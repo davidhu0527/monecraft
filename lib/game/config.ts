@@ -17,7 +17,7 @@ export const MAX_STACK_SIZE = 99;
 export const RENDER_RADIUS = 90;
 export const RENDER_GRID = 20;
 
-export const SAVE_KEY = "minecraft_save_v2";
+export const SAVE_KEY = "minecraft_save_v4";
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
 export const ARMOR_SLOT_LABELS: Record<ArmorSlot, string> = {
   helmet: "Helmet",

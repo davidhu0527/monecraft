@@ -110,6 +110,14 @@ export function tickPlayerMovement(args: MoveTickArgs): { voidTimer: number; did
   stepAxis("z", player.velocity.z * dt);
   stepAxis("y", player.velocity.y * dt);
 
+  // Depenetration: if still colliding after movement, nudge up
+  if (collidesAt(world, player.position, playerHalfWidth, playerHeight)) {
+    for (let i = 0; i < 5; i += 1) {
+      player.position.y += 0.2;
+      if (!collidesAt(world, player.position, playerHalfWidth, playerHeight)) break;
+    }
+  }
+
   if (crouching && (player.onGround || wasGrounded) && !hasSupportUnderPlayer(world, player.position, playerHalfWidth + 0.12)) {
     player.position.x = prevX;
     player.position.z = prevZ;

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { BlockId, collidesAt, createBlockAtlasTexture, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import { BiomeId, BlockId, collidesAt, createBlockAtlasTexture, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
 import { readSave } from "@/lib/game/save";
 import { tickDayNight } from "@/lib/game/runtime/dayNight";
 import { bindGameInput } from "@/lib/game/runtime/input";
@@ -58,6 +58,7 @@ export function useMinecraftGame() {
   const mineTargetRef = useRef<string>("");
   const saveNowRef = useRef<(() => void) | null>(null);
   const loadNowRef = useRef<(() => void) | null>(null);
+  const resetNowRef = useRef<(() => void) | null>(null);
 
   const [locked, setLocked] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(0);
@@ -329,101 +330,112 @@ export function useMinecraftGame() {
       keys: new Set<string>()
     };
 
-    const spawnX = Math.floor(world.sizeX / 2);
-    const spawnZ = Math.floor(world.sizeZ / 2);
-    const findSpawnOnLand = (centerX = spawnX, centerZ = spawnZ) => {
-      const isGoodSpawn = (x: number, y: number, z: number): boolean => {
-        const top = world.get(x, y - 2, z);
-        const atFeet = world.get(x, y - 1, z);
-        const atBody = world.get(x, y, z);
-        const atHead = world.get(x, y + 1, z);
-        if (top !== BlockId.Grass) return false;
-        if (atFeet === BlockId.Water || atBody === BlockId.Water || atHead === BlockId.Water) return false;
-        if (atFeet !== BlockId.Air || atBody !== BlockId.Air || atHead !== BlockId.Air) return false;
-        const ny = y - 2;
-        const h0 = world.highestSolidY(x + 1, z);
-        const h1 = world.highestSolidY(x - 1, z);
-        const h2 = world.highestSolidY(x, z + 1);
-        const h3 = world.highestSolidY(x, z - 1);
-        return Math.abs(h0 - ny) <= 1 && Math.abs(h1 - ny) <= 1 && Math.abs(h2 - ny) <= 1 && Math.abs(h3 - ny) <= 1;
-      };
-      const maxRadius = Math.min(260, Math.floor(Math.min(world.sizeX, world.sizeZ) * 0.12));
-      for (let radius = 0; radius <= maxRadius; radius += 4) {
-        for (let i = 0; i < 24; i += 1) {
-          const angle = (Math.PI * 2 * i) / 24;
-          const x = Math.max(2, Math.min(world.sizeX - 3, Math.floor(centerX + Math.cos(angle) * radius)));
-          const z = Math.max(2, Math.min(world.sizeZ - 3, Math.floor(centerZ + Math.sin(angle) * radius)));
-          const topY = world.highestSolidY(x, z);
-          const y = topY + 2;
-          if (isGoodSpawn(x, y, z)) return { x, y, z };
+        const spawnX = Math.floor(world.sizeX / 2);
+        const spawnZ = Math.floor(world.sizeZ / 2);
+        const findSpawnOnLand = (centerX = spawnX, centerZ = spawnZ, seekPlains = true) => {
+          const isGoodSpawn = (x: number, y: number, z: number): boolean => {
+            const top = world.get(x, y - 1, z);
+            const atBody = world.get(x, y, z);
+            const atHead = world.get(x, y + 1, z);
+            if (!world.isSolid(x, y - 1, z)) return false;
+            if (atBody === BlockId.Water || atHead === BlockId.Water || top === BlockId.Water) return false;
+            if (atBody !== BlockId.Air || atHead !== BlockId.Air) return false;
+            if (seekPlains && world.getBiome(x, z) !== BiomeId.Plains) return false;
+    
+            const h0 = world.highestSolidY(x + 1, z);
+            const h1 = world.highestSolidY(x - 1, z);
+            const h2 = world.highestSolidY(x, z + 1);
+            const h3 = world.highestSolidY(x, z - 1);
+            const ny = y - 1;
+            return Math.abs(h0 - ny) <= 2 && Math.abs(h1 - ny) <= 2 && Math.abs(h2 - ny) <= 2 && Math.abs(h3 - ny) <= 2;
+          };
+    
+          const maxRadius = Math.min(300, Math.floor(Math.min(world.sizeX, world.sizeZ) * 0.4));
+          // Try to find a plain first
+          for (let radius = 0; radius <= maxRadius; radius += 2) {
+            for (let i = 0; i < 32; i += 1) {
+              const angle = (Math.PI * 2 * i) / 32;
+              const x = Math.max(5, Math.min(world.sizeX - 6, Math.floor(centerX + Math.cos(angle) * radius)));
+              const z = Math.max(5, Math.min(world.sizeZ - 6, Math.floor(centerZ + Math.sin(angle) * radius)));
+              const topY = world.highestSolidY(x, z);
+              const y = topY + 1;
+              if (isGoodSpawn(x, y, z)) return { x, y, z };
+            }
+          }
+    
+          // If no plain found, try any solid ground
+          if (seekPlains) return findSpawnOnLand(centerX, centerZ, false);
+    
+          const topY = world.highestSolidY(centerX, centerZ);
+          return { x: centerX, y: topY + 1, z: centerZ };
+        };
+    
+        const firstSpawn = findSpawnOnLand();
+        const player = {
+          position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
+          velocity: new THREE.Vector3(),
+          onGround: false
+        };
+        const forceUnstuck = (centerX = player.position.x, centerZ = player.position.z) => {
+          const safe = findSpawnOnLand(centerX, centerZ, true);
+          player.position.set(safe.x, safe.y, safe.z);
+          player.velocity.set(0, 0, 0);
+          player.onGround = false;
+        };
+    
+        if (Array.isArray(loadedSave?.inventorySlots)) {
+          const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
+          for (let i = 0; i < Math.min(INVENTORY_SLOTS, loadedSave.inventorySlots.length); i += 1) {
+            const saved = loadedSave.inventorySlots[i];
+            if (!saved?.id || saved.count <= 0) continue;
+            if (!ITEM_DEF_BY_ID[saved.id]) continue;
+            slots[i] = createSlot(saved.id, Math.min(MAX_STACK_SIZE, Math.max(0, Math.floor(saved.count))));
+          }
+          setInventory(slots);
+        } else if (loadedSave?.inventoryCounts) {
+          const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
+          let cursor = 0;
+          for (const [id, raw] of Object.entries(loadedSave.inventoryCounts)) {
+            if (!ITEM_DEF_BY_ID[id]) continue;
+            let remaining = Math.max(0, Math.floor(raw));
+            while (remaining > 0 && cursor < slots.length) {
+              const add = Math.min(MAX_STACK_SIZE, remaining);
+              slots[cursor] = createSlot(id, add);
+              cursor += 1;
+              remaining -= add;
+            }
+          }
+          setInventory(slots);
         }
-      }
-      return { x: spawnX, y: world.highestSolidY(spawnX, spawnZ) + 2, z: spawnZ };
-    };
-    const firstSpawn = findSpawnOnLand();
-    const player = {
-      position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
-      velocity: new THREE.Vector3(),
-      onGround: false
-    };
-    const forceUnstuck = (centerX = player.position.x, centerZ = player.position.z) => {
-      const safe = findSpawnOnLand(centerX, centerZ);
-      player.position.set(safe.x, safe.y, safe.z);
-      player.velocity.set(0, 0, 0);
-      player.onGround = false;
-    };
-
-    if (Array.isArray(loadedSave?.inventorySlots)) {
-      const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
-      for (let i = 0; i < Math.min(INVENTORY_SLOTS, loadedSave.inventorySlots.length); i += 1) {
-        const saved = loadedSave.inventorySlots[i];
-        if (!saved?.id || saved.count <= 0) continue;
-        if (!ITEM_DEF_BY_ID[saved.id]) continue;
-        slots[i] = createSlot(saved.id, Math.min(MAX_STACK_SIZE, Math.max(0, Math.floor(saved.count))));
-      }
-      setInventory(slots);
-    } else if (loadedSave?.inventoryCounts) {
-      const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
-      let cursor = 0;
-      for (const [id, raw] of Object.entries(loadedSave.inventoryCounts)) {
-        if (!ITEM_DEF_BY_ID[id]) continue;
-        let remaining = Math.max(0, Math.floor(raw));
-        while (remaining > 0 && cursor < slots.length) {
-          const add = Math.min(MAX_STACK_SIZE, remaining);
-          slots[cursor] = createSlot(id, add);
-          cursor += 1;
-          remaining -= add;
+        if (typeof loadedSave?.selectedSlot === "number") {
+          const idx = Math.max(0, Math.min(HOTBAR_SLOTS - 1, loadedSave.selectedSlot));
+          setSelectedSlot(idx);
+          selectedSlotRef.current = idx;
         }
-      }
-      setInventory(slots);
-    }
-    if (typeof loadedSave?.selectedSlot === "number") {
-      const idx = Math.max(0, Math.min(HOTBAR_SLOTS - 1, loadedSave.selectedSlot));
-      setSelectedSlot(idx);
-      selectedSlotRef.current = idx;
-    }
-    if (loadedSave?.equippedArmor) {
-      const nextArmor = createEmptyArmorEquipment();
-      for (const armorSlot of ARMOR_SLOTS) {
-        const equippedId = loadedSave.equippedArmor[armorSlot];
-        if (!equippedId) continue;
-        const def = ITEM_DEF_BY_ID[equippedId];
-        if (def?.kind !== "armor" || def.armorSlot !== armorSlot) continue;
-        nextArmor[armorSlot] = equippedId;
-      }
-      setEquippedArmor(nextArmor);
-      equippedArmorRef.current = nextArmor;
-    }
-    if (loadedSave?.player) {
-      player.position.set(loadedSave.player.x, loadedSave.player.y, loadedSave.player.z);
-    }
-    if (
-      collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) ||
-      player.position.y < 2 ||
-      world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z)) === BlockId.Water
-    ) {
-      forceUnstuck(player.position.x, player.position.z);
-    }
+        if (loadedSave?.equippedArmor) {
+          const nextArmor = createEmptyArmorEquipment();
+          for (const armorSlot of ARMOR_SLOTS) {
+            const equippedId = loadedSave.equippedArmor[armorSlot];
+            if (!equippedId) continue;
+            const def = ITEM_DEF_BY_ID[equippedId];
+            if (def?.kind !== "armor" || def.armorSlot !== armorSlot) continue;
+            nextArmor[armorSlot] = equippedId;
+          }
+          setEquippedArmor(nextArmor);
+          equippedArmorRef.current = nextArmor;
+        }
+        if (loadedSave?.player) {
+          player.position.set(loadedSave.player.x, loadedSave.player.y, loadedSave.player.z);
+        }
+        // Safety check: if stuck after load, relocate to a plain
+        if (
+          collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) ||
+          player.position.y < 2 ||
+          world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z)) === BlockId.Water
+        ) {
+          forceUnstuck(player.position.x, player.position.z);
+        }
+    
 
     const mobs: MobEntity[] = [];
     const disposables: Array<{ materials: THREE.Material[]; geometries: THREE.BufferGeometry[] }> = [];
@@ -607,7 +619,7 @@ export function useMinecraftGame() {
     };
     window.addEventListener("keydown", onEmergencyUnstuck);
 
-    const { persistSave, loadFromSave } = createPersistenceHandlers({
+    const { persistSave, loadFromSave, resetWorld } = createPersistenceHandlers({
       worldSeed: world.seed,
       changedBlocks,
       inventoryRef,
@@ -619,6 +631,7 @@ export function useMinecraftGame() {
 
     saveNowRef.current = persistSave;
     loadNowRef.current = loadFromSave;
+    resetNowRef.current = resetWorld;
     const autoSaveId = window.setInterval(persistSave, 15000);
     const onBeforeUnload = () => persistSave();
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -912,6 +925,7 @@ export function useMinecraftGame() {
     swapInventorySlots,
     toggleEquipArmor,
     saveNow: () => saveNowRef.current?.(),
-    loadNow: () => loadNowRef.current?.()
+    loadNow: () => loadNowRef.current?.(),
+    resetNow: () => resetNowRef.current?.()
   };
 }

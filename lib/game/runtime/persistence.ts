@@ -60,5 +60,18 @@ export function createPersistenceHandlers(args: CreatePersistenceHandlersArgs) {
     }
   };
 
-  return { persistSave, loadFromSave };
+  const resetWorld = () => {
+    try {
+      localStorage.removeItem(SAVE_KEY);
+      setSaveMessage("Resetting...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch {
+      setSaveMessage("Reset failed");
+      setTimeout(() => setSaveMessage(""), 1200);
+    }
+  };
+
+  return { persistSave, loadFromSave, resetWorld };
 }

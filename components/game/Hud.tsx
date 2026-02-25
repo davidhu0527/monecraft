@@ -9,6 +9,7 @@ type HudProps = {
   saveMessage: string;
   onSave: () => void;
   onLoad: () => void;
+  onReset: () => void;
 };
 
 export default function Hud(props: HudProps) {
@@ -20,7 +21,8 @@ export default function Hud(props: HudProps) {
     selectedSlotData,
     saveMessage,
     onSave,
-    onLoad
+    onLoad,
+    onReset
   } = props;
 
   return (
@@ -46,6 +48,9 @@ export default function Hud(props: HudProps) {
         </button>
         <button className="save-btn" onClick={onLoad}>
           Load Save
+        </button>
+        <button className="save-btn reset-btn" onClick={onReset} style={{ backgroundColor: "#822", marginLeft: "10px" }}>
+          Reset World
         </button>
         {saveMessage ? <span className="save-msg">{saveMessage}</span> : null}
       </div>

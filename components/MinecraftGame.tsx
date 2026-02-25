@@ -26,6 +26,7 @@ export default function MinecraftGame() {
           saveMessage={game.saveMessage}
           onSave={game.saveNow}
           onLoad={game.loadNow}
+          onReset={game.resetNow}
         />
       ) : null}
 
