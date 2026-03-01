@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 export const WORLD_SIZE_X = 512;
-export const WORLD_SIZE_Y = 100;
+export const WORLD_SIZE_Y = 150;
 export const WORLD_SIZE_Z = 512;
 
 export const enum BlockId {
@@ -382,18 +382,18 @@ export class VoxelWorld {
       }
     };
 
-    const caveCount = 180;
+    const caveCount = 230;
     for (let i = 0; i < caveCount; i += 1) {
       let x = 12 + rand() * (this.sizeX - 24);
       let y = 3 + rand() * (this.sizeY - 9);
       let z = 12 + rand() * (this.sizeZ - 24);
       let yaw = rand() * Math.PI * 2;
       let pitch = (rand() - 0.5) * 0.26;
-      const length = 38 + Math.floor(rand() * 42);
+      const length = 56 + Math.floor(rand() * 56);
       for (let step = 0; step < length; step += 1) {
-        const r = 1.2 + rand() * 1.9;
+        const r = 1.9 + rand() * 2.6;
         carveSphere(x, y, z, r);
-        if (rand() > 0.982) carveSphere(x, y, z, 3.2 + rand() * 3.4);
+        if (rand() > 0.968) carveSphere(x, y, z, 4.8 + rand() * 4.6);
         yaw += (rand() - 0.5) * 0.28;
         pitch = Math.max(-0.55, Math.min(0.55, pitch + (rand() - 0.5) * 0.16));
         x += Math.cos(yaw);
@@ -403,12 +403,12 @@ export class VoxelWorld {
       }
     }
 
-    const chamberCount = 90;
+    const chamberCount = 150;
     for (let i = 0; i < chamberCount; i += 1) {
       const cx = 12 + rand() * (this.sizeX - 24);
       const cy = 5 + rand() * (this.sizeY - 14);
       const cz = 12 + rand() * (this.sizeZ - 24);
-      carveSphere(cx, cy, cz, 3.2 + rand() * 4.8);
+      carveSphere(cx, cy, cz, 5.4 + rand() * 6.4);
     }
   }
 
