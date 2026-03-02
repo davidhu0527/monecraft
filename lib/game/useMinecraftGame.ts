@@ -202,6 +202,46 @@ export function useMinecraftGame() {
     });
   };
 
+  const consumeSelectedToolDurability = (amount = 1) => {
+    if (amount <= 0) return;
+    setInventory((prev) => {
+      const idx = selectedSlotRef.current;
+      if (idx < 0 || idx >= prev.length) return prev;
+      const next = prev.map(cloneSlot);
+      const slot = next[idx];
+      if (slot.kind !== "tool" || !slot.id || slot.count <= 0 || !slot.maxDurability) return prev;
+      const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
+      if (nextDurability <= 0) {
+        next[idx] = createEmptySlot();
+        return next;
+      }
+      slot.durability = nextDurability;
+      return next;
+    });
+  };
+
+  const consumeEquippedArmorDurability = (amount = 1) => {
+    if (amount <= 0) return;
+    const equipped = equippedArmorRef.current;
+    setInventory((prev) => {
+      const next = prev.map(cloneSlot);
+      let changed = false;
+      for (const armorSlot of ARMOR_SLOTS) {
+        const equippedId = equipped[armorSlot];
+        if (!equippedId) continue;
+        const idx = next.findIndex((slot) => slot.id === equippedId && slot.kind === "armor" && slot.count > 0);
+        if (idx < 0) continue;
+        const slot = next[idx];
+        if (!slot.maxDurability) continue;
+        const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
+        if (nextDurability <= 0) next[idx] = createEmptySlot();
+        else slot.durability = nextDurability;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  };
+
   const canCraft = (recipe: Recipe): boolean => {
     const slots = inventoryRef.current;
     const byId = countsById(slots);
@@ -386,12 +426,22 @@ export function useMinecraftGame() {
         if (Array.isArray(loadedSave?.inventorySlots)) {
           const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
           for (let i = 0; i < Math.min(INVENTORY_SLOTS, loadedSave.inventorySlots.length); i += 1) {
-            const saved = loadedSave.inventorySlots[i];
-            if (!saved?.id || saved.count <= 0) continue;
-            if (!ITEM_DEF_BY_ID[saved.id]) continue;
-            slots[i] = createSlot(saved.id, Math.min(MAX_STACK_SIZE, Math.max(0, Math.floor(saved.count))));
+        const saved = loadedSave.inventorySlots[i];
+        if (!saved?.id || saved.count <= 0) continue;
+        if (!ITEM_DEF_BY_ID[saved.id]) continue;
+        const slot = createSlot(saved.id, Math.min(MAX_STACK_SIZE, Math.max(0, Math.floor(saved.count))));
+        if ((slot.kind === "tool" || slot.kind === "armor") && slot.maxDurability) {
+          if (typeof saved.durability === "number") {
+            const loadedDurability = Math.floor(saved.durability);
+            if (loadedDurability <= 0) continue;
+            slot.durability = Math.max(1, Math.min(slot.maxDurability, loadedDurability));
+          } else {
+            slot.durability = slot.maxDurability;
           }
-          setInventory(slots);
+        }
+        slots[i] = slot;
+      }
+      setInventory(slots);
         } else if (loadedSave?.inventoryCounts) {
           const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
           let cursor = 0;
@@ -586,6 +636,7 @@ export function useMinecraftGame() {
       }
     });
     const applyDamageWithArmor = (amount: number) => {
+      if (amount > 0) consumeEquippedArmorDurability(1);
       const reduction = armorReductionFromInventory(inventoryRef.current, equippedArmorRef.current);
       const mitigated = Math.max(1, Math.floor(amount * (1 - reduction)));
       applyDamage(mitigated);
@@ -667,6 +718,7 @@ export function useMinecraftGame() {
       leftMouseHeldRef,
       inventoryOpenRef,
       isDeadRef,
+      consumeSelectedToolDurability,
       adjustSlotCount,
       addBlockDrop,
       setBlockTracked,
@@ -715,7 +767,7 @@ export function useMinecraftGame() {
           removeMobAt(idx);
           setPassiveCount(mobs.filter((mob) => !mob.hostile).length);
           setHostileCount(mobs.filter((mob) => mob.hostile).length);
-        })
+        }) && (consumeSelectedToolDurability(1), true)
     });
 
     let last = performance.now();

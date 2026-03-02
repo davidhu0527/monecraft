@@ -19,6 +19,7 @@ type MiningContext = {
   leftMouseHeldRef: { current: boolean };
   inventoryOpenRef: { current: boolean };
   isDeadRef: { current: boolean };
+  consumeSelectedToolDurability: (amount?: number) => void;
   adjustSlotCount: (slotId: string, delta: number, preferredIndex?: number) => void;
   addBlockDrop: (block: BlockId) => void;
   setBlockTracked: (x: number, y: number, z: number, nextBlock: BlockId) => void;
@@ -134,6 +135,7 @@ export function processMining(ctx: MiningContext, dt: number): void {
     leftMouseHeldRef,
     inventoryOpenRef,
     isDeadRef,
+    consumeSelectedToolDurability,
     addBlockDrop,
     setBlockTracked,
     rebuildWorldMesh
@@ -174,6 +176,7 @@ export function processMining(ctx: MiningContext, dt: number): void {
   if (mineProgressRef.current < hardness) return;
 
   setBlockTracked(bx, by, bz, BlockId.Air);
+  if (tool) consumeSelectedToolDurability(1);
   addBlockDrop(targetBlock as BlockId);
   rebuildWorldMesh(true);
   mineProgressRef.current = 0;

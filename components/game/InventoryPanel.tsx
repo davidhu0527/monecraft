@@ -60,6 +60,7 @@ export default function InventoryPanel({ inventory, equippedArmor, selectedHotba
             onClick={() => onSlotClick(idx)}
           >
             <span>{slot.id ? slot.label : "Empty"}</span>
+            <span>{slot.maxDurability ? `dur ${slot.durability ?? slot.maxDurability}/${slot.maxDurability}` : ""}</span>
             <span>{slot.count > 0 ? `x${slot.count}` : ""}</span>
           </button>
         ))}
@@ -82,6 +83,7 @@ export default function InventoryPanel({ inventory, equippedArmor, selectedHotba
               onClick={() => onSlotClick(idx)}
             >
               <span>{slot.id ? slot.label : "Empty"}</span>
+              <span>{slot.maxDurability ? `dur ${slot.durability ?? slot.maxDurability}/${slot.maxDurability}` : ""}</span>
               <span>{slot.count > 0 ? `x${slot.count}` : ""}</span>
             </button>
           );
@@ -96,6 +98,7 @@ export default function InventoryPanel({ inventory, equippedArmor, selectedHotba
             <div key={`armor-${armorSlot}`} className={equippedItem ? "armor-slot filled" : "armor-slot"}>
               <span className="armor-slot-name">{ARMOR_SLOT_LABELS[armorSlot]}</span>
               <span className="armor-slot-item">{equippedItem?.label ?? "Empty"}</span>
+              <span className="armor-slot-item">{equippedItem?.maxDurability ? `${equippedItem.durability ?? equippedItem.maxDurability}/${equippedItem.maxDurability}` : ""}</span>
             </div>
           );
         })}

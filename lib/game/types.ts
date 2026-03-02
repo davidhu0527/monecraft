@@ -15,6 +15,7 @@ export type ItemDef = {
   mineTier?: number;
   armorSlot?: ArmorSlot;
   defense?: number;
+  maxDurability?: number;
 };
 
 export type InventorySlot = {
@@ -28,6 +29,8 @@ export type InventorySlot = {
   mineTier?: number;
   armorSlot?: ArmorSlot;
   defense?: number;
+  durability?: number;
+  maxDurability?: number;
 };
 
 export type Recipe = {
@@ -69,7 +72,7 @@ export type SaveDataV1 = {
   seed: number;
   changes: Array<[number, number]>;
   inventoryCounts?: Record<string, number>;
-  inventorySlots?: Array<{ id: string | null; count: number }>;
+  inventorySlots?: Array<{ id: string | null; count: number; durability?: number }>;
   equippedArmor?: Partial<EquippedArmor>;
   selectedSlot: number;
   player: { x: number; y: number; z: number };

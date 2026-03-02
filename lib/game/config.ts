@@ -72,13 +72,13 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "gold_ore", label: "Gold Ore", kind: "block", blockId: BlockId.GoldOre },
   { id: "sapphire_ore", label: "Sapphire Ore", kind: "block", blockId: BlockId.SapphireOre },
   { id: "diamond_ore", label: "Diamond Ore", kind: "block", blockId: BlockId.DiamondOre },
-  { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1 },
-  { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2 },
-  { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3 },
-  { id: "ruby_pickaxe", label: "Ruby Pickaxe", kind: "tool", minePower: 2.8, mineTier: 4 },
-  { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5 },
-  { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6 },
-  { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7 },
+  { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
+  { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
+  { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
+  { id: "ruby_pickaxe", label: "Ruby Pickaxe", kind: "tool", minePower: 2.8, mineTier: 4, maxDurability: 340 },
+  { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
+  { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
+  { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
   { id: "food", label: "Food", kind: "block" },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13 },
@@ -88,12 +88,12 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35 },
   { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40 },
   { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47 },
-  { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2 },
-  { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2 },
-  { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2 },
-  { id: "chestplate", label: "Chestplate", kind: "armor", armorSlot: "chestplate", defense: 4 },
-  { id: "leggings", label: "Leggings", kind: "armor", armorSlot: "leggings", defense: 3 },
-  { id: "boots", label: "Boots", kind: "armor", armorSlot: "boots", defense: 2 }
+  { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
+  { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
+  { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },
+  { id: "chestplate", label: "Chestplate", kind: "armor", armorSlot: "chestplate", defense: 4, maxDurability: 420 },
+  { id: "leggings", label: "Leggings", kind: "armor", armorSlot: "leggings", defense: 3, maxDurability: 340 },
+  { id: "boots", label: "Boots", kind: "armor", armorSlot: "boots", defense: 2, maxDurability: 250 }
 ];
 
 export const ITEM_DEF_BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEM_DEFS.map((item) => [item.id, item]));
@@ -105,7 +105,12 @@ export function createEmptySlot(): InventorySlot {
 export function createSlot(itemId: string, count: number): InventorySlot {
   const def = ITEM_DEF_BY_ID[itemId];
   if (!def) return createEmptySlot();
-  return { ...def, count };
+  const slot: InventorySlot = { ...def, count };
+  if ((def.kind === "tool" || def.kind === "armor") && def.maxDurability) {
+    slot.maxDurability = def.maxDurability;
+    slot.durability = def.maxDurability;
+  }
+  return slot;
 }
 
 export function createInitialInventory(): InventorySlot[] {

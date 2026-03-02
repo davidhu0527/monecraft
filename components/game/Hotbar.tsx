@@ -82,6 +82,7 @@ export default function Hotbar({ inventory, selectedSlot, hotbarSlots, hearts, m
             <span className="slot-index">{idx === 9 ? 0 : idx + 1}</span>
             <span className={slot.id ? "slot-icon" : "slot-icon empty"}>{iconForSlot(slot)}</span>
             <span className="slot-label">{slot.id ? slot.label : "Empty"}</span>
+            <span className="slot-label">{slot.maxDurability ? `${slot.durability ?? slot.maxDurability}/${slot.maxDurability}` : ""}</span>
             <span className="slot-count">{slot.count > 0 ? slot.count : ""}</span>
           </button>
         ))}
