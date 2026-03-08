@@ -38,6 +38,7 @@ export default function Hud(props: HudProps) {
         <span>Armor: click armor items in inventory to equip/unequip (only equipped pieces reduce damage)</span>
         <span>Inventory/Crafting: I (swap slots by clicking two slots) | Hotbar: 1..0 | Max Stack: 99</span>
         <span>Durability: tools lose durability when used, armor loses durability when you take damage</span>
+        <span>Hostiles: zombies and skeletons burn in daylight, spiders calm down by day, more hostiles spawn at night</span>
         <span>Emergency Unstuck: U</span>
       </div>
       <div className="stats-line">Passive Mobs: {passiveCount} | Hostile Mobs: {hostileCount}</div>

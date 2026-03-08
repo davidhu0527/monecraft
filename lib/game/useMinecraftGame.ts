@@ -779,11 +779,13 @@ export function useMinecraftGame() {
     let walkDistanceBudget = 0;
     let jumpBudget = 0;
     let stuckTimer = 0;
+    let hostileSpawnTimer = 0;
 
     const tickMobsRuntime = (dt: number, time: number) =>
       tickMobs({
         dt,
         time,
+        daylight: Math.max(0.04, Math.sin(((dayClock % 240) / 240) * Math.PI * 2) * 0.95 + 0.05),
         world,
         worldSizeX: world.sizeX,
         worldSizeZ: world.sizeZ,
@@ -917,6 +919,30 @@ export function useMinecraftGame() {
         scene,
         setDaylightPercent
       }));
+
+      const daylight = Math.max(0.04, Math.sin(((dayClock % 240) / 240) * Math.PI * 2) * 0.95 + 0.05);
+      hostileSpawnTimer += dt;
+      if (daylight < 0.28 && hostileSpawnTimer >= 10) {
+        hostileSpawnTimer = 0;
+        const livingHostiles = mobs.filter((mob) => mob.hostile).length;
+        if (livingHostiles < 16) {
+          const spawnKinds: Array<"zombie" | "skeleton" | "spider"> = ["zombie", "skeleton", "spider"];
+          const kind = spawnKinds[Math.floor(Math.random() * spawnKinds.length)];
+          spawnMobGroup({
+            kind,
+            hostile: true,
+            count: 1 + (Math.random() > 0.7 ? 1 : 0),
+            centerX: player.position.x,
+            centerZ: player.position.z,
+            radius: Math.max(26, RENDER_RADIUS * 0.85),
+            scene,
+            mobs,
+            disposables,
+            randomLandPointNear
+          });
+          setHostileCount(mobs.filter((mob) => mob.hostile).length);
+        }
+      }
 
       tickMobsRuntime(dt, now);
       rebuildWorldMesh(false);

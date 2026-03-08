@@ -49,6 +49,7 @@ export function spawnMobGroup(args: SpawnMobArgs): void {
 type TickMobsArgs = {
   dt: number;
   time: number;
+  daylight: number;
   world: VoxelWorld;
   worldSizeX: number;
   worldSizeZ: number;
@@ -66,6 +67,7 @@ export function tickMobs(args: TickMobsArgs): void {
   const {
     dt,
     time,
+    daylight,
     world,
     worldSizeX,
     worldSizeZ,
@@ -90,6 +92,7 @@ export function tickMobs(args: TickMobsArgs): void {
     const mob = mobs[i];
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
+    const activeHostile = mob.hostile && (mob.kind !== "spider" || daylight < 0.42);
 
     const toPlayer = playerPosition.clone().sub(mob.group.position).setY(0);
     const distanceToPlayer = toPlayer.length();
@@ -98,7 +101,7 @@ export function tickMobs(args: TickMobsArgs): void {
     const verticalGap = Math.abs(mobToPlayer3D.y);
     let moveSpeed = mob.speed;
 
-    if (mob.hostile && distanceToPlayer < mob.detectRange) {
+    if (activeHostile && distanceToPlayer < mob.detectRange) {
       if (distanceToPlayer > 0.001) mob.direction.lerp(toPlayer.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
     } else if (!mob.hostile && distanceToPlayer < 4.2) {
@@ -133,7 +136,7 @@ export function tickMobs(args: TickMobsArgs): void {
     }
 
     let hasLineOfSight = true;
-    if (mob.hostile && attackDistance < 4 && verticalGap < 1.6) {
+    if (activeHostile && attackDistance < 4 && verticalGap < 1.6) {
       mobEye.set(mob.group.position.x, mob.group.position.y + mob.halfHeight * 0.35, mob.group.position.z);
       playerAim.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
       toPlayerRay.copy(playerAim).sub(mobEye);
@@ -143,7 +146,7 @@ export function tickMobs(args: TickMobsArgs): void {
       }
     }
 
-    if (mob.hostile && attackDistance < 4 && verticalGap < 1.6 && hasLineOfSight && mob.attackTimer <= 0) {
+    if (activeHostile && attackDistance < 4 && verticalGap < 1.6 && hasLineOfSight && mob.attackTimer <= 0) {
       applyDamage(mob.attackDamage);
       if (!isDead && distanceToPlayer > 0.001) {
         const knock = toPlayer.normalize().multiplyScalar(4.2);
@@ -152,6 +155,11 @@ export function tickMobs(args: TickMobsArgs): void {
         playerVelocity.y = Math.max(playerVelocity.y, 3.4);
       }
       mob.attackTimer = mob.attackCooldown;
+    }
+
+    // Zombies and skeletons burn in broad daylight.
+    if (mob.hostile && mob.kind !== "spider" && daylight > 0.72) {
+      mob.hp -= dt * 0.8;
     }
 
     if (mob.hp <= 0) deadIndices.push(i);
