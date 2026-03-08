@@ -778,11 +778,13 @@ export function useMinecraftGame() {
     let sprintDistanceBudget = 0;
     let walkDistanceBudget = 0;
     let jumpBudget = 0;
+    let stuckTimer = 0;
 
     const tickMobsRuntime = (dt: number, time: number) =>
       tickMobs({
         dt,
         time,
+        world,
         worldSizeX: world.sizeX,
         worldSizeZ: world.sizeZ,
         playerPosition: player.position,
@@ -803,12 +805,15 @@ export function useMinecraftGame() {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
 
-      if (
+      const inBadState =
         collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) ||
         player.position.y < 2 ||
-        world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z)) === BlockId.Water
-      ) {
+        world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z)) === BlockId.Water;
+      if (inBadState) stuckTimer += dt;
+      else stuckTimer = 0;
+      if (stuckTimer > 0.8) {
         forceUnstuck(player.position.x, player.position.z);
+        stuckTimer = 0;
       }
 
       if (

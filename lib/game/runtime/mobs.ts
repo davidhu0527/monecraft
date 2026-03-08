@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { voxelRaycast, VoxelWorld } from "@/lib/world";
 import { createMobForKind } from "@/lib/game/mobs";
 import type { MobEntity, MobKind } from "@/lib/game/types";
 
@@ -48,6 +49,7 @@ export function spawnMobGroup(args: SpawnMobArgs): void {
 type TickMobsArgs = {
   dt: number;
   time: number;
+  world: VoxelWorld;
   worldSizeX: number;
   worldSizeZ: number;
   playerPosition: THREE.Vector3;
@@ -64,6 +66,7 @@ export function tickMobs(args: TickMobsArgs): void {
   const {
     dt,
     time,
+    world,
     worldSizeX,
     worldSizeZ,
     playerPosition,
@@ -78,6 +81,9 @@ export function tickMobs(args: TickMobsArgs): void {
 
   const deadIndices: number[] = [];
   const up = new THREE.Vector3(0, 1, 0);
+  const toPlayerRay = new THREE.Vector3();
+  const mobEye = new THREE.Vector3();
+  const playerAim = new THREE.Vector3();
 
   for (let i = 0; i < mobs.length; i += 1) {
     const mob = mobs[i];
@@ -122,7 +128,18 @@ export function tickMobs(args: TickMobsArgs): void {
       mob.legs[3].rotation.x = gait;
     }
 
-    if (mob.hostile && distanceToPlayer < 4 && mob.attackTimer <= 0) {
+    let hasLineOfSight = true;
+    if (mob.hostile && distanceToPlayer < 4) {
+      mobEye.set(mob.group.position.x, mob.group.position.y + mob.halfHeight * 0.35, mob.group.position.z);
+      playerAim.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
+      toPlayerRay.copy(playerAim).sub(mobEye);
+      if (toPlayerRay.lengthSq() > 1e-6) {
+        const hit = voxelRaycast(world, mobEye, toPlayerRay.normalize(), distanceToPlayer + 0.5);
+        hasLineOfSight = hit === null;
+      }
+    }
+
+    if (mob.hostile && distanceToPlayer < 4 && hasLineOfSight && mob.attackTimer <= 0) {
       applyDamage(mob.attackDamage);
       if (!isDead && distanceToPlayer > 0.001) {
         const knock = toPlayer.normalize().multiplyScalar(4.2);
