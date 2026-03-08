@@ -84,6 +84,7 @@ export function tickMobs(args: TickMobsArgs): void {
   const toPlayerRay = new THREE.Vector3();
   const mobEye = new THREE.Vector3();
   const playerAim = new THREE.Vector3();
+  const mobToPlayer3D = new THREE.Vector3();
 
   for (let i = 0; i < mobs.length; i += 1) {
     const mob = mobs[i];
@@ -92,6 +93,9 @@ export function tickMobs(args: TickMobsArgs): void {
 
     const toPlayer = playerPosition.clone().sub(mob.group.position).setY(0);
     const distanceToPlayer = toPlayer.length();
+    mobToPlayer3D.copy(playerPosition).sub(mob.group.position);
+    const attackDistance = mobToPlayer3D.length();
+    const verticalGap = Math.abs(mobToPlayer3D.y);
     let moveSpeed = mob.speed;
 
     if (mob.hostile && distanceToPlayer < mob.detectRange) {
@@ -129,17 +133,17 @@ export function tickMobs(args: TickMobsArgs): void {
     }
 
     let hasLineOfSight = true;
-    if (mob.hostile && distanceToPlayer < 4) {
+    if (mob.hostile && attackDistance < 4 && verticalGap < 1.6) {
       mobEye.set(mob.group.position.x, mob.group.position.y + mob.halfHeight * 0.35, mob.group.position.z);
       playerAim.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
       toPlayerRay.copy(playerAim).sub(mobEye);
       if (toPlayerRay.lengthSq() > 1e-6) {
-        const hit = voxelRaycast(world, mobEye, toPlayerRay.normalize(), distanceToPlayer + 0.5);
+        const hit = voxelRaycast(world, mobEye, toPlayerRay.normalize(), attackDistance + 0.5);
         hasLineOfSight = hit === null;
       }
     }
 
-    if (mob.hostile && distanceToPlayer < 4 && hasLineOfSight && mob.attackTimer <= 0) {
+    if (mob.hostile && attackDistance < 4 && verticalGap < 1.6 && hasLineOfSight && mob.attackTimer <= 0) {
       applyDamage(mob.attackDamage);
       if (!isDead && distanceToPlayer > 0.001) {
         const knock = toPlayer.normalize().multiplyScalar(4.2);
