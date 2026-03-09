@@ -15,6 +15,7 @@ import { createSurfaceYAt, randomLandPointNear as pickRandomLandPointNear } from
 import {
   ARMOR_SLOTS,
   BLOCK_TO_SLOT,
+  BREAK_HARDNESS,
   CROUCH_SPEED,
   createEmptyArmorEquipment,
   createEmptySlot,
@@ -39,6 +40,52 @@ import {
   WALK_SPEED
 } from "@/lib/game/config";
 import type { EquippedArmor, InventorySlot, MobEntity, Recipe, SaveDataV1 } from "@/lib/game/types";
+
+function createCrackTextures(): THREE.CanvasTexture[] {
+  const stages = 8;
+  const textures: THREE.CanvasTexture[] = [];
+
+  for (let stage = 0; stage < stages; stage += 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 16;
+    canvas.height = 16;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+    ctx.clearRect(0, 0, 16, 16);
+    ctx.strokeStyle = `rgba(20, 20, 20, ${0.18 + stage * 0.09})`;
+    ctx.lineWidth = 1.1;
+    ctx.lineCap = "square";
+
+    const draw = (points: Array<[number, number]>) => {
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i][0], points[i][1]);
+      ctx.stroke();
+    };
+
+    draw([[8, 0], [8, 5], [6, 8], [7, 12], [6, 16]]);
+    if (stage >= 1) draw([[8, 5], [11, 3], [14, 2], [16, 0]]);
+    if (stage >= 2) draw([[6, 8], [3, 8], [1, 10], [0, 13]]);
+    if (stage >= 2) draw([[7, 12], [10, 13], [13, 15]]);
+    if (stage >= 3) draw([[8, 5], [5, 4], [2, 2], [0, 0]]);
+    if (stage >= 3) draw([[6, 8], [8, 9], [11, 10], [15, 10]]);
+    if (stage >= 4) draw([[5, 4], [5, 1]]);
+    if (stage >= 4) draw([[10, 13], [11, 9], [13, 7], [16, 6]]);
+    if (stage >= 5) draw([[3, 8], [4, 11], [3, 14], [2, 16]]);
+    if (stage >= 5) draw([[11, 3], [10, 6], [11, 8]]);
+    if (stage >= 6) draw([[8, 9], [7, 11], [8, 14], [9, 16]]);
+    if (stage >= 6) draw([[11, 8], [13, 9], [16, 12]]);
+    if (stage >= 7) draw([[4, 11], [6, 10], [9, 10], [12, 11], [15, 14]]);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.needsUpdate = true;
+    textures.push(texture);
+  }
+
+  return textures;
+}
 
 export function useMinecraftGame() {
   const initialInventory = useMemo(() => createInitialInventory(), []);
@@ -518,6 +565,23 @@ export function useMinecraftGame() {
     camera.add(heldRoot);
     const heldGeometries: THREE.BufferGeometry[] = [];
     const heldMaterials: THREE.Material[] = [];
+    const crackTextures = createCrackTextures();
+    const crackMaterials = crackTextures.map(
+      (texture) =>
+        new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1
+        })
+    );
+    const crackGeometry = new THREE.BoxGeometry(1.015, 1.015, 1.015);
+    const crackOverlay = new THREE.Mesh(crackGeometry, crackMaterials[0]);
+    crackOverlay.visible = false;
+    crackOverlay.renderOrder = 5;
+    scene.add(crackOverlay);
     let heldMesh: THREE.Object3D | null = null;
     let heldKey = "";
 
@@ -527,6 +591,36 @@ export function useMinecraftGame() {
       heldKey = "";
       while (heldGeometries.length) heldGeometries.pop()?.dispose();
       while (heldMaterials.length) heldMaterials.pop()?.dispose();
+    };
+
+    const updateCrackOverlay = () => {
+      const target = mineTargetRef.current;
+      if (!target || mineProgressRef.current <= 0) {
+        crackOverlay.visible = false;
+        return;
+      }
+
+      const [sx, sy, sz] = target.split(",");
+      const bx = Number.parseInt(sx, 10);
+      const by = Number.parseInt(sy, 10);
+      const bz = Number.parseInt(sz, 10);
+      if (!Number.isFinite(bx) || !Number.isFinite(by) || !Number.isFinite(bz)) {
+        crackOverlay.visible = false;
+        return;
+      }
+
+      const block = world.get(bx, by, bz);
+      if (block === BlockId.Air || block === BlockId.Bedrock) {
+        crackOverlay.visible = false;
+        return;
+      }
+
+      const hardness = BREAK_HARDNESS[block as BlockId] ?? 2;
+      const progress = Math.max(0, Math.min(0.999, mineProgressRef.current / hardness));
+      const stage = Math.min(crackMaterials.length - 1, Math.floor(progress * crackMaterials.length));
+      crackOverlay.material = crackMaterials[stage];
+      crackOverlay.position.set(bx + 0.5, by + 0.5, bz + 0.5);
+      crackOverlay.visible = true;
     };
 
     const blockColor = (blockId: BlockId | undefined): number => {
@@ -906,6 +1000,7 @@ export function useMinecraftGame() {
       }
 
       processMining(createMiningContext(), dt);
+      updateCrackOverlay();
       updateHeldItem();
       ({ dayClock, dayHudTimer } = tickDayNight({
         dt,
@@ -970,10 +1065,14 @@ export function useMinecraftGame() {
       }
 
       scene.remove(worldMesh);
+      scene.remove(crackOverlay);
       clearHeldItem();
       camera.remove(heldRoot);
       worldMesh.geometry.dispose();
       worldMaterial.dispose();
+      crackGeometry.dispose();
+      for (const material of crackMaterials) material.dispose();
+      for (const texture of crackTextures) texture.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
