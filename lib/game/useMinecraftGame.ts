@@ -527,8 +527,7 @@ export function useMinecraftGame() {
         // Safety check: if stuck after load, relocate to a plain
         if (
           collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) ||
-          player.position.y < 2 ||
-          world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z)) === BlockId.Water
+          player.position.y < 2
         ) {
           forceUnstuck(player.position.x, player.position.z);
         }
@@ -903,8 +902,7 @@ export function useMinecraftGame() {
 
       const inBadState =
         collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) ||
-        player.position.y < 2 ||
-        world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z)) === BlockId.Water;
+        player.position.y < 2;
       if (inBadState) stuckTimer += dt;
       else stuckTimer = 0;
       if (stuckTimer > 0.8) {
