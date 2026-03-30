@@ -80,14 +80,14 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
   { id: "food", label: "Food", kind: "block" },
-  { id: "knife", label: "Knife", kind: "weapon", attack: 9 },
-  { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13 },
-  { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18 },
-  { id: "sliver_sword", label: "Sliver Sword", kind: "weapon", attack: 24 },
-  { id: "ruby_sword", label: "Ruby Sword", kind: "weapon", attack: 31 },
-  { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35 },
-  { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40 },
-  { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47 },
+  { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
+  { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
+  { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },
+  { id: "sliver_sword", label: "Sliver Sword", kind: "weapon", attack: 24, maxDurability: 260 },
+  { id: "ruby_sword", label: "Ruby Sword", kind: "weapon", attack: 31, maxDurability: 360 },
+  { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35, maxDurability: 450 },
+  { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40, maxDurability: 540 },
+  { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47, maxDurability: 720 },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
   { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
   { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },
@@ -106,7 +106,7 @@ export function createSlot(itemId: string, count: number): InventorySlot {
   const def = ITEM_DEF_BY_ID[itemId];
   if (!def) return createEmptySlot();
   const slot: InventorySlot = { ...def, count };
-  if ((def.kind === "tool" || def.kind === "armor") && def.maxDurability) {
+  if ((def.kind === "tool" || def.kind === "weapon" || def.kind === "armor") && def.maxDurability) {
     slot.maxDurability = def.maxDurability;
     slot.durability = def.maxDurability;
   }

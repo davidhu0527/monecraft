@@ -256,7 +256,7 @@ export function useMinecraftGame() {
       if (idx < 0 || idx >= prev.length) return prev;
       const next = prev.map(cloneSlot);
       const slot = next[idx];
-      if (slot.kind !== "tool" || !slot.id || slot.count <= 0 || !slot.maxDurability) return prev;
+      if ((slot.kind !== "tool" && slot.kind !== "weapon") || !slot.id || slot.count <= 0 || !slot.maxDurability) return prev;
       const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
       if (nextDurability <= 0) {
         next[idx] = createEmptySlot();
@@ -477,7 +477,7 @@ export function useMinecraftGame() {
         if (!saved?.id || saved.count <= 0) continue;
         if (!ITEM_DEF_BY_ID[saved.id]) continue;
         const slot = createSlot(saved.id, Math.min(MAX_STACK_SIZE, Math.max(0, Math.floor(saved.count))));
-        if ((slot.kind === "tool" || slot.kind === "armor") && slot.maxDurability) {
+        if ((slot.kind === "tool" || slot.kind === "weapon" || slot.kind === "armor") && slot.maxDurability) {
           if (typeof saved.durability === "number") {
             const loadedDurability = Math.floor(saved.durability);
             if (loadedDurability <= 0) continue;
