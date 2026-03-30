@@ -402,7 +402,8 @@ export function useMinecraftGame() {
       map: createBlockAtlasTexture(),
       vertexColors: true,
       roughness: 0.88,
-      metalness: 0.02
+      metalness: 0.02,
+      side: THREE.DoubleSide
     });
     let worldMesh = new THREE.Mesh(new THREE.BufferGeometry(), worldMaterial);
     scene.add(worldMesh);
