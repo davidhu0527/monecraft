@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Minecraft-inspired voxel game: Next.js 14 (App Router), TypeScript (strict), Three.js, Bun. Single-player, browser-based, client-only, saves to localStorage.
+A Minecraft-inspired voxel game: Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Three.js, Bun. Single-player, browser-based, client-only, saves to localStorage.
 
 ## Commands
 
@@ -12,7 +12,7 @@ A Minecraft-inspired voxel game: Next.js 14 (App Router), TypeScript (strict), T
 bun install     # Install dependencies
 bun run dev     # Dev server at http://localhost:3000
 bun run build   # Production build + type checking — run before committing; this is the verification baseline
-bun run lint    # Next.js ESLint
+bun run lint    # ESLint (flat config, eslint .)
 ```
 
 No test suite. For gameplay changes, manually verify in the browser: movement/collisions, mining & placing, crafting/durability, save/load across a reload, mob behavior day vs night.
