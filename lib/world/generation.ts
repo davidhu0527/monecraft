@@ -11,6 +11,34 @@ import { VoxelWorld } from "./voxelWorld";
  * after a change here, the change breaks existing saves.
  */
 
+/**
+ * Every value here is part of the save format (see module header). Names exist
+ * for readability; changing a value re-rolls every world.
+ */
+export const GEN = Object.freeze({
+  seaLevel: 43,
+  borderWallHeight: 14,
+  biomes: Object.freeze({
+    [BiomeId.Plains]: Object.freeze({ baseHeight: 47, noiseScale: 2.0, treeChance: 0.18 }),
+    [BiomeId.Desert]: Object.freeze({ baseHeight: 46, noiseScale: 3.5, treeChance: 0.01 }),
+    [BiomeId.Ocean]: Object.freeze({ baseHeight: 30, noiseScale: 2.5, treeChance: 0 }),
+    [BiomeId.Forest]: Object.freeze({ baseHeight: 50, noiseScale: 4.0, treeChance: 0.45 }),
+    [BiomeId.Mountains]: Object.freeze({ baseHeight: 55, noiseScale: 18.0, treeChance: 0.05 })
+  }),
+  mountainStoneAboveY: 65,
+  caveCount: 230,
+  caveChamberCount: 150,
+  treeAttempts: 5200,
+  houseCount: 120,
+  oreConfigs: Object.freeze([
+    { id: BlockId.SliverOre, attempts: 120000, minY: 3, maxYOffset: 10, minSize: 3, maxSize: 10 },
+    { id: BlockId.RubyOre, attempts: 52000, minY: 2, maxYOffset: 16, minSize: 3, maxSize: 10 },
+    { id: BlockId.GoldOre, attempts: 36000, minY: 2, maxYOffset: 22, minSize: 3, maxSize: 10 },
+    { id: BlockId.SapphireOre, attempts: 28000, minY: 2, maxYOffset: 28, minSize: 2, maxSize: 7 },
+    { id: BlockId.DiamondOre, attempts: 18000, minY: 2, maxYOffset: 36, minSize: 2, maxSize: 6 }
+  ])
+});
+
 function hash2D(x: number, z: number): number {
   const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
   return n - Math.floor(n);
@@ -61,31 +89,15 @@ function generateTerrain(world: VoxelWorld): void {
     for (let z = 0; z < world.sizeZ; z += 1) {
       const biome = world.getBiome(x, z);
       const noise = smoothNoise2D(x, z, world.seed);
-
-      let baseHeight: number;
-      let noiseScale: number;
-
-      if (biome === BiomeId.Plains) {
-        baseHeight = 47;
-        noiseScale = 2.0;
-      } else if (biome === BiomeId.Desert) {
-        baseHeight = 46;
-        noiseScale = 3.5;
-      } else if (biome === BiomeId.Ocean) {
-        baseHeight = 30;
-        noiseScale = 2.5;
-      } else if (biome === BiomeId.Forest) {
-        baseHeight = 50;
-        noiseScale = 4.0;
-      } else {
-        // Mountains
-        baseHeight = 55;
-        noiseScale = 18.0;
-      }
+      const { baseHeight, noiseScale } = GEN.biomes[biome];
 
       const topY = Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
       const topBlock =
-        biome === BiomeId.Desert || biome === BiomeId.Ocean ? BlockId.Sand : biome === BiomeId.Mountains && topY > 65 ? BlockId.Stone : BlockId.Grass;
+        biome === BiomeId.Desert || biome === BiomeId.Ocean
+          ? BlockId.Sand
+          : biome === BiomeId.Mountains && topY > GEN.mountainStoneAboveY
+            ? BlockId.Stone
+            : BlockId.Grass;
 
       for (let y = 1; y <= topY; y += 1) {
         if (y === topY) {
@@ -102,7 +114,7 @@ function generateTerrain(world: VoxelWorld): void {
   }
 
   // Unbreakable border walls.
-  for (let y = 1; y <= 14; y += 1) {
+  for (let y = 1; y <= GEN.borderWallHeight; y += 1) {
     for (let x = 0; x < world.sizeX; x += 1) {
       world.set(x, y, 0, BlockId.Bedrock);
       world.set(x, y, maxZ, BlockId.Bedrock);
@@ -137,8 +149,7 @@ function carveCaves(world: VoxelWorld, rand: () => number): void {
     }
   };
 
-  const caveCount = 230;
-  for (let i = 0; i < caveCount; i += 1) {
+  for (let i = 0; i < GEN.caveCount; i += 1) {
     let x = 12 + rand() * (world.sizeX - 24);
     let y = 3 + rand() * (world.sizeY - 9);
     let z = 12 + rand() * (world.sizeZ - 24);
@@ -158,8 +169,7 @@ function carveCaves(world: VoxelWorld, rand: () => number): void {
     }
   }
 
-  const chamberCount = 150;
-  for (let i = 0; i < chamberCount; i += 1) {
+  for (let i = 0; i < GEN.caveChamberCount; i += 1) {
     const cx = 12 + rand() * (world.sizeX - 24);
     const cy = 5 + rand() * (world.sizeY - 14);
     const cz = 12 + rand() * (world.sizeZ - 24);
@@ -168,7 +178,7 @@ function carveCaves(world: VoxelWorld, rand: () => number): void {
 }
 
 function placeWater(world: VoxelWorld): void {
-  const seaLevel = 43;
+  const { seaLevel } = GEN;
   for (let x = 1; x < world.sizeX - 1; x += 1) {
     for (let z = 1; z < world.sizeZ - 1; z += 1) {
       const topY = world.highestSolidY(x, z);
@@ -210,15 +220,7 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
     }
   };
 
-  const oreConfigs = [
-    { id: BlockId.SliverOre, attempts: 120000, minY: 3, maxYOffset: 10, minSize: 3, maxSize: 10 },
-    { id: BlockId.RubyOre, attempts: 52000, minY: 2, maxYOffset: 16, minSize: 3, maxSize: 10 },
-    { id: BlockId.GoldOre, attempts: 36000, minY: 2, maxYOffset: 22, minSize: 3, maxSize: 10 },
-    { id: BlockId.SapphireOre, attempts: 28000, minY: 2, maxYOffset: 28, minSize: 2, maxSize: 7 },
-    { id: BlockId.DiamondOre, attempts: 18000, minY: 2, maxYOffset: 36, minSize: 2, maxSize: 6 }
-  ];
-
-  for (const config of oreConfigs) {
+  for (const config of GEN.oreConfigs) {
     for (let i = 0; i < config.attempts; i += 1) {
       const x = 8 + Math.floor(rand() * (world.sizeX - 16));
       const y = config.minY + Math.floor(rand() * Math.max(2, world.sizeY - config.maxYOffset));
@@ -231,21 +233,12 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
 }
 
 function placeTrees(world: VoxelWorld, rand: () => number): void {
-  const treeAttempts = 5200;
-  for (let i = 0; i < treeAttempts; i += 1) {
+  for (let i = 0; i < GEN.treeAttempts; i += 1) {
     const x = 4 + Math.floor(rand() * (world.sizeX - 8));
     const z = 4 + Math.floor(rand() * (world.sizeZ - 8));
 
     const biome = world.getBiome(x, z);
-
-    let spawnChance = 0.18; // Plains
-    if (biome === BiomeId.Ocean)
-      spawnChance = 0; // Ocean
-    else if (biome === BiomeId.Mountains)
-      spawnChance = 0.05; // Mountains
-    else if (biome === BiomeId.Desert)
-      spawnChance = 0.01; // Desert
-    else if (biome === BiomeId.Forest) spawnChance = 0.45; // Forest
+    const spawnChance = GEN.biomes[biome].treeChance;
 
     if (rand() > spawnChance) continue;
 
@@ -269,7 +262,7 @@ function placeTrees(world: VoxelWorld, rand: () => number): void {
 }
 
 function placeStructures(world: VoxelWorld, rand: () => number): void {
-  for (let i = 0; i < 120; i += 1) {
+  for (let i = 0; i < GEN.houseCount; i += 1) {
     const cx = 12 + Math.floor(rand() * (world.sizeX - 24));
     const cz = 12 + Math.floor(rand() * (world.sizeZ - 24));
     placeHouse(world, cx, cz);
