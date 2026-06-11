@@ -7,20 +7,20 @@ Two runners, three layers:
 
 ## What is covered
 
-| Area                 | File                                            | What it pins down                                                                                                     |
-| -------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Worldgen determinism | `lib/world/generation.test.ts`                  | SHA-256 digests of generated worlds per seed (the save-compat contract), plus structural probes and meshing snapshots |
-| Voxel store          | `lib/world/voxelWorld.test.ts`                  | get/set/bounds/solidity and the voxel index formula saves depend on                                                   |
-| Raycast & collision  | `lib/world/queries.test.ts`                     | DDA hit/previous cells, AABB collision edges, water non-solidity                                                      |
-| Items & recipes      | `lib/game/config.test.ts`                       | Referential integrity: every recipe/drop/armor mapping points at a real item                                          |
-| Inventory algebra    | `lib/game/inventory.test.ts`                    | Stack math, durability, crafting (including the refuse-on-full behavior), armor equip rules                           |
-| Save format          | `lib/game/save.test.ts`                         | Round-trips, legacy-shape parsing, corrupt-data rejection                                                             |
-| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, hunger/regen gates, mining, commands (incl. pause/debug/respawn), death/respawn, night spawning, save round-trips |
-| UI sprites           | `lib/ui/*.test.ts`                              | Every item id renders a non-empty deterministic 16×16 sprite; HUD icon variants (full/half/container) differ           |
-| Minimap sampling     | `lib/game/render/minimapColors.test.ts`         | Top-block detection (water visible), height shading, per-block colors                                                  |
-| Renderer logic       | `lib/game/render/{mobVisuals,heldItem}.test.ts` | Model lifecycle (create/reuse/remove/dispose), positioning, bob, item swaps — pure Three.js, no DOM                   |
+| Area                 | File                                            | What it pins down                                                                                                                                         |
+| -------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worldgen determinism | `lib/world/generation.test.ts`                  | SHA-256 digests of generated worlds per seed (the save-compat contract), plus structural probes and meshing snapshots                                     |
+| Voxel store          | `lib/world/voxelWorld.test.ts`                  | get/set/bounds/solidity and the voxel index formula saves depend on                                                                                       |
+| Raycast & collision  | `lib/world/queries.test.ts`                     | DDA hit/previous cells, AABB collision edges, water non-solidity                                                                                          |
+| Items & recipes      | `lib/game/config.test.ts`                       | Referential integrity: every recipe/drop/armor mapping points at a real item                                                                              |
+| Inventory algebra    | `lib/game/inventory.test.ts`                    | Stack math, durability, crafting (including the refuse-on-full behavior), armor equip rules                                                               |
+| Save format          | `lib/game/save.test.ts`                         | Round-trips, legacy-shape parsing, corrupt-data rejection                                                                                                 |
+| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, hunger/regen gates, mining, commands (incl. pause/debug/respawn), death/respawn, night spawning, save round-trips      |
+| UI sprites           | `lib/ui/*.test.ts`                              | Every item id renders a non-empty deterministic 16×16 sprite; HUD icon variants (full/half/container) differ                                              |
+| Minimap sampling     | `lib/game/render/minimapColors.test.ts`         | Top-block detection (water visible), height shading, per-block colors                                                                                     |
+| Renderer logic       | `lib/game/render/{mobVisuals,heldItem}.test.ts` | Model lifecycle (create/reuse/remove/dispose), positioning, bob, item swaps — pure Three.js, no DOM                                                       |
 | Components           | `components/game/*.test.tsx`                    | InventoryPanel click-to-swap/equip/craft gating, Hotbar slots, StatusBars heart/hunger/armor meters, PauseMenu, DeathScreen (happy-dom + Testing Library) |
-| Browser E2E          | `e2e/smoke.e2e.ts`                              | Real browser: boot without console errors, scene draws, input → movement, craft via UI, mining, pause freeze/resume, save via pause menu across reload |
+| Browser E2E          | `e2e/smoke.e2e.ts`                              | Real browser: boot without console errors, scene draws, input → movement, craft via UI, mining, pause freeze/resume, save via pause menu across reload    |
 
 ## Running the E2E suite
 

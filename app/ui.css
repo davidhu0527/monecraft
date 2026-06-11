@@ -60,10 +60,18 @@
 }
 
 @keyframes hotbar-name-fade {
-  0% { opacity: 0; }
-  8% { opacity: 1; }
-  70% { opacity: 1; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .hotbar {

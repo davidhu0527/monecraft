@@ -4,9 +4,7 @@ import StatusBars, { iconStates } from "@/components/game/StatusBars";
 import { MAX_HEARTS, MAX_HUNGER } from "@/lib/game/config";
 
 function renderBars(overrides: Partial<Parameters<typeof StatusBars>[0]> = {}) {
-  render(
-    <StatusBars hearts={MAX_HEARTS} maxHearts={MAX_HEARTS} hunger={MAX_HUNGER} maxHunger={MAX_HUNGER} armorPoints={0} {...overrides} />
-  );
+  render(<StatusBars hearts={MAX_HEARTS} maxHearts={MAX_HEARTS} hunger={MAX_HUNGER} maxHunger={MAX_HUNGER} armorPoints={0} {...overrides} />);
 }
 
 describe("StatusBars", () => {

@@ -127,7 +127,14 @@ export default function InventoryPanel({
           <div className="inventory-heading">Crafting</div>
           <div className="recipe-list">
             {recipes.map((recipe) => (
-              <button key={recipe.id} className="recipe-entry" onClick={() => onCraft(recipe)} disabled={!canCraft(recipe)} aria-label={recipe.label} title={recipe.label}>
+              <button
+                key={recipe.id}
+                className="recipe-entry"
+                onClick={() => onCraft(recipe)}
+                disabled={!canCraft(recipe)}
+                aria-label={recipe.label}
+                title={recipe.label}
+              >
                 <span className="recipe-ingredients">
                   {recipe.cost.map((cost) => (
                     <ItemIcon key={`${recipe.id}-${cost.slotId}`} slot={createSlot(cost.slotId, cost.count)} size={24} />

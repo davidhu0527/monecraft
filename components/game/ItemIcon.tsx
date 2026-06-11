@@ -15,8 +15,7 @@ type ItemIconProps = {
 export default function ItemIcon({ slot, size = 32 }: ItemIconProps) {
   if (!slot.id || slot.count <= 0) return null;
 
-  const durabilityRatio =
-    slot.maxDurability && slot.durability !== undefined ? Math.max(0, Math.min(1, slot.durability / slot.maxDurability)) : null;
+  const durabilityRatio = slot.maxDurability && slot.durability !== undefined ? Math.max(0, Math.min(1, slot.durability / slot.maxDurability)) : null;
   // Green at full, red when nearly broken — only shown once worn.
   const durabilityHue = durabilityRatio !== null ? Math.round(durabilityRatio * 120) : 0;
 
