@@ -28,18 +28,26 @@ Full detail (loop order, meshing, refs-vs-state bridge): [docs/architecture.md](
 
 ## Hard rules
 
-- New mechanics are a new module in `lib/game/runtime/` wired into the loop — never inline logic in the hook.
-- Gameplay values live twice: React state (UI) and a ref (read by the loop). Keep both in sync via the existing `useEffect` pattern; updating only one is the classic bug.
-- Saves are diffs against generated terrain: changing worldgen or the voxel index formula corrupts them — bump `SAVE_KEY` and note compatibility impact in PRs. See [docs/save-format.md](docs/save-format.md).
-- Client-only: never touch `window`/`document`/localStorage at module top level — only behind `"use client"` inside effects.
-- Before touching meshing, collision, or mob behavior, read the invariants in [docs/architecture.md](docs/architecture.md) (water rendering, unstuck rules, daylight thresholds, pointer lock).
+- UI-facing gameplay values are mirrored as both React state and a ref (the loop reads the ref). Change them together via the existing `useEffect` sync — updating only one is the classic desync bug.
+- Saves are diffs against generated terrain: changing worldgen or the voxel index formula corrupts existing saves — bump `SAVE_KEY` and note the impact in PRs. See [docs/save-format.md](docs/save-format.md).
+- Client-only: no `window`/`document`/localStorage at module scope — access them inside effects/handlers (the game mounts behind `"use client"`).
+- Meshing and collision carry non-obvious invariants that break silently (water renders double-sided/bidirectional; being in water is deliberately not "stuck"). Read [docs/architecture.md](docs/architecture.md) before changing them.
 
 ## Conventions
 
 - TypeScript strict; 2-space indentation; imports grouped by domain.
 - `PascalCase` components/types, `camelCase` functions/variables, `UPPER_SNAKE_CASE` constants.
-- Imperative, scoped commit messages (e.g. `Add block breaking crack overlay`); keep `bun run build` green at each commit.
-- When opening a PR, do not add a "Generated with Claude Code" line (or similar attribution) to the PR description.
+- Prefer extracting per-mechanic logic into a `lib/game/runtime/` module over growing `useMinecraftGame.ts`.
+
+## Development Workflow
+
+For a non-trivial change:
+
+- **Branch** for features and multi-file or dependency changes — a `<type>/<topic>` branch off `main` (e.g. `upgrade/next16-react19-three184`). Small doc-only or single-fix edits can go straight to `main`.
+- **Commit in focused slices.** One logical change per commit (e.g. split a dead-code removal from the feature that replaces it), with imperative, scoped messages (e.g. `Add block breaking crack overlay`) — plain style, no Conventional-Commit prefixes, no attribution trailers. Keep `bun run build` green at each commit so the branch stays bisectable.
+- **Update docs in the same change.** When behavior or a documented concept changes, update CLAUDE.md / `docs/` and add a `CHANGELOG.md` entry; keep `AGENTS.md` and `GEMINI.md` consistent. Flag any save-format or worldgen impact (see Hard rules).
+- **Verify before a PR:** `bun run build` and `bun run lint` green, plus a manual gameplay pass for anything touching the engine (no automated test suite).
+- **Open the PR against this fork's `main`** (`gh pr create --repo hutusi/monecraft --base main`); do not add a "Generated with Claude Code" line to the description. Pushing and opening PRs are user-authorized — don't push or open a PR unless asked.
 
 ## Docs
 
