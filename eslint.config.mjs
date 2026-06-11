@@ -11,15 +11,15 @@ export default defineConfig([
   ...tseslint.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],
-    ...react.configs["recommended-typescript"],
+    ...react.configs["recommended-typescript"]
   },
   reactHooks.configs.flat.recommended,
   {
     plugins: { "@next/next": nextPlugin },
     rules: {
       ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
-    },
+      ...nextPlugin.configs["core-web-vitals"].rules
+    }
   },
   {
     rules: {
@@ -30,7 +30,7 @@ export default defineConfig([
       "react-hooks/set-state-in-effect": "off",
       "@eslint-react/set-state-in-effect": "off",
       // Duplicate of react-hooks/exhaustive-deps — keep the canonical one only.
-      "@eslint-react/exhaustive-deps": "off",
-    },
-  },
+      "@eslint-react/exhaustive-deps": "off"
+    }
+  }
 ]);

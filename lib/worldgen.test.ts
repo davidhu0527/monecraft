@@ -83,9 +83,7 @@ describe("meshing", () => {
       const geometry = world.buildGeometryRegion(0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
       expect(positions.count).toBe(1345464);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe(
-        "d27ec64793f92c06846047c8c597346d6409fa66b4c4cee0c7479d066629c6c4"
-      );
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("d27ec64793f92c06846047c8c597346d6409fa66b4c4cee0c7479d066629c6c4");
     },
     { timeout: 60000 }
   );

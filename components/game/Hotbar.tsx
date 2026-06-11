@@ -62,14 +62,18 @@ export default function Hotbar({ inventory, selectedSlot, hotbarSlots, hearts, m
       <div className="hotbar-status">
         <div className="hotbar-status-row">
           <span className="hotbar-status-label">Health</span>
-          <span className="hotbar-status-value">{hearts}/{maxHearts}</span>
+          <span className="hotbar-status-value">
+            {hearts}/{maxHearts}
+          </span>
         </div>
         <div className="status-track health-bar">
           <div className="status-fill health-fill" style={{ width: `${Math.max(0, Math.min(100, (hearts / maxHearts) * 100))}%` }} />
         </div>
         <div className="hotbar-status-row">
           <span className="hotbar-status-label">Energy</span>
-          <span className="hotbar-status-value">{Math.round(energy)}/{maxEnergy}</span>
+          <span className="hotbar-status-value">
+            {Math.round(energy)}/{maxEnergy}
+          </span>
         </div>
         <div className="status-track energy-bar">
           <div className="status-fill energy-fill" style={{ width: `${Math.max(0, Math.min(100, (energy / maxEnergy) * 100))}%` }} />

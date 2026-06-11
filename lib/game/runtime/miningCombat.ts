@@ -95,7 +95,20 @@ export function tryAttackMob(
 }
 
 export function doPlace(ctx: MiningContext): void {
-  const { world, camera, pointer, raycaster, selectedSlotRef, inventoryRef, adjustSlotCount, setBlockTracked, playerPosition, playerHalfWidth, playerHeight, rebuildWorldMesh } = ctx;
+  const {
+    world,
+    camera,
+    pointer,
+    raycaster,
+    selectedSlotRef,
+    inventoryRef,
+    adjustSlotCount,
+    setBlockTracked,
+    playerPosition,
+    playerHalfWidth,
+    playerHeight,
+    rebuildWorldMesh
+  } = ctx;
 
   raycaster.setFromCamera(pointer, camera);
   const result = voxelRaycast(world, camera.position, raycaster.ray.direction, 7);

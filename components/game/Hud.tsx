@@ -13,17 +13,7 @@ type HudProps = {
 };
 
 export default function Hud(props: HudProps) {
-  const {
-    locked,
-    passiveCount,
-    hostileCount,
-    daylightPercent,
-    selectedSlotData,
-    saveMessage,
-    onSave,
-    onLoad,
-    onReset
-  } = props;
+  const { locked, passiveCount, hostileCount, daylightPercent, selectedSlotData, saveMessage, onSave, onLoad, onReset } = props;
 
   return (
     <div className="hud">
@@ -41,7 +31,9 @@ export default function Hud(props: HudProps) {
         <span>Hostiles: zombies and skeletons burn in daylight, spiders calm down by day, more hostiles spawn at night</span>
         <span>Emergency Unstuck: U</span>
       </div>
-      <div className="stats-line">Passive Mobs: {passiveCount} | Hostile Mobs: {hostileCount}</div>
+      <div className="stats-line">
+        Passive Mobs: {passiveCount} | Hostile Mobs: {hostileCount}
+      </div>
       <div className="stats-line">Daylight: {daylightPercent}%</div>
       <div className="stats-line">Selected: {selectedSlotData?.label ?? "None"}</div>
       <div className="save-controls">
@@ -56,7 +48,6 @@ export default function Hud(props: HudProps) {
         </button>
         {saveMessage ? <span className="save-msg">{saveMessage}</span> : null}
       </div>
-
     </div>
   );
 }

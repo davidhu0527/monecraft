@@ -110,7 +110,7 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
 
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
         if ((block === BlockId.Stone || block === BlockId.Cobblestone || block === BlockId.Bedrock) && n > 0.8) c = tone(base, 1.18);
-        if ((block === BlockId.Wood || block === BlockId.Planks) && ((x + y) % 4 === 0)) c = tone(base, 0.82);
+        if ((block === BlockId.Wood || block === BlockId.Planks) && (x + y) % 4 === 0) c = tone(base, 0.82);
         if (block === BlockId.SliverOre && n > 0.86) c = tone([0.93, 0.93, 0.95], 1);
         if (block === BlockId.RubyOre && n > 0.88) c = tone([0.86, 0.24, 0.24], 1);
         if (block === BlockId.GoldOre && n > 0.84) c = tone([0.96, 0.8, 0.25], 1);
@@ -146,12 +146,60 @@ const FACE_DEFS: {
   dir: [number, number, number];
   corners: [number, number, number][];
 }[] = [
-  { dir: [1, 0, 0], corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
-  { dir: [-1, 0, 0], corners: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]] },
-  { dir: [0, 1, 0], corners: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]] },
-  { dir: [0, -1, 0], corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
-  { dir: [0, 0, 1], corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]] },
-  { dir: [0, 0, -1], corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] }
+  {
+    dir: [1, 0, 0],
+    corners: [
+      [1, 0, 0],
+      [1, 1, 0],
+      [1, 1, 1],
+      [1, 0, 1]
+    ]
+  },
+  {
+    dir: [-1, 0, 0],
+    corners: [
+      [0, 0, 1],
+      [0, 1, 1],
+      [0, 1, 0],
+      [0, 0, 0]
+    ]
+  },
+  {
+    dir: [0, 1, 0],
+    corners: [
+      [0, 1, 1],
+      [1, 1, 1],
+      [1, 1, 0],
+      [0, 1, 0]
+    ]
+  },
+  {
+    dir: [0, -1, 0],
+    corners: [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 0, 1],
+      [0, 0, 1]
+    ]
+  },
+  {
+    dir: [0, 0, 1],
+    corners: [
+      [1, 0, 1],
+      [1, 1, 1],
+      [0, 1, 1],
+      [0, 0, 1]
+    ]
+  },
+  {
+    dir: [0, 0, -1],
+    corners: [
+      [0, 0, 0],
+      [0, 1, 0],
+      [1, 1, 0],
+      [1, 0, 0]
+    ]
+  }
 ];
 
 function hash2D(x: number, z: number): number {
@@ -322,7 +370,8 @@ export class VoxelWorld {
         } else if (biome === BiomeId.Forest) {
           baseHeight = 50;
           noiseScale = 4.0;
-        } else { // Mountains
+        } else {
+          // Mountains
           baseHeight = 55;
           noiseScale = 18.0;
         }
@@ -483,9 +532,12 @@ export class VoxelWorld {
       const biome = this.getBiome(x, z);
 
       let spawnChance = 0.18; // Plains
-      if (biome === BiomeId.Ocean) spawnChance = 0; // Ocean
-      else if (biome === BiomeId.Mountains) spawnChance = 0.05; // Mountains
-      else if (biome === BiomeId.Desert) spawnChance = 0.01; // Desert
+      if (biome === BiomeId.Ocean)
+        spawnChance = 0; // Ocean
+      else if (biome === BiomeId.Mountains)
+        spawnChance = 0.05; // Mountains
+      else if (biome === BiomeId.Desert)
+        spawnChance = 0.01; // Desert
       else if (biome === BiomeId.Forest) spawnChance = 0.45; // Forest
 
       if (rand() > spawnChance) continue;
@@ -625,12 +677,7 @@ export type RaycastResult = {
   previous: THREE.Vector3;
 };
 
-export function voxelRaycast(
-  world: VoxelWorld,
-  origin: THREE.Vector3,
-  direction: THREE.Vector3,
-  maxDist = 6
-): RaycastResult | null {
+export function voxelRaycast(world: VoxelWorld, origin: THREE.Vector3, direction: THREE.Vector3, maxDist = 6): RaycastResult | null {
   const dir = direction.clone().normalize();
   const pos = origin.clone();
 

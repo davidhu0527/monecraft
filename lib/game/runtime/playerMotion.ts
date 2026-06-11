@@ -27,7 +27,13 @@ type MoveTickArgs = {
   canSprint: boolean;
 };
 
-export function tickPlayerMovement(args: MoveTickArgs): { voidTimer: number; didSprint: boolean; didWalk: boolean; didJump: boolean; horizontalDistance: number } {
+export function tickPlayerMovement(args: MoveTickArgs): {
+  voidTimer: number;
+  didSprint: boolean;
+  didWalk: boolean;
+  didJump: boolean;
+  horizontalDistance: number;
+} {
   const {
     dt,
     world,
