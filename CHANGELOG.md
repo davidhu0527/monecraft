@@ -16,6 +16,7 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- **Fewer, better-spread animals**: the day-one passive population drops from 34 to 14 (6 sheep, 5 chickens, 3 horses) and scatters over a wider ring than hostiles, so the spawn area no longer feels crowded. Initial hostiles and night spawning are unchanged. Mobs and the respawn point also no longer place on flooded columns
 - **Worldgen rebalanced — `SAVE_KEY` bumped to `minecraft_save_v5`, existing saves are discarded.** The biome noise field was degenerate (whole maps collapsed to 1–2 biomes; forests effectively never generated, leaving some worlds nearly woodless). Maps now contain coherent patches of all five biomes (forest ~19–31%, measured across seeds). Tree canopies no longer overwrite trunk tops (trees were losing 2 wood blocks each and looked like bushes), tree density roughly doubled, and forests grow taller trunks. Worldgen hash tests re-baselined per the documented policy
 - **Stats rebalanced to Minecraft ranges** — health 50 → 20 (10 hearts), energy renamed to hunger and rescaled 100 → 20 (10 drumsticks) with total drain ranges preserved (sprint 100 blocks / walk 300 / 50 jumps per point), food restores 7; health regen now requires hunger ≥ 12 and sprinting needs hunger > 6; hunger refills on respawn; fall/void damage rescaled to the new HP range
 - **Hostile mobs hit harder**: zombie/skeleton damage 1 → 3, spider 1 → 2 (the old values were ~2% of max HP per hit; this is a real difficulty increase)

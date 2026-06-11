@@ -54,10 +54,10 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    expect(state.mobs.length).toBe(14 + 12 + 8 + 8 + 6 + 6);
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 8 + 6 + 6);
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(34);
+    expect(engine.getSnapshot().passiveCount).toBe(14);
     expect(engine.getSnapshot().hostileCount).toBe(20);
   });
 

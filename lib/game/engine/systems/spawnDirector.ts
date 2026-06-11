@@ -42,20 +42,25 @@ export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () =>
   }
 }
 
-/** The day-one population around the player's spawn point. */
+/**
+ * The day-one population around the player's spawn point. Passives scatter
+ * over a wider ring than hostiles so the spawn area doesn't feel like a
+ * petting zoo; hostiles stay closer (the dawn-aggro behavior tests document).
+ */
 export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
   const centerX = state.player.position.x;
   const centerZ = state.player.position.z;
-  const radius = RENDER_RADIUS * 0.7;
-  const groups: Array<[MobKind, boolean, number]> = [
-    ["sheep", false, 14],
-    ["chicken", false, 12],
-    ["horse", false, 8],
-    ["zombie", true, 8],
-    ["skeleton", true, 6],
-    ["spider", true, 6]
+  const passiveRadius = RENDER_RADIUS * 1.2;
+  const hostileRadius = RENDER_RADIUS * 0.7;
+  const groups: Array<[MobKind, boolean, number, number]> = [
+    ["sheep", false, 6, passiveRadius],
+    ["chicken", false, 5, passiveRadius],
+    ["horse", false, 3, passiveRadius],
+    ["zombie", true, 8, hostileRadius],
+    ["skeleton", true, 6, hostileRadius],
+    ["spider", true, 6, hostileRadius]
   ];
-  for (const [kind, hostile, count] of groups) {
+  for (const [kind, hostile, count, radius] of groups) {
     spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius }, rng, surfaceYAt);
   }
 }
