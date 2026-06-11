@@ -19,7 +19,7 @@ This is a Next.js + TypeScript Minecraft-like game.
 - `bun run dev`: Start local dev server (`http://localhost:3000`).
 - `bun run build`: Production build + type checking.
 - `bun run start`: Serve the production build.
-- `bun run lint`: Run Next.js ESLint (configure once if prompted).
+- `bun run lint`: Run ESLint across the repo (`eslint .` with the flat config in `eslint.config.mjs`).
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript (`strict` enabled).
