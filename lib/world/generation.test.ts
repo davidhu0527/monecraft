@@ -33,9 +33,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "4900ec2fe8808b413ca82f6c19a85cd836d1d767a31f917ec9550611e7484675"],
-    [1, "b37a02f3adc20f4f49baba9870d1daa23929f95c4feef5512f2a5e1082178bea"],
-    [999999937, "8f2b794d5b6d91095d1cadfd8fd4787597a1b04a4cca7aba22b5df09d8f145f8"]
+    [1337, "b5fdbdb52db110be4d963c2eb30ae5678ac46dd8c3ca63baccf98b464059d5c3"],
+    [1, "4ff7cf20eabc45506c83314afa370f8f09107b1f6a9a93865fb10681c8b8456d"],
+    [999999937, "ac9e6f83a447e9194a230ef6f771db8da7173ebd291244b1cd10196ab903b109"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -43,7 +43,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("e1ca3305724cb61c1a5aa138f4d663880e9bbd14bfab4b700e2d3960185821e9");
+      expect(hashBytes(fullWorld().blocks)).toBe("788cb3a2952929975d18d11a47e789d324f7df76be47912a0b4221b07ad88b58");
     },
     { timeout: 60000 }
   );
@@ -61,18 +61,91 @@ describe("worldgen determinism", () => {
     expect(world.get(200, 14, 0)).toBe(BlockId.Bedrock);
 
     // Biome field samples.
-    expect(world.getBiome(1, 1)).toBe(BiomeId.Plains);
+    expect(world.getBiome(1, 1)).toBe(BiomeId.Forest);
     expect(world.getBiome(1, 277)).toBe(BiomeId.Desert);
+    expect(world.getBiome(400, 100)).toBe(BiomeId.Mountains);
 
-    // Terrain heights at sample columns.
-    expect(world.highestSolidY(64, 64)).toBe(44);
-    expect(world.highestSolidY(256, 256)).toBe(46);
-    expect(world.highestSolidY(400, 100)).toBe(52);
+    // Terrain heights at sample columns ((64,64) tops out in a tree canopy).
+    expect(world.highestSolidY(64, 64)).toBe(49);
+    expect(world.highestSolidY(256, 256)).toBe(28);
+    expect(world.highestSolidY(400, 100)).toBe(104);
+
+    // Snow caps above the snow line.
+    expect(world.get(400, 104, 100)).toBe(BlockId.Snow);
 
     // Sea-level fill: a column whose floor is below sea level holds water at y=43.
     expect(world.highestSolidY(1, 277)).toBe(30);
     expect(world.get(1, 43, 277)).toBe(BlockId.Water);
   });
+});
+
+describe("world content balance", () => {
+  // These floors pin the world's playability, not its exact bytes: they catch
+  // the degenerate-biome regression class (a whole map collapsing to 1-2
+  // biomes left some worlds nearly woodless) and survive legitimate
+  // re-baselines as long as the world still plays right.
+  test(
+    "every biome appears with real coverage on the seed-1337 map",
+    () => {
+      const world = fullWorld();
+      const counts = new Map<BiomeId, number>();
+      let samples = 0;
+      for (let x = 0; x < world.sizeX; x += 4) {
+        for (let z = 0; z < world.sizeZ; z += 4) {
+          const biome = world.getBiome(x, z);
+          counts.set(biome, (counts.get(biome) ?? 0) + 1);
+          samples += 1;
+        }
+      }
+      for (const biome of [BiomeId.Plains, BiomeId.Desert, BiomeId.Ocean, BiomeId.Forest, BiomeId.Mountains]) {
+        expect((counts.get(biome) ?? 0) / samples).toBeGreaterThan(0.02);
+      }
+      expect((counts.get(BiomeId.Forest) ?? 0) / samples).toBeGreaterThan(0.1);
+    },
+    { timeout: 60000 }
+  );
+
+  test(
+    "wood, snow, cacti, and beaches actually generate",
+    () => {
+      const world = fullWorld();
+      let woodNearCenter = 0;
+      let snow = 0;
+      let cactus = 0;
+      for (let x = 0; x < world.sizeX; x += 1) {
+        for (let z = 0; z < world.sizeZ; z += 1) {
+          const nearCenter = Math.hypot(x - world.sizeX / 2, z - world.sizeZ / 2) <= 90;
+          for (let y = 0; y < world.sizeY; y += 1) {
+            const block = world.get(x, y, z);
+            if (block === BlockId.Wood && nearCenter) woodNearCenter += 1;
+            else if (block === BlockId.Snow) snow += 1;
+            else if (block === BlockId.Cactus) cactus += 1;
+          }
+        }
+      }
+      expect(woodNearCenter).toBeGreaterThan(100); // a player can find wood without travelling far
+      expect(snow).toBeGreaterThan(500); // mountain snow caps exist
+      expect(cactus).toBeGreaterThanOrEqual(5); // some dry desert grows cacti
+
+      // At least one beach column: sand top at sea level on a non-desert/ocean
+      // column with water beside it.
+      let beachFound = false;
+      search: for (let x = 1; x < world.sizeX - 1; x += 1) {
+        for (let z = 1; z < world.sizeZ - 1; z += 1) {
+          const biome = world.getBiome(x, z);
+          if (biome === BiomeId.Desert || biome === BiomeId.Ocean) continue;
+          const topY = world.highestSolidY(x, z);
+          if (topY < 43 || topY > 44 || world.get(x, topY, z) !== BlockId.Sand) continue;
+          if (world.get(x + 1, 43, z) === BlockId.Water || world.get(x - 1, 43, z) === BlockId.Water) {
+            beachFound = true;
+            break search;
+          }
+        }
+      }
+      expect(beachFound).toBe(true);
+    },
+    { timeout: 60000 }
+  );
 });
 
 describe("meshing", () => {
@@ -82,8 +155,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1345464);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("d27ec64793f92c06846047c8c597346d6409fa66b4c4cee0c7479d066629c6c4");
+      expect(positions.count).toBe(1342776);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("2e86e767dc462d7770538409b2faab359cfc82e2978205ff94dcf34a4fd187cb");
     },
     { timeout: 60000 }
   );

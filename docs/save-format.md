@@ -11,7 +11,7 @@
 - selected hotbar slot (0–8)
 - player position
 
-Stored in localStorage under `SAVE_KEY` (`minecraft_save_v4`, defined in `lib/game/config.ts`). Read/write and restore validation live in `lib/game/save.ts` (the `Storage` is injectable for tests); `GameEngine.serialize()` produces the save from live state, and `lib/game/engine/blockChanges.ts` maintains the block diff.
+Stored in localStorage under `SAVE_KEY` (`minecraft_save_v5`, defined in `lib/game/config.ts`). Read/write and restore validation live in `lib/game/save.ts` (the `Storage` is injectable for tests); `GameEngine.serialize()` produces the save from live state, and `lib/game/engine/blockChanges.ts` maintains the block diff.
 
 ### Version history
 

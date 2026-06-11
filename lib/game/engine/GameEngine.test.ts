@@ -54,15 +54,18 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    expect(state.mobs.length).toBe(14 + 12 + 8 + 8 + 6 + 6);
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 8 + 6 + 6);
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(34);
+    expect(engine.getSnapshot().passiveCount).toBe(14);
     expect(engine.getSnapshot().hostileCount).toBe(20);
   });
 
   test("the player settles onto the ground under gravity and stays put", () => {
     const engine = makeEngine();
+    // Combat-free: with the rebalanced worldgen a hostile can spawn next to
+    // the player and its hit knockback would masquerade as physics drift.
+    calmDaytime(engine);
     run(engine, 2);
     const y1 = engine.state.player.position.y;
     run(engine, 1);
@@ -259,6 +262,7 @@ describe("commands", () => {
 
   test("respawn command skips the countdown and restores full stats", () => {
     const engine = makeEngine();
+    calmDaytime(engine); // hostiles at dawn could re-kill the fresh respawn
     run(engine, 0.5);
     engine.state.hunger = 5;
     engine.state.hearts = 1;
@@ -288,6 +292,7 @@ describe("commands", () => {
 describe("death and respawn", () => {
   test("void damage kills, the respawn countdown runs, and the player returns at full health", () => {
     const engine = makeEngine();
+    calmDaytime(engine); // hostiles at dawn could damage the fresh respawn
     run(engine, 0.5);
     // One void tick (0.4s) must kill before the 0.8s auto-unstuck teleport fires.
     engine.state.hearts = 1;

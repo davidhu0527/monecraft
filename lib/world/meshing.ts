@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ATLAS_COLUMNS, ATLAS_FACE_VARIANTS, tileIndexFor } from "./atlas";
+import { ATLAS_COLUMNS, ATLAS_ROWS, tileIndexFor } from "./atlas";
 import { BlockId } from "./blocks";
 import { VoxelWorld } from "./voxelWorld";
 
@@ -105,7 +105,7 @@ export function buildGeometryRegion(
     const tile = tileIndexFor(block, face);
     const col = tile % ATLAS_COLUMNS;
     const row = Math.floor(tile / ATLAS_COLUMNS);
-    const rows = Math.ceil(((BlockId.Water + 1) * ATLAS_FACE_VARIANTS) / ATLAS_COLUMNS);
+    const rows = ATLAS_ROWS;
     const pad = 0.0008;
     const u0 = col / ATLAS_COLUMNS + pad;
     const v0 = row / rows + pad;

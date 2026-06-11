@@ -49,7 +49,7 @@ test("inventory opens and crafting works end to end", async ({ gamePage: page })
 test("holding the mouse mines the block underfoot", async ({ gamePage: page }) => {
   await calmDaytime(page);
   await acquirePointerLock(page);
-  await page.waitForTimeout(500); // settle
+  await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
 
   // Aim straight down from the center of the cell (a ray origin exactly on a
   // cell boundary may target the diagonal neighbor — see docs/testing.md).
@@ -61,7 +61,8 @@ test("holding the mouse mines the block underfoot", async ({ gamePage: page }) =
   });
 
   await page.mouse.down();
-  await expect.poll(async () => page.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 15000 }).toBeGreaterThan(0);
+  // Generous timeout: CI renders with software GL at single-digit FPS.
+  await expect.poll(async () => page.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 30000 }).toBeGreaterThan(0);
   await page.mouse.up();
 });
 
@@ -88,7 +89,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Save Game" }).click();
-  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v4"));
+  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v5"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
   expect(JSON.parse(saved!).version).toBe(2);

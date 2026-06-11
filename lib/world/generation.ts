@@ -22,13 +22,19 @@ export const GEN = Object.freeze({
     [BiomeId.Plains]: Object.freeze({ baseHeight: 47, noiseScale: 2.0, treeChance: 0.18 }),
     [BiomeId.Desert]: Object.freeze({ baseHeight: 46, noiseScale: 3.5, treeChance: 0.01 }),
     [BiomeId.Ocean]: Object.freeze({ baseHeight: 30, noiseScale: 2.5, treeChance: 0 }),
-    [BiomeId.Forest]: Object.freeze({ baseHeight: 50, noiseScale: 4.0, treeChance: 0.45 }),
+    [BiomeId.Forest]: Object.freeze({ baseHeight: 50, noiseScale: 4.0, treeChance: 0.6 }),
     [BiomeId.Mountains]: Object.freeze({ baseHeight: 55, noiseScale: 18.0, treeChance: 0.05 })
   }),
   mountainStoneAboveY: 65,
+  snowAboveY: 68,
+  // Sand shoreline band around sea level (deeper floors keep their biome top).
+  beachMaxAboveSea: 1,
+  beachDepthBelowSea: 2,
   caveCount: 230,
   caveChamberCount: 150,
-  treeAttempts: 5200,
+  treeAttempts: 9000,
+  // Cacti per dry desert column — keyed on area so drowned deserts get few.
+  cactusChance: 0.012,
   houseCount: 120,
   oreConfigs: Object.freeze([
     { id: BlockId.SliverOre, attempts: 120000, minY: 3, maxYOffset: 10, minSize: 3, maxSize: 10 },
@@ -68,8 +74,10 @@ export function generateWorld(world: VoxelWorld): void {
   generateTerrain(world);
   carveCaves(world, rand);
   placeWater(world);
+  placeBeaches(world);
   placeOres(world, rand);
   placeTrees(world, rand);
+  placeCacti(world);
   placeStructures(world, rand);
 }
 
@@ -92,12 +100,14 @@ function generateTerrain(world: VoxelWorld): void {
       const { baseHeight, noiseScale } = GEN.biomes[biome];
 
       const topY = Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
-      const topBlock =
-        biome === BiomeId.Desert || biome === BiomeId.Ocean
-          ? BlockId.Sand
-          : biome === BiomeId.Mountains && topY > GEN.mountainStoneAboveY
-            ? BlockId.Stone
-            : BlockId.Grass;
+      let topBlock = BlockId.Grass;
+      if (biome === BiomeId.Desert || biome === BiomeId.Ocean) {
+        topBlock = BlockId.Sand;
+      } else if (biome === BiomeId.Mountains && topY > GEN.snowAboveY) {
+        topBlock = BlockId.Snow;
+      } else if (biome === BiomeId.Mountains && topY > GEN.mountainStoneAboveY) {
+        topBlock = BlockId.Stone;
+      }
 
       for (let y = 1; y <= topY; y += 1) {
         if (y === topY) {
@@ -232,6 +242,31 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
   }
 }
 
+/**
+ * Sand shorelines: grass columns in the sea-level band turn to beach only
+ * when water actually sits nearby — inland basins at sea level stay grass.
+ * Runs after placeWater so adjacency can test real water blocks.
+ */
+function placeBeaches(world: VoxelWorld): void {
+  for (let x = 1; x < world.sizeX - 1; x += 1) {
+    for (let z = 1; z < world.sizeZ - 1; z += 1) {
+      const topY = world.highestSolidY(x, z);
+      if (topY > GEN.seaLevel + GEN.beachMaxAboveSea || topY < GEN.seaLevel - GEN.beachDepthBelowSea) continue;
+      if (world.get(x, topY, z) !== BlockId.Grass) continue;
+
+      let nearWater = false;
+      for (let dx = -2; dx <= 2 && !nearWater; dx += 1) {
+        for (let dz = -2; dz <= 2 && !nearWater; dz += 1) {
+          if (world.get(x + dx, GEN.seaLevel, z + dz) === BlockId.Water) nearWater = true;
+        }
+      }
+      if (!nearWater) continue;
+
+      for (let y = Math.max(1, topY - 2); y <= topY; y += 1) world.set(x, y, z, BlockId.Sand);
+    }
+  }
+}
+
 function placeTrees(world: VoxelWorld, rand: () => number): void {
   for (let i = 0; i < GEN.treeAttempts; i += 1) {
     const x = 4 + Math.floor(rand() * (world.sizeX - 8));
@@ -254,9 +289,30 @@ function placeTrees(world: VoxelWorld, rand: () => number): void {
         for (let oy = 0; oy <= 2; oy += 1) {
           const d = Math.abs(ox) + Math.abs(oz) + oy;
           if (d > 4) continue;
+          // Only fill air: the canopy must not eat the trunk or neighbors.
+          if (world.get(x + ox, leafStart + oy, z + oz) !== BlockId.Air) continue;
           world.set(x + ox, leafStart + oy, z + oz, BlockId.Leaves);
         }
       }
+    }
+  }
+}
+
+function placeCacti(world: VoxelWorld): void {
+  // Hash-gated scan instead of random attempts: density follows the dry
+  // desert area, so a mostly-flooded desert gets few cacti instead of the
+  // whole budget missing. Doesn't consume the shared rand stream.
+  for (let x = 4; x < world.sizeX - 4; x += 1) {
+    for (let z = 4; z < world.sizeZ - 4; z += 1) {
+      if (hash2D(x * 1.7 + 11.3, z * 2.3 - 7.1) > GEN.cactusChance) continue;
+      if (world.getBiome(x, z) !== BiomeId.Desert) continue;
+
+      const topY = world.highestSolidY(x, z);
+      if (world.get(x, topY, z) !== BlockId.Sand) continue;
+      if (world.get(x, topY + 1, z) !== BlockId.Air) continue;
+
+      const height = 2 + (hash2D(z * 3.1, x * 1.3) > 0.5 ? 1 : 0);
+      for (let y = 1; y <= height; y += 1) world.set(x, topY + y, z, BlockId.Cactus);
     }
   }
 }

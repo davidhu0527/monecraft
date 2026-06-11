@@ -128,12 +128,24 @@ export function useMinecraftGame() {
     let minimap: MinimapRenderer | null = null;
     let last = performance.now();
     let animationFrame = 0;
+    // Catch-up stepping: a slow frame (software GL, busy machine) can take far
+    // longer than one 50ms step, and a single clamped step would run the
+    // simulation in slow motion. Bounded substeps keep sim time tracking wall
+    // time; the cap bounds work per frame and quietly drops time beyond it
+    // (e.g. after a background-tab stall).
+    const MAX_STEP_SECONDS = 0.05;
+    const MAX_SUBSTEPS = 5;
+    let pendingSeconds = 0;
     const clock = () => {
       const now = performance.now();
-      const dt = Math.min((now - last) / 1000, 0.05);
+      pendingSeconds = Math.min(pendingSeconds + (now - last) / 1000, MAX_STEP_SECONDS * MAX_SUBSTEPS);
       last = now;
 
-      gameEngine.step(dt, input.input);
+      while (pendingSeconds > 0) {
+        const dt = Math.min(pendingSeconds, MAX_STEP_SECONDS);
+        gameEngine.step(dt, input.input);
+        pendingSeconds -= dt;
+      }
 
       for (const event of gameEngine.consumeEvents()) {
         if (event.type === "died") {
