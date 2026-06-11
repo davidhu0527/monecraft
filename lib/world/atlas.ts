@@ -7,6 +7,11 @@ export const ATLAS_TILE_SIZE = 16;
 export const ATLAS_FACE_VARIANTS = 3; // top, side, bottom
 export const ATLAS_COLUMNS = 16;
 
+// Tile range derived from the palette so new blocks get tiles automatically —
+// a hardcoded last-block bound here once left new blocks sampling garbage UVs.
+export const ATLAS_BLOCK_COUNT = Math.max(...Object.keys(BLOCK_COLORS).map(Number)) + 1;
+export const ATLAS_ROWS = Math.ceil((ATLAS_BLOCK_COUNT * ATLAS_FACE_VARIANTS) / ATLAS_COLUMNS);
+
 let atlasTextureCache: THREE.CanvasTexture | null = null;
 
 function clamp01(v: number): number {
@@ -29,10 +34,8 @@ export function tileIndexFor(block: number, face: "top" | "side" | "bottom"): nu
 export function createBlockAtlasTexture(): THREE.CanvasTexture {
   if (atlasTextureCache) return atlasTextureCache;
 
-  const totalTiles = (BlockId.Water + 1) * ATLAS_FACE_VARIANTS;
-  const rows = Math.ceil(totalTiles / ATLAS_COLUMNS);
   const width = ATLAS_COLUMNS * ATLAS_TILE_SIZE;
-  const height = rows * ATLAS_TILE_SIZE;
+  const height = ATLAS_ROWS * ATLAS_TILE_SIZE;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -69,6 +72,8 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.DiamondOre && n > 0.9) c = tone([0.7, 0.94, 0.98], 1);
         if (block === BlockId.Water) c = tone([0.22, 0.48, 0.85], 0.95 + n * 0.12, face === "top" ? 0.02 : 0);
         if (block === BlockId.Sand && n > 0.84) c = tone(base, 1.12);
+        if (block === BlockId.Cactus && face === "side" && x % 4 === 0) c = tone(base, 0.72);
+        if (block === BlockId.Snow) c = tone(base, 0.97 + n * 0.06);
 
         ctx.fillStyle = rgb(c);
         ctx.fillRect(ox + x, oy + y, 1, 1);
@@ -76,7 +81,7 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
     }
   };
 
-  for (let block = BlockId.Grass; block <= BlockId.Water; block += 1) {
+  for (let block = BlockId.Grass; block < ATLAS_BLOCK_COUNT; block += 1) {
     drawTile(block, "top");
     drawTile(block, "side");
     drawTile(block, "bottom");
