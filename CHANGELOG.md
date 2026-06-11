@@ -14,6 +14,10 @@ All notable changes to this project are documented in this file.
 - Top-right minimap rendered from world block data (north-up, height-shaded, player arrow, refreshes on block edits)
 - Engine commands: `pause`/`resume` (freezes the whole simulation behind the menu), `toggleDebug`, and `respawn` (skips the death countdown)
 
+### Fixed
+
+- On slow machines the simulation ran in slow motion: the frame loop clamped each frame to one 50 ms step, so at low FPS game time fell behind wall time. The loop now catches up with bounded substeps
+
 ### Changed
 
 - **Fewer, better-spread animals**: the day-one passive population drops from 34 to 14 (6 sheep, 5 chickens, 3 horses) and scatters over a wider ring than hostiles, so the spawn area no longer feels crowded. Initial hostiles and night spawning are unchanged. Mobs and the respawn point also no longer place on flooded columns

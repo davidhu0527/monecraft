@@ -16,7 +16,7 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 
 ## React shell (`lib/game/useMinecraftGame.ts`, `components/`)
 
-- `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer` and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` → drain engine events → `minimap.sync(state)` → `renderer.sync(state)` → `renderer.render()`. The minimap must sync **before** the renderer because it reads `state.worldMeshDirty`, which `renderer.sync` clears.
+- `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer` and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` (in bounded catch-up substeps of ≤50 ms, so slow frames — e.g. software GL — don't run the simulation in slow motion) → drain engine events → `minimap.sync(state)` → `renderer.sync(state)` → `renderer.render()`. The minimap must sync **before** the renderer because it reads `state.worldMeshDirty`, which `renderer.sync` clears.
 - UI state arrives as immutable `GameSnapshot`s via `useSyncExternalStore`; the engine replaces the snapshot object only when a visible value changes, so React re-renders are minimal and identity-driven.
 - UI intents (`craft`, `swapSlots`, `selectSlot`, …) are dispatched as engine `Command`s. The only React state in the shell is pure UI concern: pointer lock, transient save messages, renderer failure.
 - WebGL init failure is surfaced as `rendererError` and rendered as a fallback panel instead of crashing.
