@@ -41,6 +41,14 @@ export type MiningState = {
   progress: number;
 };
 
+/** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
+export type DebugInfo = {
+  x: number;
+  y: number;
+  z: number;
+  daylight: number;
+};
+
 export type GameTimers = {
   voidTimer: number;
   regenTimer: number;
@@ -50,6 +58,7 @@ export type GameTimers = {
   stuckTimer: number;
   hostileSpawnTimer: number;
   daylightHudTimer: number;
+  debugHudTimer: number;
 };
 
 export type GameState = {
@@ -64,6 +73,10 @@ export type GameState = {
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
+  /** Frozen simulation behind the pause menu; only commands are processed. */
+  paused: boolean;
+  debugOpen: boolean;
+  debugInfo: DebugInfo | null;
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
@@ -86,7 +99,8 @@ export function createTimers(): GameTimers {
     jumpBudget: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
-    daylightHudTimer: 0
+    daylightHudTimer: 0,
+    debugHudTimer: 0
   };
 }
 
@@ -125,6 +139,11 @@ export type GameSnapshot = {
   hostileCount: number;
   respawnSeconds: number;
   inventoryOpen: boolean;
+  paused: boolean;
+  debugOpen: boolean;
+  debug: DebugInfo | null;
+  /** Total defense points of equipped armor — drives the HUD armor bar. */
+  armorPoints: number;
   capsActive: boolean;
 };
 

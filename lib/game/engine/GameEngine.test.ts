@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { BlockId, collidesAt } from "@/lib/world";
 import { MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, REGEN_MIN_HUNGER, SPRINT_BLOCKS_PER_HUNGER, SPRINT_MIN_HUNGER } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
+import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
 
@@ -198,6 +199,74 @@ describe("commands", () => {
     expect(engine.getSnapshot().inventoryOpen).toBe(true);
     engine.dispatch({ type: "toggleInventory" });
     expect(engine.getSnapshot().inventoryOpen).toBe(false);
+  });
+
+  test("pause freezes the simulation and resume unfreezes it", () => {
+    const engine = makeEngine();
+    run(engine, 1);
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(true);
+
+    const clockBefore = engine.state.dayClock;
+    const mobPositions = engine.state.mobs.map((mob) => mob.position.clone());
+    run(engine, 1, input({ keys: ["KeyW"] }));
+    expect(engine.state.dayClock).toBe(clockBefore);
+    expect(engine.state.mobs.every((mob, i) => mob.position.equals(mobPositions[i]))).toBe(true);
+
+    engine.dispatch({ type: "resume" });
+    expect(engine.getSnapshot().paused).toBe(false);
+    run(engine, 0.5);
+    expect(engine.state.dayClock).toBeGreaterThan(clockBefore);
+  });
+
+  test("pause is ignored while the inventory is open or the player is dead", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleInventory" });
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+    engine.dispatch({ type: "toggleInventory" });
+
+    engine.state.isDead = true;
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+  });
+
+  test("toggleDebug flips the overlay and publishes a throttled readout", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleDebug" });
+    expect(engine.getSnapshot().debugOpen).toBe(true);
+    expect(engine.getSnapshot().debug).not.toBeNull();
+    expect(engine.getSnapshot().debug!.y).toBeCloseTo(engine.state.player.position.y, 0);
+    engine.dispatch({ type: "toggleDebug" });
+    expect(engine.getSnapshot().debugOpen).toBe(false);
+    expect(engine.getSnapshot().debug).toBeNull();
+  });
+
+  test("respawn command skips the countdown and restores full stats", () => {
+    const engine = makeEngine();
+    run(engine, 0.5);
+    engine.state.hunger = 5;
+    engine.state.hearts = 1;
+    engine.state.player.position.y = -10;
+    run(engine, 0.5); // void tick kills
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.getSnapshot().respawnSeconds).toBeGreaterThan(1);
+
+    engine.dispatch({ type: "respawn" });
+    run(engine, 0.1);
+    expect(engine.state.isDead).toBe(false);
+    expect(engine.state.hearts).toBe(MAX_HEARTS);
+    expect(engine.state.hunger).toBe(MAX_HUNGER);
+  });
+
+  test("armorPoints reflects equipped defense", () => {
+    const engine = makeEngine();
+    expect(engine.getSnapshot().armorPoints).toBe(0);
+    const slot = engine.state.inventory.findIndex((entry) => !entry.id);
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[slot] = createSlot("helmet", 1);
+    engine.dispatch({ type: "toggleEquipArmor", index: slot });
+    expect(engine.getSnapshot().armorPoints).toBeGreaterThan(0);
   });
 });
 

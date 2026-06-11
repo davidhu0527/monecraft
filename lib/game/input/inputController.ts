@@ -41,7 +41,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
     pointerLocked: false
   };
 
-  const uiBlocked = () => engine.state.inventoryOpen || engine.state.isDead;
+  const uiBlocked = () => engine.state.inventoryOpen || engine.state.isDead || engine.state.paused;
 
   const onMouseMove = (evt: MouseEvent) => {
     if (!input.pointerLocked) return;
@@ -49,6 +49,23 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
   };
 
   const onKeyDown = (evt: KeyboardEvent) => {
+    // Escape under pointer lock never reaches us — the browser consumes it to
+    // exit the lock, and the pointerlockchange handler below opens the menu.
+    if (evt.code === "Escape") {
+      if (engine.state.paused) engine.dispatch({ type: "resume" });
+      else if (engine.state.inventoryOpen) engine.dispatch({ type: "toggleInventory" });
+      else if (!input.pointerLocked) engine.dispatch({ type: "pause" });
+      return;
+    }
+
+    if (engine.state.paused) return;
+
+    if (evt.code === "F3") {
+      evt.preventDefault();
+      engine.dispatch({ type: "toggleDebug" });
+      return;
+    }
+
     if (evt.code.startsWith("Digit")) {
       const idx = Number.parseInt(evt.code.slice(5), 10) - 1;
       if (idx >= 0) engine.dispatch({ type: "selectSlot", index: idx });
@@ -114,6 +131,11 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
   const onPointerLockChange = () => {
     input.pointerLocked = document.pointerLockElement === canvas;
     onLockChange(input.pointerLocked);
+    // Losing the lock during plain gameplay means the player pressed Escape
+    // (or the browser took it away) — open the pause menu. The inventory and
+    // death paths set their state flags before the lock change fires, and the
+    // pause command itself ignores those states as a second guard.
+    if (!input.pointerLocked) engine.dispatch({ type: "pause" });
   };
 
   window.addEventListener("resize", onResize);

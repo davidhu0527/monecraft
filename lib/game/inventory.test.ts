@@ -5,6 +5,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import {
   adjustSlotCount,
   armorReduction,
+  equippedDefense,
   canCraft,
   consumeEquippedArmorDurability,
   consumeToolDurability,
@@ -180,5 +181,13 @@ describe("swap and armor", () => {
     // Equipped but not owned counts for nothing.
     expect(armorReduction(makeSlots(["helmet", 1]), equipped)).toBeCloseTo(2 * 0.05);
     expect(armorReduction(slots, createEmptyArmorEquipment())).toBe(0);
+  });
+
+  test("equippedDefense sums defense points of owned equipped pieces", () => {
+    const slots = makeSlots(["helmet", 1], ["chestplate", 1]);
+    const equipped = { ...createEmptyArmorEquipment(), helmet: "helmet", chestplate: "chestplate" };
+    expect(equippedDefense(slots, equipped)).toBe(2 + 4);
+    expect(equippedDefense(makeSlots(["helmet", 1]), equipped)).toBe(2);
+    expect(equippedDefense(slots, createEmptyArmorEquipment())).toBe(0);
   });
 });

@@ -12,4 +12,8 @@ export type Command =
   | { type: "eatFood" }
   | { type: "placeBlock" }
   | { type: "attack" }
-  | { type: "unstuck" };
+  | { type: "unstuck" }
+  | { type: "pause" }
+  | { type: "resume" }
+  | { type: "toggleDebug" }
+  | { type: "respawn" };

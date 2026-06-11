@@ -34,6 +34,10 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   hostileCount: 0,
   respawnSeconds: 0,
   inventoryOpen: false,
+  paused: false,
+  debugOpen: false,
+  debug: null,
+  armorPoints: 0,
   capsActive: false
 };
 

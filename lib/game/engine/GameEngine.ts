@@ -77,6 +77,9 @@ export class GameEngine {
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
+      paused: false,
+      debugOpen: false,
+      debugInfo: null,
       capsActive: false,
       mobs: [],
       nextMobId: 1,
@@ -107,6 +110,11 @@ export class GameEngine {
   /** Advances the simulation by dt seconds. The renderer draws the state afterwards. */
   step(dt: number, input: FrameInput): void {
     const state = this.state;
+    if (state.paused) {
+      // Full freeze: mobs, the day clock, mining, and stats all stop.
+      this.refreshSnapshot();
+      return;
+    }
     state.capsActive = input.capsActive;
 
     // Stuck detection / auto-unstuck.
@@ -132,6 +140,7 @@ export class GameEngine {
     tickDayNight(state, dt);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
+    this.tickDebugInfo(dt);
 
     this.refreshSnapshot();
   }
@@ -191,6 +200,27 @@ export class GameEngine {
       case "unstuck": {
         if (state.isDead) break;
         this.forceUnstuck();
+        break;
+      }
+      case "pause": {
+        // The inventory panel and the death screen own their lock-loss; only
+        // plain gameplay lock-loss (or an explicit Escape) opens the pause menu.
+        if (state.inventoryOpen || state.isDead) break;
+        state.paused = true;
+        break;
+      }
+      case "resume": {
+        state.paused = false;
+        break;
+      }
+      case "toggleDebug": {
+        state.debugOpen = !state.debugOpen;
+        state.debugInfo = state.debugOpen ? this.currentDebugInfo() : null;
+        break;
+      }
+      case "respawn": {
+        // Skip the rest of the countdown; the next step performs the respawn.
+        if (state.isDead) state.respawnTimer = 0;
         break;
       }
     }
@@ -290,6 +320,26 @@ export class GameEngine {
     state.equippedArmor = inv.unequipMissingArmor(state.inventory, state.equippedArmor) ?? state.equippedArmor;
   }
 
+  /** Refreshes the F3 readout at ~4 Hz so React is not re-rendered every frame. */
+  private tickDebugInfo(dt: number): void {
+    const state = this.state;
+    if (!state.debugOpen) return;
+    state.timers.debugHudTimer += dt;
+    if (state.timers.debugHudTimer < 0.25) return;
+    state.timers.debugHudTimer = 0;
+    state.debugInfo = this.currentDebugInfo();
+  }
+
+  private currentDebugInfo() {
+    const { player, daylight } = this.state;
+    return {
+      x: Math.round(player.position.x * 10) / 10,
+      y: Math.round(player.position.y * 10) / 10,
+      z: Math.round(player.position.z * 10) / 10,
+      daylight: Math.round(daylight * 100) / 100
+    };
+  }
+
   private buildSnapshot(): GameSnapshot {
     const state = this.state;
     return {
@@ -304,6 +354,10 @@ export class GameEngine {
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),
       respawnSeconds: state.isDead ? Math.max(0, Math.ceil(state.respawnTimer)) : 0,
       inventoryOpen: state.inventoryOpen,
+      paused: state.paused,
+      debugOpen: state.debugOpen,
+      debug: state.debugInfo,
+      armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
       capsActive: state.capsActive
     };
   }
