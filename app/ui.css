@@ -348,35 +348,40 @@
   font-weight: 700;
 }
 
-.respawn-overlay {
+/* --- Death screen --- */
+
+.death-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(8, 4, 4, 0.55);
+  background: rgba(124, 10, 10, 0.5);
   z-index: 8;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
 }
 
-.respawn-card {
-  border: 1px solid #ffffff3b;
-  border-radius: 12px;
-  background: rgba(20, 20, 20, 0.85);
-  color: #fff;
-  padding: 18px 24px;
+.death-content {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
   text-align: center;
-  min-width: 220px;
 }
 
-.respawn-title {
-  font-size: 24px;
+.death-title {
+  font-size: 44px;
   font-weight: 700;
+  color: var(--mc-text-light);
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
 }
 
-.respawn-sub {
-  margin-top: 6px;
-  font-size: 14px;
+.death-sub {
+  font-size: 15px;
+  color: #f3dcdc;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.death-content .mc-button {
+  min-width: 220px;
 }
 
 @media (max-width: 720px) {

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import DeathScreen from "@/components/game/DeathScreen";
 import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
-import RespawnOverlay from "@/components/game/RespawnOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
@@ -41,6 +41,7 @@ export default function MinecraftGame() {
     swapInventorySlots,
     toggleEquipArmor,
     resumeNow,
+    respawnNow,
     saveNow,
     loadNow,
     resetNow
@@ -93,7 +94,7 @@ export default function MinecraftGame() {
 
       {paused ? <PauseMenu saveMessage={saveMessage} onBack={resumeNow} onSave={saveNow} onLoad={loadNow} onReset={resetNow} /> : null}
 
-      <RespawnOverlay seconds={respawnSeconds} />
+      <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
 
       <div className="crosshair" />
       <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>
