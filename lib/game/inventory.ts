@@ -194,8 +194,8 @@ export function unequipMissingArmor(slots: InventorySlot[], equipped: EquippedAr
   return changed ? next : null;
 }
 
-/** Damage reduction from equipped, still-owned armor: 5% per defense point, capped at 75%. */
-export function armorReduction(slots: InventorySlot[], equipped: EquippedArmor): number {
+/** Total defense points from equipped, still-owned armor (drives the HUD armor bar). */
+export function equippedDefense(slots: InventorySlot[], equipped: EquippedArmor): number {
   let defense = 0;
   for (const armorSlot of ARMOR_SLOTS) {
     const equippedId = equipped[armorSlot];
@@ -206,5 +206,10 @@ export function armorReduction(slots: InventorySlot[], equipped: EquippedArmor):
     if (!hasOwnedPiece) continue;
     defense += def.defense ?? 0;
   }
-  return Math.min(0.75, defense * 0.05);
+  return defense;
+}
+
+/** Damage reduction from equipped, still-owned armor: 5% per defense point, capped at 75%. */
+export function armorReduction(slots: InventorySlot[], equipped: EquippedArmor): number {
+  return Math.min(0.75, equippedDefense(slots, equipped) * 0.05);
 }

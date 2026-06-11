@@ -1,8 +1,18 @@
 import * as THREE from "three";
 import { collidesAt, hasSupportUnderPlayer } from "@/lib/world";
-import { CROUCH_SPEED, GRAVITY, JUMP_VELOCITY, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, SPRINT_SPEED, WALK_SPEED, WORLD_BORDER_PADDING } from "@/lib/game/config";
+import {
+  CROUCH_SPEED,
+  GRAVITY,
+  JUMP_VELOCITY,
+  PLAYER_HALF_WIDTH,
+  PLAYER_HEIGHT,
+  SPRINT_MIN_HUNGER,
+  SPRINT_SPEED,
+  WALK_SPEED,
+  WORLD_BORDER_PADDING
+} from "@/lib/game/config";
 import type { FrameInput, GameState } from "../state";
-import { speedScaleFromEnergy } from "./playerStats";
+import { speedScaleFromHunger } from "./playerStats";
 
 export type MoveTickResult = {
   didSprint: boolean;
@@ -60,8 +70,8 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   scratchMoveDir.addScaledVector(scratchRight, strafeInput);
   if (scratchMoveDir.lengthSq() > 0) scratchMoveDir.normalize();
 
-  const speedScale = speedScaleFromEnergy(state.energy);
-  const canSprint = state.energy > 0;
+  const speedScale = speedScaleFromHunger(state.hunger);
+  const canSprint = state.hunger > SPRINT_MIN_HUNGER;
   const sprinting = canSprint && forwardInput > 0 && keys.has("KeyW") && input.capsActive && !crouching;
   const speed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
 
@@ -107,14 +117,15 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   player.position.z = Math.min(world.sizeZ - WORLD_BORDER_PADDING, Math.max(WORLD_BORDER_PADDING, player.position.z));
 
   if (!wasGrounded && player.onGround && vyBeforeMove < -14) {
-    applyDamage(Math.min(18, Math.floor((-vyBeforeMove - 13) * 1.15)));
+    // Any fall hard enough to trigger this deals at least half a heart.
+    applyDamage(Math.max(1, Math.min(19, Math.floor((-vyBeforeMove - 13) * 0.5))));
   }
 
   const inVoid = player.position.y < -4;
   if (inVoid) {
     timers.voidTimer += dt;
     if (timers.voidTimer >= 0.4) {
-      applyDamage(3);
+      applyDamage(1);
       timers.voidTimer = 0;
     }
   } else {

@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Hotbar from "@/components/game/Hotbar";
-import { HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_ENERGY, MAX_HEARTS } from "@/lib/game/config";
+import { HOTBAR_SLOTS, INVENTORY_SLOTS } from "@/lib/game/config";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import type { InventorySlot } from "@/lib/game/types";
 
@@ -18,10 +18,6 @@ function renderHotbar(overrides: Partial<Parameters<typeof Hotbar>[0]> = {}) {
     inventory: makeInventory(),
     selectedSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
-    hearts: 40,
-    maxHearts: MAX_HEARTS,
-    energy: 80,
-    maxEnergy: MAX_ENERGY,
     onSelectSlot: mock(),
     ...overrides
   };
@@ -38,13 +34,19 @@ describe("Hotbar", () => {
     expect(buttons[0].className).not.toContain("active");
   });
 
-  test("shows item labels, counts, durability, and the selected chip", () => {
+  test("shows item icons, stack counts, and the selected item name", () => {
     renderHotbar({ selectedSlot: 1 });
-    expect(screen.getByText("12")).toBeTruthy(); // dirt count
-    expect(screen.getByText("70/70")).toBeTruthy(); // pickaxe durability
-    expect(screen.getByText("Selected: Wood Pickaxe")).toBeTruthy();
-    expect(screen.getByText("40/50")).toBeTruthy(); // health
-    expect(screen.getByText("80/100")).toBeTruthy(); // energy
+    expect(screen.getByAltText("Dirt")).toBeTruthy(); // sprite icon
+    expect(screen.getByAltText("Wood Pickaxe")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy(); // dirt stack count
+    expect(screen.getByText("Wood Pickaxe")).toBeTruthy(); // fading name above the bar
+  });
+
+  test("single items show no count and empty slots show no icon", () => {
+    renderHotbar();
+    expect(screen.queryByText("1")).toBeNull(); // pickaxe count hidden
+    const buttons = screen.getAllByRole("button");
+    expect(buttons[5].querySelector("img")).toBeNull(); // empty slot
   });
 
   test("clicking a slot selects it", async () => {

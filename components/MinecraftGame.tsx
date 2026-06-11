@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import Hud from "@/components/game/Hud";
+import { useEffect } from "react";
+import DeathScreen from "@/components/game/DeathScreen";
+import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
-import RespawnOverlay from "@/components/game/RespawnOverlay";
+import PauseMenu from "@/components/game/PauseMenu";
+import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
+import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 export default function MinecraftGame() {
   const {
     attachMount,
+    attachMinimap,
     locked,
     rendererError,
     selectedSlot,
@@ -18,28 +22,35 @@ export default function MinecraftGame() {
     inventoryOpen,
     inventory,
     equippedArmor,
+    armorPoints,
     hearts,
-    energy,
+    hunger,
     daylightPercent,
     passiveCount,
     hostileCount,
     respawnSeconds,
+    paused,
+    debugOpen,
+    debug,
     saveMessage,
-    selectedSlotData,
     hotbarSlots,
     recipes,
     maxHearts,
-    maxEnergy,
+    maxHunger,
     canCraft,
     craft,
     swapInventorySlots,
     toggleEquipArmor,
+    resumeNow,
+    respawnNow,
     saveNow,
     loadNow,
     resetNow
   } = useMinecraftGame();
-  const [hudMenuOpen, setHudMenuOpen] = useState(false);
-  const [hudHidden, setHudHidden] = useState(false);
+
+  useEffect(() => {
+    installUiTiles();
+  }, []);
 
   if (rendererError) {
     return (
@@ -53,48 +64,22 @@ export default function MinecraftGame() {
     );
   }
 
+  const showClickHint = !locked && !paused && !inventoryOpen && respawnSeconds === 0;
+
   return (
     <div className="game-root">
       <div ref={attachMount} className="game-canvas-wrap" />
 
-      {!hudHidden ? (
-        <Hud
-          locked={locked}
-          passiveCount={passiveCount}
-          hostileCount={hostileCount}
-          daylightPercent={daylightPercent}
-          selectedSlotData={selectedSlotData}
-          saveMessage={saveMessage}
-          onSave={saveNow}
-          onLoad={loadNow}
-          onReset={resetNow}
-        />
-      ) : null}
+      {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
-      <button className="hud-menu-toggle" onClick={() => setHudMenuOpen((v) => !v)}>
-        •••
-      </button>
-      {hudMenuOpen ? (
-        <div className="hud-menu-panel">
-          <button className="hud-menu-btn" onClick={() => setHudHidden((v) => !v)}>
-            {hudHidden ? "Show Top-Left Info" : "Hide Top-Left Info"}
-          </button>
-          <button className="hud-menu-btn" onClick={() => setHudMenuOpen(false)}>
-            Close
-          </button>
-        </div>
-      ) : null}
+      {showClickHint ? <div className="click-hint">Click to play</div> : null}
 
-      <Hotbar
-        inventory={inventory}
-        selectedSlot={selectedSlot}
-        hotbarSlots={hotbarSlots}
-        hearts={hearts}
-        maxHearts={maxHearts}
-        energy={energy}
-        maxEnergy={maxEnergy}
-        onSelectSlot={setSelectedSlot}
-      />
+      <div ref={attachMinimap} className="minimap" data-testid="minimap" />
+
+      <div className="hud-bottom">
+        <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
+        <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
+      </div>
 
       {inventoryOpen ? (
         <InventoryPanel
@@ -110,10 +95,12 @@ export default function MinecraftGame() {
         />
       ) : null}
 
-      <RespawnOverlay seconds={respawnSeconds} />
+      {paused ? <PauseMenu saveMessage={saveMessage} onBack={resumeNow} onSave={saveNow} onLoad={loadNow} onReset={resetNow} /> : null}
+
+      <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
 
       <div className="crosshair" />
-      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint Enabled)" : "OFF"}</div>
+      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>
     </div>
   );
 }

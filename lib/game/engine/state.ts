@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { VoxelWorld } from "@/lib/world";
-import type { EquippedArmor, InventorySlot, MobKind, SaveDataV1 } from "@/lib/game/types";
+import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -41,6 +41,14 @@ export type MiningState = {
   progress: number;
 };
 
+/** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
+export type DebugInfo = {
+  x: number;
+  y: number;
+  z: number;
+  daylight: number;
+};
+
 export type GameTimers = {
   voidTimer: number;
   regenTimer: number;
@@ -50,6 +58,7 @@ export type GameTimers = {
   stuckTimer: number;
   hostileSpawnTimer: number;
   daylightHudTimer: number;
+  debugHudTimer: number;
 };
 
 export type GameState = {
@@ -60,10 +69,14 @@ export type GameState = {
   equippedArmor: EquippedArmor;
   selectedSlot: number;
   hearts: number;
-  energy: number;
+  hunger: number;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
+  /** Frozen simulation behind the pause menu; only commands are processed. */
+  paused: boolean;
+  debugOpen: boolean;
+  debugInfo: DebugInfo | null;
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
@@ -86,7 +99,8 @@ export function createTimers(): GameTimers {
     jumpBudget: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
-    daylightHudTimer: 0
+    daylightHudTimer: 0,
+    debugHudTimer: 0
   };
 }
 
@@ -108,7 +122,7 @@ export const IDLE_INPUT: FrameInput = {
 /** The engine surface the UI may touch: intents in, save data out. */
 export type GameApi = {
   dispatch(command: Command): void;
-  serialize(): SaveDataV1;
+  serialize(): SaveData;
 };
 
 /** Immutable view for the React UI, replaced only when a visible value changes. */
@@ -119,12 +133,17 @@ export type GameSnapshot = {
   equippedArmor: EquippedArmor;
   selectedSlot: number;
   hearts: number;
-  energy: number;
+  hunger: number;
   daylightPercent: number;
   passiveCount: number;
   hostileCount: number;
   respawnSeconds: number;
   inventoryOpen: boolean;
+  paused: boolean;
+  debugOpen: boolean;
+  debug: DebugInfo | null;
+  /** Total defense points of equipped armor — drives the HUD armor bar. */
+  armorPoints: number;
   capsActive: boolean;
 };
 

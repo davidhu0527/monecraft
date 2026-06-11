@@ -1,19 +1,19 @@
 import * as THREE from "three";
 import { collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
-import { HOTBAR_SLOTS, MAX_ENERGY, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, RENDER_RADIUS, STUCK_RESET_SECONDS } from "@/lib/game/config";
+import { HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, RENDER_RADIUS, STUCK_RESET_SECONDS } from "@/lib/game/config";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import { inventorySlotsSnapshot, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
-import type { SaveDataV1 } from "@/lib/game/types";
+import type { SaveData } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 import { createTimers, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
-import { eatEnergy, tickEnergyDrain, tickHealthRegen } from "./systems/playerStats";
+import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
@@ -21,7 +21,7 @@ import { spawnInitialMobs, tickHostileSpawnDirector } from "./systems/spawnDirec
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
-  save?: SaveDataV1 | null;
+  save?: SaveData | null;
   /** Seed for a fresh world; ignored when a save is provided. */
   seed?: number;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
@@ -73,10 +73,13 @@ export class GameEngine {
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
       hearts: MAX_HEARTS,
-      energy: MAX_ENERGY,
+      hunger: MAX_HUNGER,
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
+      paused: false,
+      debugOpen: false,
+      debugInfo: null,
       capsActive: false,
       mobs: [],
       nextMobId: 1,
@@ -107,6 +110,11 @@ export class GameEngine {
   /** Advances the simulation by dt seconds. The renderer draws the state afterwards. */
   step(dt: number, input: FrameInput): void {
     const state = this.state;
+    if (state.paused) {
+      // Full freeze: mobs, the day clock, mining, and stats all stop.
+      this.refreshSnapshot();
+      return;
+    }
     state.capsActive = input.capsActive;
 
     // Stuck detection / auto-unstuck.
@@ -126,12 +134,13 @@ export class GameEngine {
     }
 
     const move = tickPlayerMotion(state, input, dt, this.applyDamage);
-    tickEnergyDrain(state, move);
+    tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     tickMining(state, input, dt);
     tickDayNight(state, dt);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
+    this.tickDebugInfo(dt);
 
     this.refreshSnapshot();
   }
@@ -171,7 +180,7 @@ export class GameEngine {
         const next = inv.adjustSlotCount(state.inventory, "food", -1, state.selectedSlot);
         if (!next) break;
         state.inventory = next;
-        state.energy = eatEnergy(state.energy);
+        state.hunger = restoreHunger(state.hunger);
         break;
       }
       case "placeBlock": {
@@ -193,6 +202,27 @@ export class GameEngine {
         this.forceUnstuck();
         break;
       }
+      case "pause": {
+        // The inventory panel and the death screen own their lock-loss; only
+        // plain gameplay lock-loss (or an explicit Escape) opens the pause menu.
+        if (state.inventoryOpen || state.isDead) break;
+        state.paused = true;
+        break;
+      }
+      case "resume": {
+        state.paused = false;
+        break;
+      }
+      case "toggleDebug": {
+        state.debugOpen = !state.debugOpen;
+        state.debugInfo = state.debugOpen ? this.currentDebugInfo() : null;
+        break;
+      }
+      case "respawn": {
+        // Skip the rest of the countdown; the next step performs the respawn.
+        if (state.isDead) state.respawnTimer = 0;
+        break;
+      }
     }
     this.syncEquippedArmor();
     this.refreshSnapshot();
@@ -206,10 +236,10 @@ export class GameEngine {
   }
 
   /** Current world + player state as a persistable save. */
-  serialize(): SaveDataV1 {
+  serialize(): SaveData {
     const state = this.state;
     return {
-      version: 1,
+      version: 2,
       seed: state.world.seed,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
@@ -290,6 +320,26 @@ export class GameEngine {
     state.equippedArmor = inv.unequipMissingArmor(state.inventory, state.equippedArmor) ?? state.equippedArmor;
   }
 
+  /** Refreshes the F3 readout at ~4 Hz so React is not re-rendered every frame. */
+  private tickDebugInfo(dt: number): void {
+    const state = this.state;
+    if (!state.debugOpen) return;
+    state.timers.debugHudTimer += dt;
+    if (state.timers.debugHudTimer < 0.25) return;
+    state.timers.debugHudTimer = 0;
+    state.debugInfo = this.currentDebugInfo();
+  }
+
+  private currentDebugInfo() {
+    const { player, daylight } = this.state;
+    return {
+      x: Math.round(player.position.x * 10) / 10,
+      y: Math.round(player.position.y * 10) / 10,
+      z: Math.round(player.position.z * 10) / 10,
+      daylight: Math.round(daylight * 100) / 100
+    };
+  }
+
   private buildSnapshot(): GameSnapshot {
     const state = this.state;
     return {
@@ -298,12 +348,16 @@ export class GameEngine {
       equippedArmor: state.equippedArmor,
       selectedSlot: state.selectedSlot,
       hearts: state.hearts,
-      energy: state.energy,
+      hunger: state.hunger,
       daylightPercent: state.daylightPercent,
       passiveCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 0 : 1), 0),
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),
       respawnSeconds: state.isDead ? Math.max(0, Math.ceil(state.respawnTimer)) : 0,
       inventoryOpen: state.inventoryOpen,
+      paused: state.paused,
+      debugOpen: state.debugOpen,
+      debug: state.debugInfo,
+      armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
       capsActive: state.capsActive
     };
   }

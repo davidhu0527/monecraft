@@ -1,53 +1,54 @@
 import {
-  FOOD_ENERGY,
+  FOOD_HUNGER,
   HEALTH_REGEN_INTERVAL_SECONDS,
-  JUMPS_PER_ENERGY,
-  MAX_ENERGY,
+  JUMPS_PER_HUNGER,
+  MAX_HUNGER,
   MAX_HEARTS,
-  SPRINT_BLOCKS_PER_ENERGY,
-  WALK_BLOCKS_PER_ENERGY
+  REGEN_MIN_HUNGER,
+  SPRINT_BLOCKS_PER_HUNGER,
+  WALK_BLOCKS_PER_HUNGER
 } from "@/lib/game/config";
 import type { GameState } from "../state";
 import type { MoveTickResult } from "./playerMotion";
 
-/** Movement speed multiplier from the energy level, with a small full-energy bonus. */
-export function speedScaleFromEnergy(energy: number): number {
-  const ratio = Math.max(0, Math.min(1, energy / MAX_ENERGY));
+/** Movement speed multiplier from the hunger level, with a small full-hunger bonus. */
+export function speedScaleFromHunger(hunger: number): number {
+  const ratio = Math.max(0, Math.min(1, hunger / MAX_HUNGER));
   return 0.62 + ratio * 0.38 + (ratio >= 0.99 ? 0.08 : 0);
 }
 
-/** Drains energy from accumulated sprint/walk distance and jumps. */
-export function tickEnergyDrain(state: GameState, move: MoveTickResult): void {
+/** Drains hunger from accumulated sprint/walk distance and jumps. */
+export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
   const { timers } = state;
   let drain = 0;
 
   if (move.didSprint) {
     timers.sprintDistanceBudget += move.horizontalDistance;
-    while (timers.sprintDistanceBudget >= SPRINT_BLOCKS_PER_ENERGY) {
-      timers.sprintDistanceBudget -= SPRINT_BLOCKS_PER_ENERGY;
+    while (timers.sprintDistanceBudget >= SPRINT_BLOCKS_PER_HUNGER) {
+      timers.sprintDistanceBudget -= SPRINT_BLOCKS_PER_HUNGER;
       drain += 1;
     }
   } else if (move.didWalk) {
     timers.walkDistanceBudget += move.horizontalDistance;
-    while (timers.walkDistanceBudget >= WALK_BLOCKS_PER_ENERGY) {
-      timers.walkDistanceBudget -= WALK_BLOCKS_PER_ENERGY;
+    while (timers.walkDistanceBudget >= WALK_BLOCKS_PER_HUNGER) {
+      timers.walkDistanceBudget -= WALK_BLOCKS_PER_HUNGER;
       drain += 1;
     }
   }
   if (move.didJump) {
     timers.jumpBudget += 1;
-    while (timers.jumpBudget >= JUMPS_PER_ENERGY) {
-      timers.jumpBudget -= JUMPS_PER_ENERGY;
+    while (timers.jumpBudget >= JUMPS_PER_HUNGER) {
+      timers.jumpBudget -= JUMPS_PER_HUNGER;
       drain += 1;
     }
   }
 
-  if (drain > 0) state.energy = Math.max(0, state.energy - drain);
+  if (drain > 0) state.hunger = Math.max(0, state.hunger - drain);
 }
 
-/** Regenerates one heart every interval while alive and hurt. */
+/** Regenerates half a heart every interval while alive, hurt, and fed enough. */
 export function tickHealthRegen(state: GameState, dt: number): void {
-  if (!state.isDead && state.hearts < MAX_HEARTS) {
+  if (!state.isDead && state.hearts < MAX_HEARTS && state.hunger >= REGEN_MIN_HUNGER) {
     state.timers.regenTimer += dt;
     if (state.timers.regenTimer >= HEALTH_REGEN_INTERVAL_SECONDS) {
       state.hearts = Math.min(MAX_HEARTS, state.hearts + 1);
@@ -58,7 +59,7 @@ export function tickHealthRegen(state: GameState, dt: number): void {
   }
 }
 
-/** Restores energy when food is eaten. */
-export function eatEnergy(energy: number): number {
-  return Math.min(MAX_ENERGY, energy + FOOD_ENERGY);
+/** Restores hunger when food is eaten. */
+export function restoreHunger(hunger: number): number {
+  return Math.min(MAX_HUNGER, hunger + FOOD_HUNGER);
 }

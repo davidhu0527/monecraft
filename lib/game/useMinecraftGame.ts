@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_ENERGY, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
@@ -9,6 +9,7 @@ import * as inv from "@/lib/game/inventory";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
+import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
 import type { Recipe } from "@/lib/game/types";
 
@@ -28,12 +29,16 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   equippedArmor: createEmptyArmorEquipment(),
   selectedSlot: 0,
   hearts: MAX_HEARTS,
-  energy: MAX_ENERGY,
+  hunger: MAX_HUNGER,
   daylightPercent: 100,
   passiveCount: 0,
   hostileCount: 0,
   respawnSeconds: 0,
   inventoryOpen: false,
+  paused: false,
+  debugOpen: false,
+  debug: null,
+  armorPoints: 0,
   capsActive: false
 };
 
@@ -63,6 +68,8 @@ export function useMinecraftGame() {
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [rendererError, setRendererError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const minimapNodeRef = useRef<HTMLDivElement | null>(null);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -72,6 +79,12 @@ export function useMinecraftGame() {
       return;
     }
     setCtx({ engine: new GameEngine({ save: readSave(SAVE_KEY) }), node });
+  }, []);
+
+  // The minimap container mounts independently of the canvas; the rAF loop
+  // below picks it up lazily once both exist.
+  const attachMinimap = useCallback((node: HTMLDivElement | null) => {
+    minimapNodeRef.current = node;
   }, []);
 
   const engine = ctx?.engine ?? null;
@@ -97,6 +110,7 @@ export function useMinecraftGame() {
       return;
     }
     const renderer = created.renderer;
+    canvasRef.current = renderer.domElement;
 
     const input = createInputController({
       canvas: renderer.domElement,
@@ -111,6 +125,7 @@ export function useMinecraftGame() {
 
     window.__monecraft = { engine: gameEngine, renderer, input };
 
+    let minimap: MinimapRenderer | null = null;
     let last = performance.now();
     let animationFrame = 0;
     const clock = () => {
@@ -128,6 +143,9 @@ export function useMinecraftGame() {
         if (event.type === "respawned") input.clearKeys();
       }
 
+      if (!minimap && minimapNodeRef.current) minimap = createMinimapRenderer(minimapNodeRef.current);
+      // The minimap must read worldMeshDirty before renderer.sync clears it.
+      minimap?.sync(gameEngine.state, now);
       renderer.sync(gameEngine.state, now);
       renderer.render();
       animationFrame = requestAnimationFrame(clock);
@@ -136,6 +154,8 @@ export function useMinecraftGame() {
 
     return () => {
       delete window.__monecraft;
+      canvasRef.current = null;
+      minimap?.dispose();
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
       window.removeEventListener("beforeunload", autoSave);
@@ -145,11 +165,16 @@ export function useMinecraftGame() {
     };
   }, [ctx, flashMessage]);
 
-  const heartDisplay = useMemo(() => Array.from({ length: MAX_HEARTS }, (_, i) => i < snapshot.hearts), [snapshot.hearts]);
-  const selectedSlotData = snapshot.inventory[snapshot.selectedSlot]?.id ? snapshot.inventory[snapshot.selectedSlot] : undefined;
+  // Re-locking can legitimately reject (e.g. Chrome's cooldown right after
+  // Escape); the player just clicks the canvas to lock again.
+  const requestPointerLock = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (canvas) Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  }, []);
 
   return {
     attachMount,
+    attachMinimap,
     locked,
     rendererError,
     selectedSlot: snapshot.selectedSlot,
@@ -158,23 +183,30 @@ export function useMinecraftGame() {
     inventoryOpen: snapshot.inventoryOpen,
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
+    armorPoints: snapshot.armorPoints,
     hearts: snapshot.hearts,
-    energy: snapshot.energy,
+    hunger: snapshot.hunger,
     daylightPercent: snapshot.daylightPercent,
     passiveCount: snapshot.passiveCount,
     hostileCount: snapshot.hostileCount,
     respawnSeconds: snapshot.respawnSeconds,
+    paused: snapshot.paused,
+    debugOpen: snapshot.debugOpen,
+    debug: snapshot.debug,
     saveMessage,
-    heartDisplay,
-    selectedSlotData,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     maxHearts: MAX_HEARTS,
-    maxEnergy: MAX_ENERGY,
+    maxHunger: MAX_HUNGER,
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),
+    resumeNow: () => {
+      engine?.dispatch({ type: "resume" });
+      requestPointerLock();
+    },
+    respawnNow: () => engine?.dispatch({ type: "respawn" }),
     saveNow: () => {
       if (engine) persistGame(engine, flashMessage);
     },

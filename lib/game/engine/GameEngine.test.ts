@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { BlockId, collidesAt } from "@/lib/world";
-import { MAX_ENERGY, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
+import { MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, REGEN_MIN_HUNGER, SPRINT_BLOCKS_PER_HUNGER, SPRINT_MIN_HUNGER } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
+import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
 
@@ -71,7 +72,7 @@ describe("boot", () => {
 });
 
 describe("movement and stats", () => {
-  test("walking moves the player and never drains energy below the walk budget rate", () => {
+  test("walking moves the player and never drains hunger below the walk budget rate", () => {
     const engine = makeEngine();
     calmDaytime(engine);
     run(engine, 1);
@@ -82,14 +83,44 @@ describe("movement and stats", () => {
     expect(moved).toBeGreaterThan(3);
   });
 
-  test("sprinting drains energy with distance", () => {
+  test("sprinting drains hunger with distance", () => {
     const engine = makeEngine();
     calmDaytime(engine);
     run(engine, 1);
-    expect(engine.state.energy).toBe(MAX_ENERGY);
+    expect(engine.state.hunger).toBe(MAX_HUNGER);
+    // The 64-block test world is smaller than one full drain interval, so
+    // pre-seed the budget and sprint the last stretch.
+    engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 10;
     // Space held: the player hops over one-block terrain rises while sprinting.
-    run(engine, 8, input({ keys: ["KeyW", "Space"], capsActive: true }));
-    expect(engine.state.energy).toBeLessThan(MAX_ENERGY);
+    run(engine, 4, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    expect(engine.state.hunger).toBeLessThan(MAX_HUNGER);
+  });
+
+  test("sprint is blocked at low hunger", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.state.hunger = SPRINT_MIN_HUNGER;
+    engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 1;
+    run(engine, 2, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    // No sprint drain fired: movement counted as walking instead.
+    expect(engine.state.hunger).toBe(SPRINT_MIN_HUNGER);
+    expect(engine.state.timers.sprintDistanceBudget).toBe(SPRINT_BLOCKS_PER_HUNGER - 1);
+  });
+
+  test("a barely-qualifying hard fall deals at least one damage", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1); // settle on the ground
+    const { state } = engine;
+    const groundY = state.player.position.y;
+    // ~3.95 blocks of free fall lands at vy ≈ -14.3..-14.8 — inside the
+    // damage window but where the scaled value floors to 0 without the clamp.
+    state.player.position.y = groundY + 3.95;
+    state.player.velocity.set(0, 0, 0);
+    state.player.onGround = false;
+    run(engine, 1);
+    expect(engine.state.hearts).toBeLessThan(MAX_HEARTS);
   });
 
   test("hearts regenerate one per interval while hurt", () => {
@@ -100,6 +131,15 @@ describe("movement and stats", () => {
     expect(engine.state.hearts).toBe(MAX_HEARTS - 2);
     run(engine, 6.5);
     expect(engine.state.hearts).toBe(MAX_HEARTS);
+  });
+
+  test("health regen stops when hunger is too low", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.hearts = MAX_HEARTS - 3;
+    engine.state.hunger = REGEN_MIN_HUNGER - 1;
+    run(engine, 6.5);
+    expect(engine.state.hearts).toBe(MAX_HEARTS - 3);
   });
 });
 
@@ -175,13 +215,82 @@ describe("commands", () => {
     engine.dispatch({ type: "toggleInventory" });
     expect(engine.getSnapshot().inventoryOpen).toBe(false);
   });
+
+  test("pause freezes the simulation and resume unfreezes it", () => {
+    const engine = makeEngine();
+    run(engine, 1);
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(true);
+
+    const clockBefore = engine.state.dayClock;
+    const mobPositions = engine.state.mobs.map((mob) => mob.position.clone());
+    run(engine, 1, input({ keys: ["KeyW"] }));
+    expect(engine.state.dayClock).toBe(clockBefore);
+    expect(engine.state.mobs.every((mob, i) => mob.position.equals(mobPositions[i]))).toBe(true);
+
+    engine.dispatch({ type: "resume" });
+    expect(engine.getSnapshot().paused).toBe(false);
+    run(engine, 0.5);
+    expect(engine.state.dayClock).toBeGreaterThan(clockBefore);
+  });
+
+  test("pause is ignored while the inventory is open or the player is dead", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleInventory" });
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+    engine.dispatch({ type: "toggleInventory" });
+
+    engine.state.isDead = true;
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+  });
+
+  test("toggleDebug flips the overlay and publishes a throttled readout", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleDebug" });
+    expect(engine.getSnapshot().debugOpen).toBe(true);
+    expect(engine.getSnapshot().debug).not.toBeNull();
+    expect(engine.getSnapshot().debug!.y).toBeCloseTo(engine.state.player.position.y, 0);
+    engine.dispatch({ type: "toggleDebug" });
+    expect(engine.getSnapshot().debugOpen).toBe(false);
+    expect(engine.getSnapshot().debug).toBeNull();
+  });
+
+  test("respawn command skips the countdown and restores full stats", () => {
+    const engine = makeEngine();
+    run(engine, 0.5);
+    engine.state.hunger = 5;
+    engine.state.hearts = 1;
+    engine.state.player.position.y = -10;
+    run(engine, 0.5); // void tick kills
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.getSnapshot().respawnSeconds).toBeGreaterThan(1);
+
+    engine.dispatch({ type: "respawn" });
+    run(engine, 0.1);
+    expect(engine.state.isDead).toBe(false);
+    expect(engine.state.hearts).toBe(MAX_HEARTS);
+    expect(engine.state.hunger).toBe(MAX_HUNGER);
+  });
+
+  test("armorPoints reflects equipped defense", () => {
+    const engine = makeEngine();
+    expect(engine.getSnapshot().armorPoints).toBe(0);
+    const slot = engine.state.inventory.findIndex((entry) => !entry.id);
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[slot] = createSlot("helmet", 1);
+    engine.dispatch({ type: "toggleEquipArmor", index: slot });
+    expect(engine.getSnapshot().armorPoints).toBeGreaterThan(0);
+  });
 });
 
 describe("death and respawn", () => {
   test("void damage kills, the respawn countdown runs, and the player returns at full health", () => {
     const engine = makeEngine();
     run(engine, 0.5);
-    engine.state.hearts = 2;
+    // One void tick (0.4s) must kill before the 0.8s auto-unstuck teleport fires.
+    engine.state.hearts = 1;
     engine.state.player.position.y = -10; // into the void
 
     run(engine, 2);

@@ -1,4 +1,4 @@
-import { MAX_HEARTS, RESPAWN_SECONDS } from "@/lib/game/config";
+import { MAX_HEARTS, MAX_HUNGER, RESPAWN_SECONDS } from "@/lib/game/config";
 import { armorReduction, consumeEquippedArmorDurability } from "@/lib/game/inventory";
 import type { GameState } from "../state";
 
@@ -33,6 +33,7 @@ export function tickRespawnTimer(state: GameState, dt: number): boolean {
   if (state.respawnTimer > 0) return false;
 
   state.hearts = MAX_HEARTS;
+  state.hunger = MAX_HUNGER;
   state.isDead = false;
   state.respawnTimer = 0;
   return true;

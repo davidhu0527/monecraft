@@ -13,7 +13,7 @@ bun install        # Install dependencies
 bun run dev        # Dev server at http://localhost:3000
 bun run build      # Production build — part of the verification baseline
 bun run lint       # ESLint (flat config, eslint .)
-bun run typecheck  # tsc --noEmit
+bun run typecheck  # next typegen + tsc --noEmit
 bun test           # Unit + integration + component tests
 bun run test:e2e   # Playwright browser smoke tests (needs `bunx playwright install chromium` once)
 ```

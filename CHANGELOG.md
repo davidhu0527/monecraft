@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Minecraft-style UI overhaul**: pixel-art hotbar with white selection outline and fading item-name popup, heart/hunger/armor icon rows, survival-layout inventory (armor column, 9×3 storage grid, hotbar row) with a visual recipe book (ingredient icons → result), pause menu (Esc) with Save/Load/Reset and a controls reference, red-tinted "You Died!" death screen with a Respawn button, and a toggleable F3 debug overlay (position, daylight, mob counts, FPS)
+- Procedural pixel-art sprite system (`lib/ui/`): 16×16 item icons (isometric block cubes from `BLOCK_COLORS`, shape×material-palette tools/weapons/armor), HUD icons (hearts, drumsticks, armor), and UI noise tiles — all generated in code, no image assets, covered by integrity tests
+- Top-right minimap rendered from world block data (north-up, height-shaded, player arrow, refreshes on block edits)
+- Engine commands: `pause`/`resume` (freezes the whole simulation behind the menu), `toggleDebug`, and `respawn` (skips the death countdown)
+
+### Changed
+
+- **Stats rebalanced to Minecraft ranges** — health 50 → 20 (10 hearts), energy renamed to hunger and rescaled 100 → 20 (10 drumsticks) with total drain ranges preserved (sprint 100 blocks / walk 300 / 50 jumps per point), food restores 7; health regen now requires hunger ≥ 12 and sprinting needs hunger > 6; hunger refills on respawn; fall/void damage rescaled to the new HP range
+- **Hostile mobs hit harder**: zombie/skeleton damage 1 → 3, spider 1 → 2 (the old values were ~2% of max HP per hit; this is a real difficulty increase)
+- **Inventory shrunk to 36 slots (9-slot hotbar + 27 storage)** to match the Minecraft layout; the `Digit0` hotbar binding is gone (1–9 only)
+- **Save format bumped to version 2** (same `SAVE_KEY`, no worldgen impact): v1 saves are migrated on load — slots are compacted 40 → 36 with stackables merged, `selectedSlot` clamped to 0–8; items that genuinely overflow the smaller inventory are dropped
+- Save/Load/Reset buttons moved from the top-left HUD (now removed) into the pause menu; the old top-left info lives in the F3 overlay
+- Escape now opens the pause menu (pointer-lock loss during gameplay pauses the game; Esc also closes the inventory)
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
