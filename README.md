@@ -28,7 +28,7 @@ Then open `http://localhost:3000`.
 ```bash
 bun run lint        # ESLint
 bun run typecheck   # tsc --noEmit
-bun test            # unit + headless simulation + component tests
+bun test            # unit + integration + component tests
 bun run build       # production build
 bun run test:e2e    # Playwright browser smoke tests
 bun run format      # Prettier

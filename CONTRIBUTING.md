@@ -31,7 +31,7 @@ bun run test:e2e    # Playwright browser smoke tests (run for renderer/input/she
 
 ## Save compatibility (read before touching worldgen)
 
-Saves store only the world seed plus block-change deltas. World generation must therefore produce **byte-identical** output for a given seed, and the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) must never change. The characterization tests in `lib/worldgen.test.ts` pin generator output with SHA-256 digests — if they fail after your change, your change breaks every existing save. Fix the code, never the hash. See `docs/save-format.md` and `docs/testing.md`.
+Saves store only the world seed plus block-change deltas. World generation must therefore produce **byte-identical** output for a given seed, and the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) must never change. The characterization tests in `lib/world/generation.test.ts` pin generator output with SHA-256 digests — if they fail after your change, your change breaks every existing save. Fix the code, never the hash. See `docs/save-format.md` and `docs/testing.md`.
 
 ## Docs
 
