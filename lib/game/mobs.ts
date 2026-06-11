@@ -1,7 +1,7 @@
-import { createMobModel } from "@/lib/game/mobModel";
 import type { MobKind } from "@/lib/game/types";
+import { createMobModel } from "@/lib/game/mobModel";
 
-type MobTemplate = {
+export type MobTemplate = {
   speed: number;
   hp: number;
   detectRange: number;
@@ -10,7 +10,7 @@ type MobTemplate = {
   modelArgs: Parameters<typeof createMobModel>;
 };
 
-const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
+export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   sheep: {
     speed: 0.9,
     hp: 10,
@@ -61,10 +61,17 @@ const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   }
 };
 
-export function createMobForKind(kind: MobKind) {
-  const template = MOB_TEMPLATES[kind];
-  return {
-    ...template,
-    model: createMobModel(...template.modelArgs)
-  };
+/**
+ * Body-center height above the ground for a mob kind. Mirrors the geometry
+ * math in createMobModel so the headless simulation needs no Three.js meshes.
+ */
+export function mobHalfHeight(kind: MobKind): number {
+  const bodyHeight = MOB_TEMPLATES[kind].modelArgs[5][1];
+  const legHeight = Math.max(0.3, bodyHeight * 0.56);
+  return Math.max(bodyHeight, legHeight) * 0.5 + 0.2;
+}
+
+/** Builds the Three.js model for a mob kind (renderer side). */
+export function createMobModelForKind(kind: MobKind) {
+  return createMobModel(...MOB_TEMPLATES[kind].modelArgs);
 }

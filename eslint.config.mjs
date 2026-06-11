@@ -11,26 +11,20 @@ export default defineConfig([
   ...tseslint.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],
-    ...react.configs["recommended-typescript"],
+    ...react.configs["recommended-typescript"]
   },
   reactHooks.configs.flat.recommended,
   {
     plugins: { "@next/next": nextPlugin },
     rules: {
       ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
-    },
+      ...nextPlugin.configs["core-web-vitals"].rules
+    }
   },
   {
     rules: {
-      // The game engine intentionally bridges React state with refs read by the
-      // imperative rAF loop (see docs/architecture.md "Refs-vs-state bridge"),
-      // which the React Hooks v6+ compiler rules reject wholesale.
-      "react-hooks/refs": "off",
-      "react-hooks/set-state-in-effect": "off",
-      "@eslint-react/set-state-in-effect": "off",
       // Duplicate of react-hooks/exhaustive-deps — keep the canonical one only.
-      "@eslint-react/exhaustive-deps": "off",
-    },
-  },
+      "@eslint-react/exhaustive-deps": "off"
+    }
+  }
 ]);

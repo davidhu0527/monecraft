@@ -8,25 +8,66 @@ import RespawnOverlay from "@/components/game/RespawnOverlay";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 
 export default function MinecraftGame() {
-  const game = useMinecraftGame();
+  const {
+    attachMount,
+    locked,
+    rendererError,
+    selectedSlot,
+    setSelectedSlot,
+    capsActive,
+    inventoryOpen,
+    inventory,
+    equippedArmor,
+    hearts,
+    energy,
+    daylightPercent,
+    passiveCount,
+    hostileCount,
+    respawnSeconds,
+    saveMessage,
+    selectedSlotData,
+    hotbarSlots,
+    recipes,
+    maxHearts,
+    maxEnergy,
+    canCraft,
+    craft,
+    swapInventorySlots,
+    toggleEquipArmor,
+    saveNow,
+    loadNow,
+    resetNow
+  } = useMinecraftGame();
   const [hudMenuOpen, setHudMenuOpen] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
 
+  if (rendererError) {
+    return (
+      <div className="game-root">
+        <div className="renderer-error">
+          <h2>Could not start the 3D renderer</h2>
+          <p>WebGL appears to be unavailable in this browser ({rendererError}).</p>
+          <p>Try enabling hardware acceleration or switching browsers, then reload.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="game-root">
-      <div ref={game.mountRef} className="game-canvas-wrap" />
+      <div ref={attachMount} className="game-canvas-wrap" />
 
       {!hudHidden ? (
         <Hud
-          locked={game.locked}
-          passiveCount={game.passiveCount}
-          hostileCount={game.hostileCount}
-          daylightPercent={game.daylightPercent}
-          selectedSlotData={game.selectedSlotData}
-          saveMessage={game.saveMessage}
-          onSave={game.saveNow}
-          onLoad={game.loadNow}
-          onReset={game.resetNow}
+          locked={locked}
+          passiveCount={passiveCount}
+          hostileCount={hostileCount}
+          daylightPercent={daylightPercent}
+          selectedSlotData={selectedSlotData}
+          saveMessage={saveMessage}
+          onSave={saveNow}
+          onLoad={loadNow}
+          onReset={resetNow}
         />
       ) : null}
 
@@ -45,34 +86,34 @@ export default function MinecraftGame() {
       ) : null}
 
       <Hotbar
-        inventory={game.inventory}
-        selectedSlot={game.selectedSlot}
-        hotbarSlots={game.hotbarSlots}
-        hearts={game.hearts}
-        maxHearts={game.maxHearts}
-        energy={game.energy}
-        maxEnergy={game.maxEnergy}
-        onSelectSlot={game.setSelectedSlot}
+        inventory={inventory}
+        selectedSlot={selectedSlot}
+        hotbarSlots={hotbarSlots}
+        hearts={hearts}
+        maxHearts={maxHearts}
+        energy={energy}
+        maxEnergy={maxEnergy}
+        onSelectSlot={setSelectedSlot}
       />
 
-      {game.inventoryOpen ? (
+      {inventoryOpen ? (
         <InventoryPanel
-          inventory={game.inventory}
-          equippedArmor={game.equippedArmor}
-          selectedHotbarSlot={game.selectedSlot}
-          hotbarSlots={game.hotbarSlots}
-          recipes={game.recipes}
-          canCraft={game.canCraft}
-          onSwapSlots={game.swapInventorySlots}
-          onToggleEquipArmor={game.toggleEquipArmor}
-          onCraft={game.craft}
+          inventory={inventory}
+          equippedArmor={equippedArmor}
+          selectedHotbarSlot={selectedSlot}
+          hotbarSlots={hotbarSlots}
+          recipes={recipes}
+          canCraft={canCraft}
+          onSwapSlots={swapInventorySlots}
+          onToggleEquipArmor={toggleEquipArmor}
+          onCraft={craft}
         />
       ) : null}
 
-      <RespawnOverlay seconds={game.respawnSeconds} />
+      <RespawnOverlay seconds={respawnSeconds} />
 
       <div className="crosshair" />
-      <div className={game.capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {game.capsActive ? "ON (Sprint Enabled)" : "OFF"}</div>
+      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint Enabled)" : "OFF"}</div>
     </div>
   );
 }

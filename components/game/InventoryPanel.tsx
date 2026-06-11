@@ -1,4 +1,4 @@
-import { ARMOR_SLOT_LABELS, ARMOR_SLOTS } from "@/lib/game/config";
+import { ARMOR_SLOT_LABELS, ARMOR_SLOTS } from "@/lib/game/items";
 import { useState } from "react";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
@@ -14,7 +14,17 @@ type InventoryPanelProps = {
   onCraft: (recipe: Recipe) => void;
 };
 
-export default function InventoryPanel({ inventory, equippedArmor, selectedHotbarSlot, hotbarSlots, recipes, canCraft, onSwapSlots, onToggleEquipArmor, onCraft }: InventoryPanelProps) {
+export default function InventoryPanel({
+  inventory,
+  equippedArmor,
+  selectedHotbarSlot,
+  hotbarSlots,
+  recipes,
+  canCraft,
+  onSwapSlots,
+  onToggleEquipArmor,
+  onCraft
+}: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
 
   const onSlotClick = (index: number) => {
@@ -73,13 +83,7 @@ export default function InventoryPanel({ inventory, equippedArmor, selectedHotba
           return (
             <button
               key={`inv-storage-${idx}`}
-              className={[
-                "inventory-slot",
-                pendingIndex === idx ? "pending" : "",
-                isEquippedArmor ? "equipped" : ""
-              ]
-              .filter(Boolean)
-                .join(" ")}
+              className={["inventory-slot", pendingIndex === idx ? "pending" : "", isEquippedArmor ? "equipped" : ""].filter(Boolean).join(" ")}
               onClick={() => onSlotClick(idx)}
             >
               <span>{slot.id ? slot.label : "Empty"}</span>
@@ -98,7 +102,9 @@ export default function InventoryPanel({ inventory, equippedArmor, selectedHotba
             <div key={`armor-${armorSlot}`} className={equippedItem ? "armor-slot filled" : "armor-slot"}>
               <span className="armor-slot-name">{ARMOR_SLOT_LABELS[armorSlot]}</span>
               <span className="armor-slot-item">{equippedItem?.label ?? "Empty"}</span>
-              <span className="armor-slot-item">{equippedItem?.maxDurability ? `${equippedItem.durability ?? equippedItem.maxDurability}/${equippedItem.maxDurability}` : ""}</span>
+              <span className="armor-slot-item">
+                {equippedItem?.maxDurability ? `${equippedItem.durability ?? equippedItem.maxDurability}/${equippedItem.maxDurability}` : ""}
+              </span>
             </div>
           );
         })}
