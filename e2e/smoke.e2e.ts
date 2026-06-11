@@ -1,0 +1,85 @@
+import { acquirePointerLock, calmDaytime, expect, itemCount, playerPosition, test } from "./helpers";
+
+test("boots without errors and renders the world", async ({ gamePage: page }) => {
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator(".hud")).toBeVisible();
+  const triangles = await page.evaluate(() => window.__monecraft!.renderer.renderedTriangles());
+  expect(triangles).toBeGreaterThan(0);
+
+  // The engine is alive: the day clock advances between frames.
+  const clock1 = await page.evaluate(() => window.__monecraft!.engine.state.dayClock);
+  await page.waitForTimeout(200);
+  const clock2 = await page.evaluate(() => window.__monecraft!.engine.state.dayClock);
+  expect(clock2).toBeGreaterThan(clock1);
+});
+
+test("pointer-lock flow enables WASD movement", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+
+  await page.waitForTimeout(500); // settle onto the ground
+  const before = await playerPosition(page);
+  await page.keyboard.down("w");
+  await page.waitForTimeout(700);
+  await page.keyboard.up("w");
+  const after = await playerPosition(page);
+
+  const moved = Math.hypot(after.x - before.x, after.z - before.z);
+  expect(moved).toBeGreaterThan(0.5);
+});
+
+test("inventory opens and crafting works end to end", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await page.keyboard.press("i");
+  const panel = page.locator(".inventory-panel");
+  await expect(panel).toBeVisible();
+
+  const planksBefore = await itemCount(page, "planks"); // starter loadout: 20
+  await panel.getByRole("button", { name: "2 Wood -> 4 Planks" }).click();
+
+  expect(await itemCount(page, "planks")).toBe(planksBefore + 4);
+  expect(await itemCount(page, "wood")).toBe(62);
+  // The UI re-rendered from the new snapshot.
+  await expect(panel.locator(".inventory-slot", { hasText: "Planks" }).first()).toContainText(`x${planksBefore + 4}`);
+
+  await page.keyboard.press("i");
+  await expect(panel).not.toBeVisible();
+});
+
+test("holding the mouse mines the block underfoot", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(500); // settle
+
+  // Aim straight down from the center of the cell (a ray origin exactly on a
+  // cell boundary may target the diagonal neighbor — see docs/testing.md).
+  await page.evaluate(() => {
+    const { player } = window.__monecraft!.engine.state;
+    player.pitch = -Math.PI / 2 + 0.02;
+    player.position.x = Math.floor(player.position.x) + 0.5;
+    player.position.z = Math.floor(player.position.z) + 0.5;
+  });
+
+  await page.mouse.down();
+  await expect.poll(async () => page.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 15000 }).toBeGreaterThan(0);
+  await page.mouse.up();
+});
+
+test("saving persists the world across a reload", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  const seed = await page.evaluate(() => window.__monecraft!.engine.state.world.seed);
+  const positionBefore = await playerPosition(page);
+
+  await page.getByRole("button", { name: "Save World" }).click();
+  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v4"));
+  expect(saved).not.toBeNull();
+  expect(JSON.parse(saved!).seed).toBe(seed);
+
+  await page.reload();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  expect(await page.evaluate(() => window.__monecraft!.engine.state.world.seed)).toBe(seed);
+  const positionAfter = await playerPosition(page);
+  expect(Math.abs(positionAfter.x - positionBefore.x)).toBeLessThan(2);
+  expect(Math.abs(positionAfter.z - positionBefore.z)).toBeLessThan(2);
+});
