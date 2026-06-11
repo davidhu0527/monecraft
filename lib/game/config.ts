@@ -51,7 +51,7 @@ export const HOSTILE_CAP = 16;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-export const SAVE_KEY = "minecraft_save_v4";
+export const SAVE_KEY = "minecraft_save_v5";
 
 // Rendering
 export const RENDER_RADIUS = 90;

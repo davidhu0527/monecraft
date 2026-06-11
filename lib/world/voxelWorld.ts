@@ -54,16 +54,20 @@ export class VoxelWorld {
   }
 
   getBiome(x: number, z: number): BiomeId {
+    // Two incommensurate, direction-rotated sine octaves per field, with
+    // dominant wavelengths of ~250-900 blocks: each field traverses several
+    // cycles across the 512-block map, so every world gets coherent patches
+    // of all five biomes (~60-150 block scale).
     const s = this.seed * 0.007;
-    const temp = Math.sin(x * 0.0015 + s) * 0.5 + Math.cos(z * 0.0012 + s * 1.2) * 0.5;
-    const moisture = Math.sin(x * 0.0017 - s * 0.8) * 0.5 + Math.cos(z * 0.0019 + s * 1.5) * 0.5;
-    const continental = Math.sin(x * 0.0007 + s * 2.1) * 0.5 + Math.cos(z * 0.0009 - s * 1.7) * 0.5;
-    const ridge = Math.sin(x * 0.006 + z * 0.005 + s) * 0.5 + Math.cos(x * 0.004 - z * 0.006 - s) * 0.5;
+    const temp = Math.sin(x * 0.013 + z * 0.006 + s * 1.3) * 0.6 + Math.sin(x * 0.029 - z * 0.017 + s * 2.4) * 0.4;
+    const moisture = Math.sin(x * 0.007 - z * 0.012 + s * 0.8) * 0.6 + Math.sin(x * 0.019 + z * 0.023 - s * 1.6) * 0.4;
+    const continental = Math.sin(x * 0.008 + z * 0.01 + s * 2.1) * 0.55 + Math.sin(x * 0.014 - z * 0.009 - s * 1.7) * 0.45;
+    const ridge = Math.sin(x * 0.024 + z * 0.02 + s) * 0.5 + Math.sin(x * 0.016 - z * 0.024 - s) * 0.5;
 
-    if (continental < -0.3) return BiomeId.Ocean;
-    if (continental > 0.6 || ridge > 0.7) return BiomeId.Mountains;
-    if (temp > 0.3 && moisture < -0.2) return BiomeId.Desert;
-    if (moisture > 0.25) return BiomeId.Forest;
+    if (continental < -0.52) return BiomeId.Ocean;
+    if ((continental > 0.5 && ridge > 0) || ridge > 0.8) return BiomeId.Mountains;
+    if (temp > 0.2 && moisture < -0.12) return BiomeId.Desert;
+    if (moisture > 0.18) return BiomeId.Forest;
     return BiomeId.Plains;
   }
 }

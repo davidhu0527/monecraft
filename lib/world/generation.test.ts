@@ -33,9 +33,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "4900ec2fe8808b413ca82f6c19a85cd836d1d767a31f917ec9550611e7484675"],
-    [1, "b37a02f3adc20f4f49baba9870d1daa23929f95c4feef5512f2a5e1082178bea"],
-    [999999937, "8f2b794d5b6d91095d1cadfd8fd4787597a1b04a4cca7aba22b5df09d8f145f8"]
+    [1337, "1626af26e49bca8bfa2221628da3706c8de9ba804aa7e86635e02fa03c964462"],
+    [1, "9f423923b00725e7308edbf7a1504c6268f498c9d0459c9904650d5734b7e85b"],
+    [999999937, "be9b73dba0481b8204ab13fcc8646fefaf266c8897bb1bf94253364a162093b1"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -43,7 +43,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("e1ca3305724cb61c1a5aa138f4d663880e9bbd14bfab4b700e2d3960185821e9");
+      expect(hashBytes(fullWorld().blocks)).toBe("270708bd530431720134eed421b6910ecef7f9a9eb6104a169eb44e71f5f7c3a");
     },
     { timeout: 60000 }
   );
@@ -61,13 +61,17 @@ describe("worldgen determinism", () => {
     expect(world.get(200, 14, 0)).toBe(BlockId.Bedrock);
 
     // Biome field samples.
-    expect(world.getBiome(1, 1)).toBe(BiomeId.Plains);
+    expect(world.getBiome(1, 1)).toBe(BiomeId.Forest);
     expect(world.getBiome(1, 277)).toBe(BiomeId.Desert);
+    expect(world.getBiome(400, 100)).toBe(BiomeId.Mountains);
 
     // Terrain heights at sample columns.
     expect(world.highestSolidY(64, 64)).toBe(44);
-    expect(world.highestSolidY(256, 256)).toBe(46);
-    expect(world.highestSolidY(400, 100)).toBe(52);
+    expect(world.highestSolidY(256, 256)).toBe(28);
+    expect(world.highestSolidY(400, 100)).toBe(104);
+
+    // Snow caps above the snow line.
+    expect(world.get(400, 104, 100)).toBe(BlockId.Snow);
 
     // Sea-level fill: a column whose floor is below sea level holds water at y=43.
     expect(world.highestSolidY(1, 277)).toBe(30);
@@ -82,8 +86,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1345464);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("d27ec64793f92c06846047c8c597346d6409fa66b4c4cee0c7479d066629c6c4");
+      expect(positions.count).toBe(1332576);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("528b56978ab673d27b55d1b72823ade333645409965ed6ee7a359fe9f675efa0");
     },
     { timeout: 60000 }
   );

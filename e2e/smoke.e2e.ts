@@ -88,7 +88,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Save Game" }).click();
-  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v4"));
+  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v5"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
   expect(JSON.parse(saved!).version).toBe(2);

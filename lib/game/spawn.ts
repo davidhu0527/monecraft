@@ -53,12 +53,17 @@ export function findSpawnOnLand(world: VoxelWorld, centerX: number, centerZ: num
   return { x: centerX, y: topY + 1, z: centerZ };
 }
 
+/** True when the surface position is dry: not a flooded column (seabed/lake floor). */
+function isDrySurface(world: VoxelWorld, x: number, y: number, z: number): boolean {
+  return world.get(Math.floor(x), y, Math.floor(z)) !== BlockId.Water;
+}
+
 export function randomLandPoint(world: VoxelWorld, surfaceYAt: SurfaceYAtFn, rng: () => number = Math.random): THREE.Vector3 {
   for (let i = 0; i < 40; i += 1) {
     const x = 10 + rng() * (world.sizeX - 20);
     const z = 10 + rng() * (world.sizeZ - 20);
     const y = surfaceYAt(x, z);
-    if (y > 2) return new THREE.Vector3(x, y, z);
+    if (y > 2 && isDrySurface(world, x, y, z)) return new THREE.Vector3(x, y, z);
   }
   return new THREE.Vector3(world.sizeX / 2, 12, world.sizeZ / 2);
 }
@@ -77,7 +82,7 @@ export function randomLandPointNear(
     const clampedX = Math.max(10, Math.min(world.sizeX - 10, x));
     const clampedZ = Math.max(10, Math.min(world.sizeZ - 10, z));
     const y = surfaceYAt(clampedX, clampedZ);
-    if (y > 2) return new THREE.Vector3(clampedX, y, clampedZ);
+    if (y > 2 && isDrySurface(world, clampedX, y, clampedZ)) return new THREE.Vector3(clampedX, y, clampedZ);
   }
   return randomLandPoint(world, surfaceYAt, rng);
 }
