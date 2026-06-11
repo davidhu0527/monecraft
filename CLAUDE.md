@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Minecraft-inspired voxel game: Next.js 14 (App Router), TypeScript (strict), Three.js, Bun. Single-player, browser-based, client-only, saves to localStorage.
+A Minecraft-inspired voxel game: Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Three.js, Bun. Single-player, browser-based, client-only, saves to localStorage.
 
 ## Commands
 

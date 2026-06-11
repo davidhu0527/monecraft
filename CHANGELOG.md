@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Upgraded dependencies: Next.js 14.2 → 16.2 (Turbopack), React 18.3 → 19.2, Three.js r168 → r184, TypeScript 5.6 → 6.0, ESLint 8 → 9 with flat config (`next lint` was removed upstream; `bun run lint` now runs `eslint .`)
+
 ## [0.2.0] - 2026-06-11
 
 ### Added
