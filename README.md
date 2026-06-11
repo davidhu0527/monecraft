@@ -7,7 +7,7 @@ A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves 
 ## Controls
 
 - `W A S D`: Move · `Space`: Jump · `C`: Crouch
-- `W + CapsLock`: Sprint (drains energy)
+- `W + CapsLock`: Sprint (drains hunger)
 - `Mouse`: Look around (click the game first to lock the pointer)
 - `Left click` (hold): Break block / attack mobs
 - `Right click` or `E`: Place selected block

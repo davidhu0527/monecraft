@@ -60,7 +60,7 @@ export type GameState = {
   equippedArmor: EquippedArmor;
   selectedSlot: number;
   hearts: number;
-  energy: number;
+  hunger: number;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
@@ -119,7 +119,7 @@ export type GameSnapshot = {
   equippedArmor: EquippedArmor;
   selectedSlot: number;
   hearts: number;
-  energy: number;
+  hunger: number;
   daylightPercent: number;
   passiveCount: number;
   hostileCount: number;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_ENERGY, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
+import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
@@ -28,7 +28,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   equippedArmor: createEmptyArmorEquipment(),
   selectedSlot: 0,
   hearts: MAX_HEARTS,
-  energy: MAX_ENERGY,
+  hunger: MAX_HUNGER,
   daylightPercent: 100,
   passiveCount: 0,
   hostileCount: 0,
@@ -159,7 +159,7 @@ export function useMinecraftGame() {
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
     hearts: snapshot.hearts,
-    energy: snapshot.energy,
+    hunger: snapshot.hunger,
     daylightPercent: snapshot.daylightPercent,
     passiveCount: snapshot.passiveCount,
     hostileCount: snapshot.hostileCount,
@@ -170,7 +170,7 @@ export function useMinecraftGame() {
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     maxHearts: MAX_HEARTS,
-    maxEnergy: MAX_ENERGY,
+    maxHunger: MAX_HUNGER,
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),

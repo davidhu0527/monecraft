@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BlockId, collidesAt } from "@/lib/world";
-import { MAX_ENERGY, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
+import { MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
@@ -71,7 +71,7 @@ describe("boot", () => {
 });
 
 describe("movement and stats", () => {
-  test("walking moves the player and never drains energy below the walk budget rate", () => {
+  test("walking moves the player and never drains hunger below the walk budget rate", () => {
     const engine = makeEngine();
     calmDaytime(engine);
     run(engine, 1);
@@ -82,14 +82,14 @@ describe("movement and stats", () => {
     expect(moved).toBeGreaterThan(3);
   });
 
-  test("sprinting drains energy with distance", () => {
+  test("sprinting drains hunger with distance", () => {
     const engine = makeEngine();
     calmDaytime(engine);
     run(engine, 1);
-    expect(engine.state.energy).toBe(MAX_ENERGY);
+    expect(engine.state.hunger).toBe(MAX_HUNGER);
     // Space held: the player hops over one-block terrain rises while sprinting.
     run(engine, 8, input({ keys: ["KeyW", "Space"], capsActive: true }));
-    expect(engine.state.energy).toBeLessThan(MAX_ENERGY);
+    expect(engine.state.hunger).toBeLessThan(MAX_HUNGER);
   });
 
   test("hearts regenerate one per interval while hurt", () => {

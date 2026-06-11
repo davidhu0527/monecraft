@@ -13,14 +13,14 @@ export const WORLD_BORDER_PADDING = 1.2;
 
 // Player stats
 export const MAX_HEARTS = 50;
-export const MAX_ENERGY = 100;
+export const MAX_HUNGER = 100;
 export const RESPAWN_SECONDS = 3;
 export const HEALTH_REGEN_INTERVAL_SECONDS = 3;
-// Energy drain: one point per N blocks sprinted/walked, or per N jumps.
-export const SPRINT_BLOCKS_PER_ENERGY = 20;
-export const WALK_BLOCKS_PER_ENERGY = 60;
-export const JUMPS_PER_ENERGY = 10;
-export const FOOD_ENERGY = 34;
+// Hunger drain: one point per N blocks sprinted/walked, or per N jumps.
+export const SPRINT_BLOCKS_PER_HUNGER = 20;
+export const WALK_BLOCKS_PER_HUNGER = 60;
+export const JUMPS_PER_HUNGER = 10;
+export const FOOD_HUNGER = 34;
 
 // Inventory
 export const HOTBAR_SLOTS = 10;

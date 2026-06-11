@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
-import { HOTBAR_SLOTS, MAX_ENERGY, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, RENDER_RADIUS, STUCK_RESET_SECONDS } from "@/lib/game/config";
+import { HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, RENDER_RADIUS, STUCK_RESET_SECONDS } from "@/lib/game/config";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
@@ -13,7 +13,7 @@ import { createTimers, type FrameInput, type GameEvent, type GameSnapshot, type 
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
-import { eatEnergy, tickEnergyDrain, tickHealthRegen } from "./systems/playerStats";
+import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
@@ -73,7 +73,7 @@ export class GameEngine {
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
       hearts: MAX_HEARTS,
-      energy: MAX_ENERGY,
+      hunger: MAX_HUNGER,
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -126,7 +126,7 @@ export class GameEngine {
     }
 
     const move = tickPlayerMotion(state, input, dt, this.applyDamage);
-    tickEnergyDrain(state, move);
+    tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     tickMining(state, input, dt);
     tickDayNight(state, dt);
@@ -171,7 +171,7 @@ export class GameEngine {
         const next = inv.adjustSlotCount(state.inventory, "food", -1, state.selectedSlot);
         if (!next) break;
         state.inventory = next;
-        state.energy = eatEnergy(state.energy);
+        state.hunger = restoreHunger(state.hunger);
         break;
       }
       case "placeBlock": {
@@ -298,7 +298,7 @@ export class GameEngine {
       equippedArmor: state.equippedArmor,
       selectedSlot: state.selectedSlot,
       hearts: state.hearts,
-      energy: state.energy,
+      hunger: state.hunger,
       daylightPercent: state.daylightPercent,
       passiveCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 0 : 1), 0),
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),

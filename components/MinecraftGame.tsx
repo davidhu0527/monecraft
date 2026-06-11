@@ -19,7 +19,7 @@ export default function MinecraftGame() {
     inventory,
     equippedArmor,
     hearts,
-    energy,
+    hunger,
     daylightPercent,
     passiveCount,
     hostileCount,
@@ -29,7 +29,7 @@ export default function MinecraftGame() {
     hotbarSlots,
     recipes,
     maxHearts,
-    maxEnergy,
+    maxHunger,
     canCraft,
     craft,
     swapInventorySlots,
@@ -91,8 +91,8 @@ export default function MinecraftGame() {
         hotbarSlots={hotbarSlots}
         hearts={hearts}
         maxHearts={maxHearts}
-        energy={energy}
-        maxEnergy={maxEnergy}
+        hunger={hunger}
+        maxHunger={maxHunger}
         onSelectSlot={setSelectedSlot}
       />
 

@@ -22,7 +22,7 @@ export default function Hud(props: HudProps) {
         <span>{locked ? "Mouse: Look" : "Click to lock mouse"}</span>
         <span>Move: W/S forward-back, A/D strafe</span>
         <span>Sprint: W + CapsLock | Crouch: C | Eat: F</span>
-        <span>Energy: Sprint 20 blocks = -1, Walk 60 blocks = -1, Jump 10 times = -1. Eat food to recover.</span>
+        <span>Hunger: Sprint 20 blocks = -1, Walk 60 blocks = -1, Jump 10 times = -1. Eat food to recover.</span>
         <span>Attack: Left click | Mine: Hold left click | Place: Right click or E</span>
         <span>Stone needs pickaxe, Sliver needs Stone, Ruby/Gold need Sliver, Sapphire/Diamond need Ruby pickaxe or higher</span>
         <span>Armor: click armor items in inventory to equip/unequip (only equipped pieces reduce damage)</span>

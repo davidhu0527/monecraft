@@ -6,12 +6,12 @@ type HotbarProps = {
   hotbarSlots: number;
   hearts: number;
   maxHearts: number;
-  energy: number;
-  maxEnergy: number;
+  hunger: number;
+  maxHunger: number;
   onSelectSlot: (index: number) => void;
 };
 
-export default function Hotbar({ inventory, selectedSlot, hotbarSlots, hearts, maxHearts, energy, maxEnergy, onSelectSlot }: HotbarProps) {
+export default function Hotbar({ inventory, selectedSlot, hotbarSlots, hearts, maxHearts, hunger, maxHunger, onSelectSlot }: HotbarProps) {
   const iconForSlot = (slot: InventorySlot): string => {
     if (!slot.id || slot.count <= 0) return "";
     const byId: Record<string, string> = {
@@ -70,13 +70,13 @@ export default function Hotbar({ inventory, selectedSlot, hotbarSlots, hearts, m
           <div className="status-fill health-fill" style={{ width: `${Math.max(0, Math.min(100, (hearts / maxHearts) * 100))}%` }} />
         </div>
         <div className="hotbar-status-row">
-          <span className="hotbar-status-label">Energy</span>
+          <span className="hotbar-status-label">Hunger</span>
           <span className="hotbar-status-value">
-            {Math.round(energy)}/{maxEnergy}
+            {Math.round(hunger)}/{maxHunger}
           </span>
         </div>
-        <div className="status-track energy-bar">
-          <div className="status-fill energy-fill" style={{ width: `${Math.max(0, Math.min(100, (energy / maxEnergy) * 100))}%` }} />
+        <div className="status-track hunger-bar">
+          <div className="status-fill hunger-fill" style={{ width: `${Math.max(0, Math.min(100, (hunger / maxHunger) * 100))}%` }} />
         </div>
         <div className="hotbar-selected-chip">Selected: {selected?.id ? selected.label : "Empty"}</div>
       </div>

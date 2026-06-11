@@ -57,11 +57,11 @@
   box-shadow: inset 0 0 8px rgba(255, 180, 180, 0.35);
 }
 
-.energy-bar {
+.hunger-bar {
   background: #3a2e24;
 }
 
-.energy-fill {
+.hunger-fill {
   height: 100%;
   background: linear-gradient(90deg, #e36d2f 0%, #f2d050 55%, #8bd16a 100%);
   box-shadow: inset 0 0 8px rgba(255, 240, 180, 0.28);

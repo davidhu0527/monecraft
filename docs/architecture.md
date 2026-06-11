@@ -35,7 +35,7 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 1. Stuck detection / auto-unstuck (`STUCK_RESET_SECONDS`)
 2. Death check + respawn countdown (while dead, only mobs tick)
 3. Player movement & physics (`systems/playerMotion.ts` — derives direction from `yaw`, scratch vectors, no per-frame allocations)
-4. Energy drain from sprint/walk/jump budgets + health regen (`systems/playerStats.ts`)
+4. Hunger drain from sprint/walk/jump budgets + health regen (`systems/playerStats.ts`)
 5. Mining progress and block breaking (`systems/mining.ts`; placement also lives here)
 6. Day-night clock (`systems/dayNight.ts` — `daylightAt()` is the single daylight formula)
 7. Night hostile spawning (`systems/spawnDirector.ts`, interval/cap in config)
@@ -58,7 +58,7 @@ Owns every DOM listener. Continuous input (movement keys, mouse button, pointer 
 
 - `inventory.ts` — pure slot algebra (`adjustSlotCount`, `craft`, durability, armor); every function returns a new array or `null` for "no change". Crafting refuses when the result doesn't fit rather than destroying overflow.
 - `items.ts` — `ITEM_DEFS`, `BLOCK_TO_SLOT`, `BREAK_HARDNESS`, armor slots, slot factories. `recipes.ts` — `RECIPES`.
-- `config.ts` — every gameplay tunable, named: physics, energy rules, daylight thresholds, mob director, mining reach, autosave interval, `SAVE_KEY`.
+- `config.ts` — every gameplay tunable, named: physics, hunger rules, daylight thresholds, mob director, mining reach, autosave interval, `SAVE_KEY`.
 - `save.ts` — versioned (de)serialization with an injectable `Storage`; `spawn.ts` — deterministic spawn search + random land points.
 
 ## World layer (`lib/world/`)

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { collidesAt, hasSupportUnderPlayer } from "@/lib/world";
 import { CROUCH_SPEED, GRAVITY, JUMP_VELOCITY, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, SPRINT_SPEED, WALK_SPEED, WORLD_BORDER_PADDING } from "@/lib/game/config";
 import type { FrameInput, GameState } from "../state";
-import { speedScaleFromEnergy } from "./playerStats";
+import { speedScaleFromHunger } from "./playerStats";
 
 export type MoveTickResult = {
   didSprint: boolean;
@@ -60,8 +60,8 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   scratchMoveDir.addScaledVector(scratchRight, strafeInput);
   if (scratchMoveDir.lengthSq() > 0) scratchMoveDir.normalize();
 
-  const speedScale = speedScaleFromEnergy(state.energy);
-  const canSprint = state.energy > 0;
+  const speedScale = speedScaleFromHunger(state.hunger);
+  const canSprint = state.hunger > 0;
   const sprinting = canSprint && forwardInput > 0 && keys.has("KeyW") && input.capsActive && !crouching;
   const speed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
 

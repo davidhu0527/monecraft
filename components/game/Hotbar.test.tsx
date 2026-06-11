@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Hotbar from "@/components/game/Hotbar";
-import { HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_ENERGY, MAX_HEARTS } from "@/lib/game/config";
+import { HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HUNGER, MAX_HEARTS } from "@/lib/game/config";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import type { InventorySlot } from "@/lib/game/types";
 
@@ -20,8 +20,8 @@ function renderHotbar(overrides: Partial<Parameters<typeof Hotbar>[0]> = {}) {
     hotbarSlots: HOTBAR_SLOTS,
     hearts: 40,
     maxHearts: MAX_HEARTS,
-    energy: 80,
-    maxEnergy: MAX_ENERGY,
+    hunger: 80,
+    maxHunger: MAX_HUNGER,
     onSelectSlot: mock(),
     ...overrides
   };
@@ -44,7 +44,7 @@ describe("Hotbar", () => {
     expect(screen.getByText("70/70")).toBeTruthy(); // pickaxe durability
     expect(screen.getByText("Selected: Wood Pickaxe")).toBeTruthy();
     expect(screen.getByText("40/50")).toBeTruthy(); // health
-    expect(screen.getByText("80/100")).toBeTruthy(); // energy
+    expect(screen.getByText("80/100")).toBeTruthy(); // hunger
   });
 
   test("clicking a slot selects it", async () => {
