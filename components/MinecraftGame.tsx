@@ -5,6 +5,7 @@ import Hud from "@/components/game/Hud";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
 import RespawnOverlay from "@/components/game/RespawnOverlay";
+import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 
 export default function MinecraftGame() {
@@ -18,6 +19,7 @@ export default function MinecraftGame() {
     inventoryOpen,
     inventory,
     equippedArmor,
+    armorPoints,
     hearts,
     hunger,
     daylightPercent,
@@ -85,16 +87,10 @@ export default function MinecraftGame() {
         </div>
       ) : null}
 
-      <Hotbar
-        inventory={inventory}
-        selectedSlot={selectedSlot}
-        hotbarSlots={hotbarSlots}
-        hearts={hearts}
-        maxHearts={maxHearts}
-        hunger={hunger}
-        maxHunger={maxHunger}
-        onSelectSlot={setSelectedSlot}
-      />
+      <div className="hud-bottom">
+        <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
+        <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
+      </div>
 
       {inventoryOpen ? (
         <InventoryPanel

@@ -2,7 +2,7 @@ import { acquirePointerLock, calmDaytime, expect, itemCount, playerPosition, tes
 
 test("boots without errors and renders the world", async ({ gamePage: page }) => {
   await expect(page.locator("canvas")).toBeVisible();
-  await expect(page.locator(".hud")).toBeVisible();
+  await expect(page.getByTestId("hotbar")).toBeVisible();
   const triangles = await page.evaluate(() => window.__monecraft!.renderer.renderedTriangles());
   expect(triangles).toBeGreaterThan(0);
 

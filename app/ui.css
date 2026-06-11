@@ -1,158 +1,143 @@
-.hotbar-wrap {
+/* --- Bottom HUD: status icon rows + the 9-slot hotbar --- */
+
+.hud-bottom {
   position: absolute;
   left: 50%;
-  bottom: 12px;
+  bottom: 6px;
   transform: translateX(-50%);
   z-index: 4;
-  width: min(96vw, 760px);
+  display: grid;
+  justify-items: center;
+  gap: 3px;
   pointer-events: auto;
+  user-select: none;
 }
 
-.hotbar-status {
-  margin-bottom: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 13px;
-  background: linear-gradient(180deg, rgba(44, 41, 36, 0.84), rgba(27, 25, 22, 0.9));
-  box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  padding: 8px 12px;
-}
-
-.hotbar-status-row {
+.status-bars {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  color: #efe6d5;
-  font-size: 11px;
-  margin-top: 2px;
-}
-
-.hotbar-status-label {
-  letter-spacing: 0.02em;
-  opacity: 0.9;
-}
-
-.hotbar-status-value {
-  font-weight: 700;
-  color: #f8f1e4;
-}
-
-.status-track {
-  margin-top: 4px;
   width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(17, 15, 13, 0.85);
-  overflow: hidden;
+  gap: 12px;
 }
 
-.health-bar {
-  background: #3a2323;
-}
-
-.health-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #8b1a1a 0%, #e14545 55%, #ff8080 100%);
-  box-shadow: inset 0 0 8px rgba(255, 180, 180, 0.35);
-}
-
-.hunger-bar {
-  background: #3a2e24;
-}
-
-.hunger-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #e36d2f 0%, #f2d050 55%, #8bd16a 100%);
-  box-shadow: inset 0 0 8px rgba(255, 240, 180, 0.28);
-}
-
-.hotbar-selected-chip {
-  margin-top: 6px;
-  display: inline-block;
-  font-size: 10px;
-  color: #f5e9d2;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-  padding: 2px 8px;
-}
-
-.hotbar-bottom {
-  display: flex;
-  gap: 6px;
-  width: 100%;
-  justify-content: center;
-  padding: 8px 10px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(44, 41, 36, 0.84), rgba(27, 25, 22, 0.9));
-  box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(1.5px);
-}
-
-.hotbar-slot {
-  width: 68px;
-  height: 78px;
-  border: 1px solid rgba(0, 0, 0, 0.58);
-  border-radius: 10px;
-  background: linear-gradient(180deg, #f0e7d6 0%, #cec2a8 100%);
-  color: #1a1a1a;
-  cursor: pointer;
-  padding: 6px 4px;
+.status-bars-left,
+.status-bars-right {
   display: grid;
-  grid-template-rows: 12px 1fr 12px 14px;
-  align-items: center;
+  gap: 2px;
+}
+
+.status-icon-row {
+  display: flex;
+  gap: 1px;
+}
+
+.status-icon-row.reversed {
+  flex-direction: row-reverse;
+}
+
+.status-icon-row img {
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.45));
+}
+
+.hotbar-area {
+  position: relative;
+  display: grid;
   justify-items: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.hotbar-slot.active {
-  border-color: #ffe6ae;
-  background: linear-gradient(180deg, #f9dda1 0%, #deb25b 100%);
+.hotbar-item-name {
+  position: absolute;
+  top: -34px;
+  color: var(--mc-text-light);
+  font-size: 15px;
   font-weight: 700;
-  transform: translateY(-3px) scale(1.01);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-
-.hotbar-slot:hover {
-  border-color: rgba(255, 233, 188, 0.72);
-}
-
-.slot-index {
-  font-size: 10px;
-  opacity: 0.75;
-}
-
-.slot-label {
-  font-size: 10px;
-  text-align: center;
-  line-height: 1.05;
-  max-width: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-shadow: var(--mc-text-shadow);
+  opacity: 0;
+  animation: hotbar-name-fade 2.2s ease-out forwards;
+  pointer-events: none;
   white-space: nowrap;
 }
 
-.slot-icon {
-  font-size: 20px;
-  line-height: 1;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.45));
+@keyframes hotbar-name-fade {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
-.slot-icon.empty {
-  opacity: 0.18;
+.hotbar {
+  display: flex;
+  padding: 3px;
+  background: rgba(12, 12, 12, 0.5);
+  border: 2px solid rgba(0, 0, 0, 0.62);
+  outline: 1px solid rgba(255, 255, 255, 0.28);
 }
 
-.slot-count {
-  font-size: 12px;
+.hotbar-slot {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: rgba(34, 34, 34, 0.42);
+  border-style: solid;
+  border-width: 2px;
+  border-color: rgba(20, 20, 20, 0.85) rgba(125, 125, 125, 0.6) rgba(125, 125, 125, 0.6) rgba(20, 20, 20, 0.85);
+}
+
+.hotbar-slot.active::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 3px solid #fefefe;
+  outline: 1px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.hotbar-slot:hover {
+  background: rgba(80, 80, 80, 0.45);
+}
+
+/* --- Item icons (shared by hotbar and inventory slots) --- */
+
+.item-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-icon img {
+  image-rendering: pixelated;
+}
+
+.item-icon-count {
+  position: absolute;
+  right: -4px;
+  bottom: -6px;
+  font-size: 14px;
   font-weight: 700;
-  align-self: end;
-  color: #2e2317;
+  color: var(--mc-text-light);
+  text-shadow: var(--mc-text-shadow);
+  pointer-events: none;
+}
+
+.item-icon-durability {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: -2px;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.item-icon-durability-fill {
+  display: block;
+  height: 2px;
 }
 
 .crosshair {
@@ -165,11 +150,15 @@
   pointer-events: none;
 }
 
+.crosshair {
+  mix-blend-mode: difference;
+}
+
 .crosshair::before,
 .crosshair::after {
   content: "";
   position: absolute;
-  background: #111;
+  background: #e6e6e6;
 }
 
 .crosshair::before {
@@ -188,21 +177,19 @@
 
 .caps-indicator {
   position: absolute;
-  right: 12px;
-  top: 12px;
-  border-radius: 8px;
-  border: 1px solid #00000040;
-  background: #efebe4;
-  color: #232323;
-  padding: 8px 12px;
-  font-size: 12px;
+  left: 12px;
+  bottom: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.6);
+  background: rgba(12, 12, 12, 0.5);
+  color: #d8d8d8;
+  padding: 4px 8px;
+  font-size: 11px;
+  text-shadow: var(--mc-text-shadow);
   user-select: none;
 }
 
 .caps-indicator.on {
-  background: #b4fca2;
-  border-color: #1b6d15;
-  color: #0c3f09;
+  color: #7dff6e;
 }
 
 .hud-menu-toggle {
@@ -422,38 +409,13 @@
 }
 
 @media (max-width: 720px) {
-  .hotbar-wrap {
-    bottom: 8px;
-    width: min(98vw, 680px);
-  }
-
-  .hotbar-status {
-    margin-bottom: 5px;
-    padding: 6px 8px;
-  }
-
-  .hotbar-status-row {
-    font-size: 10px;
-  }
-
-  .status-track {
-    height: 9px;
-  }
-
-  .hotbar-bottom {
-    gap: 4px;
-    padding: 6px 6px 7px;
+  .hud-bottom {
+    bottom: 4px;
   }
 
   .hotbar-slot {
-    width: 54px;
-    height: 64px;
-    grid-template-rows: 10px 1fr 10px 12px;
-    padding: 4px 2px;
-  }
-
-  .slot-icon {
-    font-size: 16px;
+    width: 38px;
+    height: 38px;
   }
 
   .inventory-panel {

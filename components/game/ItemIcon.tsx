@@ -1,3 +1,4 @@
+import PixelImg from "@/components/game/PixelImg";
 import { itemIconUrl } from "@/lib/ui/sprites";
 import type { InventorySlot } from "@/lib/game/types";
 
@@ -21,8 +22,7 @@ export default function ItemIcon({ slot, size = 32 }: ItemIconProps) {
 
   return (
     <span className="item-icon" style={{ width: size, height: size }}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- tiny generated data URL; next/image cannot optimize it */}
-      <img src={itemIconUrl(slot.id)} alt={slot.label} draggable={false} width={size} height={size} />
+      <PixelImg src={itemIconUrl(slot.id)} alt={slot.label} size={size} />
       {durabilityRatio !== null && durabilityRatio < 1 && (
         <span className="item-icon-durability">
           <span

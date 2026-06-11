@@ -162,6 +162,7 @@ export function useMinecraftGame() {
     inventoryOpen: snapshot.inventoryOpen,
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
+    armorPoints: snapshot.armorPoints,
     hearts: snapshot.hearts,
     hunger: snapshot.hunger,
     daylightPercent: snapshot.daylightPercent,
