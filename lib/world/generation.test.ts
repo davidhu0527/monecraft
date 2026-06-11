@@ -79,6 +79,75 @@ describe("worldgen determinism", () => {
   });
 });
 
+describe("world content balance", () => {
+  // These floors pin the world's playability, not its exact bytes: they catch
+  // the degenerate-biome regression class (a whole map collapsing to 1-2
+  // biomes left some worlds nearly woodless) and survive legitimate
+  // re-baselines as long as the world still plays right.
+  test(
+    "every biome appears with real coverage on the seed-1337 map",
+    () => {
+      const world = fullWorld();
+      const counts = new Map<BiomeId, number>();
+      let samples = 0;
+      for (let x = 0; x < world.sizeX; x += 4) {
+        for (let z = 0; z < world.sizeZ; z += 4) {
+          const biome = world.getBiome(x, z);
+          counts.set(biome, (counts.get(biome) ?? 0) + 1);
+          samples += 1;
+        }
+      }
+      for (const biome of [BiomeId.Plains, BiomeId.Desert, BiomeId.Ocean, BiomeId.Forest, BiomeId.Mountains]) {
+        expect((counts.get(biome) ?? 0) / samples).toBeGreaterThan(0.02);
+      }
+      expect((counts.get(BiomeId.Forest) ?? 0) / samples).toBeGreaterThan(0.1);
+    },
+    { timeout: 60000 }
+  );
+
+  test(
+    "wood, snow, cacti, and beaches actually generate",
+    () => {
+      const world = fullWorld();
+      let woodNearCenter = 0;
+      let snow = 0;
+      let cactus = 0;
+      for (let x = 0; x < world.sizeX; x += 1) {
+        for (let z = 0; z < world.sizeZ; z += 1) {
+          const nearCenter = Math.hypot(x - world.sizeX / 2, z - world.sizeZ / 2) <= 90;
+          for (let y = 0; y < world.sizeY; y += 1) {
+            const block = world.get(x, y, z);
+            if (block === BlockId.Wood && nearCenter) woodNearCenter += 1;
+            else if (block === BlockId.Snow) snow += 1;
+            else if (block === BlockId.Cactus) cactus += 1;
+          }
+        }
+      }
+      expect(woodNearCenter).toBeGreaterThan(100); // a player can find wood without travelling far
+      expect(snow).toBeGreaterThan(500); // mountain snow caps exist
+      expect(cactus).toBeGreaterThanOrEqual(5); // some dry desert grows cacti
+
+      // At least one beach column: sand top at sea level on a non-desert/ocean
+      // column with water beside it.
+      let beachFound = false;
+      search: for (let x = 1; x < world.sizeX - 1; x += 1) {
+        for (let z = 1; z < world.sizeZ - 1; z += 1) {
+          const biome = world.getBiome(x, z);
+          if (biome === BiomeId.Desert || biome === BiomeId.Ocean) continue;
+          const topY = world.highestSolidY(x, z);
+          if (topY < 43 || topY > 44 || world.get(x, topY, z) !== BlockId.Sand) continue;
+          if (world.get(x + 1, 43, z) === BlockId.Water || world.get(x - 1, 43, z) === BlockId.Water) {
+            beachFound = true;
+            break search;
+          }
+        }
+      }
+      expect(beachFound).toBe(true);
+    },
+    { timeout: 60000 }
+  );
+});
+
 describe("meshing", () => {
   test(
     "geometry for a generated region is byte-identical",
