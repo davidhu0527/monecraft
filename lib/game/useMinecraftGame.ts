@@ -41,6 +41,14 @@ const noopSubscribe = () => () => {};
 
 type GameContext = { engine: GameEngine; node: HTMLDivElement };
 
+// Debug/test handle: lets the browser console and the Playwright E2E suite
+// inspect the live simulation (single-player client game — nothing to protect).
+declare global {
+  interface Window {
+    __monecraft?: { engine: GameEngine; renderer: GameRenderer };
+  }
+}
+
 function persistGame(api: GameApi, onMessage: (text: string) => void): void {
   try {
     writeSave(SAVE_KEY, api.serialize());
@@ -101,6 +109,8 @@ export function useMinecraftGame() {
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
+    window.__monecraft = { engine: gameEngine, renderer };
+
     let last = performance.now();
     let animationFrame = 0;
     const clock = () => {
@@ -125,6 +135,7 @@ export function useMinecraftGame() {
     animationFrame = requestAnimationFrame(clock);
 
     return () => {
+      delete window.__monecraft;
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
       window.removeEventListener("beforeunload", autoSave);
