@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-11
+
 ### Added
 
 - Playwright E2E smoke suite (`bun run test:e2e`, also a CI job): boots the production build in headless Chromium and verifies rendering, input → movement, crafting via UI, mining, and save persistence through a `window.__monecraft` debug handle (also usable from the browser console)
