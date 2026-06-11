@@ -33,9 +33,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "1626af26e49bca8bfa2221628da3706c8de9ba804aa7e86635e02fa03c964462"],
-    [1, "9f423923b00725e7308edbf7a1504c6268f498c9d0459c9904650d5734b7e85b"],
-    [999999937, "be9b73dba0481b8204ab13fcc8646fefaf266c8897bb1bf94253364a162093b1"]
+    [1337, "b5fdbdb52db110be4d963c2eb30ae5678ac46dd8c3ca63baccf98b464059d5c3"],
+    [1, "4ff7cf20eabc45506c83314afa370f8f09107b1f6a9a93865fb10681c8b8456d"],
+    [999999937, "ac9e6f83a447e9194a230ef6f771db8da7173ebd291244b1cd10196ab903b109"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -43,7 +43,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("270708bd530431720134eed421b6910ecef7f9a9eb6104a169eb44e71f5f7c3a");
+      expect(hashBytes(fullWorld().blocks)).toBe("788cb3a2952929975d18d11a47e789d324f7df76be47912a0b4221b07ad88b58");
     },
     { timeout: 60000 }
   );
@@ -65,8 +65,8 @@ describe("worldgen determinism", () => {
     expect(world.getBiome(1, 277)).toBe(BiomeId.Desert);
     expect(world.getBiome(400, 100)).toBe(BiomeId.Mountains);
 
-    // Terrain heights at sample columns.
-    expect(world.highestSolidY(64, 64)).toBe(44);
+    // Terrain heights at sample columns ((64,64) tops out in a tree canopy).
+    expect(world.highestSolidY(64, 64)).toBe(49);
     expect(world.highestSolidY(256, 256)).toBe(28);
     expect(world.highestSolidY(400, 100)).toBe(104);
 
@@ -155,8 +155,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1332576);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("528b56978ab673d27b55d1b72823ade333645409965ed6ee7a359fe9f675efa0");
+      expect(positions.count).toBe(1342776);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("2e86e767dc462d7770538409b2faab359cfc82e2978205ff94dcf34a4fd187cb");
     },
     { timeout: 60000 }
   );

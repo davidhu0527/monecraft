@@ -74,6 +74,7 @@ export function generateWorld(world: VoxelWorld): void {
   generateTerrain(world);
   carveCaves(world, rand);
   placeWater(world);
+  placeBeaches(world);
   placeOres(world, rand);
   placeTrees(world, rand);
   placeCacti(world);
@@ -106,8 +107,6 @@ function generateTerrain(world: VoxelWorld): void {
         topBlock = BlockId.Snow;
       } else if (biome === BiomeId.Mountains && topY > GEN.mountainStoneAboveY) {
         topBlock = BlockId.Stone;
-      } else if (topY <= GEN.seaLevel + GEN.beachMaxAboveSea && topY >= GEN.seaLevel - GEN.beachDepthBelowSea) {
-        topBlock = BlockId.Sand; // beaches where low land meets the sea
       }
 
       for (let y = 1; y <= topY; y += 1) {
@@ -239,6 +238,31 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
       const block = world.get(x, y, z);
       if ((block !== BlockId.Stone && block !== BlockId.Cobblestone) || !hasNearbyAir(x, y, z)) continue;
       placeOreVein(x, y, z, config.id, config.minSize, config.maxSize);
+    }
+  }
+}
+
+/**
+ * Sand shorelines: grass columns in the sea-level band turn to beach only
+ * when water actually sits nearby — inland basins at sea level stay grass.
+ * Runs after placeWater so adjacency can test real water blocks.
+ */
+function placeBeaches(world: VoxelWorld): void {
+  for (let x = 1; x < world.sizeX - 1; x += 1) {
+    for (let z = 1; z < world.sizeZ - 1; z += 1) {
+      const topY = world.highestSolidY(x, z);
+      if (topY > GEN.seaLevel + GEN.beachMaxAboveSea || topY < GEN.seaLevel - GEN.beachDepthBelowSea) continue;
+      if (world.get(x, topY, z) !== BlockId.Grass) continue;
+
+      let nearWater = false;
+      for (let dx = -2; dx <= 2 && !nearWater; dx += 1) {
+        for (let dz = -2; dz <= 2 && !nearWater; dz += 1) {
+          if (world.get(x + dx, GEN.seaLevel, z + dz) === BlockId.Water) nearWater = true;
+        }
+      }
+      if (!nearWater) continue;
+
+      for (let y = Math.max(1, topY - 2); y <= topY; y += 1) world.set(x, y, z, BlockId.Sand);
     }
   }
 }
