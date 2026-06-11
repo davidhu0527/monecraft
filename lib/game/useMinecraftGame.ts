@@ -2,7 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { BiomeId, BlockId, collidesAt, createBlockAtlasTexture, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import {
+  BiomeId,
+  BlockId,
+  buildGeometryRegion,
+  collidesAt,
+  createBlockAtlasTexture,
+  generateWorld,
+  VoxelWorld,
+  WORLD_SIZE_X,
+  WORLD_SIZE_Y,
+  WORLD_SIZE_Z
+} from "@/lib/world";
 import { readSave } from "@/lib/game/save";
 import { tickDayNight } from "@/lib/game/runtime/dayNight";
 import { bindGameInput } from "@/lib/game/runtime/input";
@@ -434,7 +445,7 @@ export function useMinecraftGame() {
 
     const worldSeed = loadedSave?.seed ?? Math.floor(Math.random() * 2147483647);
     const world = new VoxelWorld(WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z, worldSeed);
-    world.generate();
+    generateWorld(world);
 
     const changedBlocks = new Map<number, number>();
     const baselineByIndex = new Map<number, number>();
@@ -882,7 +893,7 @@ export function useMinecraftGame() {
       currentRegionX = regionX;
       currentRegionZ = regionZ;
 
-      const geometry = world.buildGeometryRegion(regionX - RENDER_RADIUS, regionX + RENDER_RADIUS, regionZ - RENDER_RADIUS, regionZ + RENDER_RADIUS);
+      const geometry = buildGeometryRegion(world, regionX - RENDER_RADIUS, regionX + RENDER_RADIUS, regionZ - RENDER_RADIUS, regionZ + RENDER_RADIUS);
       scene.remove(worldMesh);
       worldMesh.geometry.dispose();
       worldMesh = new THREE.Mesh(geometry, worldMaterial);

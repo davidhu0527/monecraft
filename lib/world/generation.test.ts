@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld } from "@/lib/world";
+import { BiomeId, BlockId, VoxelWorld, buildGeometryRegion, generateWorld } from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -19,15 +19,15 @@ function hashBytes(bytes: Uint8Array): string {
   return new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 }
 
-function generateWorld(sizeX: number, sizeY: number, sizeZ: number, seed: number): VoxelWorld {
+function makeWorld(sizeX: number, sizeY: number, sizeZ: number, seed: number): VoxelWorld {
   const world = new VoxelWorld(sizeX, sizeY, sizeZ, seed);
-  world.generate();
+  generateWorld(world);
   return world;
 }
 
 let fullWorldCache: VoxelWorld | null = null;
 function fullWorld(): VoxelWorld {
-  fullWorldCache ??= generateWorld(512, 150, 512, 1337);
+  fullWorldCache ??= makeWorld(512, 150, 512, 1337);
   return fullWorldCache;
 }
 
@@ -37,7 +37,7 @@ describe("worldgen determinism", () => {
     [1, "b37a02f3adc20f4f49baba9870d1daa23929f95c4feef5512f2a5e1082178bea"],
     [999999937, "8f2b794d5b6d91095d1cadfd8fd4787597a1b04a4cca7aba22b5df09d8f145f8"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
-    expect(hashBytes(generateWorld(128, 150, 128, seed).blocks)).toBe(expected);
+    expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
 
   test(
@@ -79,8 +79,8 @@ describe("meshing", () => {
   test(
     "geometry for a generated region is byte-identical",
     () => {
-      const world = generateWorld(128, 150, 128, 1337);
-      const geometry = world.buildGeometryRegion(0, 127, 0, 127);
+      const world = makeWorld(128, 150, 128, 1337);
+      const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
       expect(positions.count).toBe(1345464);
       expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("d27ec64793f92c06846047c8c597346d6409fa66b4c4cee0c7479d066629c6c4");
@@ -91,7 +91,7 @@ describe("meshing", () => {
   test("a lone block renders 6 faces (36 vertices)", () => {
     const world = new VoxelWorld(8, 8, 8, 1);
     world.set(3, 3, 3, BlockId.Stone);
-    const geometry = world.buildGeometryRegion(0, 7, 0, 7);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
     expect(geometry.getAttribute("position").count).toBe(36);
   });
 
@@ -99,7 +99,7 @@ describe("meshing", () => {
     const world = new VoxelWorld(8, 8, 8, 1);
     world.set(3, 3, 3, BlockId.Stone);
     world.set(4, 3, 3, BlockId.Stone);
-    const geometry = world.buildGeometryRegion(0, 7, 0, 7);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
     expect(geometry.getAttribute("position").count).toBe(60); // 10 faces, not 12
   });
 
@@ -107,7 +107,7 @@ describe("meshing", () => {
     const world = new VoxelWorld(8, 8, 8, 1);
     world.set(3, 3, 3, BlockId.Water);
     world.set(4, 3, 3, BlockId.Water);
-    const geometry = world.buildGeometryRegion(0, 7, 0, 7);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
     expect(geometry.getAttribute("position").count).toBe(60); // 5 air-facing faces each
   });
 
@@ -115,7 +115,7 @@ describe("meshing", () => {
     const world = new VoxelWorld(8, 8, 8, 1);
     world.set(3, 3, 3, BlockId.Stone);
     world.set(4, 3, 3, BlockId.Water);
-    const geometry = world.buildGeometryRegion(0, 7, 0, 7);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
     expect(geometry.getAttribute("position").count).toBe(72); // all 6 faces of each
   });
 });
