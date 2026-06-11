@@ -22,11 +22,11 @@ export default function Hud(props: HudProps) {
         <span>{locked ? "Mouse: Look" : "Click to lock mouse"}</span>
         <span>Move: W/S forward-back, A/D strafe</span>
         <span>Sprint: W + CapsLock | Crouch: C | Eat: F</span>
-        <span>Hunger: Sprint 20 blocks = -1, Walk 60 blocks = -1, Jump 10 times = -1. Eat food to recover.</span>
+        <span>Hunger: Sprint 100 blocks = -1, Walk 300 blocks = -1, Jump 50 times = -1. Eat food to recover.</span>
         <span>Attack: Left click | Mine: Hold left click | Place: Right click or E</span>
         <span>Stone needs pickaxe, Sliver needs Stone, Ruby/Gold need Sliver, Sapphire/Diamond need Ruby pickaxe or higher</span>
         <span>Armor: click armor items in inventory to equip/unequip (only equipped pieces reduce damage)</span>
-        <span>Inventory/Crafting: I (swap slots by clicking two slots) | Hotbar: 1..0 | Max Stack: 99</span>
+        <span>Inventory/Crafting: I (swap slots by clicking two slots) | Hotbar: 1..9 | Max Stack: 99</span>
         <span>Durability: tools lose durability when used, armor loses durability when you take damage</span>
         <span>Hostiles: zombies and skeletons burn in daylight, spiders calm down by day, more hostiles spawn at night</span>
         <span>Emergency Unstuck: U</span>

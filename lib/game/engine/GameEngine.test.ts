@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BlockId, collidesAt } from "@/lib/world";
-import { MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
+import { MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, REGEN_MIN_HUNGER, SPRINT_BLOCKS_PER_HUNGER, SPRINT_MIN_HUNGER } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
@@ -87,9 +87,24 @@ describe("movement and stats", () => {
     calmDaytime(engine);
     run(engine, 1);
     expect(engine.state.hunger).toBe(MAX_HUNGER);
+    // The 64-block test world is smaller than one full drain interval, so
+    // pre-seed the budget and sprint the last stretch.
+    engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 10;
     // Space held: the player hops over one-block terrain rises while sprinting.
-    run(engine, 8, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    run(engine, 4, input({ keys: ["KeyW", "Space"], capsActive: true }));
     expect(engine.state.hunger).toBeLessThan(MAX_HUNGER);
+  });
+
+  test("sprint is blocked at low hunger", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.state.hunger = SPRINT_MIN_HUNGER;
+    engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 1;
+    run(engine, 2, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    // No sprint drain fired: movement counted as walking instead.
+    expect(engine.state.hunger).toBe(SPRINT_MIN_HUNGER);
+    expect(engine.state.timers.sprintDistanceBudget).toBe(SPRINT_BLOCKS_PER_HUNGER - 1);
   });
 
   test("hearts regenerate one per interval while hurt", () => {
@@ -100,6 +115,15 @@ describe("movement and stats", () => {
     expect(engine.state.hearts).toBe(MAX_HEARTS - 2);
     run(engine, 6.5);
     expect(engine.state.hearts).toBe(MAX_HEARTS);
+  });
+
+  test("health regen stops when hunger is too low", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.hearts = MAX_HEARTS - 3;
+    engine.state.hunger = REGEN_MIN_HUNGER - 1;
+    run(engine, 6.5);
+    expect(engine.state.hearts).toBe(MAX_HEARTS - 3);
   });
 });
 
@@ -181,7 +205,8 @@ describe("death and respawn", () => {
   test("void damage kills, the respawn countdown runs, and the player returns at full health", () => {
     const engine = makeEngine();
     run(engine, 0.5);
-    engine.state.hearts = 2;
+    // One void tick (0.4s) must kill before the 0.8s auto-unstuck teleport fires.
+    engine.state.hearts = 1;
     engine.state.player.position.y = -10; // into the void
 
     run(engine, 2);

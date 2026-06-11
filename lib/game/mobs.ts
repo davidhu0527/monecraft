@@ -39,7 +39,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     speed: 1.05,
     hp: 10,
     detectRange: 11,
-    attackDamage: 1,
+    attackDamage: 3,
     attackCooldown: 1.35,
     modelArgs: [0x669e57, 0x4e7e45, 0x41663a, 0xff3333, 0x264a2f, [0.78, 1.1, 0.52], [0.52, 0.52, 0.52]]
   },
@@ -47,7 +47,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     speed: 1.08,
     hp: 9,
     detectRange: 12,
-    attackDamage: 1,
+    attackDamage: 3,
     attackCooldown: 1.4,
     modelArgs: [0xe4e4e2, 0xcfcfcb, 0xb4b4b1, 0xff3333, 0x8f8f8f, [0.75, 1.08, 0.48], [0.48, 0.48, 0.48]]
   },
@@ -55,7 +55,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     speed: 1.2,
     hp: 8,
     detectRange: 10,
-    attackDamage: 1,
+    attackDamage: 2,
     attackCooldown: 1.1,
     modelArgs: [0x2e2e2e, 0x1f1f1f, 0x161616, 0xff3333, 0x4a0f0f, [1.15, 0.52, 1.15], [0.5, 0.42, 0.5]]
   }

@@ -18,9 +18,9 @@ function renderHotbar(overrides: Partial<Parameters<typeof Hotbar>[0]> = {}) {
     inventory: makeInventory(),
     selectedSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
-    hearts: 40,
+    hearts: 13,
     maxHearts: MAX_HEARTS,
-    hunger: 80,
+    hunger: 15,
     maxHunger: MAX_HUNGER,
     onSelectSlot: mock(),
     ...overrides
@@ -43,8 +43,8 @@ describe("Hotbar", () => {
     expect(screen.getByText("12")).toBeTruthy(); // dirt count
     expect(screen.getByText("70/70")).toBeTruthy(); // pickaxe durability
     expect(screen.getByText("Selected: Wood Pickaxe")).toBeTruthy();
-    expect(screen.getByText("40/50")).toBeTruthy(); // health
-    expect(screen.getByText("80/100")).toBeTruthy(); // hunger
+    expect(screen.getByText("13/20")).toBeTruthy(); // health
+    expect(screen.getByText("15/20")).toBeTruthy(); // hunger
   });
 
   test("clicking a slot selects it", async () => {

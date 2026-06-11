@@ -50,8 +50,8 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
 
   const onKeyDown = (evt: KeyboardEvent) => {
     if (evt.code.startsWith("Digit")) {
-      const idx = evt.code === "Digit0" ? 9 : Number.parseInt(evt.code.slice(5), 10) - 1;
-      engine.dispatch({ type: "selectSlot", index: idx });
+      const idx = Number.parseInt(evt.code.slice(5), 10) - 1;
+      if (idx >= 0) engine.dispatch({ type: "selectSlot", index: idx });
     }
 
     if (evt.code === "KeyI") {

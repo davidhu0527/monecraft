@@ -11,20 +11,23 @@ export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
 export const WORLD_BORDER_PADDING = 1.2;
 
-// Player stats
-export const MAX_HEARTS = 50;
-export const MAX_HUNGER = 100;
+// Player stats — Minecraft ranges: 20 HP shown as 10 hearts, 20 hunger as 10 drumsticks.
+export const MAX_HEARTS = 20;
+export const MAX_HUNGER = 20;
 export const RESPAWN_SECONDS = 3;
 export const HEALTH_REGEN_INTERVAL_SECONDS = 3;
+// Health regen only runs at or above this hunger level; sprint needs more than SPRINT_MIN_HUNGER.
+export const REGEN_MIN_HUNGER = 12;
+export const SPRINT_MIN_HUNGER = 6;
 // Hunger drain: one point per N blocks sprinted/walked, or per N jumps.
-export const SPRINT_BLOCKS_PER_HUNGER = 20;
-export const WALK_BLOCKS_PER_HUNGER = 60;
-export const JUMPS_PER_HUNGER = 10;
-export const FOOD_HUNGER = 34;
+export const SPRINT_BLOCKS_PER_HUNGER = 100;
+export const WALK_BLOCKS_PER_HUNGER = 300;
+export const JUMPS_PER_HUNGER = 50;
+export const FOOD_HUNGER = 7;
 
 // Inventory
-export const HOTBAR_SLOTS = 10;
-export const INVENTORY_SLOTS = 40;
+export const HOTBAR_SLOTS = 9;
+export const INVENTORY_SLOTS = 36;
 export const MAX_STACK_SIZE = 99;
 
 // Mining & combat

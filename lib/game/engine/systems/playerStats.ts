@@ -4,6 +4,7 @@ import {
   JUMPS_PER_HUNGER,
   MAX_HUNGER,
   MAX_HEARTS,
+  REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
   WALK_BLOCKS_PER_HUNGER
 } from "@/lib/game/config";
@@ -45,9 +46,9 @@ export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
   if (drain > 0) state.hunger = Math.max(0, state.hunger - drain);
 }
 
-/** Regenerates one heart every interval while alive and hurt. */
+/** Regenerates half a heart every interval while alive, hurt, and fed enough. */
 export function tickHealthRegen(state: GameState, dt: number): void {
-  if (!state.isDead && state.hearts < MAX_HEARTS) {
+  if (!state.isDead && state.hearts < MAX_HEARTS && state.hunger >= REGEN_MIN_HUNGER) {
     state.timers.regenTimer += dt;
     if (state.timers.regenTimer >= HEALTH_REGEN_INTERVAL_SECONDS) {
       state.hearts = Math.min(MAX_HEARTS, state.hearts + 1);
