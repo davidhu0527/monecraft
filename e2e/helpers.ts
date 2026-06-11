@@ -59,7 +59,7 @@ export async function playerPosition(page: Page): Promise<{ x: number; y: number
  * gameplay pass.
  */
 export async function acquirePointerLock(page: Page): Promise<void> {
-  const canvas = page.locator("canvas");
+  const canvas = page.locator(".game-canvas-wrap canvas");
   await canvas.click(); // first click only acquires the lock
   try {
     await page.waitForFunction(() => document.pointerLockElement !== null, undefined, { timeout: 2000 });
