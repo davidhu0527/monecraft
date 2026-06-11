@@ -39,6 +39,7 @@ Full detail (loop order, meshing, refs-vs-state bridge): [docs/architecture.md](
 - TypeScript strict; 2-space indentation; imports grouped by domain.
 - `PascalCase` components/types, `camelCase` functions/variables, `UPPER_SNAKE_CASE` constants.
 - Imperative, scoped commit messages (e.g. `Add block breaking crack overlay`); keep `bun run build` green at each commit.
+- When opening a PR, do not add a "Generated with Claude Code" line (or similar attribution) to the PR description.
 
 ## Docs
 
