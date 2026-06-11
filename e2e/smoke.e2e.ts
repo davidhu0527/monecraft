@@ -65,15 +65,33 @@ test("holding the mouse mines the block underfoot", async ({ gamePage: page }) =
   await page.mouse.up();
 });
 
-test("saving persists the world across a reload", async ({ gamePage: page }) => {
+test("the pause menu freezes the game and resumes it", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
+  await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+
+  const clock1 = await page.evaluate(() => window.__monecraft!.engine.state.dayClock);
+  await page.waitForTimeout(250);
+  const clock2 = await page.evaluate(() => window.__monecraft!.engine.state.dayClock);
+  expect(clock2).toBe(clock1);
+
+  await page.getByRole("button", { name: "Back to Game" }).click();
+  await expect(page.getByRole("button", { name: "Back to Game" })).not.toBeVisible();
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => window.__monecraft!.engine.state.dayClock)).toBeGreaterThan(clock2);
+});
+
+test("saving from the pause menu persists the world across a reload", async ({ gamePage: page }) => {
   await calmDaytime(page);
   const seed = await page.evaluate(() => window.__monecraft!.engine.state.world.seed);
   const positionBefore = await playerPosition(page);
 
-  await page.getByRole("button", { name: "Save World" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Save Game" }).click();
   const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v4"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
+  expect(JSON.parse(saved!).version).toBe(2);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

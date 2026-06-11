@@ -192,48 +192,6 @@
   color: #7dff6e;
 }
 
-.hud-menu-toggle {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  z-index: 7;
-  width: 34px;
-  height: 26px;
-  border: 1px solid #00000060;
-  border-radius: 7px;
-  background: rgba(250, 245, 232, 0.84);
-  color: #2a251e;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.hud-menu-panel {
-  position: absolute;
-  left: 12px;
-  bottom: 46px;
-  z-index: 7;
-  display: grid;
-  gap: 6px;
-  min-width: 170px;
-  border: 1px solid #00000055;
-  border-radius: 10px;
-  background: rgba(248, 242, 228, 0.96);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
-  padding: 8px;
-}
-
-.hud-menu-btn {
-  border: 1px solid #0000004a;
-  border-radius: 6px;
-  background: #f7efdd;
-  color: #221c16;
-  font-size: 12px;
-  text-align: left;
-  padding: 6px 8px;
-  cursor: pointer;
-}
-
 .inventory-panel {
   position: absolute;
   top: 50%;
@@ -423,10 +381,6 @@
     padding: 12px;
     max-height: 92vh;
     overflow-y: auto;
-  }
-
-  .hud-menu-panel {
-    min-width: 150px;
   }
 
   .inventory-grid {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
@@ -67,6 +67,7 @@ export function useMinecraftGame() {
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [rendererError, setRendererError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -101,6 +102,7 @@ export function useMinecraftGame() {
       return;
     }
     const renderer = created.renderer;
+    canvasRef.current = renderer.domElement;
 
     const input = createInputController({
       canvas: renderer.domElement,
@@ -140,6 +142,7 @@ export function useMinecraftGame() {
 
     return () => {
       delete window.__monecraft;
+      canvasRef.current = null;
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
       window.removeEventListener("beforeunload", autoSave);
@@ -149,8 +152,12 @@ export function useMinecraftGame() {
     };
   }, [ctx, flashMessage]);
 
-  const heartDisplay = useMemo(() => Array.from({ length: MAX_HEARTS }, (_, i) => i < snapshot.hearts), [snapshot.hearts]);
-  const selectedSlotData = snapshot.inventory[snapshot.selectedSlot]?.id ? snapshot.inventory[snapshot.selectedSlot] : undefined;
+  // Re-locking can legitimately reject (e.g. Chrome's cooldown right after
+  // Escape); the player just clicks the canvas to lock again.
+  const requestPointerLock = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (canvas) Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  }, []);
 
   return {
     attachMount,
@@ -169,9 +176,10 @@ export function useMinecraftGame() {
     passiveCount: snapshot.passiveCount,
     hostileCount: snapshot.hostileCount,
     respawnSeconds: snapshot.respawnSeconds,
+    paused: snapshot.paused,
+    debugOpen: snapshot.debugOpen,
+    debug: snapshot.debug,
     saveMessage,
-    heartDisplay,
-    selectedSlotData,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     maxHearts: MAX_HEARTS,
@@ -180,6 +188,11 @@ export function useMinecraftGame() {
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),
+    resumeNow: () => {
+      engine?.dispatch({ type: "resume" });
+      requestPointerLock();
+    },
+    respawnNow: () => engine?.dispatch({ type: "respawn" }),
     saveNow: () => {
       if (engine) persistGame(engine, flashMessage);
     },

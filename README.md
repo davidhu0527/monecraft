@@ -13,6 +13,7 @@ A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves 
 - `Right click` or `E`: Place selected block
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `U`: Emergency unstuck
+- `Esc`: Pause menu (save / load / reset live there) · `F3`: Debug overlay
 
 ## Run
 

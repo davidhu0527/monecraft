@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import Hud from "@/components/game/Hud";
+import { useEffect } from "react";
+import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
+import PauseMenu from "@/components/game/PauseMenu";
 import RespawnOverlay from "@/components/game/RespawnOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
+import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 export default function MinecraftGame() {
   const {
@@ -26,8 +28,10 @@ export default function MinecraftGame() {
     passiveCount,
     hostileCount,
     respawnSeconds,
+    paused,
+    debugOpen,
+    debug,
     saveMessage,
-    selectedSlotData,
     hotbarSlots,
     recipes,
     maxHearts,
@@ -36,12 +40,15 @@ export default function MinecraftGame() {
     craft,
     swapInventorySlots,
     toggleEquipArmor,
+    resumeNow,
     saveNow,
     loadNow,
     resetNow
   } = useMinecraftGame();
-  const [hudMenuOpen, setHudMenuOpen] = useState(false);
-  const [hudHidden, setHudHidden] = useState(false);
+
+  useEffect(() => {
+    installUiTiles();
+  }, []);
 
   if (rendererError) {
     return (
@@ -55,37 +62,15 @@ export default function MinecraftGame() {
     );
   }
 
+  const showClickHint = !locked && !paused && !inventoryOpen && respawnSeconds === 0;
+
   return (
     <div className="game-root">
       <div ref={attachMount} className="game-canvas-wrap" />
 
-      {!hudHidden ? (
-        <Hud
-          locked={locked}
-          passiveCount={passiveCount}
-          hostileCount={hostileCount}
-          daylightPercent={daylightPercent}
-          selectedSlotData={selectedSlotData}
-          saveMessage={saveMessage}
-          onSave={saveNow}
-          onLoad={loadNow}
-          onReset={resetNow}
-        />
-      ) : null}
+      {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
-      <button className="hud-menu-toggle" onClick={() => setHudMenuOpen((v) => !v)}>
-        •••
-      </button>
-      {hudMenuOpen ? (
-        <div className="hud-menu-panel">
-          <button className="hud-menu-btn" onClick={() => setHudHidden((v) => !v)}>
-            {hudHidden ? "Show Top-Left Info" : "Hide Top-Left Info"}
-          </button>
-          <button className="hud-menu-btn" onClick={() => setHudMenuOpen(false)}>
-            Close
-          </button>
-        </div>
-      ) : null}
+      {showClickHint ? <div className="click-hint">Click to play</div> : null}
 
       <div className="hud-bottom">
         <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
@@ -106,10 +91,12 @@ export default function MinecraftGame() {
         />
       ) : null}
 
+      {paused ? <PauseMenu saveMessage={saveMessage} onBack={resumeNow} onSave={saveNow} onLoad={loadNow} onReset={resetNow} /> : null}
+
       <RespawnOverlay seconds={respawnSeconds} />
 
       <div className="crosshair" />
-      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint Enabled)" : "OFF"}</div>
+      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>
     </div>
   );
 }
