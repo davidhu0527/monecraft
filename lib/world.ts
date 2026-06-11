@@ -272,7 +272,6 @@ export class VoxelWorld {
   }
 
   generate(): void {
-    const seededHash = (x: number, z: number): number => hash2D(x + this.seed * 0.013, z - this.seed * 0.017);
     const rand = (() => {
       let t = (this.seed >>> 0) + 0x6d2b79f5;
       return () => {
@@ -283,15 +282,15 @@ export class VoxelWorld {
       };
     })();
 
-    this.generateTerrain(seededHash);
+    this.generateTerrain();
     this.carveCaves(rand);
     this.placeWater();
     this.placeOres(rand);
-    this.placeTrees(rand, seededHash);
+    this.placeTrees(rand);
     this.placeStructures(rand);
   }
 
-  private generateTerrain(seededHash: (x: number, z: number) => number): void {
+  private generateTerrain(): void {
     const maxX = this.sizeX - 1;
     const maxZ = this.sizeZ - 1;
 
@@ -308,8 +307,8 @@ export class VoxelWorld {
         const biome = this.getBiome(x, z);
         const noise = smoothNoise2D(x, z, this.seed);
 
-        let baseHeight = 48;
-        let noiseScale = 1.0;
+        let baseHeight: number;
+        let noiseScale: number;
 
         if (biome === BiomeId.Plains) {
           baseHeight = 47;
@@ -475,7 +474,7 @@ export class VoxelWorld {
     }
   }
 
-  private placeTrees(rand: () => number, seededHash: (x: number, z: number) => number): void {
+  private placeTrees(rand: () => number): void {
     const treeAttempts = 5200;
     for (let i = 0; i < treeAttempts; i += 1) {
       const x = 4 + Math.floor(rand() * (this.sizeX - 8));

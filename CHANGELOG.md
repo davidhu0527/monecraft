@@ -6,7 +6,9 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
-- Upgraded dependencies: Next.js 14.2 → 16.2 (Turbopack), React 18.3 → 19.2, Three.js r168 → r184, TypeScript 5.6 → 6.0, ESLint 8 → 9 with flat config (`next lint` was removed upstream; `bun run lint` now runs `eslint .`)
+- Upgraded dependencies: Next.js 14.2 → 16.2 (Turbopack), React 18.3 → 19.2, Three.js r168 → r184, TypeScript 5.6 → 6.0, ESLint 8 → 10 with flat config (`next lint` was removed upstream; `bun run lint` now runs `eslint .`)
+- Replaced `eslint-config-next` (blocked on ESLint 10 by `eslint-plugin-react`) with a hand-rolled flat config: `@eslint/js`, `typescript-eslint`, `@eslint-react/eslint-plugin`, `eslint-plugin-react-hooks` v7, `@next/eslint-plugin-next`
+- Removed dead code in world generation flagged by the new lint stack (`seededHash`, useless biome-height initializers)
 
 ## [0.2.0] - 2026-06-11
 
