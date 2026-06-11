@@ -9,6 +9,7 @@ import * as inv from "@/lib/game/inventory";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
+import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
 import type { Recipe } from "@/lib/game/types";
 
@@ -68,6 +69,7 @@ export function useMinecraftGame() {
   const [saveMessage, setSaveMessage] = useState("");
   const [rendererError, setRendererError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const minimapNodeRef = useRef<HTMLDivElement | null>(null);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -77,6 +79,12 @@ export function useMinecraftGame() {
       return;
     }
     setCtx({ engine: new GameEngine({ save: readSave(SAVE_KEY) }), node });
+  }, []);
+
+  // The minimap container mounts independently of the canvas; the rAF loop
+  // below picks it up lazily once both exist.
+  const attachMinimap = useCallback((node: HTMLDivElement | null) => {
+    minimapNodeRef.current = node;
   }, []);
 
   const engine = ctx?.engine ?? null;
@@ -117,6 +125,7 @@ export function useMinecraftGame() {
 
     window.__monecraft = { engine: gameEngine, renderer, input };
 
+    let minimap: MinimapRenderer | null = null;
     let last = performance.now();
     let animationFrame = 0;
     const clock = () => {
@@ -134,6 +143,9 @@ export function useMinecraftGame() {
         if (event.type === "respawned") input.clearKeys();
       }
 
+      if (!minimap && minimapNodeRef.current) minimap = createMinimapRenderer(minimapNodeRef.current);
+      // The minimap must read worldMeshDirty before renderer.sync clears it.
+      minimap?.sync(gameEngine.state, now);
       renderer.sync(gameEngine.state, now);
       renderer.render();
       animationFrame = requestAnimationFrame(clock);
@@ -143,6 +155,7 @@ export function useMinecraftGame() {
     return () => {
       delete window.__monecraft;
       canvasRef.current = null;
+      minimap?.dispose();
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
       window.removeEventListener("beforeunload", autoSave);
@@ -161,6 +174,7 @@ export function useMinecraftGame() {
 
   return {
     attachMount,
+    attachMinimap,
     locked,
     rendererError,
     selectedSlot: snapshot.selectedSlot,

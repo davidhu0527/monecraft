@@ -13,6 +13,7 @@ import { installUiTiles } from "@/lib/ui/chromeTiles";
 export default function MinecraftGame() {
   const {
     attachMount,
+    attachMinimap,
     locked,
     rendererError,
     selectedSlot,
@@ -72,6 +73,8 @@ export default function MinecraftGame() {
       {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
       {showClickHint ? <div className="click-hint">Click to play</div> : null}
+
+      <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
       <div className="hud-bottom">
         <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
