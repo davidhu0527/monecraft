@@ -31,6 +31,27 @@ export enum BiomeId {
   Mountains = 4
 }
 
+// Hex palette tinting the first-person held-item block model. Deliberately a
+// different (brighter) palette than BLOCK_COLORS below, which feeds the atlas.
+export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
+  [BlockId.Grass]: 0x5ea74a,
+  [BlockId.Dirt]: 0x7f5d3d,
+  [BlockId.Stone]: 0x8f9296,
+  [BlockId.Wood]: 0x8d653d,
+  [BlockId.Planks]: 0xbe965d,
+  [BlockId.Cobblestone]: 0x787c82,
+  [BlockId.Sand]: 0xd8ca84,
+  [BlockId.Brick]: 0xb65448,
+  [BlockId.Glass]: 0xaed4dc,
+  [BlockId.SliverOre]: 0x9fa3aa,
+  [BlockId.RubyOre]: 0xa26464,
+  [BlockId.GoldOre]: 0xd9b33b,
+  [BlockId.SapphireOre]: 0x3f92d6,
+  [BlockId.DiamondOre]: 0x85e9f4
+};
+
+export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
+
 // Float RGB palette used to paint the procedural texture atlas (see atlas.ts).
 // Not to be confused with the hex palette tinting the held-item model.
 export const BLOCK_COLORS: Record<number, [number, number, number]> = {

@@ -9,6 +9,8 @@ import {
   collidesAt,
   createBlockAtlasTexture,
   generateWorld,
+  HELD_BLOCK_COLORS,
+  HELD_BLOCK_FALLBACK_COLOR,
   VoxelWorld,
   WORLD_SIZE_X,
   WORLD_SIZE_Y,
@@ -769,40 +771,7 @@ export function useMinecraftGame() {
       crackOverlay.visible = true;
     };
 
-    const blockColor = (blockId: BlockId | undefined): number => {
-      switch (blockId) {
-        case BlockId.Grass:
-          return 0x5ea74a;
-        case BlockId.Dirt:
-          return 0x7f5d3d;
-        case BlockId.Stone:
-          return 0x8f9296;
-        case BlockId.Wood:
-          return 0x8d653d;
-        case BlockId.Planks:
-          return 0xbe965d;
-        case BlockId.Cobblestone:
-          return 0x787c82;
-        case BlockId.Sand:
-          return 0xd8ca84;
-        case BlockId.Brick:
-          return 0xb65448;
-        case BlockId.Glass:
-          return 0xaed4dc;
-        case BlockId.SliverOre:
-          return 0x9fa3aa;
-        case BlockId.RubyOre:
-          return 0xa26464;
-        case BlockId.GoldOre:
-          return 0xd9b33b;
-        case BlockId.SapphireOre:
-          return 0x3f92d6;
-        case BlockId.DiamondOre:
-          return 0x85e9f4;
-        default:
-          return 0xbababa;
-      }
-    };
+    const blockColor = (blockId: BlockId | undefined): number => (blockId !== undefined ? HELD_BLOCK_COLORS[blockId] : undefined) ?? HELD_BLOCK_FALLBACK_COLOR;
 
     const updateHeldItem = () => {
       const slot = inventoryRef.current[selectedSlotRef.current];
