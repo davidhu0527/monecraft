@@ -8,7 +8,7 @@ import { renderHudIconPixels, type HudIconName } from "./hudPixels";
  * pixel logic itself is covered by the pure-module tests.
  */
 
-const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+export const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 const cache = new Map<string, string>();
 
