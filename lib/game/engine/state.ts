@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { VoxelWorld } from "@/lib/world";
-import type { EquippedArmor, InventorySlot, MobKind } from "@/lib/game/types";
+import type { EquippedArmor, InventorySlot, MobKind, SaveDataV1 } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
+import type { Command } from "./commands";
 
 export type PlayerState = {
   position: THREE.Vector3;
@@ -104,8 +105,16 @@ export const IDLE_INPUT: FrameInput = {
   pointerLocked: false
 };
 
+/** The engine surface the UI may touch: intents in, save data out. */
+export type GameApi = {
+  dispatch(command: Command): void;
+  serialize(): SaveDataV1;
+};
+
 /** Immutable view for the React UI, replaced only when a visible value changes. */
 export type GameSnapshot = {
+  /** Stable handle for dispatching intents; null until the engine exists. */
+  api: GameApi | null;
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
   selectedSlot: number;

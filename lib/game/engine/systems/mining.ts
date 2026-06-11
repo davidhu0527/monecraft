@@ -47,7 +47,12 @@ function addBlockDrop(state: GameState, block: BlockId): void {
 
 /** Advances mining progress while the mouse is held; breaks the block at full progress. */
 export function tickMining(state: GameState, input: FrameInput, dt: number): void {
-  if (!input.leftMouseHeld || state.inventoryOpen || state.isDead || !input.pointerLocked) return;
+  if (!input.leftMouseHeld) {
+    // Releasing the button abandons progress (matching the crack overlay).
+    if (state.mining.progress > 0) resetMining(state);
+    return;
+  }
+  if (state.inventoryOpen || state.isDead || !input.pointerLocked) return;
 
   const { world, mining } = state;
   const origin = eyePosition(state, scratchEye);

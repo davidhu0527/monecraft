@@ -23,12 +23,6 @@ export default defineConfig([
   },
   {
     rules: {
-      // The game engine intentionally bridges React state with refs read by the
-      // imperative rAF loop (see docs/architecture.md "Refs-vs-state bridge"),
-      // which the React Hooks v6+ compiler rules reject wholesale.
-      "react-hooks/refs": "off",
-      "react-hooks/set-state-in-effect": "off",
-      "@eslint-react/set-state-in-effect": "off",
       // Duplicate of react-hooks/exhaustive-deps — keep the canonical one only.
       "@eslint-react/exhaustive-deps": "off"
     }

@@ -42,23 +42,6 @@ export type Recipe = {
 
 export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider";
 
-export type MobEntity = {
-  kind: MobKind;
-  hostile: boolean;
-  hp: number;
-  group: THREE.Group;
-  legs: THREE.Mesh[];
-  direction: THREE.Vector3;
-  turnTimer: number;
-  speed: number;
-  detectRange: number;
-  attackDamage: number;
-  attackCooldown: number;
-  attackTimer: number;
-  halfHeight: number;
-  bobSeed: number;
-};
-
 export type MobModel = {
   group: THREE.Group;
   legs: THREE.Mesh[];

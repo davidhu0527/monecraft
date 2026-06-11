@@ -293,6 +293,7 @@ export class GameEngine {
   private buildSnapshot(): GameSnapshot {
     const state = this.state;
     return {
+      api: this,
       inventory: state.inventory,
       equippedArmor: state.equippedArmor,
       selectedSlot: state.selectedSlot,

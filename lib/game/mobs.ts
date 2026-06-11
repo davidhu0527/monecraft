@@ -75,8 +75,3 @@ export function mobHalfHeight(kind: MobKind): number {
 export function createMobModelForKind(kind: MobKind) {
   return createMobModel(...MOB_TEMPLATES[kind].modelArgs);
 }
-
-/** @deprecated Transitional shim for the legacy runtime modules; removed with them. */
-export function createMobForKind(kind: MobKind) {
-  return { ...MOB_TEMPLATES[kind], model: createMobModelForKind(kind) };
-}

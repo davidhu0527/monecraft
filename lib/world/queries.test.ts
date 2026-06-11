@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { BlockId, VoxelWorld, collidesAt, hasSupportUnderPlayer, voxelRaycast } from "@/lib/world";
-import { createSurfaceYAt } from "@/lib/game/runtime/spawn";
+import { createSurfaceYAt } from "@/lib/game/spawn";
 
 function emptyWorld(): VoxelWorld {
   return new VoxelWorld(16, 16, 16, 1);
