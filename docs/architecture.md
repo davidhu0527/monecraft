@@ -32,14 +32,19 @@ Every gameplay value (inventory, selected slot, armor, …) exists twice — Rea
 
 ### Config and types
 
-- `config.ts` is the single source of truth for tunables: player physics, `BREAK_HARDNESS`, `ITEM_DEFS`, `RECIPES`, `RENDER_RADIUS`, `RENDER_GRID`, `SAVE_KEY`. World dimensions live in `lib/world.ts` (`WORLD_SIZE_*`, 512×150×512).
+- `config.ts` is the single source of truth for tunables: player physics, `BREAK_HARDNESS`, `ITEM_DEFS`, `RECIPES`, `RENDER_RADIUS`, `RENDER_GRID`, `SAVE_KEY`. World dimensions live in `lib/world/blocks.ts` (`WORLD_SIZE_*`, 512×150×512).
 - `types.ts` defines shared entities (including the save schema); `save.ts` + `runtime/persistence.ts` handle localStorage (see [save-format.md](save-format.md)).
 
-## World layer (`lib/world.ts`)
+## World layer (`lib/world/`)
 
-- `VoxelWorld` stores voxels in a flat `Uint8Array` (index = `x + z*sizeX + y*sizeX*sizeZ`) and handles procedural generation (biomes, caves, ores, structures), raycasting, and collision queries.
-- **Meshing**: one mesh covers the visible region (not chunked). `buildGeometryRegion` rebuilds it when the player crosses a `RENDER_GRID` (20-block) boundary, or immediately via `rebuildWorldMesh(true)` after block edits, respawn, or manual unstuck. Old geometry is disposed on rebuild.
-- Textures come from a runtime canvas block atlas (`createBlockAtlasTexture`) — tiles are generated from `BLOCK_COLORS`, no image assets.
+One module per concern, behind an `index.ts` barrel — consumers always import from `@/lib/world`:
+
+- `blocks.ts` — `BlockId`, `BiomeId`, `WORLD_SIZE_*`, and both block palettes (`BLOCK_COLORS` paints the atlas; `HELD_BLOCK_COLORS` tints the held-item model — intentionally different values).
+- `voxelWorld.ts` — `VoxelWorld` stores voxels in a flat `Uint8Array` (index = `x + z*sizeX + y*sizeX*sizeZ`) plus cheap queries (`get`/`set`/`isSolid`/`highestSolidY`/`getBiome`).
+- `generation.ts` — `generateWorld(world)`: deterministic terrain, caves, water, ores, trees, houses. Constants live in the frozen `GEN` object. **Byte-identical output per seed is a save-format contract**, pinned by `generation.test.ts` hash tests — fix code, never hashes.
+- `meshing.ts` — `buildGeometryRegion(world, …)`: one mesh covers the visible region (not chunked). Rebuilt when the player crosses a `RENDER_GRID` (20-block) boundary, or immediately via `rebuildWorldMesh(true)` after block edits, respawn, or manual unstuck. Old geometry is disposed on rebuild.
+- `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
+- `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.
 
 ## Engine invariants & gotchas
 
