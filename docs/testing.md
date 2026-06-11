@@ -15,10 +15,12 @@ Two runners, three layers:
 | Items & recipes      | `lib/game/config.test.ts`                       | Referential integrity: every recipe/drop/armor mapping points at a real item                                          |
 | Inventory algebra    | `lib/game/inventory.test.ts`                    | Stack math, durability, crafting (including the refuse-on-full behavior), armor equip rules                           |
 | Save format          | `lib/game/save.test.ts`                         | Round-trips, legacy-shape parsing, corrupt-data rejection                                                             |
-| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, hunger/regen, mining, commands, death/respawn, night spawning, save round-trips    |
+| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, hunger/regen gates, mining, commands (incl. pause/debug/respawn), death/respawn, night spawning, save round-trips |
+| UI sprites           | `lib/ui/*.test.ts`                              | Every item id renders a non-empty deterministic 16×16 sprite; HUD icon variants (full/half/container) differ           |
+| Minimap sampling     | `lib/game/render/minimapColors.test.ts`         | Top-block detection (water visible), height shading, per-block colors                                                  |
 | Renderer logic       | `lib/game/render/{mobVisuals,heldItem}.test.ts` | Model lifecycle (create/reuse/remove/dispose), positioning, bob, item swaps — pure Three.js, no DOM                   |
-| Components           | `components/game/*.test.tsx`                    | InventoryPanel click-to-swap/equip/craft gating, Hotbar rendering and selection (happy-dom + Testing Library)         |
-| Browser E2E          | `e2e/smoke.e2e.ts`                              | Real browser: boot without console errors, scene draws, input → movement, craft via UI, mining, save across reload    |
+| Components           | `components/game/*.test.tsx`                    | InventoryPanel click-to-swap/equip/craft gating, Hotbar slots, StatusBars heart/hunger/armor meters, PauseMenu, DeathScreen (happy-dom + Testing Library) |
+| Browser E2E          | `e2e/smoke.e2e.ts`                              | Real browser: boot without console errors, scene draws, input → movement, craft via UI, mining, pause freeze/resume, save via pause menu across reload |
 
 ## Running the E2E suite
 
@@ -28,6 +30,8 @@ bun run test:e2e                   # builds and starts the prod server itself
 ```
 
 E2E tests assert through `window.__monecraft` (the live engine/renderer/input handle — also handy in the browser console) instead of pixels; the one render check uses `renderer.renderedTriangles()`. The shared fixture fails any test that logs a console error.
+
+**happy-dom has no 2D canvas context**: generated sprites degrade to a transparent data URL in component tests — assert sprite pixels in the pure `lib/ui` tests and component structure via roles/labels/`data-icon` attributes, not image sources.
 
 **Known limitation:** headless Chromium cannot engage pointer lock (`requestPointerLock` never resolves). `acquirePointerLock` in `e2e/helpers.ts` tries the real thing, then falls back to forcing the input controller's lock flag — so key/mouse → engine wiring is still tested end to end, but real lock acquisition and look-around feel remain in the manual gameplay pass, along with visual quality. That manual pass is now only required for changes to pointer-lock handling or visual appearance.
 

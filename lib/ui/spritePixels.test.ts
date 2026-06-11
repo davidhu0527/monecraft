@@ -14,10 +14,12 @@ describe("renderSpritePixels", () => {
   // new ITEM_DEFS entry without icon coverage fails here instead of falling
   // back to the magenta checker silently.
   test("every item def yields a non-empty 16x16 sprite", () => {
+    const placeholder = renderSpritePixels("no_such_item");
     for (const def of ITEM_DEFS) {
       const pixels = renderSpritePixels(def.id);
       expect(pixels.length).toBe(SPRITE_SIZE * SPRITE_SIZE * 4);
       expect(opaquePixelCount(pixels)).toBeGreaterThan(20);
+      expect(pixels).not.toEqual(placeholder); // no item may fall back to the checker
     }
   });
 

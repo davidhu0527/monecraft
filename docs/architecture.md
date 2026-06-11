@@ -16,10 +16,11 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 
 ## React shell (`lib/game/useMinecraftGame.ts`, `components/`)
 
-- `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer` and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` → drain engine events → `renderer.sync(state)` → `renderer.render()`.
+- `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer` and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` → drain engine events → `minimap.sync(state)` → `renderer.sync(state)` → `renderer.render()`. The minimap must sync **before** the renderer because it reads `state.worldMeshDirty`, which `renderer.sync` clears.
 - UI state arrives as immutable `GameSnapshot`s via `useSyncExternalStore`; the engine replaces the snapshot object only when a visible value changes, so React re-renders are minimal and identity-driven.
 - UI intents (`craft`, `swapSlots`, `selectSlot`, …) are dispatched as engine `Command`s. The only React state in the shell is pure UI concern: pointer lock, transient save messages, renderer failure.
 - WebGL init failure is surfaced as `rendererError` and rendered as a fallback panel instead of crashing.
+- UI pixel art is procedural: `lib/ui/` generates 16×16 item/HUD sprites as pure pixel buffers (`spritePixels.ts`, `hudPixels.ts` — DOM-free, unit-tested) wrapped by a cached canvas→data-URL layer (`sprites.ts`, falls back to a transparent pixel under happy-dom) plus noise tiles installed as CSS vars (`chromeTiles.ts`). No image assets, no licensing exposure. `lib/ui/` must not import Three.js or the engine.
 - Note for the React Compiler lint rules: consume the hook with destructuring (`const { … } = useMinecraftGame()`); property access on the result object can false-positive `react-hooks/refs`.
 
 ## Game engine (`lib/game/engine/`)
@@ -32,6 +33,7 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 
 ### Per-frame step order (in `GameEngine.step`)
 
+0. Pause gate: while `state.paused`, `step` refreshes the snapshot and returns — mobs, the day clock, mining, and stats all freeze (autosave still serializes fine)
 1. Stuck detection / auto-unstuck (`STUCK_RESET_SECONDS`)
 2. Death check + respawn countdown (while dead, only mobs tick)
 3. Player movement & physics (`systems/playerMotion.ts` — derives direction from `yaw`, scratch vectors, no per-frame allocations)
@@ -49,10 +51,13 @@ Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame.
 - **World mesh**: one mesh covers the visible region (not chunked), rebuilt when the player crosses a `RENDER_GRID` (20-block) boundary or when the engine sets `state.worldMeshDirty` (block edits, respawn, unstuck). Old geometry is disposed on rebuild.
 - `mobVisuals.ts` — mob id → model map; creates/removes models as mobs spawn/die and animates bob + leg gait from mob state (the simulation knows nothing about legs).
 - `heldItem.ts` / `crackOverlay.ts` — first-person item model and the 8-stage mining crack box (stage = progress / hardness).
+- `minimap.ts` / `minimapColors.ts` — the top-right minimap: pure column sampling (top non-air block, height-shaded `BLOCK_COLORS`) feeding a 2D canvas that rebuilds its 128×128 base only when the player crosses a 16-block grid boundary or `worldMeshDirty` is set (read-only — the renderer owns clearing it), then blits with a yaw-rotated player arrow at ~10 Hz.
 
 ## Input (`lib/game/input/inputController.ts`)
 
-Owns every DOM listener. Continuous input (movement keys, mouse button, pointer lock, CapsLock) is exposed as a `FrameInput` the engine reads each step; discrete actions (hotbar, inventory toggle, place, eat, attack, unstuck) become commands; mouse-look calls `engine.applyLook`. The first click only acquires pointer lock; `KeyI` exits it.
+Owns every DOM listener. Continuous input (movement keys, mouse button, pointer lock, CapsLock) is exposed as a `FrameInput` the engine reads each step; discrete actions (hotbar, inventory toggle, place, eat, attack, unstuck, pause, F3 debug) become commands; mouse-look calls `engine.applyLook`. The first click only acquires pointer lock; `KeyI` exits it.
+
+**Pause ↔ pointer lock**: the browser consumes Escape to exit pointer lock, so Esc never reaches keydown while locked — losing the lock during plain gameplay is the pause trigger (`pointerlockchange` dispatches `pause`). The inventory (`KeyI`) and death paths set their state flags *before* the async `pointerlockchange` fires, and the engine's `pause` command additionally ignores those states, so they don't open the menu. While unlocked, Escape toggles pause directly (and closes the inventory). "Back to Game" resumes and re-requests the lock; Chrome's ~1.25 s cooldown after Esc can reject that request — the rejection is swallowed and the player just clicks the canvas.
 
 ## Inventory and items (`lib/game/`)
 
