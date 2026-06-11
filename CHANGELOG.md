@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Playwright E2E smoke suite (`bun run test:e2e`, also a CI job): boots the production build in headless Chromium and verifies rendering, input → movement, crafting via UI, mining, and save persistence through a `window.__monecraft` debug handle (also usable from the browser console)
+- React component tests for InventoryPanel and Hotbar, and Three.js-only unit tests for mob visuals and the held item, all under `bun test` via a happy-dom preload
 - Test suite (`bun test`): worldgen determinism hash tests (save-compat guard), meshing snapshots, raycast/collision/save round-trip/item-recipe integrity tests, pure inventory unit tests, and headless engine simulation tests (movement, energy, regen, mining, crafting, death/respawn, night spawning, save round-trips)
 - Quality tooling: `bun run typecheck` (tsc), Prettier + `.editorconfig`, GitHub Actions CI (lint, typecheck, format, test, build on pinned Bun)
 - WebGL failure handling: a fallback panel replaces a crash when the renderer cannot start
@@ -18,14 +20,14 @@ All notable changes to this project are documented in this file.
 - Split `lib/game/config.ts` into `config.ts` (named tunables), `items.ts`, and `recipes.ts`; inventory slot math extracted to pure `lib/game/inventory.ts`
 - Held-item block palette moved next to the atlas palette in `lib/world/blocks.ts` (same values)
 - Per-frame `Vector3` allocations in mob AI, combat, and player motion replaced with module-scope scratch vectors
-
-### Fixed
-
-- Crafting with a full inventory no longer consumes the cost while silently destroying the crafted result; the recipe is refused instead (the craft button was already disabled in this case, so this was only reachable programmatically)
-
 - Upgraded dependencies: Next.js 14.2 → 16.2 (Turbopack), React 18.3 → 19.2, Three.js r168 → r184, TypeScript 5.6 → 6.0, ESLint 8 → 10 with flat config (`next lint` was removed upstream; `bun run lint` now runs `eslint .`)
 - Replaced `eslint-config-next` (blocked on ESLint 10 by `eslint-plugin-react`) with a hand-rolled flat config: `@eslint/js`, `typescript-eslint`, `@eslint-react/eslint-plugin`, `eslint-plugin-react-hooks` v7, `@next/eslint-plugin-next`
 - Removed dead code in world generation flagged by the new lint stack (`seededHash`, useless biome-height initializers)
+
+### Fixed
+
+- Unhandled `requestPointerLock()` rejection (surfaced by the E2E suite): clicking any UI button triggered a lock attempt whose failure logged an uncaught error in some environments; the game now stays unlocked silently
+- Crafting with a full inventory no longer consumes the cost while silently destroying the crafted result; the recipe is refused instead (the craft button was already disabled in this case, so this was only reachable programmatically)
 
 ## [0.2.0] - 2026-06-11
 

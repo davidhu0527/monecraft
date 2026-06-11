@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_ENERGY, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
-import { createInputController } from "@/lib/game/input/inputController";
+import { createInputController, type InputController } from "@/lib/game/input/inputController";
 import * as inv from "@/lib/game/inventory";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
@@ -40,6 +40,14 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
 const noopSubscribe = () => () => {};
 
 type GameContext = { engine: GameEngine; node: HTMLDivElement };
+
+// Debug/test handle: lets the browser console and the Playwright E2E suite
+// inspect the live simulation (single-player client game — nothing to protect).
+declare global {
+  interface Window {
+    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController };
+  }
+}
 
 function persistGame(api: GameApi, onMessage: (text: string) => void): void {
   try {
@@ -101,6 +109,8 @@ export function useMinecraftGame() {
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
+    window.__monecraft = { engine: gameEngine, renderer, input };
+
     let last = performance.now();
     let animationFrame = 0;
     const clock = () => {
@@ -125,6 +135,7 @@ export function useMinecraftGame() {
     animationFrame = requestAnimationFrame(clock);
 
     return () => {
+      delete window.__monecraft;
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
       window.removeEventListener("beforeunload", autoSave);

@@ -91,7 +91,9 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
     if (uiBlocked()) return;
     if (!input.pointerLocked) {
       // The first click only acquires pointer lock — no mining or placing.
-      canvas.requestPointerLock();
+      // The request can legitimately reject (recent Esc, unfocused document,
+      // headless browsers); the game just stays unlocked.
+      Promise.resolve(canvas.requestPointerLock()).catch(() => {});
       return;
     }
 

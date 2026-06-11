@@ -3,3 +3,5 @@ node_modules/
 bun.lock
 next-env.d.ts
 tsconfig.tsbuildinfo
+playwright-report/
+test-results/

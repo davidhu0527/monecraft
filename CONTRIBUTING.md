@@ -16,11 +16,12 @@ Every commit should keep all four of these green:
 ```bash
 bun run lint        # ESLint (flat config)
 bun run typecheck   # tsc --noEmit
-bun test            # unit + characterization tests
+bun test            # unit + integration + component tests
 bun run build       # production build
+bun run test:e2e    # Playwright browser smoke tests (run for renderer/input/shell changes)
 ```
 
-`bun run format` applies Prettier; CI enforces `format:check`. For anything touching the game engine, also do a manual gameplay pass (mine/place, craft, combat at night, die/respawn, save/load) — there is no automated end-to-end test.
+`bun run format` applies Prettier; CI enforces `format:check` and runs the E2E suite. A manual gameplay pass is only needed for pointer-lock handling or visual-appearance changes — see `docs/testing.md`.
 
 ## Workflow
 
@@ -30,7 +31,7 @@ bun run build       # production build
 
 ## Save compatibility (read before touching worldgen)
 
-Saves store only the world seed plus block-change deltas. World generation must therefore produce **byte-identical** output for a given seed, and the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) must never change. The characterization tests in `lib/worldgen.test.ts` pin generator output with SHA-256 digests — if they fail after your change, your change breaks every existing save. Fix the code, never the hash. See `docs/save-format.md` and `docs/testing.md`.
+Saves store only the world seed plus block-change deltas. World generation must therefore produce **byte-identical** output for a given seed, and the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) must never change. The characterization tests in `lib/world/generation.test.ts` pin generator output with SHA-256 digests — if they fail after your change, your change breaks every existing save. Fix the code, never the hash. See `docs/save-format.md` and `docs/testing.md`.
 
 ## Docs
 

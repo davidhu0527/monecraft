@@ -82,6 +82,11 @@ export class GameRenderer {
     return this.webgl.domElement;
   }
 
+  /** Triangles drawn in the last render() — lets E2E tests prove the scene renders without reading pixels. */
+  renderedTriangles(): number {
+    return this.webgl.info.render.triangles;
+  }
+
   /** Pulls everything visible from the simulation state. Call once per frame, then render(). */
   sync(state: GameState, timeMs: number): void {
     this.syncCamera(state);
