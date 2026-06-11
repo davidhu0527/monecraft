@@ -29,7 +29,8 @@ For a non-trivial change:
 
 ## Docs
 
-- [docs/architecture.md](docs/architecture.md) — layers, game loop order, refs-vs-state bridge, meshing, engine invariants & gotchas
-- [docs/adding-content.md](docs/adding-content.md) — step-by-step: new block / item / recipe / mob
+- [docs/architecture.md](docs/architecture.md) — engine/renderer/shell layers, step order, engine invariants & gotchas
+- [docs/adding-content.md](docs/adding-content.md) — step-by-step: new block / item / recipe / mob / mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema, autosave, compatibility rules
+- [docs/testing.md](docs/testing.md) — test coverage map and the worldgen hash re-baseline policy
 - `README.md` — player-facing controls and quick start

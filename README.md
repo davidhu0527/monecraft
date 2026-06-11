@@ -1,16 +1,18 @@
-# Minecraft-like Game (Next.js + TypeScript + Three.js + Bun)
+# Monecraft (Next.js + TypeScript + Three.js + Bun)
 
-A playable Minecraft-inspired prototype with voxel terrain, first-person movement, jumping, gravity, collisions, and block breaking/placing.
+[![CI](https://github.com/hutusi/monecraft/actions/workflows/ci.yml/badge.svg)](https://github.com/hutusi/monecraft/actions/workflows/ci.yml)
+
+A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves and ores, first-person movement, mining and building, crafting, armor, mobs, a day-night cycle, and localStorage saves. Single-player, browser-only.
 
 ## Controls
 
-- `W A S D`: Move
-- `Space`: Jump
-- `W + CapsLock`: Sprint
-- `Mouse`: Look around (click game first to lock pointer)
-- `Left click`: Break block
-- `Right click`: Place selected block
-- `1..5`: Select block type
+- `W A S D`: Move · `Space`: Jump · `C`: Crouch
+- `W + CapsLock`: Sprint (drains energy)
+- `Mouse`: Look around (click the game first to lock the pointer)
+- `Left click` (hold): Break block / attack mobs
+- `Right click` or `E`: Place selected block
+- `1..9, 0`: Select hotbar slot
+- `I`: Inventory & crafting · `F`: Eat food · `U`: Emergency unstuck
 
 ## Run
 
@@ -21,7 +23,19 @@ bun run dev
 
 Then open `http://localhost:3000`.
 
-## Notes
+## Development
 
-- The world is generated procedurally at startup.
-- Geometry is rebuilt after block edits for correctness.
+```bash
+bun run lint        # ESLint
+bun run typecheck   # tsc --noEmit
+bun test            # unit + headless simulation tests
+bun run build       # production build
+bun run format      # Prettier
+```
+
+All five are enforced by CI on every PR. The game simulation is a headless engine (no DOM), so gameplay logic is covered by real simulation tests — see [docs/testing.md](docs/testing.md).
+
+- [docs/architecture.md](docs/architecture.md) — engine/renderer/shell layering and invariants
+- [docs/adding-content.md](docs/adding-content.md) — add a block, item, recipe, mob, or mechanic
+- [docs/save-format.md](docs/save-format.md) — save schema and compatibility rules
+- [CONTRIBUTING.md](CONTRIBUTING.md) — workflow and verification baseline
