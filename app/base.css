@@ -1,5 +1,20 @@
 :root {
   color-scheme: light;
+
+  /* Minecraft chrome palette: gray panels with light/dark bevel edges. */
+  --mc-panel: #c6c6c6;
+  --mc-panel-deep: #8b8b8b;
+  --mc-bevel-light: #ffffff;
+  --mc-bevel-dark: #373737;
+  --mc-slot-well: #8b8b8b;
+  --mc-text: #404040;
+  --mc-text-light: #fcfcfc;
+  --mc-text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+  --mc-button: #6f6f6f;
+  --mc-button-hover: #7f8caf;
+  /* Generated noise tiles (set at runtime by installUiTiles). */
+  --mc-tile-dirt: none;
+  --mc-tile-stone: none;
 }
 
 * {
@@ -12,7 +27,7 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: "Lucida Console", Monaco, "Courier New", monospace;
   background: #87bfff;
 }
 

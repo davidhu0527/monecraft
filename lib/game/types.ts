@@ -42,23 +42,6 @@ export type Recipe = {
 
 export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider";
 
-export type MobEntity = {
-  kind: MobKind;
-  hostile: boolean;
-  hp: number;
-  group: THREE.Group;
-  legs: THREE.Mesh[];
-  direction: THREE.Vector3;
-  turnTimer: number;
-  speed: number;
-  detectRange: number;
-  attackDamage: number;
-  attackCooldown: number;
-  attackTimer: number;
-  halfHeight: number;
-  bobSeed: number;
-};
-
 export type MobModel = {
   group: THREE.Group;
   legs: THREE.Mesh[];
@@ -67,6 +50,7 @@ export type MobModel = {
   geometries: THREE.BufferGeometry[];
 };
 
+/** Legacy save shape (40 inventory slots, 10-slot hotbar) — accepted and migrated on load. */
 export type SaveDataV1 = {
   version: 1;
   seed: number;
@@ -77,3 +61,6 @@ export type SaveDataV1 = {
   selectedSlot: number;
   player: { x: number; y: number; z: number };
 };
+
+/** Current save shape: same fields as v1, reinterpreted for 36 slots / 9-slot hotbar. */
+export type SaveData = Omit<SaveDataV1, "version"> & { version: 2 };

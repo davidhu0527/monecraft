@@ -1,78 +1,106 @@
 "use client";
 
-import { useState } from "react";
-import Hud from "@/components/game/Hud";
+import { useEffect } from "react";
+import DeathScreen from "@/components/game/DeathScreen";
+import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
-import RespawnOverlay from "@/components/game/RespawnOverlay";
+import PauseMenu from "@/components/game/PauseMenu";
+import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
+import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 export default function MinecraftGame() {
-  const game = useMinecraftGame();
-  const [hudMenuOpen, setHudMenuOpen] = useState(false);
-  const [hudHidden, setHudHidden] = useState(false);
+  const {
+    attachMount,
+    attachMinimap,
+    locked,
+    rendererError,
+    selectedSlot,
+    setSelectedSlot,
+    capsActive,
+    inventoryOpen,
+    inventory,
+    equippedArmor,
+    armorPoints,
+    hearts,
+    hunger,
+    daylightPercent,
+    passiveCount,
+    hostileCount,
+    respawnSeconds,
+    paused,
+    debugOpen,
+    debug,
+    saveMessage,
+    hotbarSlots,
+    recipes,
+    maxHearts,
+    maxHunger,
+    canCraft,
+    craft,
+    swapInventorySlots,
+    toggleEquipArmor,
+    resumeNow,
+    respawnNow,
+    saveNow,
+    loadNow,
+    resetNow
+  } = useMinecraftGame();
+
+  useEffect(() => {
+    installUiTiles();
+  }, []);
+
+  if (rendererError) {
+    return (
+      <div className="game-root">
+        <div className="renderer-error">
+          <h2>Could not start the 3D renderer</h2>
+          <p>WebGL appears to be unavailable in this browser ({rendererError}).</p>
+          <p>Try enabling hardware acceleration or switching browsers, then reload.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const showClickHint = !locked && !paused && !inventoryOpen && respawnSeconds === 0;
 
   return (
     <div className="game-root">
-      <div ref={game.mountRef} className="game-canvas-wrap" />
+      <div ref={attachMount} className="game-canvas-wrap" />
 
-      {!hudHidden ? (
-        <Hud
-          locked={game.locked}
-          passiveCount={game.passiveCount}
-          hostileCount={game.hostileCount}
-          daylightPercent={game.daylightPercent}
-          selectedSlotData={game.selectedSlotData}
-          saveMessage={game.saveMessage}
-          onSave={game.saveNow}
-          onLoad={game.loadNow}
-          onReset={game.resetNow}
-        />
-      ) : null}
+      {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
-      <button className="hud-menu-toggle" onClick={() => setHudMenuOpen((v) => !v)}>
-        •••
-      </button>
-      {hudMenuOpen ? (
-        <div className="hud-menu-panel">
-          <button className="hud-menu-btn" onClick={() => setHudHidden((v) => !v)}>
-            {hudHidden ? "Show Top-Left Info" : "Hide Top-Left Info"}
-          </button>
-          <button className="hud-menu-btn" onClick={() => setHudMenuOpen(false)}>
-            Close
-          </button>
-        </div>
-      ) : null}
+      {showClickHint ? <div className="click-hint">Click to play</div> : null}
 
-      <Hotbar
-        inventory={game.inventory}
-        selectedSlot={game.selectedSlot}
-        hotbarSlots={game.hotbarSlots}
-        hearts={game.hearts}
-        maxHearts={game.maxHearts}
-        energy={game.energy}
-        maxEnergy={game.maxEnergy}
-        onSelectSlot={game.setSelectedSlot}
-      />
+      <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
-      {game.inventoryOpen ? (
+      <div className="hud-bottom">
+        <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
+        <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
+      </div>
+
+      {inventoryOpen ? (
         <InventoryPanel
-          inventory={game.inventory}
-          equippedArmor={game.equippedArmor}
-          selectedHotbarSlot={game.selectedSlot}
-          hotbarSlots={game.hotbarSlots}
-          recipes={game.recipes}
-          canCraft={game.canCraft}
-          onSwapSlots={game.swapInventorySlots}
-          onToggleEquipArmor={game.toggleEquipArmor}
-          onCraft={game.craft}
+          inventory={inventory}
+          equippedArmor={equippedArmor}
+          selectedHotbarSlot={selectedSlot}
+          hotbarSlots={hotbarSlots}
+          recipes={recipes}
+          canCraft={canCraft}
+          onSwapSlots={swapInventorySlots}
+          onToggleEquipArmor={toggleEquipArmor}
+          onCraft={craft}
         />
       ) : null}
 
-      <RespawnOverlay seconds={game.respawnSeconds} />
+      {paused ? <PauseMenu saveMessage={saveMessage} onBack={resumeNow} onSave={saveNow} onLoad={loadNow} onReset={resetNow} /> : null}
+
+      <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
 
       <div className="crosshair" />
-      <div className={game.capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {game.capsActive ? "ON (Sprint Enabled)" : "OFF"}</div>
+      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>
     </div>
   );
 }

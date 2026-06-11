@@ -2,3 +2,7 @@
 node_modules
 bun.lockb
 .DS_Store
+tsconfig.tsbuildinfo
+playwright-report/
+test-results/
+next-env.d.ts

@@ -1,78 +1,165 @@
-.hud {
+/* Full-screen overlays: pause menu, F3 debug readout, click-to-play hint. */
+
+.pause-overlay {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  color: #102131;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
-  user-select: none;
-  pointer-events: none;
-  max-width: min(94vw, 780px);
-}
-
-.title {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.help {
-  margin-top: 8px;
-  display: grid;
-  gap: 2px;
-  font-size: 12px;
-}
-
-.stats-line {
-  margin-top: 6px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.save-controls {
-  margin-top: 10px;
+  inset: 0;
+  z-index: 9;
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.pause-menu {
+  display: grid;
   gap: 8px;
-  pointer-events: auto;
+  width: min(92vw, 320px);
+  justify-items: stretch;
 }
 
-.save-btn {
-  border: 1px solid #0000004a;
-  border-radius: 6px;
-  background: #f8f2e6;
-  color: #1d1d1d;
-  padding: 6px 10px;
-  font-size: 12px;
+.pause-title {
+  text-align: center;
+  color: var(--mc-text-light);
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+  margin-bottom: 10px;
+}
+
+.mc-button {
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mc-text-light);
+  text-shadow: var(--mc-text-shadow);
+  background: var(--mc-button);
+  border-style: solid;
+  border-width: 2px;
+  border-color: #a8a8a8 #2c2c2c #2c2c2c #a8a8a8;
+  outline: 2px solid rgba(0, 0, 0, 0.85);
   cursor: pointer;
+  user-select: none;
 }
 
-.save-msg {
-  font-size: 12px;
+.mc-button:hover,
+.mc-button:focus-visible {
+  background: var(--mc-button-hover);
+  border-color: #c3cbe5 #34394d #34394d #c3cbe5;
+}
+
+.mc-button:active {
+  border-color: #2c2c2c #a8a8a8 #a8a8a8 #2c2c2c;
+}
+
+.mc-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mc-button.danger {
+  background: #8c3a34;
+  border-color: #c98179 #4a1713 #4a1713 #c98179;
+}
+
+.pause-reset-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pause-save-message {
+  text-align: center;
+  color: #aef79f;
+  font-size: 13px;
   font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
 }
 
-.health-wrap {
-  margin-top: 10px;
+.pause-controls {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--mc-tile-dirt), rgba(20, 14, 8, 0.9);
+  outline: 2px solid rgba(0, 0, 0, 0.85);
+  display: grid;
+  gap: 3px;
 }
 
-.health-label {
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.health-bar {
+.pause-controls-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  max-width: min(94vw, 640px);
+  justify-content: space-between;
+  gap: 16px;
+  color: #d4d4d4;
+  font-size: 11px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
 }
 
-.heart {
-  color: #934d4d;
+.pause-controls-row span:last-child {
+  color: #f4f4f4;
+  font-weight: 700;
+}
+
+.debug-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  pointer-events: none;
+  user-select: none;
+}
+
+.debug-line {
+  background: rgba(16, 16, 16, 0.45);
+  color: #e8e8e8;
   font-size: 12px;
-  line-height: 1;
+  line-height: 1.35;
+  padding: 1px 5px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+  white-space: pre;
 }
 
-.heart.filled {
-  color: #db1f1f;
+.click-hint {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translateX(-50%);
+  z-index: 3;
+  color: var(--mc-text-light);
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+  background: rgba(16, 16, 16, 0.45);
+  padding: 6px 14px;
+  outline: 2px solid rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  user-select: none;
+  animation: click-hint-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes click-hint-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.renderer-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(92vw, 460px);
+  background: var(--mc-panel);
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--mc-bevel-light) var(--mc-bevel-dark) var(--mc-bevel-dark) var(--mc-bevel-light);
+  color: var(--mc-text);
+  padding: 18px 22px;
+  text-align: center;
 }

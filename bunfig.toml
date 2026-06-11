@@ -1,0 +1,3 @@
+[test]
+# Registers happy-dom + Testing Library cleanup for component tests.
+preload = ["./tests/setup.ts"]
