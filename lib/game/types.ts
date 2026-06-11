@@ -50,6 +50,7 @@ export type MobModel = {
   geometries: THREE.BufferGeometry[];
 };
 
+/** Legacy save shape (40 inventory slots, 10-slot hotbar) — accepted and migrated on load. */
 export type SaveDataV1 = {
   version: 1;
   seed: number;
@@ -60,3 +61,6 @@ export type SaveDataV1 = {
   selectedSlot: number;
   player: { x: number; y: number; z: number };
 };
+
+/** Current save shape: same fields as v1, reinterpreted for 36 slots / 9-slot hotbar. */
+export type SaveData = Omit<SaveDataV1, "version"> & { version: 2 };

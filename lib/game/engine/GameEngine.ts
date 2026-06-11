@@ -6,7 +6,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import { inventorySlotsSnapshot, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
-import type { SaveDataV1 } from "@/lib/game/types";
+import type { SaveData } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 import { createTimers, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
@@ -21,7 +21,7 @@ import { spawnInitialMobs, tickHostileSpawnDirector } from "./systems/spawnDirec
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
-  save?: SaveDataV1 | null;
+  save?: SaveData | null;
   /** Seed for a fresh world; ignored when a save is provided. */
   seed?: number;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
@@ -206,10 +206,10 @@ export class GameEngine {
   }
 
   /** Current world + player state as a persistable save. */
-  serialize(): SaveDataV1 {
+  serialize(): SaveData {
     const state = this.state;
     return {
-      version: 1,
+      version: 2,
       seed: state.world.seed,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),

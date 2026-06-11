@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { inventorySlotsSnapshot, readSave, writeSave } from "@/lib/game/save";
+import { INVENTORY_SLOTS } from "@/lib/game/config";
+import { inventorySlotsSnapshot, migrateSaveV1toV2, readSave, writeSave } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { SaveDataV1 } from "@/lib/game/types";
+import type { SaveData, SaveDataV1 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -19,9 +20,9 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
 
 const KEY = "test_save";
 
-function sampleSave(): SaveDataV1 {
+function sampleSave(): SaveData {
   return {
-    version: 1,
+    version: 2,
     seed: 1337,
     changes: [
       [42, 0],
@@ -57,8 +58,72 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
+    expect(parsed!.version).toBe(2);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
+  });
+});
+
+describe("v1 to v2 migration", () => {
+  function v1Save(overrides: Partial<SaveDataV1> = {}): SaveDataV1 {
+    return {
+      version: 1,
+      seed: 1337,
+      changes: [[42, 0]],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  test("readSave accepts a v1 save and migrates it to v2", () => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
+    const parsed = readSave(KEY, storage);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.version).toBe(2);
+    expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
+    expect(parsed!.seed).toBe(1337);
+    expect(parsed!.changes).toEqual([[42, 0]]);
+  });
+
+  test("packs non-empty slots and merges stackable items", () => {
+    const migrated = migrateSaveV1toV2(
+      v1Save({
+        inventorySlots: [
+          { id: "dirt", count: 90 },
+          { id: null, count: 0 },
+          { id: "wood_pickaxe", count: 1, durability: 35 },
+          { id: "dirt", count: 30 }
+        ]
+      })
+    );
+    expect(migrated.inventorySlots).toEqual([
+      { id: "dirt", count: 99 },
+      { id: "wood_pickaxe", count: 1, durability: 35 },
+      { id: "dirt", count: 21, durability: undefined }
+    ]);
+  });
+
+  test("tools never merge even when sharing an id", () => {
+    const migrated = migrateSaveV1toV2(
+      v1Save({
+        inventorySlots: [
+          { id: "wood_pickaxe", count: 1, durability: 35 },
+          { id: "wood_pickaxe", count: 1, durability: 70 }
+        ]
+      })
+    );
+    expect(migrated.inventorySlots).toHaveLength(2);
+  });
+
+  test("items overflowing the smaller inventory are dropped", () => {
+    const slots = Array.from({ length: 40 }, (_, i) => ({ id: i % 2 === 0 ? "dirt" : "wood_pickaxe", count: 1 }));
+    const migrated = migrateSaveV1toV2(v1Save({ inventorySlots: slots }));
+    // 20 dirt merge into one stack; 20 pickaxes stay separate = 21 ≤ 36 kept.
+    expect(migrated.inventorySlots!.length).toBeLessThanOrEqual(INVENTORY_SLOTS);
+    const pickaxes = Array.from({ length: 40 }, () => ({ id: "wood_pickaxe", count: 1 }));
+    const overflowing = migrateSaveV1toV2(v1Save({ inventorySlots: pickaxes }));
+    expect(overflowing.inventorySlots!.length).toBe(INVENTORY_SLOTS);
   });
 });
 
@@ -71,8 +136,8 @@ describe("readSave rejects corrupt data", () => {
     expect(readSave(KEY, memoryStorage({ [KEY]: "{not json" }))).toBeNull();
   });
 
-  test("wrong version", () => {
-    const save = { ...sampleSave(), version: 2 };
+  test("unknown future version", () => {
+    const save = { ...sampleSave(), version: 3 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 

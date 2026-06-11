@@ -1,21 +1,57 @@
 import { HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
-import type { EquippedArmor, SaveDataV1, InventorySlot } from "@/lib/game/types";
+import type { EquippedArmor, SaveData, SaveDataV1, InventorySlot } from "@/lib/game/types";
+
+/**
+ * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
+ * hotbar): non-empty slots are packed in order, stackable items merge into
+ * earlier stacks, and anything that still overflows 36 slots is dropped.
+ */
+export function migrateSaveV1toV2(save: SaveDataV1): SaveData {
+  const migrated: SaveData = { ...save, version: 2, selectedSlot: Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot)) };
+
+  if (Array.isArray(save.inventorySlots)) {
+    const packed: Array<{ id: string | null; count: number; durability?: number }> = [];
+    for (const saved of save.inventorySlots) {
+      if (!saved?.id || saved.count <= 0) continue;
+      // Items without durability stack; merge them into an earlier stack first.
+      const stackable = ITEM_DEF_BY_ID[saved.id] ? !ITEM_DEF_BY_ID[saved.id].maxDurability : false;
+      let remaining = saved.count;
+      if (stackable) {
+        for (const slot of packed) {
+          if (slot.id !== saved.id || slot.count >= MAX_STACK_SIZE) continue;
+          const moved = Math.min(MAX_STACK_SIZE - slot.count, remaining);
+          slot.count += moved;
+          remaining -= moved;
+          if (remaining === 0) break;
+        }
+      }
+      if (remaining > 0 && packed.length < INVENTORY_SLOTS) {
+        packed.push({ id: saved.id, count: remaining, durability: saved.durability });
+      }
+    }
+    migrated.inventorySlots = packed;
+  }
+
+  return migrated;
+}
 
 // Storage is injectable so save logic can be tested without a browser.
-export function readSave(saveKey: string, storage: Storage = localStorage): SaveDataV1 | null {
+export function readSave(saveKey: string, storage: Storage = localStorage): SaveData | null {
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveDataV1;
-    if (parsed?.version !== 1 || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
+    const parsed = JSON.parse(raw) as SaveData | SaveDataV1;
+    if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
+    if (parsed.version === 1) return migrateSaveV1toV2(parsed);
+    if (parsed.version !== 2) return null;
     return parsed;
   } catch {
     return null;
   }
 }
 
-export function writeSave(saveKey: string, data: SaveDataV1, storage: Storage = localStorage): void {
+export function writeSave(saveKey: string, data: SaveData, storage: Storage = localStorage): void {
   storage.setItem(saveKey, JSON.stringify(data));
 }
 
@@ -29,7 +65,7 @@ export function inventorySlotsSnapshot(inventory: InventorySlot[]): Array<{ id: 
  * inventorySlots shape and the legacy inventoryCounts shape. Returns null when
  * the save carries no inventory.
  */
-export function restoreInventorySlots(save: SaveDataV1): InventorySlot[] | null {
+export function restoreInventorySlots(save: SaveData): InventorySlot[] | null {
   if (Array.isArray(save.inventorySlots)) {
     const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
     for (let i = 0; i < Math.min(INVENTORY_SLOTS, save.inventorySlots.length); i += 1) {
@@ -71,7 +107,7 @@ export function restoreInventorySlots(save: SaveDataV1): InventorySlot[] | null 
 }
 
 /** Restores equipped armor from a save, ignoring ids that are not valid armor for the slot. */
-export function restoreEquippedArmor(save: SaveDataV1): EquippedArmor | null {
+export function restoreEquippedArmor(save: SaveData): EquippedArmor | null {
   if (!save.equippedArmor) return null;
   const next = createEmptyArmorEquipment();
   for (const armorSlot of ARMOR_SLOTS) {
@@ -84,7 +120,7 @@ export function restoreEquippedArmor(save: SaveDataV1): EquippedArmor | null {
   return next;
 }
 
-export function restoreSelectedSlot(save: SaveDataV1): number | null {
+export function restoreSelectedSlot(save: SaveData): number | null {
   if (typeof save.selectedSlot !== "number") return null;
   return Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot));
 }

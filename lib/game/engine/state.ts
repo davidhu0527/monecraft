@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { VoxelWorld } from "@/lib/world";
-import type { EquippedArmor, InventorySlot, MobKind, SaveDataV1 } from "@/lib/game/types";
+import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -108,7 +108,7 @@ export const IDLE_INPUT: FrameInput = {
 /** The engine surface the UI may touch: intents in, save data out. */
 export type GameApi = {
   dispatch(command: Command): void;
-  serialize(): SaveDataV1;
+  serialize(): SaveData;
 };
 
 /** Immutable view for the React UI, replaced only when a visible value changes. */
