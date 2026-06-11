@@ -1,20 +1,35 @@
 # Testing
 
-`bun test` runs everything; tests are colocated as `*.test.ts` next to the code they cover. There is no DOM or browser in the test environment — the game engine is deliberately headless (see [architecture.md](architecture.md)), which is what makes most of this testable at all.
+Two runners, three layers:
+
+- **`bun test`** — unit, integration, and component tests, colocated as `*.test.ts[x]` next to the code they cover. The shared setup (`tests/setup.ts`, preloaded via `bunfig.toml`) registers happy-dom so React component tests run under the same runner; the game engine itself needs no DOM (see [architecture.md](architecture.md)).
+- **`bun run test:e2e`** — Playwright browser smoke tests in `e2e/*.e2e.ts` against the production build. The file suffix matters: `bun test` auto-collects `*.test.ts` AND `*.spec.ts`, so E2E files must use `.e2e.ts`.
 
 ## What is covered
 
-| Area                 | File                                 | What it pins down                                                                                                     |
-| -------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Worldgen determinism | `lib/world/generation.test.ts`       | SHA-256 digests of generated worlds per seed (the save-compat contract), plus structural probes and meshing snapshots |
-| Voxel store          | `lib/world/voxelWorld.test.ts`       | get/set/bounds/solidity and the voxel index formula saves depend on                                                   |
-| Raycast & collision  | `lib/world/queries.test.ts`          | DDA hit/previous cells, AABB collision edges, water non-solidity                                                      |
-| Items & recipes      | `lib/game/config.test.ts`            | Referential integrity: every recipe/drop/armor mapping points at a real item                                          |
-| Inventory algebra    | `lib/game/inventory.test.ts`         | Stack math, durability, crafting (including the refuse-on-full behavior), armor equip rules                           |
-| Save format          | `lib/game/save.test.ts`              | Round-trips, legacy-shape parsing, corrupt-data rejection                                                             |
-| Simulation           | `lib/game/engine/GameEngine.test.ts` | Headless gameplay: boot, movement, energy/regen, mining, commands, death/respawn, night spawning, save round-trips    |
+| Area                 | File                                            | What it pins down                                                                                                     |
+| -------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Worldgen determinism | `lib/world/generation.test.ts`                  | SHA-256 digests of generated worlds per seed (the save-compat contract), plus structural probes and meshing snapshots |
+| Voxel store          | `lib/world/voxelWorld.test.ts`                  | get/set/bounds/solidity and the voxel index formula saves depend on                                                   |
+| Raycast & collision  | `lib/world/queries.test.ts`                     | DDA hit/previous cells, AABB collision edges, water non-solidity                                                      |
+| Items & recipes      | `lib/game/config.test.ts`                       | Referential integrity: every recipe/drop/armor mapping points at a real item                                          |
+| Inventory algebra    | `lib/game/inventory.test.ts`                    | Stack math, durability, crafting (including the refuse-on-full behavior), armor equip rules                           |
+| Save format          | `lib/game/save.test.ts`                         | Round-trips, legacy-shape parsing, corrupt-data rejection                                                             |
+| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, energy/regen, mining, commands, death/respawn, night spawning, save round-trips    |
+| Renderer logic       | `lib/game/render/{mobVisuals,heldItem}.test.ts` | Model lifecycle (create/reuse/remove/dispose), positioning, bob, item swaps — pure Three.js, no DOM                   |
+| Components           | `components/game/*.test.tsx`                    | InventoryPanel click-to-swap/equip/craft gating, Hotbar rendering and selection (happy-dom + Testing Library)         |
+| Browser E2E          | `e2e/smoke.e2e.ts`                              | Real browser: boot without console errors, scene draws, input → movement, craft via UI, mining, save across reload    |
 
-Not covered by automation: actual rendering (Three.js scene output) and pointer-lock input. Anything touching `lib/game/render/` or `lib/game/input/` still needs the manual gameplay pass from [CONTRIBUTING.md](../CONTRIBUTING.md).
+## Running the E2E suite
+
+```bash
+bunx playwright install chromium   # once
+bun run test:e2e                   # builds and starts the prod server itself
+```
+
+E2E tests assert through `window.__monecraft` (the live engine/renderer/input handle — also handy in the browser console) instead of pixels; the one render check uses `renderer.renderedTriangles()`. The shared fixture fails any test that logs a console error.
+
+**Known limitation:** headless Chromium cannot engage pointer lock (`requestPointerLock` never resolves). `acquirePointerLock` in `e2e/helpers.ts` tries the real thing, then falls back to forcing the input controller's lock flag — so key/mouse → engine wiring is still tested end to end, but real lock acquisition and look-around feel remain in the manual gameplay pass, along with visual quality. That manual pass is now only required for changes to pointer-lock handling or visual appearance.
 
 ## The worldgen hash policy
 

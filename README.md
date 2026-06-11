@@ -28,12 +28,13 @@ Then open `http://localhost:3000`.
 ```bash
 bun run lint        # ESLint
 bun run typecheck   # tsc --noEmit
-bun test            # unit + headless simulation tests
+bun test            # unit + headless simulation + component tests
 bun run build       # production build
+bun run test:e2e    # Playwright browser smoke tests
 bun run format      # Prettier
 ```
 
-All five are enforced by CI on every PR. The game simulation is a headless engine (no DOM), so gameplay logic is covered by real simulation tests — see [docs/testing.md](docs/testing.md).
+All of these are enforced by CI on every PR. The game simulation is a headless engine (no DOM), so gameplay logic is covered by real simulation tests, and a Playwright smoke suite exercises the browser layers — see [docs/testing.md](docs/testing.md).
 
 - [docs/architecture.md](docs/architecture.md) — engine/renderer/shell layering and invariants
 - [docs/adding-content.md](docs/adding-content.md) — add a block, item, recipe, mob, or mechanic
