@@ -1,5 +1,8 @@
-import { ARMOR_SLOT_LABELS, ARMOR_SLOTS } from "@/lib/game/items";
 import { useState } from "react";
+import ItemIcon from "@/components/game/ItemIcon";
+import PixelImg from "@/components/game/PixelImg";
+import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot } from "@/lib/game/items";
+import { itemIconUrl } from "@/lib/ui/sprites";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 type InventoryPanelProps = {
@@ -14,6 +17,18 @@ type InventoryPanelProps = {
   onCraft: (recipe: Recipe) => void;
 };
 
+function slotTitle(slot: InventorySlot): string | undefined {
+  if (!slot.id || slot.count <= 0) return undefined;
+  if (slot.maxDurability) return `${slot.label} (${slot.durability ?? slot.maxDurability}/${slot.maxDurability})`;
+  return slot.label;
+}
+
+/**
+ * The survival inventory: armor column, 27-slot storage grid, hotbar row, and
+ * a recipe book where every entry shows ingredient icons and the result.
+ * Items move by clicking one slot and then another (click-to-swap); clicking
+ * an armor item toggles equipping it instead.
+ */
 export default function InventoryPanel({
   inventory,
   equippedArmor,
@@ -47,76 +62,85 @@ export default function InventoryPanel({
     setPendingIndex(null);
   };
 
+  const isEquipped = (slot: InventorySlot) => slot.kind === "armor" && !!slot.id && equippedArmor[slot.armorSlot ?? "helmet"] === slot.id;
+
+  const renderSlot = (slot: InventorySlot, idx: number, extraClass = "") => (
+    <button
+      key={`inv-slot-${idx}`}
+      className={["inv-slot", extraClass, pendingIndex === idx ? "pending" : "", isEquipped(slot) ? "equipped" : ""].filter(Boolean).join(" ")}
+      onClick={() => onSlotClick(idx)}
+      title={slotTitle(slot)}
+      aria-label={slot.id && slot.count > 0 ? `Slot ${idx + 1}: ${slot.label}` : `Slot ${idx + 1}: empty`}
+    >
+      <ItemIcon slot={slot} size={32} />
+    </button>
+  );
+
   const hotbar = inventory.slice(0, hotbarSlots);
   const storage = inventory.slice(hotbarSlots);
 
   return (
     <div className="inventory-panel">
-      <div className="inventory-title">Inventory & Crafting</div>
-      <div className="inventory-subtitle">Click one slot, then another to move/swap items between hotbar and inventory.</div>
-      <div className="inventory-section-title">Hotbar</div>
-      <div className="inventory-grid">
-        {hotbar.map((slot, idx) => (
-          <button
-            key={`inv-hotbar-${idx}`}
-            className={[
-              "inventory-slot",
-              idx === selectedHotbarSlot ? "active" : "",
-              pendingIndex === idx ? "pending" : "",
-              slot.kind === "armor" && slot.id && equippedArmor[slot.armorSlot ?? "helmet"] === slot.id ? "equipped" : ""
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={() => onSlotClick(idx)}
-          >
-            <span>{slot.id ? slot.label : "Empty"}</span>
-            <span>{slot.maxDurability ? `dur ${slot.durability ?? slot.maxDurability}/${slot.maxDurability}` : ""}</span>
-            <span>{slot.count > 0 ? `x${slot.count}` : ""}</span>
-          </button>
-        ))}
-      </div>
-      <div className="inventory-section-title">Storage</div>
-      <div className="inventory-grid inventory-grid-storage">
-        {storage.map((slot, offset) => {
-          const idx = offset + hotbarSlots;
-          const isEquippedArmor = slot.kind === "armor" && !!slot.id && equippedArmor[slot.armorSlot ?? "helmet"] === slot.id;
-          return (
-            <button
-              key={`inv-storage-${idx}`}
-              className={["inventory-slot", pendingIndex === idx ? "pending" : "", isEquippedArmor ? "equipped" : ""].filter(Boolean).join(" ")}
-              onClick={() => onSlotClick(idx)}
-            >
-              <span>{slot.id ? slot.label : "Empty"}</span>
-              <span>{slot.maxDurability ? `dur ${slot.durability ?? slot.maxDurability}/${slot.maxDurability}` : ""}</span>
-              <span>{slot.count > 0 ? `x${slot.count}` : ""}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="inventory-section-title">Armor (click armor item to equip/unequip)</div>
-      <div className="armor-grid">
-        {ARMOR_SLOTS.map((armorSlot) => {
-          const equippedId = equippedArmor[armorSlot];
-          const equippedItem = equippedId ? inventory.find((slot) => slot.id === equippedId && slot.count > 0) : undefined;
-          return (
-            <div key={`armor-${armorSlot}`} className={equippedItem ? "armor-slot filled" : "armor-slot"}>
-              <span className="armor-slot-name">{ARMOR_SLOT_LABELS[armorSlot]}</span>
-              <span className="armor-slot-item">{equippedItem?.label ?? "Empty"}</span>
-              <span className="armor-slot-item">
-                {equippedItem?.maxDurability ? `${equippedItem.durability ?? equippedItem.maxDurability}/${equippedItem.maxDurability}` : ""}
-              </span>
+      <div className="inventory-columns">
+        <div className="inventory-main">
+          <div className="inventory-heading">Inventory</div>
+          <div className="inventory-upper">
+            <div className="armor-column">
+              {ARMOR_SLOTS.map((armorSlot) => {
+                const equippedId = equippedArmor[armorSlot];
+                const equippedIndex = equippedId ? inventory.findIndex((slot) => slot.id === equippedId && slot.count > 0) : -1;
+                const equippedItem = equippedIndex >= 0 ? inventory[equippedIndex] : undefined;
+                return (
+                  <button
+                    key={`armor-${armorSlot}`}
+                    className={equippedItem ? "inv-slot armor-slot filled" : "inv-slot armor-slot"}
+                    onClick={() => equippedIndex >= 0 && onToggleEquipArmor(equippedIndex)}
+                    title={equippedItem ? slotTitle(equippedItem) : `${ARMOR_SLOT_LABELS[armorSlot]} (empty)`}
+                    aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${equippedItem.label}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
+                  >
+                    {equippedItem ? (
+                      <ItemIcon slot={equippedItem} size={32} />
+                    ) : (
+                      <span className="armor-ghost">
+                        <PixelImg src={itemIconUrl(armorSlot)} alt="" size={32} aria-hidden />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+            <div className="inventory-hint">
+              Click one slot, then another to move items.
+              <br />
+              Click armor to equip or unequip it.
+            </div>
+          </div>
+          <div className="inv-grid storage" data-testid="storage-grid">
+            {storage.map((slot, offset) => renderSlot(slot, offset + hotbarSlots))}
+          </div>
+          <div className="inv-grid hotbar-row" data-testid="hotbar-grid">
+            {hotbar.map((slot, idx) => renderSlot(slot, idx, idx === selectedHotbarSlot ? "active" : ""))}
+          </div>
+        </div>
 
-      <div className="crafting-title">Recipes</div>
-      <div className="crafting-list">
-        {recipes.map((recipe) => (
-          <button key={recipe.id} className="craft-btn" onClick={() => onCraft(recipe)} disabled={!canCraft(recipe)}>
-            {recipe.label}
-          </button>
-        ))}
+        <div className="recipe-book">
+          <div className="inventory-heading">Crafting</div>
+          <div className="recipe-list">
+            {recipes.map((recipe) => (
+              <button key={recipe.id} className="recipe-entry" onClick={() => onCraft(recipe)} disabled={!canCraft(recipe)} aria-label={recipe.label} title={recipe.label}>
+                <span className="recipe-ingredients">
+                  {recipe.cost.map((cost) => (
+                    <ItemIcon key={`${recipe.id}-${cost.slotId}`} slot={createSlot(cost.slotId, cost.count)} size={24} />
+                  ))}
+                </span>
+                <span className="recipe-arrow" aria-hidden>
+                  →
+                </span>
+                <ItemIcon slot={createSlot(recipe.result.slotId, recipe.result.count)} size={24} />
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -192,147 +192,160 @@
   color: #7dff6e;
 }
 
+/* --- Survival inventory dialog + recipe book --- */
+
 .inventory-panel {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(95vw, 920px);
-  border: 1px solid #00000060;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(239, 231, 214, 0.97), rgba(218, 206, 183, 0.97));
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
-  padding: 16px;
   z-index: 6;
+  background: var(--mc-panel);
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--mc-bevel-light) var(--mc-bevel-dark) var(--mc-bevel-dark) var(--mc-bevel-light);
+  outline: 2px solid rgba(0, 0, 0, 0.8);
+  padding: 12px;
+  max-height: 92vh;
+  overflow-y: auto;
 }
 
-.inventory-title {
-  font-size: 16px;
+.inventory-columns {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.inventory-heading {
+  color: var(--mc-text);
+  font-size: 13px;
   font-weight: 700;
-  color: #211b14;
   margin-bottom: 6px;
 }
 
-.inventory-subtitle {
-  font-size: 12px;
-  color: #3b3023;
+.inventory-upper {
+  display: flex;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
-.inventory-section-title {
-  margin-top: 8px;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #2f2418;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.armor-column {
+  display: grid;
+  gap: 2px;
 }
 
-.inventory-grid {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+.inventory-hint {
+  align-self: center;
+  color: #5a5a5a;
+  font-size: 10px;
+  line-height: 1.6;
 }
 
-.inventory-slot {
-  border: 1px solid #00000033;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #f8f4ea 0%, #ded5c4 100%);
-  color: #1f1f1f;
-  min-height: 58px;
-  padding: 6px;
-  cursor: pointer;
+.inv-grid {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-columns: repeat(9, 40px);
+  gap: 2px;
+}
+
+.inv-grid.storage {
+  margin-bottom: 10px;
+}
+
+.inv-slot {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
   align-items: center;
-  justify-items: center;
-  font-size: 11px;
-  text-align: center;
-  line-height: 1.05;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
 }
 
-.inventory-slot.active {
-  background: linear-gradient(180deg, #ffe3a3 0%, #eec16d 100%);
-  border-color: #8f6710;
-  font-weight: 700;
+.inv-slot:hover {
+  background: #a3a3a3;
 }
 
-.inventory-slot.pending {
-  background: linear-gradient(180deg, #c8e4ff 0%, #9ac3f0 100%);
-  border-color: #3f6da6;
-  font-weight: 700;
+.inv-slot.active::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid #fefefe;
+  outline: 1px solid rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.inventory-slot.equipped {
-  background: linear-gradient(180deg, #d8f7d1 0%, #a9e3a1 100%);
-  border-color: #3e8f4d;
+.inv-slot.pending {
+  background: #b8c8e8;
+  border-color: #2c3c64 #d8e4ff #d8e4ff #2c3c64;
 }
 
-.armor-grid {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.inv-slot.equipped {
+  background: #9dbb8f;
 }
 
-.armor-slot {
-  border: 1px solid #00000033;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #f5f0e3 0%, #ddd2bf 100%);
-  padding: 6px 8px;
-  min-height: 52px;
+.armor-ghost {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.recipe-book {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  border-left: 2px solid #9a9a9a;
+  padding-left: 12px;
+}
+
+.recipe-list {
   display: grid;
   gap: 4px;
-}
-
-.armor-slot.filled {
-  border-color: #3f8b4d;
-  background: linear-gradient(180deg, #daf6d4 0%, #b9e7b2 100%);
-}
-
-.armor-slot-name {
-  font-size: 10px;
-  font-weight: 700;
-  color: #2f2418;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.armor-slot-item {
-  font-size: 11px;
-  color: #1f1f1f;
-}
-
-.crafting-title {
-  margin-top: 16px;
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #322b24;
-}
-
-.crafting-list {
-  display: grid;
-  gap: 8px;
-  max-height: min(34vh, 280px);
+  align-content: start;
   overflow-y: auto;
+  max-height: 360px;
   padding-right: 4px;
 }
 
-.craft-btn {
-  border: 1px solid #4f3f30;
-  border-radius: 8px;
-  background: #f7e2be;
-  color: #23190f;
-  text-align: left;
-  padding: 9px 10px;
-  font-size: 13px;
+.recipe-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
   cursor: pointer;
+  background: var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
 }
 
-.craft-btn:disabled {
-  opacity: 0.5;
+.recipe-entry:hover:not(:disabled) {
+  background: #a3a3a3;
+}
+
+.recipe-entry:disabled {
   cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.recipe-entry:disabled img {
+  filter: grayscale(0.9);
+}
+
+.recipe-ingredients {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recipe-arrow {
+  color: var(--mc-text);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .respawn-overlay {
@@ -376,23 +389,27 @@
     height: 38px;
   }
 
-  .inventory-panel {
-    width: min(97vw, 760px);
-    padding: 12px;
-    max-height: 92vh;
-    overflow-y: auto;
+  .inventory-columns {
+    flex-direction: column;
   }
 
-  .inventory-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+  .recipe-book {
+    border-left: none;
+    padding-left: 0;
+    border-top: 2px solid #9a9a9a;
+    padding-top: 10px;
   }
 
-  .inventory-slot {
-    min-height: 52px;
-    font-size: 10px;
+  .inv-grid {
+    grid-template-columns: repeat(9, 32px);
   }
 
-  .crafting-list {
-    max-height: min(30vh, 220px);
+  .inv-slot {
+    width: 32px;
+    height: 32px;
+  }
+
+  .recipe-list {
+    max-height: 180px;
   }
 }

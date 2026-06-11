@@ -39,8 +39,8 @@ test("inventory opens and crafting works end to end", async ({ gamePage: page })
 
   expect(await itemCount(page, "planks")).toBe(planksBefore + 4);
   expect(await itemCount(page, "wood")).toBe(62);
-  // The UI re-rendered from the new snapshot.
-  await expect(panel.locator(".inventory-slot", { hasText: "Planks" }).first()).toContainText(`x${planksBefore + 4}`);
+  // The UI re-rendered from the new snapshot: the planks stack count updated.
+  await expect(panel.locator('.inv-slot[title="Planks"]').first()).toContainText(`${planksBefore + 4}`);
 
   await page.keyboard.press("i");
   await expect(panel).not.toBeVisible();
