@@ -108,6 +108,21 @@ describe("movement and stats", () => {
     expect(engine.state.timers.sprintDistanceBudget).toBe(SPRINT_BLOCKS_PER_HUNGER - 1);
   });
 
+  test("a barely-qualifying hard fall deals at least one damage", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1); // settle on the ground
+    const { state } = engine;
+    const groundY = state.player.position.y;
+    // ~3.95 blocks of free fall lands at vy ≈ -14.3..-14.8 — inside the
+    // damage window but where the scaled value floors to 0 without the clamp.
+    state.player.position.y = groundY + 3.95;
+    state.player.velocity.set(0, 0, 0);
+    state.player.onGround = false;
+    run(engine, 1);
+    expect(engine.state.hearts).toBeLessThan(MAX_HEARTS);
+  });
+
   test("hearts regenerate one per interval while hurt", () => {
     const engine = makeEngine();
     calmDaytime(engine);

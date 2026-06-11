@@ -1,6 +1,16 @@
 import * as THREE from "three";
 import { collidesAt, hasSupportUnderPlayer } from "@/lib/world";
-import { CROUCH_SPEED, GRAVITY, JUMP_VELOCITY, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, SPRINT_MIN_HUNGER, SPRINT_SPEED, WALK_SPEED, WORLD_BORDER_PADDING } from "@/lib/game/config";
+import {
+  CROUCH_SPEED,
+  GRAVITY,
+  JUMP_VELOCITY,
+  PLAYER_HALF_WIDTH,
+  PLAYER_HEIGHT,
+  SPRINT_MIN_HUNGER,
+  SPRINT_SPEED,
+  WALK_SPEED,
+  WORLD_BORDER_PADDING
+} from "@/lib/game/config";
 import type { FrameInput, GameState } from "../state";
 import { speedScaleFromHunger } from "./playerStats";
 
@@ -107,7 +117,8 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   player.position.z = Math.min(world.sizeZ - WORLD_BORDER_PADDING, Math.max(WORLD_BORDER_PADDING, player.position.z));
 
   if (!wasGrounded && player.onGround && vyBeforeMove < -14) {
-    applyDamage(Math.min(19, Math.floor((-vyBeforeMove - 13) * 0.5)));
+    // Any fall hard enough to trigger this deals at least half a heart.
+    applyDamage(Math.max(1, Math.min(19, Math.floor((-vyBeforeMove - 13) * 0.5))));
   }
 
   const inVoid = player.position.y < -4;
