@@ -16,6 +16,7 @@ import {
   WORLD_SIZE_Y,
   WORLD_SIZE_Z
 } from "@/lib/world";
+import * as inv from "@/lib/game/inventory";
 import { readSave } from "@/lib/game/save";
 import { tickDayNight } from "@/lib/game/runtime/dayNight";
 import { bindGameInput } from "@/lib/game/runtime/input";
@@ -235,208 +236,33 @@ export function useMinecraftGame() {
   }, [energy]);
 
   useEffect(() => {
-    setEquippedArmor((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const armorSlot of ARMOR_SLOTS) {
-        const equippedId = next[armorSlot];
-        if (!equippedId) continue;
-        const stillOwned = inventory.some((slot) => slot.id === equippedId && slot.count > 0);
-        if (stillOwned) continue;
-        next[armorSlot] = null;
-        changed = true;
-      }
-      return changed ? next : prev;
-    });
+    setEquippedArmor((prev) => inv.unequipMissingArmor(inventory, prev) ?? prev);
   }, [inventory]);
 
-  const cloneSlot = (slot: InventorySlot): InventorySlot => ({ ...slot });
-
-  const armorReductionFromInventory = (slots: InventorySlot[], equipped: EquippedArmor): number => {
-    let defense = 0;
-    for (const armorSlot of ARMOR_SLOTS) {
-      const equippedId = equipped[armorSlot];
-      if (!equippedId) continue;
-      const def = ITEM_DEF_BY_ID[equippedId];
-      if (!def || def.kind !== "armor" || def.armorSlot !== armorSlot) continue;
-      const hasOwnedPiece = slots.some((slot) => slot.id === equippedId && slot.count > 0);
-      if (!hasOwnedPiece) continue;
-      defense += def.defense ?? 0;
-    }
-    return Math.min(0.75, defense * 0.05);
-  };
-
   const toggleEquipArmor = (inventoryIndex: number) => {
-    if (inventoryIndex < 0 || inventoryIndex >= INVENTORY_SLOTS) return;
-    const slot = inventoryRef.current[inventoryIndex];
-    if (slot.kind !== "armor" || !slot.id || !slot.armorSlot || slot.count <= 0) return;
-    const slotId = slot.id;
-    const armorSlot = slot.armorSlot;
-    setEquippedArmor((prev) => {
-      const next = { ...prev };
-      next[armorSlot] = prev[armorSlot] === slotId ? null : slotId;
-      return next;
-    });
-  };
-
-  const countsById = (slots: InventorySlot[]): Map<string, number> => {
-    const byId = new Map<string, number>();
-    for (const slot of slots) {
-      if (!slot.id || slot.count <= 0) continue;
-      byId.set(slot.id, (byId.get(slot.id) ?? 0) + slot.count);
-    }
-    return byId;
+    setEquippedArmor((prev) => inv.toggleEquipArmor(inventoryRef.current, prev, inventoryIndex) ?? prev);
   };
 
   const adjustSlotCount = (slotId: string, delta: number, preferredIndex?: number) => {
-    if (!slotId || delta === 0) return;
-    setInventory((prev) => {
-      const next = prev.map(cloneSlot);
-      let remaining = Math.abs(delta);
-
-      if (delta < 0) {
-        const consumeFromIndex = (index: number) => {
-          if (remaining <= 0) return;
-          if (index < 0 || index >= next.length) return;
-          const slot = next[index];
-          if (slot.id !== slotId || slot.count <= 0) return;
-          const take = Math.min(remaining, slot.count);
-          slot.count -= take;
-          remaining -= take;
-          if (slot.count <= 0) next[index] = createEmptySlot();
-        };
-
-        if (typeof preferredIndex === "number") consumeFromIndex(preferredIndex);
-        for (let i = 0; i < next.length && remaining > 0; i += 1) consumeFromIndex(i);
-        if (remaining > 0) return prev;
-        return next;
-      }
-
-      if (!ITEM_DEF_BY_ID[slotId]) return prev;
-
-      const fillIndex = (index: number) => {
-        if (remaining <= 0) return;
-        if (index < 0 || index >= next.length) return;
-        const slot = next[index];
-        if (slot.id !== slotId || slot.count >= MAX_STACK_SIZE) return;
-        const add = Math.min(remaining, MAX_STACK_SIZE - slot.count);
-        slot.count += add;
-        remaining -= add;
-      };
-
-      if (typeof preferredIndex === "number") fillIndex(preferredIndex);
-      for (let i = 0; i < next.length && remaining > 0; i += 1) fillIndex(i);
-      for (let i = 0; i < next.length && remaining > 0; i += 1) {
-        if (next[i].id !== null || next[i].count !== 0) continue;
-        const add = Math.min(remaining, MAX_STACK_SIZE);
-        next[i] = createSlot(slotId, add);
-        remaining -= add;
-      }
-      return next;
-    });
+    setInventory((prev) => inv.adjustSlotCount(prev, slotId, delta, preferredIndex) ?? prev);
   };
 
   const consumeSelectedToolDurability = (amount = 1) => {
-    if (amount <= 0) return;
-    setInventory((prev) => {
-      const idx = selectedSlotRef.current;
-      if (idx < 0 || idx >= prev.length) return prev;
-      const next = prev.map(cloneSlot);
-      const slot = next[idx];
-      if ((slot.kind !== "tool" && slot.kind !== "weapon") || !slot.id || slot.count <= 0 || !slot.maxDurability) return prev;
-      const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
-      if (nextDurability <= 0) {
-        next[idx] = createEmptySlot();
-        return next;
-      }
-      slot.durability = nextDurability;
-      return next;
-    });
+    setInventory((prev) => inv.consumeToolDurability(prev, selectedSlotRef.current, amount) ?? prev);
   };
 
   const consumeEquippedArmorDurability = (amount = 1) => {
-    if (amount <= 0) return;
-    const equipped = equippedArmorRef.current;
-    setInventory((prev) => {
-      const next = prev.map(cloneSlot);
-      let changed = false;
-      for (const armorSlot of ARMOR_SLOTS) {
-        const equippedId = equipped[armorSlot];
-        if (!equippedId) continue;
-        const idx = next.findIndex((slot) => slot.id === equippedId && slot.kind === "armor" && slot.count > 0);
-        if (idx < 0) continue;
-        const slot = next[idx];
-        if (!slot.maxDurability) continue;
-        const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
-        if (nextDurability <= 0) next[idx] = createEmptySlot();
-        else slot.durability = nextDurability;
-        changed = true;
-      }
-      return changed ? next : prev;
-    });
+    setInventory((prev) => inv.consumeEquippedArmorDurability(prev, equippedArmorRef.current, amount) ?? prev);
   };
 
-  const canCraft = (recipe: Recipe): boolean => {
-    const slots = inventoryRef.current;
-    const byId = countsById(slots);
-    const hasCost = recipe.cost.every((cost) => (byId.get(cost.slotId) ?? 0) >= cost.count);
-    if (!hasCost) return false;
-
-    let freeForResult = 0;
-    for (const slot of slots) {
-      if (slot.id === recipe.result.slotId) freeForResult += MAX_STACK_SIZE - slot.count;
-      if (slot.id === null && slot.count === 0) freeForResult += MAX_STACK_SIZE;
-    }
-    return freeForResult >= recipe.result.count;
-  };
+  const canCraft = (recipe: Recipe): boolean => inv.canCraft(inventoryRef.current, recipe);
 
   const craft = (recipe: Recipe) => {
-    setInventory((prev) => {
-      const byId = countsById(prev);
-      const allowed = recipe.cost.every((cost) => (byId.get(cost.slotId) ?? 0) >= cost.count);
-      if (!allowed) return prev;
-
-      const next = prev.map(cloneSlot);
-      for (const cost of recipe.cost) {
-        let remaining = cost.count;
-        for (let i = 0; i < next.length && remaining > 0; i += 1) {
-          if (next[i].id !== cost.slotId || next[i].count <= 0) continue;
-          const take = Math.min(remaining, next[i].count);
-          next[i].count -= take;
-          remaining -= take;
-          if (next[i].count <= 0) next[i] = createEmptySlot();
-        }
-      }
-
-      if (!ITEM_DEF_BY_ID[recipe.result.slotId]) return next;
-      let remaining = recipe.result.count;
-
-      for (let i = 0; i < next.length && remaining > 0; i += 1) {
-        if (next[i].id !== recipe.result.slotId || next[i].count >= MAX_STACK_SIZE) continue;
-        const add = Math.min(remaining, MAX_STACK_SIZE - next[i].count);
-        next[i].count += add;
-        remaining -= add;
-      }
-      for (let i = 0; i < next.length && remaining > 0; i += 1) {
-        if (next[i].id !== null || next[i].count !== 0) continue;
-        const add = Math.min(remaining, MAX_STACK_SIZE);
-        next[i] = createSlot(recipe.result.slotId, add);
-        remaining -= add;
-      }
-      return next;
-    });
+    setInventory((prev) => inv.craft(prev, recipe) ?? prev);
   };
 
   const swapInventorySlots = (fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-    setInventory((prev) => {
-      if (fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length) return prev;
-      const next = prev.map(cloneSlot);
-      const temp = next[fromIndex];
-      next[fromIndex] = next[toIndex];
-      next[toIndex] = temp;
-      return next;
-    });
+    setInventory((prev) => inv.swapSlots(prev, fromIndex, toIndex) ?? prev);
   };
 
   useEffect(() => {
@@ -846,7 +672,7 @@ export function useMinecraftGame() {
     });
     const applyDamageWithArmor = (amount: number) => {
       if (amount > 0) consumeEquippedArmorDurability(1);
-      const reduction = armorReductionFromInventory(inventoryRef.current, equippedArmorRef.current);
+      const reduction = inv.armorReduction(inventoryRef.current, equippedArmorRef.current);
       const mitigated = Math.max(1, Math.floor(amount * (1 - reduction)));
       applyDamage(mitigated);
     };
