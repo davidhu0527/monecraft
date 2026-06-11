@@ -1,4 +1,5 @@
-import { ARMOR_SLOTS, createEmptySlot, createSlot, ITEM_DEF_BY_ID, MAX_STACK_SIZE } from "@/lib/game/config";
+import { MAX_STACK_SIZE } from "@/lib/game/config";
+import { ARMOR_SLOTS, createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 /**

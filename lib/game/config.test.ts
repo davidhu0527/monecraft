@@ -1,18 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { INVENTORY_SLOTS, MAX_STACK_SIZE } from "@/lib/game/config";
 import {
   ARMOR_SLOTS,
   ARMOR_SLOT_LABELS,
   BLOCK_TO_SLOT,
   BREAK_HARDNESS,
-  INVENTORY_SLOTS,
   ITEM_DEFS,
   ITEM_DEF_BY_ID,
-  MAX_STACK_SIZE,
-  RECIPES,
   createEmptyArmorEquipment,
   createInitialInventory,
   createSlot
-} from "@/lib/game/config";
+} from "@/lib/game/items";
+import { RECIPES } from "@/lib/game/recipes";
 
 describe("item definitions", () => {
   test("item ids are unique", () => {

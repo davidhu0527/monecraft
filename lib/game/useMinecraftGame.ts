@@ -27,32 +27,34 @@ import { createApplyDamage, tickDeathAndRespawn } from "@/lib/game/runtime/playe
 import { tickPlayerMovement } from "@/lib/game/runtime/playerMotion";
 import { createSurfaceYAt, randomLandPointNear as pickRandomLandPointNear } from "@/lib/game/runtime/spawn";
 import {
-  ARMOR_SLOTS,
-  BLOCK_TO_SLOT,
-  BREAK_HARDNESS,
   CROUCH_SPEED,
-  createEmptyArmorEquipment,
-  createEmptySlot,
-  createInitialInventory,
-  createSlot,
   EYE_HEIGHT,
   GRAVITY,
   HOTBAR_SLOTS,
   INVENTORY_SLOTS,
-  ITEM_DEF_BY_ID,
   JUMP_VELOCITY,
   MAX_ENERGY,
   MAX_HEARTS,
   MAX_STACK_SIZE,
   PLAYER_HEIGHT,
   PLAYER_HALF_WIDTH,
-  RECIPES,
   RENDER_GRID,
   RENDER_RADIUS,
   SAVE_KEY,
   SPRINT_SPEED,
   WALK_SPEED
 } from "@/lib/game/config";
+import {
+  ARMOR_SLOTS,
+  BLOCK_TO_SLOT,
+  BREAK_HARDNESS,
+  createEmptyArmorEquipment,
+  createEmptySlot,
+  createInitialInventory,
+  createSlot,
+  ITEM_DEF_BY_ID
+} from "@/lib/game/items";
+import { RECIPES } from "@/lib/game/recipes";
 import type { EquippedArmor, InventorySlot, MobEntity, Recipe, SaveDataV1 } from "@/lib/game/types";
 
 function createCrackTextures(): THREE.CanvasTexture[] {

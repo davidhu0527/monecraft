@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createEmptyArmorEquipment, createEmptySlot, createSlot, INVENTORY_SLOTS, MAX_STACK_SIZE, RECIPES } from "@/lib/game/config";
+import { INVENTORY_SLOTS, MAX_STACK_SIZE } from "@/lib/game/config";
+import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
+import { RECIPES } from "@/lib/game/recipes";
 import {
   adjustSlotCount,
   armorReduction,

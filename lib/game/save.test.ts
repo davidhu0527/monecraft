@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { inventorySlotsSnapshot, readSave, writeSave } from "@/lib/game/save";
-import { createSlot, createEmptySlot } from "@/lib/game/config";
+import { createSlot, createEmptySlot } from "@/lib/game/items";
 import type { SaveDataV1 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {

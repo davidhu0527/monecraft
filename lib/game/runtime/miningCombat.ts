@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { BlockId, collidesAt, VoxelWorld, voxelRaycast } from "@/lib/world";
-import { BREAK_HARDNESS } from "@/lib/game/config";
+import { BREAK_HARDNESS } from "@/lib/game/items";
 import type { InventorySlot, MobEntity } from "@/lib/game/types";
 
 type MiningContext = {

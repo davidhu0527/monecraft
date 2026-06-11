@@ -1,4 +1,4 @@
-import { ARMOR_SLOT_LABELS, ARMOR_SLOTS } from "@/lib/game/config";
+import { ARMOR_SLOT_LABELS, ARMOR_SLOTS } from "@/lib/game/items";
 import { useState } from "react";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
