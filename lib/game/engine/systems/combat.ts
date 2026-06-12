@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ATTACK_AIM_DOT, ATTACK_REACH, EYE_HEIGHT, FIST_DAMAGE } from "@/lib/game/config";
+import type { MobKind } from "@/lib/game/types";
 import type { GameState } from "../state";
 import { lookDirection } from "./playerMotion";
 
@@ -15,10 +16,10 @@ export function weaponDamage(state: GameState): number {
 }
 
 /**
- * Melee attack at the mob nearest the crosshair within reach. Returns whether
- * a mob was hit; the caller (engine) handles death drops and durability.
+ * Melee attack at the mob nearest the crosshair within reach. Returns the kind
+ * of the mob hit (or null); the caller (engine) handles death drops and durability.
  */
-export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void): boolean {
+export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void): MobKind | null {
   const { position } = state.player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
   lookDirection(state.player.yaw, state.player.pitch, scratchForward);
@@ -39,7 +40,7 @@ export function tryAttackMob(state: GameState, damage: number, onMobKilled: (ind
     }
   }
 
-  if (bestIndex < 0) return false;
+  if (bestIndex < 0) return null;
   const mob = state.mobs[bestIndex];
   mob.hp -= damage;
 
@@ -52,5 +53,5 @@ export function tryAttackMob(state: GameState, damage: number, onMobKilled: (ind
   }
 
   if (mob.hp <= 0) onMobKilled(bestIndex);
-  return true;
+  return mob.kind;
 }

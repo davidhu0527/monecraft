@@ -3,7 +3,7 @@ import { BlockId, collidesAt, voxelRaycast } from "@/lib/world";
 import { BARE_HAND_MINE_POWER, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BLOCK_TO_SLOT, BREAK_HARDNESS } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
-import type { FrameInput, GameState } from "../state";
+import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { lookDirection } from "./playerMotion";
 import type { InventorySlot } from "@/lib/game/types";
 
@@ -46,7 +46,7 @@ function addBlockDrop(state: GameState, block: BlockId): void {
 }
 
 /** Advances mining progress while the mouse is held; breaks the block at full progress. */
-export function tickMining(state: GameState, input: FrameInput, dt: number): void {
+export function tickMining(state: GameState, input: FrameInput, dt: number, emit: EmitGameEvent): void {
   if (!input.leftMouseHeld) {
     // Releasing the button abandons progress (matching the crack overlay).
     if (state.mining.progress > 0) resetMining(state);
@@ -90,10 +90,11 @@ export function tickMining(state: GameState, input: FrameInput, dt: number): voi
   addBlockDrop(state, targetBlock as BlockId);
   state.worldMeshDirty = true;
   resetMining(state);
+  emit({ type: "blockBroken", blockId: targetBlock as BlockId });
 }
 
 /** Places the selected block against the targeted face, refusing self-entombment. */
-export function placeSelectedBlock(state: GameState): void {
+export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void {
   const { world } = state;
   const origin = eyePosition(state, scratchEye);
   const direction = lookDirection(state.player.yaw, state.player.pitch, scratchDir);
@@ -120,4 +121,5 @@ export function placeSelectedBlock(state: GameState): void {
   }
 
   state.worldMeshDirty = true;
+  emit({ type: "blockPlaced", blockId: slot.blockId });
 }

@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
-import { MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, REGEN_MIN_HUNGER, SPRINT_BLOCKS_PER_HUNGER, SPRINT_MIN_HUNGER } from "@/lib/game/config";
+import { EYE_HEIGHT, MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, REGEN_MIN_HUNGER, SPRINT_BLOCKS_PER_HUNGER, SPRINT_MIN_HUNGER } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
+import type { MobKind } from "@/lib/game/types";
 
 /**
  * Headless simulation tests: the engine boots a real generated world and runs
@@ -327,6 +329,142 @@ describe("day-night and the spawn director", () => {
     engine.state.dayClock = 60; // midday
     run(engine, 12);
     expect(engine.getSnapshot().hostileCount).toBe(0);
+  });
+});
+
+describe("gameplay events", () => {
+  /** Drops a stationary mob at an offset from the player (test-controlled stats). */
+  function spawnTestMob(engine: GameEngine, kind: MobKind, hostile: boolean, offset: { x: number; y: number; z: number }): void {
+    const { state } = engine;
+    const p = state.player.position;
+    state.mobs.push({
+      id: state.nextMobId++,
+      kind,
+      hostile,
+      hp: 50,
+      position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 12,
+      attackDamage: 2,
+      attackCooldown: 5,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0
+    });
+  }
+
+  test("breaking a block emits blockBroken with the block id", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const px = Math.floor(state.player.position.x);
+    const py = Math.floor(state.player.position.y) - 1;
+    const pz = Math.floor(state.player.position.z);
+    const targetBlock = state.world.get(px, py, pz);
+    state.player.position.x = px + 0.5;
+    state.player.position.z = pz + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    engine.consumeEvents();
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "blockBroken" && event.blockId === targetBlock)).toBe(true);
+  });
+
+  test("placing a block emits blockPlaced with the block id", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    // A clear shooting lane at eye height ending in a stone backstop.
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 3, BlockId.Stone);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" }); // slot 0 holds grass blocks
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "blockPlaced" && event.blockId === BlockId.Grass)).toBe(true);
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Grass);
+  });
+
+  test("eating emits ateFood", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("food", 2);
+    state.selectedSlot = slot;
+    state.hunger = 5;
+    engine.consumeEvents();
+    engine.dispatch({ type: "eatFood" });
+    expect(engine.consumeEvents().some((event) => event.type === "ateFood")).toBe(true);
+    expect(state.hunger).toBeGreaterThan(5);
+  });
+
+  test("jumping and touching down emit jumped and landed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1); // settle
+    engine.consumeEvents();
+    engine.step(1 / 60, input({ keys: ["Space"] }));
+    run(engine, 2); // rise and fall back down
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "jumped")).toBe(true);
+    expect(events.some((event) => event.type === "landed" && event.impact > 0)).toBe(true);
+  });
+
+  test("non-lethal damage emits playerHurt, not died", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.player.position.y += 5; // a hard but survivable fall
+    state.player.velocity.set(0, 0, 0);
+    state.player.onGround = false;
+    engine.consumeEvents();
+    run(engine, 1);
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "playerHurt")).toBe(true);
+    expect(events.some((event) => event.type === "died")).toBe(false);
+    expect(state.hearts).toBeLessThan(MAX_HEARTS);
+  });
+
+  test("a hostile attacking the player emits mobAttacked", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    spawnTestMob(engine, "zombie", true, { x: 1.2, y: 0.9, z: 0 });
+    engine.consumeEvents();
+    run(engine, 0.3);
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "mobAttacked" && event.kind === "zombie")).toBe(true);
+    expect(events.some((event) => event.type === "playerHurt")).toBe(true);
+  });
+
+  test("hitting a mob emits mobHit with its kind", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    // Park a sheep dead ahead at eye height so the aim-dot check passes.
+    spawnTestMob(engine, "sheep", false, { x: 0, y: EYE_HEIGHT, z: -2 });
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" });
+    expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "sheep")).toBe(true);
   });
 });
 
