@@ -71,7 +71,12 @@ function input(overrides: Partial<{ keys: string[]; leftMouseHeld: boolean; poin
 }
 
 /** Steps the engine while piping events and state to the director, like the shell loop. */
-function runWired(engine: GameEngine, director: Awaited<ReturnType<typeof createUnlockedDirector>>["director"], seconds: number, frame: FrameInput = input()): void {
+function runWired(
+  engine: GameEngine,
+  director: Awaited<ReturnType<typeof createUnlockedDirector>>["director"],
+  seconds: number,
+  frame: FrameInput = input()
+): void {
   const dt = 1 / 60;
   for (let t = 0; t < seconds; t += dt) {
     engine.step(dt, frame);

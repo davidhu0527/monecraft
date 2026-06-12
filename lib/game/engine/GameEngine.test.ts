@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
-import { EYE_HEIGHT, MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, REGEN_MIN_HUNGER, SPRINT_BLOCKS_PER_HUNGER, SPRINT_MIN_HUNGER } from "@/lib/game/config";
+import {
+  EYE_HEIGHT,
+  MAX_HUNGER,
+  MAX_HEARTS,
+  PLAYER_HALF_WIDTH,
+  PLAYER_HEIGHT,
+  REGEN_MIN_HUNGER,
+  SPRINT_BLOCKS_PER_HUNGER,
+  SPRINT_MIN_HUNGER
+} from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
