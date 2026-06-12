@@ -18,6 +18,10 @@ export type MoveTickResult = {
   didSprint: boolean;
   didWalk: boolean;
   didJump: boolean;
+  /** Touched down this tick after being airborne. */
+  didLand: boolean;
+  /** Downward speed at touchdown (positive); 0 when didLand is false. */
+  landImpact: number;
   horizontalDistance: number;
 };
 
@@ -136,5 +140,6 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   const moving = horizontalDistance > 1e-4;
   const didSprint = sprinting && moving;
   const didWalk = !didSprint && moving;
-  return { didSprint, didWalk, didJump, horizontalDistance };
+  const didLand = !wasGrounded && player.onGround && vyBeforeMove < 0;
+  return { didSprint, didWalk, didJump, didLand, landImpact: didLand ? -vyBeforeMove : 0, horizontalDistance };
 }

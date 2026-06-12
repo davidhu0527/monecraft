@@ -10,13 +10,14 @@ GameEngine (lib/game/engine/)   headless simulation: all game state, stepped per
 Voxel world (lib/world/)        data + generation + meshing + queries
     ▲  read every frame by
 GameRenderer (lib/game/render/) Three.js: maps simulation state → GPU objects
+AudioDirector (lib/game/audio/)  WebAudio: maps engine events + state → procedural sound
 ```
 
-The engine has **no React, no DOM, no rendering** — it runs (and is tested) headlessly in `bun test`. The renderer and the input controller are the only modules touching Three.js scene objects and DOM listeners respectively.
+The engine has **no React, no DOM, no rendering** — it runs (and is tested) headlessly in `bun test`. The renderer, the audio director, and the input controller are the only modules touching Three.js scene objects, the `AudioContext`, and DOM listeners respectively.
 
 ## React shell (`lib/game/useMinecraftGame.ts`, `components/`)
 
-- `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer` and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` (in bounded catch-up substeps of ≤50 ms, so slow frames — e.g. software GL — don't run the simulation in slow motion) → drain engine events → `minimap.sync(state)` → `renderer.sync(state)` → `renderer.render()`. The minimap must sync **before** the renderer because it reads `state.worldMeshDirty`, which `renderer.sync` clears.
+- `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer`, the `AudioDirector`, and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` (in bounded catch-up substeps of ≤50 ms, so slow frames — e.g. software GL — don't run the simulation in slow motion) → drain engine events (death/respawn handling + `audio.handleEvent`) → `minimap.sync(state)` → `renderer.sync(state)` → `audio.sync(state, dt)` → `renderer.render()`. The minimap must sync **before** the renderer because it reads `state.worldMeshDirty`, which `renderer.sync` clears.
 - UI state arrives as immutable `GameSnapshot`s via `useSyncExternalStore`; the engine replaces the snapshot object only when a visible value changes, so React re-renders are minimal and identity-driven.
 - UI intents (`craft`, `swapSlots`, `selectSlot`, …) are dispatched as engine `Command`s. The only React state in the shell is pure UI concern: pointer lock, transient save messages, renderer failure.
 - WebGL init failure is surfaced as `rendererError` and rendered as a fallback panel instead of crashing.
@@ -52,6 +53,17 @@ Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame.
 - `mobVisuals.ts` — mob id → model map; creates/removes models as mobs spawn/die and animates bob + leg gait from mob state (the simulation knows nothing about legs).
 - `heldItem.ts` / `crackOverlay.ts` — first-person item model and the 8-stage mining crack box (stage = progress / hardness).
 - `minimap.ts` / `minimapColors.ts` — the top-right minimap: pure column sampling (top non-air block, height-shaded `BLOCK_COLORS`) feeding a 2D canvas that rebuilds its 128×128 base only when the player crosses a 16-block grid boundary or `worldMeshDirty` is set (read-only — the renderer owns clearing it), then blits with a yaw-rotated player arrow at ~10 Hz.
+
+## Audio (`lib/game/audio/`)
+
+All sound is procedural — no audio files, mirroring the sprite system. SFX are synthesized by [ZZFX](https://github.com/KilledByAPixel/ZzFX) parameter arrays; music is a generative ambient pad over raw WebAudio nodes.
+
+- `audioDirector.ts` — the shell-side observer, exactly parallel to the renderer: `handleEvent(GameEvent)` plays one-shots (block break/place by material, hurt/eat/jump/land, mob attacks, death/respawn stingers) and `sync(state, dt)` drives everything continuous (footsteps, mining hit ticks, mob ambience, music mood). Music follows `state.daylight` immediately and the biome with 5 s hysteresis, and ducks while paused. The engine never imports this module.
+- `synth.ts` — `SynthBackend`, **the only seam that touches WebAudio for SFX**: renders each `SoundDef` to an `AudioBuffer` once via `ZZFX.buildSamples` and plays it through gain/pan nodes with playback-rate jitter, a 10-voice cap, and per-sound retrigger throttling (which also de-dupes catch-up substep event bursts). Tests inject a recording fake instead.
+- `soundParams.ts` / `materials.ts` — pure data: ZZFX parameter tables per `MaterialGroup`/`MobKind` (tune by ear in the [ZZFX designer](https://killedbyapixel.github.io/ZzFX/)) and the exhaustive `BlockId → MaterialGroup` mapping.
+- `footsteps.ts` / `mobAmbience.ts` / `musicBrain.ts` — pure schedulers/composer (distance-accumulator strides, per-mob randomized call timers with distance gain + look-relative stereo pan, pentatonic random-walk note generation). `musicPlayer.ts` renders notes as detuned pad voices through a lowpass and a procedural convolution reverb.
+- **Lazy unlock invariant**: no `AudioContext` exists until the first user gesture calls `unlock()` — including the `zzfx` import itself, which instantiates one at module scope and is therefore only ever imported dynamically inside `unlock()`. This satisfies the browser autoplay policy, keeps SSR/`bun test` import-safe, and keeps the console clean for the E2E fixture.
+- Volume settings (`settings.ts`) persist under their own localStorage key (`minecraft_audio_v1`) — never part of the world save.
 
 ## Input (`lib/game/input/inputController.ts`)
 

@@ -134,9 +134,11 @@ export class GameEngine {
     }
 
     const move = tickPlayerMotion(state, input, dt, this.applyDamage);
+    if (move.didJump) this.emit({ type: "jumped" });
+    if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
-    tickMining(state, input, dt);
+    tickMining(state, input, dt, this.emit);
     tickDayNight(state, dt);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
@@ -181,17 +183,19 @@ export class GameEngine {
         if (!next) break;
         state.inventory = next;
         state.hunger = restoreHunger(state.hunger);
+        this.emit({ type: "ateFood" });
         break;
       }
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen) break;
-        placeSelectedBlock(state);
+        placeSelectedBlock(state, this.emit);
         break;
       }
       case "attack": {
         if (state.isDead || state.inventoryOpen) break;
-        const hit = tryAttackMob(state, weaponDamage(state), this.removeMobAt);
-        if (hit) {
+        const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt);
+        if (hitKind) {
+          this.emit({ type: "mobHit", kind: hitKind });
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
           resetMining(state);
         }
@@ -260,7 +264,7 @@ export class GameEngine {
 
   getSnapshot = (): GameSnapshot => this.snapshot;
 
-  /** Drains queued one-shot events (death, respawn) for the shell to react to. */
+  /** Drains queued one-shot gameplay events for the shell (death screen, audio). */
   consumeEvents(): GameEvent[] {
     if (this.events.length === 0) return this.events;
     const drained = this.events;
@@ -268,12 +272,19 @@ export class GameEngine {
     return drained;
   }
 
+  private emit = (event: GameEvent): void => {
+    this.events.push(event);
+  };
+
   private applyDamage = (amount: number): void => {
+    const heartsBefore = this.state.hearts;
     const died = applyDamageWithArmor(this.state, amount);
     this.syncEquippedArmor();
     if (died) {
       resetMining(this.state);
-      this.events.push({ type: "died" });
+      this.emit({ type: "died" });
+    } else if (this.state.hearts < heartsBefore) {
+      this.emit({ type: "playerHurt" });
     }
   };
 
@@ -290,7 +301,8 @@ export class GameEngine {
       surfaceYAt: this.surfaceYAt,
       applyDamage: this.applyDamage,
       removeMobAt: this.removeMobAt,
-      rng: this.rng
+      rng: this.rng,
+      emit: this.emit
     };
   }
 

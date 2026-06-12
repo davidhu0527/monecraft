@@ -1,7 +1,10 @@
 import { useState } from "react";
+import type { AudioSettings } from "@/lib/game/audio/audioDirector";
 
 type PauseMenuProps = {
   saveMessage: string;
+  audioSettings: AudioSettings;
+  onAudioSettingsChange: (partial: Partial<AudioSettings>) => void;
   onBack: () => void;
   onSave: () => void;
   onLoad: () => void;
@@ -24,8 +27,23 @@ const CONTROLS: Array<[string, string]> = [
  * The Minecraft-style game menu: shown while the engine is paused, with the
  * classic column of gray beveled buttons over a dimmed (frozen) world.
  */
-export default function PauseMenu({ saveMessage, onBack, onSave, onLoad, onReset }: PauseMenuProps) {
+export default function PauseMenu({ saveMessage, audioSettings, onAudioSettingsChange, onBack, onSave, onLoad, onReset }: PauseMenuProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
+
+  const volumeSlider = (label: string, value: number, onValue: (volume: number) => void) => (
+    <label className="pause-sound-row">
+      <span>{label}</span>
+      <input
+        className="mc-slider"
+        type="range"
+        min={0}
+        max={100}
+        value={Math.round(value * 100)}
+        onChange={(event) => onValue(Math.max(0, Math.min(1, Number(event.target.value) / 100)))}
+        aria-label={`${label} volume`}
+      />
+    </label>
+  );
 
   return (
     <div className="pause-overlay">
@@ -54,6 +72,13 @@ export default function PauseMenu({ saveMessage, onBack, onSave, onLoad, onReset
             Reset World
           </button>
         )}
+        <div className="pause-sound">
+          {volumeSlider("Sound", audioSettings.master, (volume) => onAudioSettingsChange({ master: volume }))}
+          {volumeSlider("Music", audioSettings.music, (volume) => onAudioSettingsChange({ music: volume }))}
+          <button className="mc-button" aria-pressed={audioSettings.muted} onClick={() => onAudioSettingsChange({ muted: !audioSettings.muted })}>
+            {audioSettings.muted ? "Unmute Sound" : "Mute Sound"}
+          </button>
+        </div>
         {saveMessage && <div className="pause-save-message">{saveMessage}</div>}
         <div className="pause-controls">
           {CONTROLS.map(([action, keys]) => (
