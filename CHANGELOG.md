@@ -2,7 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [0.5.0] - 2026-06-13
+
+### Added
+
+- **Animated first-person held item**: a one-shot swing on attack clicks (hit or miss, via a new `attackSwung` engine event), a looping swing while mining, a walk bob scaled by movement speed, an equip dip when switching slots, and a faint idle sway
+- Held tools, weapons, and food are now built by extruding their 16×16 inventory sprites into pixel-thick voxel meshes (one geometry, vertex colors), so the in-hand model always matches the icon; held blocks remain cubes
+- Redesigned knife sprite: a single-edged drop-point blade with a bright cutting edge, dark spine, and riveted handle — clearly distinct from the swords (no crossguard). No save-format or worldgen impact
+- **Procedural audio** — the game has sound, with zero audio assets (everything is synthesized at runtime, like the sprite system):
+  - Block interaction SFX by material (stone/wood/grass/sand/glass/water): break, place, and staged mining hit ticks
+  - Player feedback: surface-aware footsteps, jump and impact-scaled landing, hurt, eating, death/respawn stingers
+  - Mob sounds: idle calls (sheep, chicken, horse, zombie, skeleton, spider) with distance falloff and look-relative stereo pan inside a 24-block earshot, plus attack and melee-hit sounds
+  - Generative background music: a pentatonic ambient pad that brightens and quickens by day, darkens at night, and shifts with the biome (5 s hysteresis at borders); ducks behind the pause menu
+  - Pause-menu Sound section: master and music sliders plus mute, persisted under a separate localStorage key (`minecraft_audio_v1`)
+  - One-shot SFX ride on new engine `GameEvent`s (block broken/placed, hurt, ate, jumped, landed, mob attacked/hit); continuous sound derives from state, mirroring the renderer
+  - New dependency: [zzfx](https://github.com/KilledByAPixel/ZzFX) (~1 KB, MIT) for SFX synthesis; the AudioContext is created only on the first user gesture (autoplay policy)
+  - No save-format or worldgen impact
+
+## [0.4.0] - 2026-06-12
 
 ### Added
 

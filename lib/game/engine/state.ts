@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { VoxelWorld } from "@/lib/world";
+import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
@@ -147,4 +147,18 @@ export type GameSnapshot = {
   capsActive: boolean;
 };
 
-export type GameEvent = { type: "died" } | { type: "respawned" };
+/** One-shot gameplay events for the shell (death screen, audio, ...). */
+export type GameEvent =
+  | { type: "died" }
+  | { type: "respawned" }
+  | { type: "blockBroken"; blockId: BlockId }
+  | { type: "blockPlaced"; blockId: BlockId }
+  | { type: "playerHurt" }
+  | { type: "ateFood" }
+  | { type: "jumped" }
+  | { type: "landed"; impact: number }
+  | { type: "mobAttacked"; kind: MobKind }
+  | { type: "mobHit"; kind: MobKind }
+  | { type: "attackSwung" };
+
+export type EmitGameEvent = (event: GameEvent) => void;

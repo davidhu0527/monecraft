@@ -13,6 +13,8 @@
 
 Stored in localStorage under `SAVE_KEY` (`minecraft_save_v5`, defined in `lib/game/config.ts`). Read/write and restore validation live in `lib/game/save.ts` (the `Storage` is injectable for tests); `GameEngine.serialize()` produces the save from live state, and `lib/game/engine/blockChanges.ts` maintains the block diff.
 
+Audio volume preferences live under a **separate** key (`minecraft_audio_v1`, `lib/game/audio/settings.ts`) and are not part of the world save or its versioning.
+
 ### Version history
 
 - **v2** — same fields as v1, reinterpreted for the 36-slot inventory and 9-slot hotbar.

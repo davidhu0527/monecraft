@@ -33,6 +33,8 @@ export default function MinecraftGame() {
     debugOpen,
     debug,
     saveMessage,
+    audioSettings,
+    updateAudioSettings,
     hotbarSlots,
     recipes,
     maxHearts,
@@ -95,7 +97,17 @@ export default function MinecraftGame() {
         />
       ) : null}
 
-      {paused ? <PauseMenu saveMessage={saveMessage} onBack={resumeNow} onSave={saveNow} onLoad={loadNow} onReset={resetNow} /> : null}
+      {paused ? (
+        <PauseMenu
+          saveMessage={saveMessage}
+          audioSettings={audioSettings}
+          onAudioSettingsChange={updateAudioSettings}
+          onBack={resumeNow}
+          onSave={saveNow}
+          onLoad={loadNow}
+          onReset={resetNow}
+        />
+      ) : null}
 
       <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
 

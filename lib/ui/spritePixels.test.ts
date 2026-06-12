@@ -33,6 +33,22 @@ describe("renderSpritePixels", () => {
     expect(renderSpritePixels("wood_sword")).not.toEqual(renderSpritePixels("gold_sword"));
   });
 
+  test("the knife silhouette is distinct from every sword", () => {
+    const knife = renderSpritePixels("knife");
+    for (const def of ITEM_DEFS) {
+      if (!def.id.endsWith("_sword")) continue;
+      const sword = renderSpritePixels(def.id);
+      expect(knife).not.toEqual(sword);
+      // The knife has no crossguard: the sword's wide row 10 stays narrow.
+      const rowWidth = (pixels: Uint8ClampedArray, y: number) => {
+        let count = 0;
+        for (let x = 0; x < SPRITE_SIZE; x += 1) if (pixels[(y * SPRITE_SIZE + x) * 4 + 3] > 0) count += 1;
+        return count;
+      };
+      expect(rowWidth(knife, 10)).toBeLessThan(rowWidth(sword, 10));
+    }
+  });
+
   test("every tool/weapon material prefix has a palette", () => {
     for (const def of ITEM_DEFS) {
       if (def.kind !== "tool" && (def.kind !== "weapon" || def.id === "knife")) continue;

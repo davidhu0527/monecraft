@@ -101,22 +101,26 @@ const SWORD_GRID = [
   "................"
 ];
 
+// Vertical like the sword so both share one in-hand pose. Reads as a knife:
+// shorter, wider single-edged blade — bright cutting edge (l) on the left,
+// dark spine (M) on the right, drop-point tip, a dark bolster row, and a
+// riveted handle with no crossguard (the sword's signature row).
 const KNIFE_GRID = [
   "................",
-  "................",
-  "........ll......",
-  ".......lml......",
-  ".......lml......",
-  "......lml.......",
-  "......lml.......",
-  ".....lmM........",
-  ".....lmM........",
-  "....MmM.........",
-  "....hH..........",
-  "...hHh..........",
-  "..hHh...........",
-  "..HH............",
-  "................",
+  "......lM........",
+  "......lmM.......",
+  "......lmmM......",
+  "......lmmM......",
+  "......lmmM......",
+  "......lmmM......",
+  "......lmmM......",
+  "......lmmM......",
+  "......MMMM......",
+  "......hhhh......",
+  "......hHhh......",
+  "......hhhh......",
+  "......hHhh......",
+  ".......HH.......",
   "................"
 ];
 
