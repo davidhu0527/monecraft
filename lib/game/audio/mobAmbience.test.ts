@@ -13,7 +13,7 @@ function mulberry32(seed: number): () => number {
 }
 
 function mob(id: number, kind: MobKind, x: number, z: number): AmbientMob {
-  return { id, kind, x, z };
+  return { id, kind, position: { x, z } };
 }
 
 /** Runs the scheduler for `seconds` at 20 Hz and collects every emitted call. */

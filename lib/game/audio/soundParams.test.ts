@@ -13,6 +13,7 @@ import {
   LAND_SOUND,
   MOB_AMBIENT_SOUNDS,
   MOB_ATTACK_SOUNDS,
+  MOB_HIT_SOUND,
   PLACE_SOUNDS,
   RESPAWN_SOUND,
   type SoundDef
@@ -25,6 +26,7 @@ const SINGLES: Record<string, SoundDef> = {
   land: LAND_SOUND,
   hurt: HURT_SOUND,
   eat: EAT_SOUND,
+  mobHit: MOB_HIT_SOUND,
   death: DEATH_SOUND,
   respawn: RESPAWN_SOUND
 };

@@ -13,11 +13,11 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   spider: [4, 10]
 };
 
+/** Structural subset of the engine's MobState — state.mobs passes directly. */
 export type AmbientMob = {
   id: number;
   kind: MobKind;
-  x: number;
-  z: number;
+  position: { x: number; z: number };
 };
 
 export type AmbientCall = {
@@ -57,8 +57,8 @@ export function createMobAmbienceScheduler(rng: () => number = Math.random): Mob
       const rightZ = -Math.sin(playerYaw);
 
       for (const mob of mobs) {
-        const dx = mob.x - playerX;
-        const dz = mob.z - playerZ;
+        const dx = mob.position.x - playerX;
+        const dz = mob.position.z - playerZ;
         const dist = Math.hypot(dx, dz);
         if (dist > MOB_EARSHOT) continue;
 

@@ -128,6 +128,12 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
   spider: { params: zz({ volume: 0.7, randomness: 0.15, frequency: 250, sustain: 0.03, release: 0.1, shape: 4, shapeCurve: 0.8, slide: 3, noise: 1, sustainVolume: 0.7, decay: 0.04, filter: 500 }), minRetriggerMs: 100 }
 };
 
+/** Thwack when the player's melee attack lands on any mob. */
+export const MOB_HIT_SOUND: SoundDef = {
+  params: zz({ volume: 0.7, randomness: 0.1, frequency: 130, sustain: 0.02, release: 0.09, shape: 4, shapeCurve: 1.1, slide: -3, noise: 0.6, sustainVolume: 0.8, decay: 0.03, filter: -550 }),
+  minRetriggerMs: 100
+};
+
 export const JUMP_SOUND: SoundDef = {
   params: zz({ volume: 0.4, frequency: 250, attack: 0.01, sustain: 0.03, release: 0.08, shape: 1, shapeCurve: 1.5, slide: 8 }),
   minRetriggerMs: 150

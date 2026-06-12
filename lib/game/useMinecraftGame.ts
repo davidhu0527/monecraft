@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createAudioDirector, type AudioDirector } from "@/lib/game/audio/audioDirector";
 import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
@@ -50,7 +51,7 @@ type GameContext = { engine: GameEngine; node: HTMLDivElement };
 // inspect the live simulation (single-player client game — nothing to protect).
 declare global {
   interface Window {
-    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController };
+    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController; audio: AudioDirector };
   }
 }
 
@@ -112,18 +113,29 @@ export function useMinecraftGame() {
     const renderer = created.renderer;
     canvasRef.current = renderer.domElement;
 
+    const audio = createAudioDirector();
     const input = createInputController({
       canvas: renderer.domElement,
       engine: gameEngine,
       onResize: () => renderer.handleResize(),
-      onLockChange: setLocked
+      onLockChange: (isLocked) => {
+        // Pointer-lock acquisition is itself a user gesture — a safe unlock
+        // point, and it re-resumes a context suspended by the browser.
+        if (isLocked) audio.unlock();
+        setLocked(isLocked);
+      }
     });
+
+    // Autoplay policy: the AudioContext may only start inside a user gesture.
+    const unlockAudio = () => audio.unlock();
+    document.addEventListener("mousedown", unlockAudio);
+    document.addEventListener("keydown", unlockAudio);
 
     const autoSave = () => persistGame(gameEngine, flashMessage);
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
-    window.__monecraft = { engine: gameEngine, renderer, input };
+    window.__monecraft = { engine: gameEngine, renderer, input, audio };
 
     let minimap: MinimapRenderer | null = null;
     let last = performance.now();
@@ -141,10 +153,12 @@ export function useMinecraftGame() {
       pendingSeconds = Math.min(pendingSeconds + (now - last) / 1000, MAX_STEP_SECONDS * MAX_SUBSTEPS);
       last = now;
 
+      let frameSeconds = 0;
       while (pendingSeconds > 0) {
         const dt = Math.min(pendingSeconds, MAX_STEP_SECONDS);
         gameEngine.step(dt, input.input);
         pendingSeconds -= dt;
+        frameSeconds += dt;
       }
 
       for (const event of gameEngine.consumeEvents()) {
@@ -153,12 +167,14 @@ export function useMinecraftGame() {
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         }
         if (event.type === "respawned") input.clearKeys();
+        audio.handleEvent(event);
       }
 
       if (!minimap && minimapNodeRef.current) minimap = createMinimapRenderer(minimapNodeRef.current);
       // The minimap must read worldMeshDirty before renderer.sync clears it.
       minimap?.sync(gameEngine.state, now);
       renderer.sync(gameEngine.state, now);
+      audio.sync(gameEngine.state, frameSeconds);
       renderer.render();
       animationFrame = requestAnimationFrame(clock);
     };
@@ -171,6 +187,9 @@ export function useMinecraftGame() {
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
       window.removeEventListener("beforeunload", autoSave);
+      document.removeEventListener("mousedown", unlockAudio);
+      document.removeEventListener("keydown", unlockAudio);
+      audio.dispose();
       input.dispose();
       document.exitPointerLock();
       renderer.dispose();
