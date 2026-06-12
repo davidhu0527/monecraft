@@ -164,6 +164,22 @@ describe("audio director", () => {
     expect(volumes[volumes.length - 1].music).toBeCloseTo(0.8, 5);
   });
 
+  test("repeated gestures resume the existing graph instead of rebuilding it", async () => {
+    const fake = createFakeGraph();
+    let creations = 0;
+    const director = createAudioDirector({
+      createGraph: () => {
+        creations += 1;
+        return fake.graph;
+      }
+    });
+    director.unlock();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    director.unlock();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(creations).toBe(1);
+  });
+
   test("a failed graph creation is retried on the next gesture", async () => {
     const fake = createFakeGraph();
     let attempts = 0;
