@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-12
+
 ### Added
 
 - Snow and Cactus blocks (mineable, placeable; cactus deals no contact damage). Snow caps mountain tops above y=68; cacti scatter across dry desert sand
