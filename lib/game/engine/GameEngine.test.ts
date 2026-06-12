@@ -462,6 +462,19 @@ describe("gameplay events", () => {
     expect(events.some((event) => event.type === "playerHurt")).toBe(true);
   });
 
+  test("mobs stay silent while the player is dead", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.isDead = true;
+    state.respawnTimer = 5;
+    spawnTestMob(engine, "zombie", true, { x: 1.2, y: 0.9, z: 0 });
+    engine.consumeEvents();
+    run(engine, 0.5); // mobs keep ticking through the respawn countdown
+    expect(engine.consumeEvents().some((event) => event.type === "mobAttacked")).toBe(false);
+  });
+
   test("hitting a mob emits mobHit with its kind", () => {
     const engine = makeEngine();
     calmDaytime(engine);

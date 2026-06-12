@@ -6,6 +6,10 @@ test("boots without errors and renders the world", async ({ gamePage: page }) =>
   const triangles = await page.evaluate(() => window.__monecraft!.renderer.renderedTriangles());
   expect(triangles).toBeGreaterThan(0);
 
+  // The audio director is wired up (still locked pre-gesture — the shared
+  // console-error fixture proves boot stays clean without any unlock).
+  expect(await page.evaluate(() => Boolean(window.__monecraft!.audio))).toBe(true);
+
   // The engine is alive: the day clock advances between frames.
   const clock1 = await page.evaluate(() => window.__monecraft!.engine.state.dayClock);
   await page.waitForTimeout(200);

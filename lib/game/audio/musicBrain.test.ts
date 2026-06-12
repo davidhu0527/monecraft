@@ -73,6 +73,14 @@ describe("music brain", () => {
     }
   });
 
+  test("a late frame spanning several intervals emits every overdue note", () => {
+    const brain = createMusicBrain(mulberry32(5));
+    const mood = moodFor(0.9, BiomeId.Plains);
+    // One giant dt (~6 day intervals): the catch-up loop must not drop beats.
+    const notes = brain.next(20, mood);
+    expect(notes.length).toBeGreaterThanOrEqual(3);
+  });
+
   test("is deterministic under a seeded rng", () => {
     expect(play(60, 0.9, 42)).toEqual(play(60, 0.9, 42));
     expect(play(60, 0.9, 42)).not.toEqual(play(60, 0.9, 43));
