@@ -15,7 +15,11 @@ Two runners, three layers:
 | Items & recipes      | `lib/game/config.test.ts`                       | Referential integrity: every recipe/drop/armor mapping points at a real item                                                                              |
 | Inventory algebra    | `lib/game/inventory.test.ts`                    | Stack math, durability, crafting (including the refuse-on-full behavior), armor equip rules                                                               |
 | Save format          | `lib/game/save.test.ts`                         | Round-trips, legacy-shape parsing, corrupt-data rejection                                                                                                 |
-| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, hunger/regen gates, mining, commands (incl. pause/debug/respawn), death/respawn, night spawning, save round-trips      |
+| Simulation           | `lib/game/engine/GameEngine.test.ts`            | Headless gameplay: boot, movement, hunger/regen gates, mining, commands (incl. pause/debug/respawn), death/respawn, night spawning, save round-trips, gameplay event emission (block break/place, hurt, eat, jump/land, mob attack/hit) |
+| Audio data           | `lib/game/audio/{materials,soundParams}.test.ts` | Every `BlockId` has a material group; every group/`MobKind` has well-formed ZZFX sound entries                                                            |
+| Audio schedulers     | `lib/game/audio/{footsteps,mobAmbience,musicBrain}.test.ts` | Stride cadence and airborne reset; earshot gating, distance gain, look-relative pan, seeded call intervals; notes stay on scale, day/night/biome moods, deterministic under a seeded rng |
+| Audio routing        | `lib/game/audio/audioDirector.test.ts`          | With an injected fake `SynthBackend`: events → correct sound tables, staged mining ticks, footsteps while walking, pause ducking, mute/volume application |
+| Audio settings       | `lib/game/audio/settings.test.ts`               | Round-trips, corrupt-data fallback, range clamping (own localStorage key, not the world save)                                                             |
 | UI sprites           | `lib/ui/*.test.ts`                              | Every item id renders a non-empty deterministic 16×16 sprite; HUD icon variants (full/half/container) differ                                              |
 | Minimap sampling     | `lib/game/render/minimapColors.test.ts`         | Top-block detection (water visible), height shading, per-block colors                                                                                     |
 | Renderer logic       | `lib/game/render/{mobVisuals,heldItem}.test.ts` | Model lifecycle (create/reuse/remove/dispose), positioning, bob, item swaps — pure Three.js, no DOM                                                       |
@@ -32,6 +36,8 @@ bun run test:e2e                   # builds and starts the prod server itself
 E2E tests assert through `window.__monecraft` (the live engine/renderer/input handle — also handy in the browser console) instead of pixels; the one render check uses `renderer.renderedTriangles()`. The shared fixture fails any test that logs a console error.
 
 **happy-dom has no 2D canvas context**: generated sprites degrade to a transparent data URL in component tests — assert sprite pixels in the pure `lib/ui` tests and component structure via roles/labels/`data-icon` attributes, not image sources.
+
+**happy-dom has no `AudioContext`** (and the `zzfx` package instantiates one at import): everything above the `SynthBackend` seam is pure and tested with a recording fake (see `audioDirector.test.ts`); the WebAudio glue itself (`synth.ts`, `musicPlayer.ts`) plus real synthesis quality belong to the manual gameplay pass.
 
 **Known limitation:** headless Chromium cannot engage pointer lock (`requestPointerLock` never resolves). `acquirePointerLock` in `e2e/helpers.ts` tries the real thing, then falls back to forcing the input controller's lock flag — so key/mouse → engine wiring is still tested end to end, but real lock acquisition and look-around feel remain in the manual gameplay pass, along with visual quality. That manual pass is now only required for changes to pointer-lock handling or visual appearance.
 

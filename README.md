@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hutusi/monecraft/actions/workflows/ci.yml/badge.svg)](https://github.com/hutusi/monecraft/actions/workflows/ci.yml)
 
-A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves and ores, first-person movement, mining and building, crafting, armor, mobs, a day-night cycle, and localStorage saves. Single-player, browser-only.
+A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves and ores, first-person movement, mining and building, crafting, armor, mobs, a day-night cycle, procedural sound and music (no audio files — everything is synthesized), and localStorage saves. Single-player, browser-only.
 
 ## Controls
 
@@ -13,7 +13,7 @@ A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves 
 - `Right click` or `E`: Place selected block
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `U`: Emergency unstuck
-- `Esc`: Pause menu (save / load / reset live there) · `F3`: Debug overlay
+- `Esc`: Pause menu (save / load / reset and the sound/music volume sliders live there) · `F3`: Debug overlay
 
 ## Run
 
