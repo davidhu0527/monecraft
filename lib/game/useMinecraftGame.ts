@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { createAudioDirector, type AudioDirector } from "@/lib/game/audio/audioDirector";
+import { createAudioDirector, DEFAULT_AUDIO_SETTINGS, type AudioDirector, type AudioSettings } from "@/lib/game/audio/audioDirector";
+import { readAudioSettings, writeAudioSettings } from "@/lib/game/audio/settings";
 import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
@@ -69,8 +70,29 @@ export function useMinecraftGame() {
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [rendererError, setRendererError] = useState<string | null>(null);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const minimapNodeRef = useRef<HTMLDivElement | null>(null);
+  const audioRef = useRef<AudioDirector | null>(null);
+  // The rAF effect must not re-run on volume tweaks — it reads through a ref.
+  const audioSettingsRef = useRef(audioSettings);
+
+  // Persisted volumes load after mount: render never touches localStorage
+  // (SSR), and the setState hops a microtask like the renderer-error report.
+  useEffect(() => {
+    const stored = readAudioSettings();
+    audioSettingsRef.current = stored;
+    audioRef.current?.setSettings(stored);
+    queueMicrotask(() => setAudioSettings(stored));
+  }, []);
+
+  const updateAudioSettings = useCallback((partial: Partial<AudioSettings>) => {
+    const next = { ...audioSettingsRef.current, ...partial };
+    audioSettingsRef.current = next;
+    setAudioSettings(next);
+    writeAudioSettings(next);
+    audioRef.current?.setSettings(next);
+  }, []);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -114,6 +136,8 @@ export function useMinecraftGame() {
     canvasRef.current = renderer.domElement;
 
     const audio = createAudioDirector();
+    audio.setSettings(audioSettingsRef.current);
+    audioRef.current = audio;
     const input = createInputController({
       canvas: renderer.domElement,
       engine: gameEngine,
@@ -189,6 +213,7 @@ export function useMinecraftGame() {
       window.removeEventListener("beforeunload", autoSave);
       document.removeEventListener("mousedown", unlockAudio);
       document.removeEventListener("keydown", unlockAudio);
+      audioRef.current = null;
       audio.dispose();
       input.dispose();
       document.exitPointerLock();
@@ -225,6 +250,8 @@ export function useMinecraftGame() {
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
+    audioSettings,
+    updateAudioSettings,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     maxHearts: MAX_HEARTS,
