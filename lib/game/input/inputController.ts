@@ -66,6 +66,11 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       return;
     }
 
+    if (evt.code === "KeyV") {
+      engine.dispatch({ type: "toggleCameraView" });
+      return;
+    }
+
     if (evt.code.startsWith("Digit")) {
       const idx = Number.parseInt(evt.code.slice(5), 10) - 1;
       if (idx >= 0) engine.dispatch({ type: "selectSlot", index: idx });

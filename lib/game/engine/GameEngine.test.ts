@@ -271,6 +271,25 @@ describe("commands", () => {
     expect(engine.getSnapshot().debug).toBeNull();
   });
 
+  test("toggleCameraView cycles first → third-rear → third-front → first", () => {
+    const engine = makeEngine();
+    expect(engine.getSnapshot().cameraMode).toBe("first");
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("third-rear");
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("third-front");
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("first");
+  });
+
+  test("camera mode works while dead and is never persisted", () => {
+    const engine = makeEngine();
+    engine.state.isDead = true;
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("third-rear");
+    expect("cameraMode" in engine.serialize()).toBe(false);
+  });
+
   test("respawn command skips the countdown and restores full stats", () => {
     const engine = makeEngine();
     calmDaytime(engine); // hostiles at dawn could re-kill the fresh respawn
