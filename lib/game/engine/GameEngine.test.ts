@@ -488,6 +488,33 @@ describe("gameplay events", () => {
     engine.dispatch({ type: "attack" });
     expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "sheep")).toBe(true);
   });
+
+  test("attacking emits attackSwung even when nothing is hit", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" }); // empty air ahead
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "attackSwung")).toBe(true);
+    expect(events.some((event) => event.type === "mobHit")).toBe(false);
+  });
+
+  test("attacking emits no attackSwung while dead or in the inventory", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.inventoryOpen = true;
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" });
+    expect(engine.consumeEvents().some((event) => event.type === "attackSwung")).toBe(false);
+
+    state.inventoryOpen = false;
+    state.isDead = true;
+    engine.dispatch({ type: "attack" });
+    expect(engine.consumeEvents().some((event) => event.type === "attackSwung")).toBe(false);
+  });
 });
 
 describe("persistence", () => {

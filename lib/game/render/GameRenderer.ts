@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buildGeometryRegion, createBlockAtlasTexture, VoxelWorld } from "@/lib/world";
-import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS } from "@/lib/game/config";
+import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS, WALK_SPEED } from "@/lib/game/config";
 import { sunAngleAt } from "@/lib/game/engine/systems/dayNight";
 import type { GameState } from "@/lib/game/engine/state";
 import { createCrackOverlay, type CrackOverlayView } from "./crackOverlay";
@@ -91,7 +91,11 @@ export class GameRenderer {
   sync(state: GameState, timeMs: number): void {
     this.syncCamera(state);
     this.syncWorldMesh(state);
-    this.heldItem.update(state.inventory[state.selectedSlot]);
+    this.heldItem.update(state.inventory[state.selectedSlot], {
+      timeMs,
+      miningActive: state.mining.targetKey !== "",
+      moveFactor: state.player.onGround ? Math.min(1, Math.hypot(state.player.velocity.x, state.player.velocity.z) / WALK_SPEED) : 0
+    });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
     this.syncDayNight(state);
@@ -99,6 +103,11 @@ export class GameRenderer {
 
   render(): void {
     this.webgl.render(this.scene, this.camera);
+  }
+
+  /** One-shot held-item swing for attack clicks (hit or miss). */
+  triggerSwing(): void {
+    this.heldItem.triggerSwing();
   }
 
   handleResize(): void {

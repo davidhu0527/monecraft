@@ -191,6 +191,7 @@ export function useMinecraftGame() {
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         }
         if (event.type === "respawned") input.clearKeys();
+        if (event.type === "attackSwung") renderer.triggerSwing();
         audio.handleEvent(event);
       }
 
