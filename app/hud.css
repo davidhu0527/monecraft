@@ -98,6 +98,11 @@
   cursor: pointer;
 }
 
+.mc-slider:focus-visible {
+  background: var(--mc-button-hover);
+  border-color: #c3cbe5 #34394d #34394d #c3cbe5;
+}
+
 .mc-slider::-webkit-slider-thumb {
   appearance: none;
   width: 12px;

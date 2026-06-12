@@ -75,7 +75,7 @@ export default function PauseMenu({ saveMessage, audioSettings, onAudioSettingsC
         <div className="pause-sound">
           {volumeSlider("Sound", audioSettings.master, (volume) => onAudioSettingsChange({ master: volume }))}
           {volumeSlider("Music", audioSettings.music, (volume) => onAudioSettingsChange({ music: volume }))}
-          <button className="mc-button" onClick={() => onAudioSettingsChange({ muted: !audioSettings.muted })}>
+          <button className="mc-button" aria-pressed={audioSettings.muted} onClick={() => onAudioSettingsChange({ muted: !audioSettings.muted })}>
             {audioSettings.muted ? "Unmute Sound" : "Mute Sound"}
           </button>
         </div>

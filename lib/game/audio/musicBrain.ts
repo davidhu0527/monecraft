@@ -66,29 +66,31 @@ export type MusicBrain = {
 export function createMusicBrain(rng: () => number = Math.random): MusicBrain {
   let degree = 0;
   let noteTimer = 1.5; // short lead-in before the first note
-  const notes: NoteEvent[] = [];
 
   return {
     next(dt, mood) {
-      notes.length = 0;
+      const notes: NoteEvent[] = [];
       noteTimer -= dt;
-      if (noteTimer > 0) return notes;
-      noteTimer = mood.noteIntervalSec * (0.7 + rng() * 0.6);
+      // Accumulate (+=) rather than reset so a late frame's overshoot carries
+      // into the next interval instead of being dropped.
+      while (noteTimer <= 0) {
+        noteTimer += mood.noteIntervalSec * (0.7 + rng() * 0.6);
 
-      // Mostly stepwise wandering, with an occasional larger leap.
-      const roll = rng();
-      const step = roll < 0.4 ? -1 : roll < 0.8 ? 1 : roll < 0.9 ? -2 : 2;
-      degree = Math.max(0, Math.min(mood.scale.length - 1, degree + step));
+        // Mostly stepwise wandering, with an occasional larger leap.
+        const roll = rng();
+        const step = roll < 0.4 ? -1 : roll < 0.8 ? 1 : roll < 0.9 ? -2 : 2;
+        degree = Math.max(0, Math.min(mood.scale.length - 1, degree + step));
 
-      const freq = mood.rootHz * 2 ** (mood.scale[degree] / 12);
-      notes.push({
-        freq,
-        durationSec: mood.noteIntervalSec * (1.6 + rng() * 0.8),
-        velocity: 0.6 + rng() * 0.4
-      });
-      // A sparse high sparkle an octave up, layered over the pad note.
-      if (rng() < 0.15) {
-        notes.push({ freq: freq * 2, durationSec: mood.noteIntervalSec * 0.8, velocity: 0.25 + rng() * 0.15 });
+        const freq = mood.rootHz * 2 ** (mood.scale[degree] / 12);
+        notes.push({
+          freq,
+          durationSec: mood.noteIntervalSec * (1.6 + rng() * 0.8),
+          velocity: 0.6 + rng() * 0.4
+        });
+        // A sparse high sparkle an octave up, layered over the pad note.
+        if (rng() < 0.15) {
+          notes.push({ freq: freq * 2, durationSec: mood.noteIntervalSec * 0.8, velocity: 0.25 + rng() * 0.15 });
+        }
       }
       return notes;
     }

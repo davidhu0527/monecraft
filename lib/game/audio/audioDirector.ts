@@ -137,19 +137,29 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
 
   return {
     unlock() {
-      if (disposed || unlocking) {
+      if (disposed || graph || unlocking) {
         graph?.resume();
         return;
       }
       unlocking = true;
-      void Promise.resolve(createGraph()).then((created) => {
-        if (disposed) {
-          created.dispose();
-          return;
-        }
-        graph = created;
-        applyVolumes();
-      });
+      void Promise.resolve(createGraph())
+        .then((created) => {
+          if (disposed) {
+            created.dispose();
+            return;
+          }
+          graph = created;
+          // The constructor gesture may have expired by this microtask —
+          // resume explicitly so the context reliably leaves "suspended".
+          created.resume();
+          applyVolumes();
+        })
+        .catch(() => {
+          // Audio stays optional; the next gesture retries from scratch.
+        })
+        .finally(() => {
+          unlocking = false;
+        });
     },
 
     handleEvent(event) {

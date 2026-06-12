@@ -17,7 +17,8 @@ export function createFootstepScheduler(): FootstepScheduler {
       }
       traveled += Math.hypot(dx, dz);
       if (traveled < STEP_DISTANCE) return false;
-      traveled = 0;
+      // Carry the overshoot so cadence stays true at low frame rates.
+      traveled -= STEP_DISTANCE;
       return true;
     }
   };

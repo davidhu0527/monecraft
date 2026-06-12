@@ -164,6 +164,26 @@ describe("audio director", () => {
     expect(volumes[volumes.length - 1].music).toBeCloseTo(0.8, 5);
   });
 
+  test("a failed graph creation is retried on the next gesture", async () => {
+    const fake = createFakeGraph();
+    let attempts = 0;
+    const director = createAudioDirector({
+      createGraph: () => {
+        attempts += 1;
+        return attempts === 1 ? Promise.reject(new Error("no audio")) : fake.graph;
+      }
+    });
+    director.unlock();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    director.handleEvent({ type: "playerHurt" });
+    expect(fake.played.length).toBe(0);
+    director.unlock();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    director.handleEvent({ type: "playerHurt" });
+    expect(fake.played.length).toBe(1);
+    expect(attempts).toBe(2);
+  });
+
   test("mute zeroes the master volume", async () => {
     const { director, volumes } = await createUnlockedDirector();
     director.setSettings({ master: 0.9, music: 0.5, muted: true });

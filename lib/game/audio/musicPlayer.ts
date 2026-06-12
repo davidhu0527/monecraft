@@ -42,11 +42,13 @@ export function createMusicPlayer(ctx: AudioContext, destination: AudioNode, bra
   lowpass.connect(dry).connect(destination);
   lowpass.connect(convolver).connect(wet).connect(destination);
 
-  let activeVoices = 0;
+  // Live-voice teardown hooks: dispose() must silence notes mid-tail, not
+  // just unhook the shared routing while started oscillators play on.
+  const liveVoiceCleanups = new Set<() => void>();
   let disposed = false;
 
   const playNote = (freq: number, durationSec: number, velocity: number): void => {
-    if (activeVoices >= MAX_PAD_VOICES) return;
+    if (liveVoiceCleanups.size >= MAX_PAD_VOICES) return;
     const now = ctx.currentTime;
     const voiceGain = ctx.createGain();
     voiceGain.gain.setValueAtTime(0, now);
@@ -60,17 +62,28 @@ export function createMusicPlayer(ctx: AudioContext, destination: AudioNode, bra
     oscs[1].type = "sine";
     oscs[0].frequency.value = freq * 1.003;
     oscs[1].frequency.value = freq * 0.997;
-    activeVoices += 1;
+
+    const cleanup = (): void => {
+      liveVoiceCleanups.delete(cleanup);
+      for (const osc of oscs) {
+        osc.onended = null;
+        try {
+          osc.stop();
+        } catch {
+          // already stopped
+        }
+        osc.disconnect();
+      }
+      voiceGain.disconnect();
+    };
+    liveVoiceCleanups.add(cleanup);
+
     let ended = 0;
     for (const osc of oscs) {
       osc.connect(voiceGain);
       osc.onended = () => {
-        osc.disconnect();
         ended += 1;
-        if (ended === oscs.length) {
-          voiceGain.disconnect();
-          activeVoices -= 1;
-        }
+        if (ended === oscs.length) cleanup();
       };
       osc.start(now);
       osc.stop(now + durationSec + 0.05);
@@ -86,6 +99,7 @@ export function createMusicPlayer(ctx: AudioContext, destination: AudioNode, bra
     },
     dispose() {
       disposed = true;
+      for (const cleanup of [...liveVoiceCleanups]) cleanup();
       padInput.disconnect();
       lowpass.disconnect();
       dry.disconnect();

@@ -76,10 +76,12 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       }
     }
 
-    if (activeHostile && attackDistance < 4 && verticalGap < 1.6 && hasLineOfSight && mob.attackTimer <= 0) {
+    // !isDead: mobs keep ticking through the respawn countdown, but biting a
+    // corpse should neither sound nor re-arm the attack cooldown.
+    if (!isDead && activeHostile && attackDistance < 4 && verticalGap < 1.6 && hasLineOfSight && mob.attackTimer <= 0) {
       deps.emit({ type: "mobAttacked", kind: mob.kind });
       deps.applyDamage(mob.attackDamage);
-      if (!isDead && distanceToPlayer > 0.001) {
+      if (distanceToPlayer > 0.001) {
         scratchToPlayer.normalize().multiplyScalar(4.2);
         playerVelocity.x += scratchToPlayer.x;
         playerVelocity.z += scratchToPlayer.z;
