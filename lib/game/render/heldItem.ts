@@ -9,6 +9,8 @@ export type HeldItemFrame = {
   miningActive: boolean;
   /** 0..1 horizontal speed relative to walk speed — scales the walk bob. */
   moveFactor: number;
+  /** False in third person — the body's hand shows the item instead. */
+  visible: boolean;
 };
 
 export type HeldItemView = {
@@ -47,6 +49,13 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
 
   return {
     update(slot, frame) {
+      root.visible = frame.visible;
+      if (!frame.visible) {
+        // Drop queued swings so they don't replay when the view returns.
+        swingQueued = false;
+        return;
+      }
+
       const nextKey = slot?.id && slot.count > 0 && slot.kind ? `${slot.id}` : "";
       if (nextKey !== key) {
         clear();

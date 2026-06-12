@@ -56,3 +56,7 @@ export const SAVE_KEY = "minecraft_save_v5";
 // Rendering
 export const RENDER_RADIUS = 90;
 export const RENDER_GRID = 20;
+// Third-person camera boom, clamped against walls with a margin that keeps
+// the near plane (0.1) out of the blocking block.
+export const THIRD_PERSON_DISTANCE = 4;
+export const THIRD_PERSON_MARGIN = 0.2;

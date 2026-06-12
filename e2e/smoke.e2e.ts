@@ -70,6 +70,22 @@ test("holding the mouse mines the block underfoot", async ({ gamePage: page }) =
   await page.mouse.up();
 });
 
+test("V cycles the camera views and the scene keeps rendering", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  const cameraMode = () => page.evaluate(() => window.__monecraft!.engine.state.cameraMode);
+
+  expect(await cameraMode()).toBe("first");
+  await page.keyboard.press("v");
+  expect(await cameraMode()).toBe("third-rear");
+  // The third-person scene (player body included) still draws.
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.renderer.renderedTriangles())).toBeGreaterThan(0);
+
+  await page.keyboard.press("v");
+  expect(await cameraMode()).toBe("third-front");
+  await page.keyboard.press("v");
+  expect(await cameraMode()).toBe("first");
+});
+
 test("the pause menu freezes the game and resumes it", async ({ gamePage: page }) => {
   await calmDaytime(page);
   await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
