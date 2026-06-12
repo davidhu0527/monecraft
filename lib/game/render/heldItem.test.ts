@@ -109,6 +109,32 @@ describe("heldItem", () => {
     view.dispose();
   });
 
+  test("switching items mid-swing does not carry the swing to the new item", () => {
+    const camera = new THREE.PerspectiveCamera();
+    const view = createHeldItemView(camera);
+    const holder = heldHolder(camera);
+
+    view.update(createSlot("knife", 1), frame(-1000));
+    view.triggerSwing();
+    view.update(createSlot("knife", 1), frame(0));
+    view.update(createSlot("wood_pickaxe", 1), frame(SWING_MS / 2)); // switch mid-swing
+    // The swing arc pushes posZ forward; equip and idle sway never touch it.
+    expect(holder.position.z).toBeCloseTo(BASE_POSE.posZ);
+    view.dispose();
+  });
+
+  test("switching items while mining does not carry the swing to the new item", () => {
+    const camera = new THREE.PerspectiveCamera();
+    const view = createHeldItemView(camera);
+    const holder = heldHolder(camera);
+
+    view.update(createSlot("wood_pickaxe", 1), frame(-1000));
+    view.update(createSlot("wood_pickaxe", 1), frame(0, { miningActive: true }));
+    view.update(createSlot("knife", 1), frame(SWING_MS / 2)); // mining stopped by the switch
+    expect(holder.position.z).toBeCloseTo(BASE_POSE.posZ);
+    view.dispose();
+  });
+
   test("equip dips the item after an item switch", () => {
     const camera = new THREE.PerspectiveCamera();
     const view = createHeldItemView(camera);

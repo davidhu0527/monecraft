@@ -72,6 +72,11 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
       const nextKey = slot?.id && slot.count > 0 && slot.kind ? `${slot.id}` : "";
       if (nextKey !== key) {
         clear();
+        // The new item starts from its own equip transition — don't let it
+        // inherit the previous item's swing phase.
+        swingQueued = false;
+        swingStartMs = -Infinity;
+        wasMining = false;
         if (slot && nextKey) {
           mesh = buildModel(slot, nextKey);
           holder.add(mesh);
