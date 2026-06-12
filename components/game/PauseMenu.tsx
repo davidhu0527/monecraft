@@ -19,6 +19,7 @@ const CONTROLS: Array<[string, string]> = [
   ["Inventory", "I"],
   ["Eat food", "F"],
   ["Hotbar", "1-9"],
+  ["Camera view", "V"],
   ["Debug overlay", "F3"],
   ["Emergency unstuck", "U"]
 ];
