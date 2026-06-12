@@ -193,6 +193,7 @@ export class GameEngine {
       }
       case "attack": {
         if (state.isDead || state.inventoryOpen) break;
+        this.emit({ type: "attackSwung" });
         const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt);
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
