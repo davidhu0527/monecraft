@@ -28,6 +28,23 @@ describe("voxelRaycast", () => {
     expect(Math.abs(diff.x) + Math.abs(diff.y) + Math.abs(diff.z)).toBe(1);
   });
 
+  test("reports the distance where the ray enters the hit cell", () => {
+    const world = emptyWorld();
+    world.set(8, 5, 5, BlockId.Stone);
+    const result = voxelRaycast(world, new THREE.Vector3(2.5, 5.5, 5.5), new THREE.Vector3(1, 0, 0), 10);
+    expect(result).not.toBeNull();
+    // Origin x=2.5 to the x=8 cell face is 5.5 units along the ray.
+    expect(result!.distance).toBeCloseTo(5.5);
+  });
+
+  test("distance is zero when the origin cell is already solid", () => {
+    const world = emptyWorld();
+    world.set(5, 5, 5, BlockId.Stone);
+    const result = voxelRaycast(world, new THREE.Vector3(5.5, 5.5, 5.5), new THREE.Vector3(1, 0, 0), 5);
+    expect(result).not.toBeNull();
+    expect(result!.distance).toBe(0);
+  });
+
   test("returns null when no solid block is within maxDist", () => {
     const world = emptyWorld();
     world.set(12, 5, 5, BlockId.Stone);

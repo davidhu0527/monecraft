@@ -4,6 +4,8 @@ import { VoxelWorld } from "./voxelWorld";
 export type RaycastResult = {
   hit: THREE.Vector3;
   previous: THREE.Vector3;
+  /** Ray parameter where the ray enters the hit cell (0 when the origin cell is already solid). */
+  distance: number;
 };
 
 // DDA voxel traversal. `previous` is the last empty cell before the hit —
@@ -35,7 +37,7 @@ export function voxelRaycast(world: VoxelWorld, origin: THREE.Vector3, direction
   let previous = new THREE.Vector3(x, y, z);
 
   while (t <= maxDist) {
-    if (world.isSolid(x, y, z)) return { hit: new THREE.Vector3(x, y, z), previous };
+    if (world.isSolid(x, y, z)) return { hit: new THREE.Vector3(x, y, z), previous, distance: t };
     previous = new THREE.Vector3(x, y, z);
 
     if (tMaxX < tMaxY) {
