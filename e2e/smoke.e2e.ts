@@ -103,6 +103,48 @@ test("right-click still places a block when not aimed at an interactive one", as
   expect(placed.after).toBe(1); // grass placed
 });
 
+test("a chest opens, stores an item, and keeps it across a reload", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
+
+  // Place a chest at the block underfoot and aim straight down at it.
+  await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    const x = Math.floor(state.player.position.x);
+    const y = Math.floor(state.player.position.y) - 1;
+    const z = Math.floor(state.player.position.z);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    state.blockChanges.set(x, y, z, 27); // BlockId.Chest
+  });
+
+  // Right-click opens it (interact wins over placement); the chest grid appears.
+  await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "placeBlock" }));
+  await expect(page.getByTestId("chest-grid")).toBeVisible();
+
+  // Move the starter grass stack (inventory slot 0) into the first chest slot
+  // through the same command the panel dispatches (chest slot 0 = base + 0).
+  await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "moveStack", from: 0, to: 1000 }));
+  const storedId = await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    return state.containers.get(state.openContainerIndex!)![0].id;
+  });
+  expect(storedId).toBe("grass");
+
+  // Persist and reload: the chest block-entity survives in the v4 save.
+  await page.evaluate(() => localStorage.setItem("minecraft_save_v5", JSON.stringify(window.__monecraft!.engine.serialize())));
+  await page.reload();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  const restoredId = await page.evaluate(() => {
+    const containers = [...window.__monecraft!.engine.state.containers.values()];
+    return containers[0]?.[0]?.id ?? null;
+  });
+  expect(restoredId).toBe("grass");
+});
+
 test("V cycles the camera views and the scene keeps rendering", async ({ gamePage: page }) => {
   await calmDaytime(page);
   const cameraMode = () => page.evaluate(() => window.__monecraft!.engine.state.cameraMode);
@@ -167,7 +209,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v5"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(3);
+  expect(JSON.parse(saved!).version).toBe(4);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

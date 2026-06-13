@@ -107,6 +107,12 @@ waking (a fresh dawn).
 
 `HOTBAR_SLOTS`, `INVENTORY_SLOTS`, `MAX_STACK_SIZE`. **Save-sensitive** — see below.
 
+`CHEST_SLOTS` (27) is the storage capacity of a placed chest, read by the interact,
+mining, and save paths (`lib/game/engine/systems/interact.ts`, `…/mining.ts`,
+`lib/game/save.ts`) and the inventory panel grid. It is **soft** save-sensitive:
+shrinking it after chests have been saved with items past the new limit would drop
+those overflow slots on load (`readContainers` rebuilds a `CHEST_SLOTS`-length array).
+
 ## Persistence & rendering
 
 `AUTOSAVE_INTERVAL_MS`, `SAVE_KEY`, `STUCK_RESET_SECONDS`, `RENDER_RADIUS`,
