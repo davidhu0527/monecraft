@@ -18,6 +18,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: mc-fade-in 140ms ease-out;
 }
 
 .pause-menu {
@@ -50,6 +51,7 @@
   outline: 2px solid rgba(0, 0, 0, 0.85);
   cursor: pointer;
   user-select: none;
+  transition: background-color 80ms ease;
 }
 
 .mc-button:hover,
@@ -60,6 +62,7 @@
 
 .mc-button:active {
   border-color: #2c2c2c #a8a8a8 #a8a8a8 #2c2c2c;
+  transform: translateY(1px);
 }
 
 .mc-button:disabled {
