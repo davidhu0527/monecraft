@@ -53,6 +53,18 @@ into instant sunlight. `HOSTILE_CAP` × `HOSTILE_SPAWN_INTERVAL_SECONDS` bounds 
 crowded a night gets. Tests aim daylight explicitly (a `calmDaytime` helper) to
 avoid first-night aggro.
 
+## Weather (cosmetic)
+
+`WEATHER_CYCLE_SECONDS`, `WEATHER_RAIN_FRACTION`.
+
+Read by `systems/weather.ts`. Purely visual/audio — weather **does not** touch
+spawning, daylight, or any balance dial. Time is split into `WEATHER_CYCLE_SECONDS`
+(180) windows, and a seeded hash of the window index makes `WEATHER_RAIN_FRACTION`
+(~0.35, so roughly one window in three) precipitate, with the player's biome
+choosing the form (snow in the mountains, clear in desert/ocean, rain elsewhere).
+`state.weather` is transient — never saved. Raise the fraction for a wetter world;
+shorten the cycle for more frequent, briefer showers.
+
 ## Progression — mining & combat reach
 
 `MINE_REACH`, `MINING_RATE`, `BARE_HAND_MINE_POWER`, `FIST_DAMAGE`, `ATTACK_REACH`,
