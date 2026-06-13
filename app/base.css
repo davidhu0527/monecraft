@@ -14,9 +14,14 @@
   --mc-button-hover: #7f8caf;
   /* Monospace stack, kept for the F3 debug readout (column alignment). */
   --mc-font-mono: "Lucida Console", Monaco, "Courier New", monospace;
-  /* Generated noise tiles (set at runtime by installUiTiles). */
+  /* Generated noise tiles (set at runtime by installUiTiles). The chrome grain
+     tiles default to `none` so panels fall back to their flat color pre-install
+     and during SSR. */
   --mc-tile-dirt: none;
   --mc-tile-stone: none;
+  --mc-tile-panel: none;
+  --mc-tile-well: none;
+  --mc-tile-button: none;
 }
 
 * {

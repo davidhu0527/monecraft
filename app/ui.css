@@ -208,7 +208,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 6;
-  background: var(--mc-panel);
+  background: var(--mc-tile-panel), var(--mc-panel);
   border-style: solid;
   border-width: 3px;
   border-color: var(--mc-bevel-light) var(--mc-bevel-dark) var(--mc-bevel-dark) var(--mc-bevel-light);
@@ -268,14 +268,14 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  background: var(--mc-slot-well);
+  background: var(--mc-tile-well), var(--mc-slot-well);
   border-style: solid;
   border-width: 2px;
   border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
 }
 
 .inv-slot:hover {
-  background: #a3a3a3;
+  background: var(--mc-tile-well), #a3a3a3;
 }
 
 .inv-slot.active::after {
@@ -325,14 +325,14 @@
   gap: 6px;
   padding: 5px 7px;
   cursor: pointer;
-  background: var(--mc-slot-well);
+  background: var(--mc-tile-well), var(--mc-slot-well);
   border-style: solid;
   border-width: 2px;
   border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
 }
 
 .recipe-entry:hover:not(:disabled) {
-  background: #a3a3a3;
+  background: var(--mc-tile-well), #a3a3a3;
 }
 
 .recipe-entry:disabled {
