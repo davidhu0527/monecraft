@@ -3,6 +3,7 @@ import { buildGeometryRegion, createBlockAtlasTexture, voxelRaycast, VoxelWorld 
 import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS, THIRD_PERSON_DISTANCE, THIRD_PERSON_MARGIN, WALK_SPEED } from "@/lib/game/config";
 import { sunAngleAt } from "@/lib/game/engine/systems/dayNight";
 import type { GameState } from "@/lib/game/engine/state";
+import type { PlayerPalette } from "@/lib/game/playerSkins";
 import { cameraOffsetDirection, computeCameraPose } from "./cameraView";
 import { createCrackOverlay, type CrackOverlayView } from "./crackOverlay";
 import { createHeldItemView, type HeldItemView } from "./heldItem";
@@ -119,6 +120,11 @@ export class GameRenderer {
   triggerSwing(): void {
     this.heldItem.triggerSwing();
     this.playerVisuals.triggerSwing();
+  }
+
+  /** Applies a skin preset's palette to the player body (live recolor). */
+  setPlayerSkin(palette: PlayerPalette): void {
+    this.playerVisuals.setPalette(palette);
   }
 
   handleResize(): void {

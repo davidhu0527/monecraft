@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DEFAULT_PLAYER_PALETTE, type PlayerPalette } from "@/lib/game/playerSkins";
 
 /**
  * The player's own body, visible only in third person. Box-mesh humanoid in
@@ -18,19 +19,20 @@ export type PlayerModel = {
   rightLeg: THREE.Group;
   /** Hand anchor inside the right arm — the held item model goes here. */
   itemHolder: THREE.Group;
+  /** One material per palette slot, for live recolors; also listed in `materials`. */
+  paletteMaterials: Record<keyof PlayerPalette, THREE.MeshStandardMaterial>;
   materials: THREE.Material[];
   geometries: THREE.BufferGeometry[];
 };
 
-const SKIN = 0xc68e63;
-const HAIR = 0x4a3220;
-const SHIRT = 0x2e8b83;
-const PANTS = 0x3b3f8f;
-const SHOES = 0x4a3527;
-const EYE_WHITE = 0xffffff;
-const EYE_PUPIL = 0x2b2b45;
+/** Recolors an existing model in place — no allocation, safe to call live. */
+export function applyPalette(model: PlayerModel, palette: PlayerPalette): void {
+  for (const key of Object.keys(model.paletteMaterials) as Array<keyof PlayerPalette>) {
+    model.paletteMaterials[key].color.setHex(palette[key]);
+  }
+}
 
-export function createPlayerModel(): PlayerModel {
+export function createPlayerModel(palette: PlayerPalette = DEFAULT_PLAYER_PALETTE): PlayerModel {
   const group = new THREE.Group();
   const materials: THREE.Material[] = [];
   const geometries: THREE.BufferGeometry[] = [];
@@ -46,10 +48,20 @@ export function createPlayerModel(): PlayerModel {
     return new THREE.Mesh(geometry, mat);
   };
 
-  const skinMat = material(SKIN);
-  const shirtMat = material(SHIRT);
-  const pantsMat = material(PANTS);
-  const shoeMat = material(SHOES);
+  // `materials` stays the single disposal authority; this record only names them.
+  const paletteMaterials: PlayerModel["paletteMaterials"] = {
+    skin: material(palette.skin),
+    hair: material(palette.hair),
+    shirt: material(palette.shirt),
+    pants: material(palette.pants),
+    shoes: material(palette.shoes),
+    eyeWhite: material(palette.eyeWhite),
+    eyePupil: material(palette.eyePupil)
+  };
+  const skinMat = paletteMaterials.skin;
+  const shirtMat = paletteMaterials.shirt;
+  const pantsMat = paletteMaterials.pants;
+  const shoeMat = paletteMaterials.shoes;
 
   // Legs: hip pivots at y=0.72, meshes hanging below (pants + shoe band).
   const makeLeg = (x: number) => {
@@ -100,19 +112,17 @@ export function createPlayerModel(): PlayerModel {
   head.position.set(0, 1.32, 0);
   const skull = box(0.4, 0.4, 0.4, skinMat);
   skull.position.y = 0.23;
-  const hair = box(0.42, 0.12, 0.42, material(HAIR));
+  const hair = box(0.42, 0.12, 0.42, paletteMaterials.hair);
   hair.position.y = 0.4;
   head.add(skull, hair);
-  const eyeWhite = material(EYE_WHITE);
-  const eyePupil = material(EYE_PUPIL);
   for (const side of [-1, 1]) {
-    const white = box(0.09, 0.07, 0.02, eyeWhite);
+    const white = box(0.09, 0.07, 0.02, paletteMaterials.eyeWhite);
     white.position.set(side * 0.09, 0.26, -0.2);
-    const pupil = box(0.04, 0.07, 0.02, eyePupil);
+    const pupil = box(0.04, 0.07, 0.02, paletteMaterials.eyePupil);
     pupil.position.set(side * 0.07, 0.26, -0.205);
     head.add(white, pupil);
   }
   group.add(head);
 
-  return { group, head, leftArm, rightArm, leftLeg, rightLeg, itemHolder, materials, geometries };
+  return { group, head, leftArm, rightArm, leftLeg, rightLeg, itemHolder, paletteMaterials, materials, geometries };
 }

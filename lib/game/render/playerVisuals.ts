@@ -2,8 +2,9 @@ import * as THREE from "three";
 import { WALK_SPEED } from "@/lib/game/config";
 import type { CameraMode } from "@/lib/game/engine/state";
 import type { InventorySlot } from "@/lib/game/types";
+import type { PlayerPalette } from "@/lib/game/playerSkins";
 import { buildItemModel, type ItemModel } from "./itemModel";
-import { createPlayerModel } from "./playerModel";
+import { applyPalette, createPlayerModel } from "./playerModel";
 import { computePlayerPose } from "./playerPose";
 
 /** The slice of GameState the player body needs — narrow so tests stay light. */
@@ -27,6 +28,8 @@ export type PlayerVisuals = {
   sync(state: PlayerVisualsState, timeMs: number): void;
   /** Queues a one-shot arm swing (attack click); latched on the next sync. */
   triggerSwing(): void;
+  /** Recolors the body in place (skin preset change) — live-safe. */
+  setPalette(palette: PlayerPalette): void;
   dispose(): void;
 };
 
@@ -97,6 +100,10 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
 
     triggerSwing() {
       swingQueued = true;
+    },
+
+    setPalette(palette) {
+      applyPalette(model, palette);
     },
 
     dispose() {

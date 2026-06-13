@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { createPlayerModel } from "@/lib/game/render/playerModel";
+import { applyPalette, createPlayerModel } from "@/lib/game/render/playerModel";
+import { getSkinPreset } from "@/lib/game/playerSkins";
 
 describe("createPlayerModel", () => {
   test("builds a humanoid with pivoting limbs and a neck pivot", () => {
@@ -25,6 +26,35 @@ describe("createPlayerModel", () => {
     const model = createPlayerModel();
     expect(model.itemHolder.parent).toBe(model.rightArm);
     expect(model.itemHolder.position.y).toBeLessThan(-0.5);
+  });
+
+  test("builds with a given palette on named materials", () => {
+    const zombie = getSkinPreset("zombie").palette;
+    const model = createPlayerModel(zombie);
+    expect(model.paletteMaterials.skin.color.getHex()).toBe(zombie.skin);
+    expect(model.paletteMaterials.shirt.color.getHex()).toBe(zombie.shirt);
+    expect(model.paletteMaterials.eyeWhite.color.getHex()).toBe(zombie.eyeWhite);
+  });
+
+  test("applyPalette recolors the same material instances without allocating", () => {
+    const model = createPlayerModel();
+    const skinMat = model.paletteMaterials.skin;
+    const materialCount = model.materials.length;
+
+    const robot = getSkinPreset("robot").palette;
+    applyPalette(model, robot);
+
+    expect(model.paletteMaterials.skin).toBe(skinMat);
+    expect(skinMat.color.getHex()).toBe(robot.skin);
+    expect(model.paletteMaterials.eyeWhite.color.getHex()).toBe(robot.eyeWhite);
+    expect(model.materials.length).toBe(materialCount);
+  });
+
+  test("palette materials are all tracked for disposal", () => {
+    const model = createPlayerModel();
+    for (const mat of Object.values(model.paletteMaterials)) {
+      expect(model.materials).toContain(mat);
+    }
   });
 
   test("tracks every material and geometry for disposal", () => {
