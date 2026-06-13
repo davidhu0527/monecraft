@@ -48,6 +48,25 @@ export type MobState = {
   ageTimer: number;
 };
 
+/**
+ * Simulation-side projectile (arrow) — transient, never serialized, like mobs.
+ * Shared by the player's bow, ranged skeletons, and the boss; `fromPlayer` is
+ * the hit filter (player arrows hit mobs, mob arrows hit the player).
+ */
+export type ProjectileState = {
+  id: number;
+  position: THREE.Vector3;
+  /** m/s; gravity-integrated each step. yaw/pitch are derived from it for the renderer. */
+  velocity: THREE.Vector3;
+  yaw: number;
+  pitch: number;
+  damage: number;
+  knockback: number;
+  fromPlayer: boolean;
+  /** Seconds remaining before the arrow despawns mid-air. */
+  ttl: number;
+};
+
 export type MiningState = {
   /** "x,y,z" of the block being mined, or "" when idle. */
   targetKey: string;
@@ -112,6 +131,9 @@ export type GameState = {
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
+  /** In-flight arrows (session-only; never serialized). */
+  projectiles: ProjectileState[];
+  nextProjectileId: number;
   dayClock: number;
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
@@ -209,6 +231,7 @@ export type GameEvent =
   | { type: "mobHit"; kind: MobKind }
   | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
   | { type: "mobSpawned"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "arrowHit"; x: number; y: number; z: number; target: "block" | "mob" | "player" }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

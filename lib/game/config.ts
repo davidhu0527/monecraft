@@ -39,6 +39,17 @@ export const FIST_DAMAGE = 6;
 export const ATTACK_REACH = 4.5;
 export const ATTACK_AIM_DOT = 0.89; // how precisely the camera must face a mob
 
+// Ranged combat — arrows are transient projectiles shared by the bow, ranged
+// skeletons, and the boss. Gravity is below the player's so the arc stays flat
+// and readable; substepping the swept block/entity tests stops fast arrows from
+// tunnelling through 1-block walls or thin mobs between frames.
+export const ARROW_SPEED = 34; // m/s launch speed (skeletons/boss scale this down)
+export const ARROW_GRAVITY = 14; // < player GRAVITY (26)
+export const ARROW_TTL = 4; // seconds before an in-flight arrow despawns
+export const ARROW_HIT_RADIUS = 0.45; // hit padding around the arrow point
+export const ARROW_MAX_SUBSTEPS = 4; // cap on per-frame integration substeps
+export const ARROW_MAX_SEGMENT = 0.5; // blocks per substep before the swept tests run
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;

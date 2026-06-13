@@ -43,6 +43,7 @@ import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
+import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
 import { spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
@@ -121,6 +122,8 @@ export class GameEngine {
       capsActive: false,
       mobs: [],
       nextMobId: 1,
+      projectiles: [],
+      nextProjectileId: 1,
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
@@ -188,7 +191,11 @@ export class GameEngine {
     // Death: only mobs and the respawn countdown tick while dead.
     if (state.isDead) {
       if (tickRespawnTimer(state, dt)) this.respawn();
-      else tickMobs(state, dt, this.mobTickDeps);
+      else {
+        tickMobs(state, dt, this.mobTickDeps);
+        // Keep ticking so in-flight arrows clear; applyDamage no-ops while dead.
+        tickProjectiles(state, dt, this.mobTickDeps);
+      }
       this.refreshSnapshot();
       return;
     }
@@ -213,6 +220,7 @@ export class GameEngine {
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);
 
