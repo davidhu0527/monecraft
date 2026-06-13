@@ -29,6 +29,7 @@ import { createFootstepScheduler } from "./footsteps";
 import { createMobAmbienceScheduler } from "./mobAmbience";
 import { createMusicBrain, moodFor } from "./musicBrain";
 import { createMusicPlayer, type MusicPlayer } from "./musicPlayer";
+import { createRainLoop, type RainLoop } from "./rainLoop";
 import { createSynthBackend, type SynthBackend } from "./synth";
 
 export type AudioSettings = {
@@ -45,6 +46,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = { master: 0.8, music: 0.6, 
 export type AudioGraph = {
   backend: SynthBackend;
   music: MusicPlayer;
+  rain: RainLoop;
   setVolumes(master: number, music: number): void;
   resume(): void;
   dispose(): void;
@@ -86,10 +88,12 @@ async function createDefaultGraph(): Promise<AudioGraph> {
 
   const backend = createSynthBackend(ctx, sfxGain, (...params) => ZZFX.buildSamples(...params), ZZFX.sampleRate);
   const music = createMusicPlayer(ctx, musicGain, createMusicBrain());
+  const rain = createRainLoop(ctx, masterGain);
 
   return {
     backend,
     music,
+    rain,
     setVolumes(master, musicVolume) {
       masterGain.gain.value = master;
       musicGain.gain.value = musicVolume;
@@ -98,6 +102,7 @@ async function createDefaultGraph(): Promise<AudioGraph> {
       if (ctx.state === "suspended") void ctx.resume();
     },
     dispose() {
+      rain.dispose();
       music.dispose();
       backend.dispose();
       void ctx.close();
@@ -292,6 +297,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         pendingBiomeSeconds = 0;
       }
       graph.music.sync(dt, moodFor(state.daylight, stableBiome));
+
+      // Rain bed follows rain intensity; snow is silent, and it goes quiet on pause.
+      graph.rain.setIntensity(!state.paused && state.weather.kind === "rain" ? state.weather.intensity : 0);
 
       if (ducked !== state.paused) {
         ducked = state.paused;

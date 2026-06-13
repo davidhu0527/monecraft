@@ -40,6 +40,7 @@ function createFakeGraph() {
       },
       dispose: () => {}
     },
+    rain: { setIntensity: () => {}, dispose: () => {} },
     setVolumes: (master, music) => {
       volumes.push({ master, music });
     },

@@ -11,6 +11,7 @@ import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 
 const scratchEye = new THREE.Vector3();
@@ -46,6 +47,8 @@ export class GameRenderer {
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
+  private readonly precip: PrecipitationView;
+  private readonly overcastGray = new THREE.Color(0x6b7480);
   private lastSyncMs = Number.NaN;
   private dustDistance = 0;
   private lastFootX = Number.NaN;
@@ -96,6 +99,7 @@ export class GameRenderer {
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
+    this.precip = createPrecipitation(this.scene);
   }
 
   get domElement(): HTMLCanvasElement {
@@ -116,6 +120,7 @@ export class GameRenderer {
       this.emitFootstepDust(state);
     }
     this.syncCamera(state);
+    if (!state.paused) this.precip.sync(state, dtMs, this.camera.position);
     this.syncWorldMesh(state);
     this.heldItem.update(state.inventory[state.selectedSlot], {
       timeMs,
@@ -280,6 +285,7 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.precip.dispose();
     this.sky.dispose();
     this.particles.dispose();
     this.playerVisuals.dispose();
@@ -341,6 +347,16 @@ export class GameRenderer {
     this.hemiLight.intensity = 0.24 + daylight * 1.05;
 
     this.liveSky.copy(this.nightSky).lerp(this.daySky, daylight);
+
+    // Overcast: precipitation pulls the sky toward gray, dims the light, and
+    // draws the fog in for an enclosed feel. Cosmetic — daylight itself is unchanged.
+    const overcast = state.weather.kind === "clear" ? 0 : state.weather.intensity;
+    if (overcast > 0) {
+      this.liveSky.lerp(this.overcastGray, overcast * 0.6);
+      this.sun.intensity *= 1 - overcast * 0.5;
+      this.hemiLight.intensity *= 1 - overcast * 0.35;
+    }
     this.scene.fog?.color.copy(this.liveSky);
+    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.far = 200 - overcast * 90;
   }
 }

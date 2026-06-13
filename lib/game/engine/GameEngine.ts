@@ -31,6 +31,7 @@ import { createBlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
+import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
@@ -111,6 +112,7 @@ export class GameEngine {
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
+      weather: { kind: "clear", intensity: 0 },
       sleepTimer: 0,
       spawnPoint: null,
       mining: { targetKey: "", progress: 0 },
@@ -184,6 +186,7 @@ export class GameEngine {
     tickHealthRegen(state, dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickDayNight(state, dt);
+    tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
