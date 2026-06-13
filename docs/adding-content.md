@@ -66,6 +66,17 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - The crop handler is the reference: wheat stage ids are consecutive, so growth is `block + 1`, and the mature stage has no handler so it stops. Because crops are ordinary block edits, they persist for free via the save's block diff — no new save fields.
 - Tunables live in `config.ts`; the headless test pattern (a minimal `GameState`, a scripted rng that maps a sample onto a known column) is in `randomTicks.test.ts`.
 
+## A worldgen structure (houses, dungeons, …)
+
+- Structures are placed in `lib/world/generation.ts` at the end of the `generateWorld` pipeline. Mirror `placeHouse`/`placeDungeons`: loop a `GEN.<thing>Count`, sample positions, validate, and write blocks with `world.set`. Append your pass **last** so later passes don't overwrite it, and add the count to the frozen `GEN` object.
+- **Any block write changes the deterministic output**, so this breaks the worldgen hash. Re-baseline the `generation.test.ts` digests and bump `SAVE_KEY` per the [testing.md](testing.md) policy; add a structural probe test (count your blocks, assert they generate) that survives the re-baseline.
+- If the structure needs its positions known at runtime (dungeons re-derive chest/spawner indices on load), expose a **derive pass** like `collectDungeonSites`: factor placement into a shared routine that either writes blocks or records indices, drawing from a **dedicated PRNG seeded only from `world.seed`** (not the shared gen stream) with a fixed number of draws per structure, and validate against **seed-pure** terrain (`terrainTopY`, `getBiome`) — never `highestSolidY`, which a cave or player edit can shift out from under the derive pass.
+
+## A loot table / lazy block-entity fill
+
+- Drop tables are pure data + a roll function: copy the `{ itemId, min, max, chance? }` shape and the `clampUnit` roll loop from `lib/game/mobLoot.ts` / `lib/game/dungeonLoot.ts`. Add a `*.test.ts` asserting every `itemId` exists in `ITEM_DEFS` and that rolls are deterministic under an injected rng.
+- To fill a **worldgen-placed** block-entity (a dungeon chest) whose contents can't live in the block-diff baseline: fill it lazily on first access, seeded from `world.seed ^ voxelIndex` (`dungeonLoot.seededRng`), and persist a set of _accessed_ indices (additive save field) — gate the fill on that set, **not** on whether the container is currently non-empty, or an emptied-then-reloaded entity re-rolls. `lib/game/engine/systems/dungeon.ts` (`fillDungeonChestIfUnlooted`), shared by the open and break paths, is the reference; see the exploit-guard test in `GameEngine.test.ts`.
+
 ## A new mechanic
 
 Add a system module under `lib/game/engine/systems/` (a function over `GameState`), give it a slot in the `GameEngine.step` sequence, and put its tunables in `lib/game/config.ts`. If the UI triggers it, add a `Command` variant. Write its headless test next to it.

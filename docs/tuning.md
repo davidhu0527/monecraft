@@ -41,7 +41,8 @@ hunger pressure indirectly throttles both combat recovery and escape speed. Keep
 ## Danger — day-night & the mob director
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,
-`HOSTILE_BURN_ABOVE_DAYLIGHT`, `HOSTILE_SPAWN_INTERVAL_SECONDS`, `HOSTILE_CAP`.
+`HOSTILE_BURN_ABOVE_DAYLIGHT`, `HOSTILE_SPAWN_INTERVAL_SECONDS`, `HOSTILE_CAP`,
+`SPAWNER_INTERVAL_SECONDS`, `SPAWNER_ACTIVATION_RADIUS`, `SPAWNER_LOCAL_CAP`.
 
 Read by `systems/dayNight.ts`, `systems/spawnDirector.ts`, and `systems/mobAI.ts`.
 `DAY_CYCLE_SECONDS` (240) sets the whole rhythm — a shorter day means more frequent
@@ -52,6 +53,13 @@ them ordered `spawn ≤ spider_aggro` and `burn` well above both, or mobs will s
 into instant sunlight. `HOSTILE_CAP` × `HOSTILE_SPAWN_INTERVAL_SECONDS` bounds how
 crowded a night gets. Tests aim daylight explicitly (a `calmDaytime` helper) to
 avoid first-night aggro.
+
+**Dungeon spawners** are a separate, time-independent danger source: while the
+player is within `SPAWNER_ACTIVATION_RADIUS` (16) of an intact spawner, it drips
+one hostile every `SPAWNER_INTERVAL_SECONDS` (8) up to `SPAWNER_LOCAL_CAP` (6)
+clustered nearby — all still under the shared `HOSTILE_CAP`. Lower the interval or
+raise the local cap to make dungeons nastier. The dungeon count itself is a
+worldgen constant (`GEN.dungeonCount`, see below).
 
 ## Weather (cosmetic)
 
@@ -128,10 +136,12 @@ tolerated before the auto-unstuck teleport fires.
 
 Change these only with care:
 
-- **`SAVE_KEY`** (`"minecraft_save_v5"`) is the localStorage key name. Note it's
-  versioned independently of the save **schema** (currently v4, per
+- **`SAVE_KEY`** (`"minecraft_save_v6"`) is the localStorage key name. Note it's
+  versioned independently of the save **schema** (currently v5, per
   [save-format.md](save-format.md)) — renaming `SAVE_KEY` orphans every existing
   player's save. Don't bump it to express a schema change; add a migration instead.
+  It was bumped v5 → v6 for the 0.7.0 dungeon worldgen — a deliberate terrain
+  change that invalidates old block-diffs, which **is** a legitimate reason to bump.
 - **`INVENTORY_SLOTS` / `HOTBAR_SLOTS` / `MAX_STACK_SIZE`** affect the saved
   inventory layout. `save.ts` already migrates the v1 (40-slot) → v2 (36-slot)
   change; altering these again needs a matching migration or old saves break.
@@ -140,4 +150,7 @@ Change these only with care:
 - **Worldgen is not tuned here.** Terrain/ore/structure constants live in the
   frozen `GEN` object in `generation.ts` and are a byte-identical save contract
   pinned by hash tests — changing them requires the re-baseline policy in
-  [testing.md](testing.md).
+  [testing.md](testing.md). This includes **`GEN.dungeonCount`** (28, how many
+  dungeon rooms are attempted) and the dungeon loot tables / tier odds in
+  `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
+  changing the _placement_ count or geometry is).

@@ -83,6 +83,15 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           if (face === "side" && y === 7) c = tone(base, 0.58); // lid joint band
           if (face === "side" && x >= 7 && x <= 8 && y >= 6 && y <= 9) c = tone([0.62, 0.64, 0.68], 0.9 + n * 0.2); // metal latch
         }
+        if (block === BlockId.MossyCobblestone) {
+          if (n > 0.8) c = tone([0.5, 0.52, 0.5], 1.05); // pale cobble chunks
+          if (n < 0.32) c = tone([0.2, 0.4, 0.16], 0.85 + n * 0.5); // moss patches in the cracks
+        }
+        if (block === BlockId.Spawner) {
+          // A dark iron cage over a faint ember core — reads as a Minecraft spawner.
+          const bar = x % 5 === 0 || y % 5 === 0;
+          c = bar ? tone([0.32, 0.34, 0.4], 0.85 + n * 0.25) : tone([0.5, 0.16, 0.12], 0.5 + n * 0.6);
+        }
 
         ctx.fillStyle = rgb(c);
         ctx.fillRect(ox + x, oy + y, 1, 1);

@@ -64,6 +64,13 @@ export const WAKE_DAY_PHASE = 0.07;
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;
 
+// Dungeon spawners. A spawner drips one hostile every interval while the player
+// is within the activation radius, up to a local cluster cap (and the shared
+// global HOSTILE_CAP). Time-independent — dungeons are dark.
+export const SPAWNER_INTERVAL_SECONDS = 8;
+export const SPAWNER_ACTIVATION_RADIUS = 16;
+export const SPAWNER_LOCAL_CAP = 6;
+
 // Animal breeding. Feeding a passive animal puts it "in love" for a window; two
 // in-love adults of the same kind within range spawn a baby that grows up after
 // a timer. The passive cap and the wheat/seed cost bound the population.
@@ -87,7 +94,9 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-export const SAVE_KEY = "minecraft_save_v5";
+// Bumped to v6 with the dungeon worldgen: dungeons change the deterministic
+// world baseline, so old block-diffs would index against the wrong terrain.
+export const SAVE_KEY = "minecraft_save_v6";
 
 // Rendering
 export const RENDER_RADIUS = 90;

@@ -4,6 +4,7 @@ import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE,
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
+import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import type { InventorySlot } from "@/lib/game/types";
 
@@ -52,6 +53,8 @@ function addBlockDrop(state: GameState, block: BlockId, rng: () => number): void
  * removed and a pickedUp toast announces what was retrieved.
  */
 function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): boolean {
+  // Breaking an unopened dungeon chest still pays out its loot.
+  fillDungeonChestIfUnlooted(state, idx);
   const container = state.containers.get(idx);
   const items = container?.filter((slot) => slot.id && slot.count > 0) ?? [];
   if (items.length > 0) {

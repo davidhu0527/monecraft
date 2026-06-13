@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld, buildGeometryRegion, generateWorld } from "@/lib/world";
+import { BiomeId, BlockId, VoxelWorld, buildGeometryRegion, collectDungeonSites, generateWorld } from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -33,9 +33,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "b5fdbdb52db110be4d963c2eb30ae5678ac46dd8c3ca63baccf98b464059d5c3"],
-    [1, "4ff7cf20eabc45506c83314afa370f8f09107b1f6a9a93865fb10681c8b8456d"],
-    [999999937, "ac9e6f83a447e9194a230ef6f771db8da7173ebd291244b1cd10196ab903b109"]
+    [1337, "8621d825353b26bb455811a79c49a662b26263a04dc88bab2c23521cf72716da"],
+    [1, "04b9288619397c4beba76ae2037b11b2b73394df1f20ee125cdbe0ac82f4a5e8"],
+    [999999937, "6cc58e8a8cfb6978937da3b181e3d1f00b94245b7a8025947a0c4ca10879d065"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -43,7 +43,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("788cb3a2952929975d18d11a47e789d324f7df76be47912a0b4221b07ad88b58");
+      expect(hashBytes(fullWorld().blocks)).toBe("0f6b871af063a53744f4e3bb561f6ece8183374b8347e88f1a71184679503ce9");
     },
     { timeout: 60000 }
   );
@@ -148,6 +148,51 @@ describe("world content balance", () => {
   );
 });
 
+describe("dungeons", () => {
+  test(
+    "dungeons generate underground with chests, spawners, and mossy cobble, clear of spawn",
+    () => {
+      const world = fullWorld();
+      const sites = collectDungeonSites(world);
+      expect(sites.chestIndices.length).toBeGreaterThan(0);
+      expect(sites.spawnerIndices.length).toBeGreaterThan(0);
+
+      const chestSet = new Set(sites.chestIndices);
+      const spawnerSet = new Set(sites.spawnerIndices);
+      const cx = world.sizeX / 2;
+      const cz = world.sizeZ / 2;
+
+      let chests = 0;
+      let spawners = 0;
+      let mossy = 0;
+      for (let x = 0; x < world.sizeX; x += 1) {
+        for (let z = 0; z < world.sizeZ; z += 1) {
+          for (let y = 0; y < world.sizeY; y += 1) {
+            const block = world.get(x, y, z);
+            if (block === BlockId.Chest) {
+              chests += 1;
+              // Every generated chest must be a known dungeon site — this is what
+              // gates lazy loot fill, so a mismatch would mean re-rollable loot.
+              expect(chestSet.has(world.index(x, y, z))).toBe(true);
+              // No dungeon loot in the immediate spawn area.
+              expect(Math.hypot(x - cx, z - cz)).toBeGreaterThanOrEqual(30);
+            } else if (block === BlockId.Spawner) {
+              spawners += 1;
+              expect(spawnerSet.has(world.index(x, y, z))).toBe(true);
+            } else if (block === BlockId.MossyCobblestone) {
+              mossy += 1;
+            }
+          }
+        }
+      }
+      expect(chests).toBeGreaterThan(0);
+      expect(spawners).toBeGreaterThan(0);
+      expect(mossy).toBeGreaterThan(0);
+    },
+    { timeout: 60000 }
+  );
+});
+
 describe("meshing", () => {
   test(
     "geometry for a generated region is byte-identical",
@@ -155,8 +200,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1342776);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("2e86e767dc462d7770538409b2faab359cfc82e2978205ff94dcf34a4fd187cb");
+      expect(positions.count).toBe(1357176);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("aee5f8b3be9fe85fe0e3598a4c215bc78d2b51fd58b921e335d65476c835275e");
     },
     { timeout: 60000 }
   );

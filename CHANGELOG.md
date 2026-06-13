@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-14
+
+### Added
+
+- **Dungeons & loot**: digging underground now turns up small cobblestone rooms (speckled with mossy cobble) sealed in the rock, well clear of spawn — the game's first real exploration payoff, and a found-loot purpose for chests. All procedural, **zero new assets**
+  - Each dungeon holds 1–2 **pre-filled loot chests** and a central **mob spawner**. Loot is tiered (`lib/game/dungeonLoot.ts`): common chests carry food, low ores, and the occasional stone pickaxe (bone always drops, so a chest is never empty); a 25% rare roll adds the payoff — diamond/sapphire ore, a ruby/sapphire sword, helmet/chestplate, or a rare diamond pickaxe
+  - **Spawners** drip a hostile (zombie/skeleton/spider) onto the room floor every ~8 s while you're within ~16 blocks, up to 6 clustered nearby (under the global hostile cap). They're time-independent (dungeons are dark); **mining the spawner block out** stops it for good (it's hard and drops nothing). New `mobSpawned` event drives a synthesized low whoosh and a dark conjuring smoke puff
+  - New **MossyCobblestone** (mineable into a `mossy_cobble` item, found-only) and **Spawner** blocks, both with procedurally-painted atlas tiles
+  - **The lazy-loot design** solves an infinite-loot trap: dungeon chests are placed by deterministic worldgen, so their contents can't live in the block-diff save. Filling them eagerly would let a player empty a chest, reload (the empty chest is dropped from the save), and find fresh loot. Instead the engine fills each chest lazily on **first open or break** — loot seeded from `world.seed ^ voxelIndex` so it's reproducible until you reach it — and records the index in a persisted `lootedChests` set. Gating on "has this been accessed", not "is it currently empty", closes the re-roll. The set of _which_ indices are dungeon chests/spawners is session-only, re-derived from the seed each load via `collectDungeonSites` (which replays the placement math against a dedicated seed-only PRNG and seed-pure terrain estimates, never `highestSolidY`, so it can't diverge from generation)
+  - **Save format v5** (additive `lootedChests` field; `migrateSaveV4toV5` is a pure version bump) and **`SAVE_KEY` bumped `minecraft_save_v5` → `minecraft_save_v6`**: the dungeon worldgen changes the deterministic terrain baseline, so **existing saved worlds are discarded** (a deliberate, documented re-baseline — worldgen SHA-256 digests and the in-region meshing snapshot were re-rolled; the structural probes confirm the surface is untouched since dungeons are wholly underground)
+
 ## [0.6.0] - 2026-06-13
 
 ### Added

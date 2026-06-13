@@ -70,6 +70,7 @@ export type GameTimers = {
   jumpBudget: number;
   stuckTimer: number;
   hostileSpawnTimer: number;
+  spawnerTimer: number;
   daylightHudTimer: number;
   debugHudTimer: number;
   randomTickTimer: number;
@@ -97,6 +98,12 @@ export type GameState = {
   containers: Map<number, InventorySlot[]>;
   /** Voxel index of the chest open in the inventory panel, or null. */
   openContainerIndex: number | null;
+  /** Worldgen dungeon chest voxel indices (session; re-derived from the seed each load). */
+  dungeonChestIndices: Set<number>;
+  /** Worldgen dungeon spawner voxel indices (session; re-derived from the seed each load). */
+  dungeonSpawnerIndices: Set<number>;
+  /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
+  lootedDungeonChests: Set<number>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;
@@ -130,6 +137,7 @@ export function createTimers(): GameTimers {
     jumpBudget: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
+    spawnerTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
@@ -200,6 +208,7 @@ export type GameEvent =
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
   | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "mobSpawned"; kind: MobKind; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

@@ -195,6 +195,24 @@ export class GameRenderer {
           size: 0.18
         });
         break;
+      case "mobSpawned":
+        // A dark smoke puff conjured from the spawner.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 0.3,
+          z: event.z,
+          count: 16,
+          color: [0.18, 0.16, 0.22],
+          speed: 1.8,
+          spread: 1.2,
+          gravity: -2,
+          drag: 1.8,
+          life: [0.5, 1.0],
+          size: 0.2,
+          upBias: 0.5,
+          colorJitter: 0.05
+        });
+        break;
       case "ateFood":
         this.particles.emitBurst({
           x: state.player.position.x,

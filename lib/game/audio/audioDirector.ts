@@ -17,6 +17,7 @@ import {
   MOB_DEATH_SOUND,
   MOB_FED_SOUND,
   MOB_HIT_SOUND,
+  MOB_SPAWN_SOUND,
   PLACE_SOUNDS,
   PLANT_SOUND,
   RESPAWN_SOUND,
@@ -206,6 +207,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "mobDied":
           backend.play(MOB_DEATH_SOUND);
+          break;
+        case "mobSpawned":
+          backend.play(MOB_SPAWN_SOUND);
           break;
         case "died":
           backend.play(DEATH_SOUND);
