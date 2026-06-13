@@ -699,6 +699,17 @@ describe("beds and sleep", () => {
     expect(engine.state.daylight).toBeGreaterThan(0.28); // woke to morning
   });
 
+  test("pausing is ignored while sleeping so the fade can't stall", () => {
+    const engine = makeEngine();
+    engine.state.dayClock = 180; // night
+    engine.state.sleepTimer = 1.0; // mid-fade
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false); // pause refused during sleep
+    run(engine, 1.2); // the fade completes and the clock jumps
+    expect(engine.state.sleepTimer).toBe(0);
+    expect(engine.state.dayClock).toBeGreaterThan(DAY_CYCLE_SECONDS);
+  });
+
   test("a bed cannot be used during the day", () => {
     const engine = makeEngine();
     engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);

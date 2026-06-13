@@ -32,6 +32,9 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
   spider: [{ itemId: "string", min: 0, max: 2 }]
 };
 
+/** Clamps an rng sample into [0, 1) so a pathological injected rng can't over-roll. */
+const clampUnit = (v: number): number => Math.min(1 - Number.EPSILON, Math.max(0, v));
+
 /**
  * Rolls the drop table for a mob kind. Returns one entry per item that yielded a
  * positive count; the engine adds each to the inventory. `rng` is injectable so
@@ -40,9 +43,9 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
 export function rollMobDrops(kind: MobKind, rng: () => number): Array<{ itemId: string; count: number }> {
   const drops: Array<{ itemId: string; count: number }> = [];
   for (const entry of MOB_DROPS[kind]) {
-    if (entry.chance !== undefined && rng() >= entry.chance) continue;
+    if (entry.chance !== undefined && clampUnit(rng()) >= entry.chance) continue;
     const span = entry.max - entry.min + 1;
-    const count = entry.min + Math.floor(rng() * span);
+    const count = entry.min + Math.floor(clampUnit(rng()) * span);
     if (count > 0) drops.push({ itemId: entry.itemId, count });
   }
   return drops;

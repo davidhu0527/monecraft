@@ -7,8 +7,14 @@ import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, InventorySlot } f
  * hotbar): non-empty slots are packed in order, stackable items merge into
  * earlier stacks, and anything that still overflows 36 slots is dropped.
  */
+/** Coerces a persisted hotbar index to a finite integer within 0..HOTBAR_SLOTS-1. */
+function normalizeSelectedSlot(value: number): number {
+  const index = Number.isFinite(value) ? Math.floor(value) : 0;
+  return Math.max(0, Math.min(HOTBAR_SLOTS - 1, index));
+}
+
 export function migrateSaveV1toV2(save: SaveDataV1): SaveDataV2 {
-  const migrated: SaveDataV2 = { ...save, version: 2, selectedSlot: Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot)) };
+  const migrated: SaveDataV2 = { ...save, version: 2, selectedSlot: normalizeSelectedSlot(save.selectedSlot) };
 
   if (Array.isArray(save.inventorySlots)) {
     const packed: Array<{ id: string | null; count: number; durability?: number }> = [];
@@ -132,7 +138,7 @@ export function restoreEquippedArmor(save: SaveData): EquippedArmor | null {
 
 export function restoreSelectedSlot(save: SaveData): number | null {
   if (typeof save.selectedSlot !== "number") return null;
-  return Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot));
+  return normalizeSelectedSlot(save.selectedSlot);
 }
 
 /** Restores the day clock from a save (finite, non-negative); null if absent/invalid. */

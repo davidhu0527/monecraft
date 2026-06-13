@@ -3,7 +3,8 @@ import { ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { MOB_DROPS, rollMobDrops } from "@/lib/game/mobLoot";
 import type { MobKind } from "@/lib/game/types";
 
-const ALL_KINDS: MobKind[] = ["sheep", "chicken", "horse", "zombie", "skeleton", "spider"];
+// Derived from the table so new mob kinds are covered automatically.
+const ALL_KINDS = Object.keys(MOB_DROPS) as MobKind[];
 
 describe("mob drop tables", () => {
   test("every drop references an existing item", () => {

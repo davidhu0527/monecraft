@@ -269,7 +269,9 @@ export class GameEngine {
       case "pause": {
         // The inventory panel and the death screen own their lock-loss; only
         // plain gameplay lock-loss (or an explicit Escape) opens the pause menu.
-        if (state.inventoryOpen || state.isDead) break;
+        // Sleeping is a brief, atomic freeze — pausing mid-fade would stall the
+        // sleep timer (step early-returns on paused before the sleep branch).
+        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0) break;
         state.paused = true;
         state.craftingStation = null;
         break;
@@ -323,7 +325,7 @@ export class GameEngine {
       dayClock: state.dayClock,
       hearts: state.hearts,
       hunger: state.hunger,
-      spawnPoint: state.spawnPoint
+      spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null
     };
   }
 

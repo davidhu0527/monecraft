@@ -119,6 +119,13 @@ describe("v1 to v2 migration", () => {
     ]);
   });
 
+  test("normalizes a non-finite or fractional selectedSlot", () => {
+    expect(migrateSaveV1toV2(v1Save({ selectedSlot: Number.NaN })).selectedSlot).toBe(0);
+    expect(migrateSaveV1toV2(v1Save({ selectedSlot: 3.9 })).selectedSlot).toBe(3);
+    expect(migrateSaveV1toV2(v1Save({ selectedSlot: 99 })).selectedSlot).toBe(8);
+    expect(migrateSaveV1toV2(v1Save({ selectedSlot: -4 })).selectedSlot).toBe(0);
+  });
+
   test("tools never merge even when sharing an id", () => {
     const migrated = migrateSaveV1toV2(
       v1Save({
