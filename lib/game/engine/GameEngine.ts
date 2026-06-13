@@ -45,7 +45,7 @@ import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { spawnInitialMobs, tickHostileSpawnDirector } from "./systems/spawnDirector";
+import { spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
@@ -211,6 +211,7 @@ export class GameEngine {
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
+    tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);

@@ -16,9 +16,11 @@ import { CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
+import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
+import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
 import type { FrameInput } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -448,6 +450,69 @@ describe("chests", () => {
     expect(state.lootedDungeonChests.has(idx)).toBe(true);
     expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
     expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
+  });
+});
+
+describe("dungeon spawners", () => {
+  /** Registers a spawner block near the player and returns its voxel index. */
+  function placeSpawner(engine: GameEngine, offsetX = 0, offsetZ = 0): number {
+    const { state } = engine;
+    state.mobs = [];
+    const sx = 30 + offsetX;
+    const sz = 30 + offsetZ;
+    const sy = state.world.highestSolidY(sx, sz) + 1;
+    state.blockChanges.set(sx, sy, sz, BlockId.Spawner);
+    const idx = state.world.index(sx, sy, sz);
+    state.dungeonSpawnerIndices.add(idx);
+    return idx;
+  }
+
+  test("a nearby spawner drips hostiles up to the local cap, emitting spawn events", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const idx = placeSpawner(engine);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 1, sy, sz + 1); // inside the activation radius
+
+    const rng = mulberry32(7);
+    let spawnEvents = 0;
+    // Each ready interval spawns at most one per spawner; over-fire to hit the cap.
+    for (let i = 0; i < 20; i += 1) {
+      tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, (event) => {
+        if (event.type === "mobSpawned") spawnEvents += 1;
+      });
+    }
+
+    const hostiles = state.mobs.filter((mob) => mob.hostile).length;
+    expect(hostiles).toBe(SPAWNER_LOCAL_CAP);
+    expect(spawnEvents).toBe(SPAWNER_LOCAL_CAP);
+  });
+
+  test("a spawner is inert when the player is out of range", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const idx = placeSpawner(engine);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 40, sy, sz + 40); // well outside the activation radius
+
+    const rng = mulberry32(7);
+    for (let i = 0; i < 10; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
+
+    expect(state.mobs.length).toBe(0);
+  });
+
+  test("a mined-out spawner stops spawning", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const idx = placeSpawner(engine);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 1, sy, sz + 1);
+    state.blockChanges.set(sx, sy, sz, BlockId.Air); // the block is gone, index still registered
+
+    const rng = mulberry32(7);
+    for (let i = 0; i < 10; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
+
+    expect(state.mobs.length).toBe(0);
   });
 });
 

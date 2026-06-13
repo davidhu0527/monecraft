@@ -70,6 +70,7 @@ export type GameTimers = {
   jumpBudget: number;
   stuckTimer: number;
   hostileSpawnTimer: number;
+  spawnerTimer: number;
   daylightHudTimer: number;
   debugHudTimer: number;
   randomTickTimer: number;
@@ -136,6 +137,7 @@ export function createTimers(): GameTimers {
     jumpBudget: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
+    spawnerTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
@@ -206,6 +208,7 @@ export type GameEvent =
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
   | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "mobSpawned"; kind: MobKind; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

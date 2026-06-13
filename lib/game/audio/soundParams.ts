@@ -919,3 +919,24 @@ export const CHEST_OPEN_SOUND: SoundDef = {
   }),
   minRetriggerMs: 180
 };
+
+/** Low ominous whoosh when a dungeon spawner conjures a hostile. */
+export const MOB_SPAWN_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.3,
+    frequency: 70,
+    attack: 0.02,
+    sustain: 0.06,
+    release: 0.2,
+    shape: 4,
+    shapeCurve: 1.2,
+    noise: 0.9,
+    pitchJump: 40,
+    pitchJumpTime: 0.12,
+    sustainVolume: 0.6,
+    decay: 0.1,
+    filter: -380
+  }),
+  minRetriggerMs: 160
+};
