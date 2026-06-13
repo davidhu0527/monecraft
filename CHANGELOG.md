@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-13
+
 ### Added
 
 - **Chests & persistent storage**: craft a chest (8 planks), place it, and right-click it to open a **27-slot** storage grid above your inventory — the long-standing "everything rides in 36 slots on your person" gap is closed
