@@ -50,8 +50,11 @@ describe("renderSpritePixels", () => {
   });
 
   test("every tool/weapon material prefix has a palette", () => {
+    // The knife and bow render from their own custom grids, not the shared
+    // tool/sword grid + material-prefix palette, so they are exempt.
+    const customGrid = new Set(["knife", "bow"]);
     for (const def of ITEM_DEFS) {
-      if (def.kind !== "tool" && (def.kind !== "weapon" || def.id === "knife")) continue;
+      if (def.kind !== "tool" && (def.kind !== "weapon" || customGrid.has(def.id))) continue;
       expect(MATERIAL_PALETTES[def.id.split("_")[0]]).toBeDefined();
     }
   });

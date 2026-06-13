@@ -260,6 +260,46 @@ const STRING_GRID = [
 ];
 
 // Shared chunk-of-meat shape, recolored per meat (chicken/mutton/rotten).
+// A recurve bow: a wooden limb curving down the left, a straight bowstring (s).
+const BOW_GRID = [
+  ".........s......",
+  "......mm.s......",
+  ".....mM..s......",
+  "....mM...s......",
+  "....mM...s......",
+  "...mM....s......",
+  "...mM....s......",
+  "...mM....s......",
+  "...mM....s......",
+  "...mM....s......",
+  "....mM...s......",
+  "....mM...s......",
+  ".....mM..s......",
+  "......mm.s......",
+  ".........s......",
+  "................"
+];
+
+// A vertical arrow: steel head (l/m), wooden shaft (h), feather fletching (f).
+const ARROW_GRID = [
+  ".......l........",
+  "......lml.......",
+  ".....lmmml......",
+  "....lmm.mml.....",
+  ".....l.h.l......",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".....f.h.f......",
+  "....ff.h.ff.....",
+  "...ff..h..ff....",
+  "..ff...h...ff...",
+  ".......h........",
+  "................"
+];
+
 const RAW_MEAT_GRID = [
   "................",
   ".....mmmm.......",
@@ -499,6 +539,8 @@ const COOKED_MUTTON_PALETTE: PixelPalette = { m: [150, 92, 56], M: [96, 54, 30],
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 const WHEAT_PALETTE: PixelPalette = { w: [226, 193, 90], W: [176, 142, 55], g: [110, 150, 60] };
 const BREAD_PALETTE: PixelPalette = { M: [120, 70, 35], b: [170, 110, 55], l: [210, 160, 95], s: [140, 90, 45] };
+const BOW_PALETTE: PixelPalette = { m: [158, 110, 57], M: [104, 72, 37], s: [224, 221, 208] };
+const ARROW_PALETTE: PixelPalette = { l: [236, 239, 246], m: [192, 197, 207], h: [146, 102, 52], f: [228, 230, 235] };
 
 /**
  * Pixel grids for non-block, non-gear items (materials, food). Keyed by item id
@@ -519,7 +561,9 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   cooked_mutton: { grid: RAW_MEAT_GRID, palette: COOKED_MUTTON_PALETTE },
   seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
   wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
-  bread: { grid: BREAD_GRID, palette: BREAD_PALETTE }
+  bread: { grid: BREAD_GRID, palette: BREAD_PALETTE },
+  bow: { grid: BOW_GRID, palette: BOW_PALETTE },
+  arrow: { grid: ARROW_GRID, palette: ARROW_PALETTE }
 };
 
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).

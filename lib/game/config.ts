@@ -50,6 +50,12 @@ export const ARROW_HIT_RADIUS = 0.45; // hit padding around the arrow point
 export const ARROW_MAX_SUBSTEPS = 4; // cap on per-frame integration substeps
 export const ARROW_MAX_SEGMENT = 0.5; // blocks per substep before the swept tests run
 
+// Bow — instant click-to-fire (no draw-charge); fixed damage, gated by a cooldown.
+export const BOW_ARROW_DAMAGE = 9; // matches a stone sword's melee, but at range
+export const BOW_KNOCKBACK = 0.6;
+export const BOW_COOLDOWN_SECONDS = 0.4;
+export const BOW_DURABILITY_PER_SHOT = 1;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;

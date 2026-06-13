@@ -94,6 +94,8 @@ export type GameTimers = {
   debugHudTimer: number;
   randomTickTimer: number;
   breedTimer: number;
+  /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
+  bowCooldownTimer: number;
 };
 
 export type WeatherKind = "clear" | "rain" | "snow";
@@ -163,7 +165,8 @@ export function createTimers(): GameTimers {
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
-    breedTimer: 0
+    breedTimer: 0,
+    bowCooldownTimer: 0
   };
 }
 
@@ -232,6 +235,7 @@ export type GameEvent =
   | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
   | { type: "mobSpawned"; kind: MobKind; x: number; y: number; z: number }
   | { type: "arrowHit"; x: number; y: number; z: number; target: "block" | "mob" | "player" }
+  | { type: "bowFired" }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

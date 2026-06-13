@@ -190,6 +190,25 @@ export const RECIPES: Recipe[] = [
     result: { slotId: "diamond_sword", count: 1 }
   },
   {
+    id: "bow",
+    label: "3 Wood + 3 String -> Bow",
+    cost: [
+      { slotId: "wood", count: 3 },
+      { slotId: "string", count: 3 }
+    ],
+    result: { slotId: "bow", count: 1 }
+  },
+  {
+    id: "arrow",
+    label: "1 Stone + 1 Wood + 1 Feather -> 4 Arrows",
+    cost: [
+      { slotId: "stone", count: 1 },
+      { slotId: "wood", count: 1 },
+      { slotId: "feather", count: 1 }
+    ],
+    result: { slotId: "arrow", count: 4 }
+  },
+  {
     id: "helmet",
     label: "4 Sapphire Ore + 1 Ruby Ore -> Helmet",
     cost: [

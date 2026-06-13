@@ -41,7 +41,7 @@ import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
-import { tryAttackMob, weaponDamage } from "./systems/combat";
+import { isBow, tryAttackMob, tryFireBow, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
@@ -213,6 +213,7 @@ export class GameEngine {
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
+    state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickDayNight(state, dt);
     tickWeather(state);
@@ -294,6 +295,12 @@ export class GameEngine {
       case "attack": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         this.emit({ type: "attackSwung" });
+        // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
+        // cooldown or with no arrows, but the swing animation still plays.
+        if (isBow(state.inventory[state.selectedSlot])) {
+          tryFireBow(state, this.emit);
+          break;
+        }
         const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt);
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });

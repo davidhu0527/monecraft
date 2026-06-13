@@ -109,6 +109,10 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35, maxDurability: 450 },
   { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40, maxDurability: 540 },
   { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47, maxDurability: 720 },
+  // Bow fires arrows; it never melees (attack 0), so the attack input branches
+  // to firing when a bow is held. Arrows are the consumable ammo.
+  { id: "bow", label: "Bow", kind: "weapon", attack: 0, maxDurability: 200 },
+  { id: "arrow", label: "Arrow", kind: "material" },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
   { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
   { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },
