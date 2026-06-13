@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ITEM_DEF_BY_ID } from "@/lib/game/items";
+import { CHEST_SLOTS } from "@/lib/game/config";
+import { createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
+import { tryInsertSlots } from "@/lib/game/inventory";
 import { DUNGEON_LOOT, rollDungeonLoot, seededRng, type LootTier } from "@/lib/game/dungeonLoot";
 
 const ALL_TIERS = Object.keys(DUNGEON_LOOT) as LootTier[];
@@ -51,6 +53,23 @@ describe("dungeon loot tables", () => {
     expect(loot.some((d) => d.itemId === "bread")).toBe(false); // chance-gated, skipped
     expect(loot.some((d) => d.itemId === "diamond_ore")).toBe(false); // not the rare tier
     expect(loot.some((d) => d.itemId === "bone")).toBe(true); // always drops
+  });
+
+  test("a roll can never overflow a chest, so loot is never silently dropped", () => {
+    // fillDungeonChestIfUnlooted inserts loot into a CHEST_SLOTS chest and falls
+    // back to the original slots if it doesn't fit. That fallback must be
+    // unreachable: the total number of loot entries (each yields at most one
+    // slot — small stacks, durables one-per-slot) has to stay within capacity.
+    // This guards against someone growing the tables past a chest's size later.
+    const maxEntries = DUNGEON_LOOT.common.length + DUNGEON_LOOT.rare.length;
+    expect(maxEntries).toBeLessThanOrEqual(CHEST_SLOTS);
+
+    const rng = seededRng(0xfeed);
+    for (let i = 0; i < 500; i += 1) {
+      const incoming = rollDungeonLoot(rng).map((drop) => createSlot(drop.itemId, drop.count));
+      const slots = Array.from({ length: CHEST_SLOTS }, () => createEmptySlot());
+      expect(tryInsertSlots(slots, incoming)).not.toBeNull();
+    }
   });
 
   test("counts are always positive", () => {

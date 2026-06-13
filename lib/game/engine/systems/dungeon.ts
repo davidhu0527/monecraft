@@ -22,6 +22,10 @@ export function fillDungeonChestIfUnlooted(state: GameState, idx: number): void 
   const slots = state.containers.get(idx) ?? Array.from({ length: CHEST_SLOTS }, () => createEmptySlot());
   const loot = rollDungeonLoot(seededRng((state.world.seed ^ idx ^ 0x9e3779b1) >>> 0));
   const incoming = loot.map((drop) => createSlot(drop.itemId, drop.count));
+  // The loot table has far fewer entries than CHEST_SLOTS (each yields one slot),
+  // so the insert always fits and the `?? slots` fallback is unreachable —
+  // dungeonLoot.test.ts pins that invariant so growing the tables can't silently
+  // drop loot here.
   state.containers.set(idx, tryInsertSlots(slots, incoming) ?? slots);
   state.lootedDungeonChests.add(idx);
 }
