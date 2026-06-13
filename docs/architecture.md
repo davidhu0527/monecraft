@@ -47,12 +47,15 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 7. Day-night clock (`systems/dayNight.ts` — `daylightAt()` is the single daylight formula); immediately after, `systems/weather.ts` sets the **transient** `state.weather` (rain/snow/clear) as a pure function of `dayClock` + seed — cosmetic only: never serialized, never touches spawn/daylight balance
 8. Random block ticks (`systems/randomTicks.ts` — each interval samples columns near the player and runs per-block handlers; drives crop growth and is the extension point for future saplings / grass spread)
 9. Night hostile spawning (`systems/spawnDirector.ts`, interval/cap in config)
-10. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
-11. Animal breeding (`systems/breeding.ts` — feed-to-love timers, baby maturity, pairing in-love adults within range; the passive cap bounds the population)
+10. Dungeon spawners (`systems/spawnDirector.ts` `tickSpawnerDirector` — each interval, every intact dungeon spawner with the player in range drips one hostile onto the room floor, bounded by a local cluster cap and the shared `HOSTILE_CAP`; time-independent)
+11. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
+12. Animal breeding (`systems/breeding.ts` — feed-to-love timers, baby maturity, pairing in-love adults within range; the passive cap bounds the population)
 
 Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. The `placeBlock` command runs a fixed right-click precedence (`systems/interact.ts`) — feed an aimed animal (`tryFeedAimedMob`) → interact with the aimed block (`tryInteractBlock`, e.g. sleep in a bed, open a furnace, open a chest) → use the held item (`tryUseHeldItem`, e.g. a hoe tills soil, seeds plant a crop) → `placeSelectedBlock` — so each interaction consumes the click instead of getting a block placed against it. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
 
 **Block-entities (chest contents).** Blocks are bare `BlockId`s, but a chest needs attached storage, so `state.containers: Map<voxelIndex, InventorySlot[]>` holds each placed chest's slots (keyed by `world.index`, the same space as the block diff). Placing a chest creates an empty entry; opening one (`interactChest`) sets `state.openContainerIndex` and `inventoryOpen` so the panel renders its grid; the `moveStack` command shuttles slots across the inventory/chest boundary (chest indices offset by `CONTAINER_SLOT_BASE`); breaking a chest spills its contents into the inventory via `inventory.tryInsertSlots` (refused if they don't fit). `serialize()` persists non-empty containers as `blockEntities`; see [save-format.md](save-format.md).
+
+**Dungeon loot chests.** Dungeon chests are placed by worldgen, so their contents can't ride the block-diff baseline. The engine instead keeps two session-only sets — `dungeonChestIndices` / `dungeonSpawnerIndices` — rebuilt each boot from the seed via `collectDungeonSites` (`lib/world/generation.ts`, which replays the dungeon placement math without writing blocks), plus a **persisted** `lootedDungeonChests` set. On a dungeon chest's first open or break, `systems/dungeon.ts` `fillDungeonChestIfUnlooted` rolls loot seeded from `world.seed ^ voxelIndex` (`lib/game/dungeonLoot.ts`) and marks the index looted. Gating on the looted set — not on whether the chest is currently non-empty — is what stops an emptied-then-reloaded chest from re-rolling (an empty container is dropped from `blockEntities`).
 
 ## Renderer (`lib/game/render/`)
 
@@ -97,7 +100,7 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 
 - `blocks.ts` — `BlockId`, `BiomeId`, `WORLD_SIZE_*`, and both block palettes (`BLOCK_COLORS` paints the atlas; `HELD_BLOCK_COLORS` tints the held-item model — intentionally different values).
 - `voxelWorld.ts` — `VoxelWorld` stores voxels in a flat `Uint8Array` (index = `x + z*sizeX + y*sizeX*sizeZ`) plus cheap queries (`get`/`set`/`isSolid`/`highestSolidY`/`getBiome`).
-- `generation.ts` — `generateWorld(world)`: deterministic terrain, caves, water, ores, trees, houses. Constants live in the frozen `GEN` object. **Byte-identical output per seed is a save-format contract**, pinned by `generation.test.ts` hash tests — fix code, never hashes.
+- `generation.ts` — `generateWorld(world)`: deterministic terrain, caves, water, ores, trees, houses, and underground dungeons (`placeDungeons`, last in the pipeline). `collectDungeonSites(world)` re-derives dungeon chest/spawner indices from the seed for the engine. Constants live in the frozen `GEN` object. **Byte-identical output per seed is a save-format contract**, pinned by `generation.test.ts` hash tests — fix code, never hashes.
 - `meshing.ts` — `buildGeometryRegion(world, …)` with face culling, baked ambient occlusion, and atlas UVs.
 - `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
 - `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.

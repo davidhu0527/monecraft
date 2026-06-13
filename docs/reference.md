@@ -72,37 +72,39 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Blocks
 
-**27 block types** (plus air). Hardness is relative break time — higher is slower.
+**29 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock and water cannot be broken.
 
-| Block             | Hardness | Mine with      | Notes                                                                                                         |
-| ----------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------- |
-| Grass             | 2        | any            | Drops dirt; ~20% chance to also drop a seed                                                                   |
-| Dirt              | 2        | any            | —                                                                                                             |
-| Sand              | 2        | any            | Common on beaches and in deserts                                                                              |
-| Snow              | 2        | any            | Mountain peaks                                                                                                |
-| Leaves            | 2        | any            | From trees; drops dirt                                                                                        |
-| Cactus            | 2        | any            | Desert decoration                                                                                             |
-| Glass             | 2        | any            | Crafted from sand                                                                                             |
-| Wood              | 3        | any            | Tree trunks                                                                                                   |
-| Planks            | 3        | any            | Crafted from wood                                                                                             |
-| Stone             | 5        | Wood Pickaxe   | Drops the stone item                                                                                          |
-| Cobblestone       | 5        | Wood Pickaxe   | Drops cobble (crafting staple)                                                                                |
-| Brick             | 5        | Wood Pickaxe   | Crafted; also found in houses                                                                                 |
-| Furnace           | 5        | Wood Pickaxe   | **Interactive** — opens smelting recipes                                                                      |
-| Chest             | 3        | any            | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
-| Sliver Ore        | 7        | Stone Pickaxe  | —                                                                                                             |
-| Ruby Ore          | 9        | Sliver Pickaxe | —                                                                                                             |
-| Gold Ore          | 11       | Sliver Pickaxe | —                                                                                                             |
-| Sapphire Ore      | 12       | Ruby Pickaxe   | —                                                                                                             |
-| Diamond Ore       | 14       | Ruby Pickaxe   | Deepest, rarest ore                                                                                           |
-| Bed               | 2        | any            | **Interactive** — sleep & set spawn                                                                           |
-| Farmland          | 1        | any            | Tilled soil; reverts to dirt when broken                                                                      |
-| Wheat (stage 0–2) | 1        | any            | Immature crop; drops its seed                                                                                 |
-| Wheat (stage 3)   | 1        | any            | Mature crop; drops wheat + 1–2 seeds                                                                          |
-| Bedrock           | —        | unbreakable    | World floor and border                                                                                        |
-| Water             | —        | —              | Liquid; sea level fills below y≈43                                                                            |
+| Block             | Hardness | Mine with       | Notes                                                                                                         |
+| ----------------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
+| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                   |
+| Dirt              | 2        | any             | —                                                                                                             |
+| Sand              | 2        | any             | Common on beaches and in deserts                                                                              |
+| Snow              | 2        | any             | Mountain peaks                                                                                                |
+| Leaves            | 2        | any             | From trees; drops dirt                                                                                        |
+| Cactus            | 2        | any             | Desert decoration                                                                                             |
+| Glass             | 2        | any             | Crafted from sand                                                                                             |
+| Wood              | 3        | any             | Tree trunks                                                                                                   |
+| Planks            | 3        | any             | Crafted from wood                                                                                             |
+| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                          |
+| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                |
+| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                 |
+| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                      |
+| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
+| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                    |
+| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it      |
+| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                             |
+| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                             |
+| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                             |
+| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                             |
+| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                           |
+| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                           |
+| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                      |
+| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                 |
+| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                          |
+| Bedrock           | —        | unbreakable     | World floor and border                                                                                        |
+| Water             | —        | —               | Liquid; sea level fills below y≈43                                                                            |
 
 ## Mobs
 
@@ -189,3 +191,22 @@ always deals at least 1).
 Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
 (from farming and grass).
+
+## Dungeons
+
+Small cobblestone rooms (speckled with mossy cobble) generate **underground**,
+well clear of the spawn area. Each holds 1–2 **loot chests** and a central **mob
+spawner**. The loot tables live in `lib/game/dungeonLoot.ts`; a chest fills on
+first open or break, with loot seeded so it's the same until you reach it.
+
+Each chest rolls a tier:
+
+| Tier   | Odds | Contents                                                                                                                      |
+| ------ | ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Common | 75%  | Bone (always), bread, cooked chicken, string, seeds, sliver/gold ore, an occasional stone pickaxe                             |
+| Rare   | 25%  | Everything a common chest rolls **plus** diamond/sapphire ore, a ruby/sapphire sword, helmet/chestplate, rare diamond pickaxe |
+
+**Spawners** are time-independent: while you're within ~16 blocks, a spawner
+drips one hostile (zombie/skeleton/spider) every ~8 s onto the room floor, up to
+6 clustered nearby (and never past the global hostile cap of 16). Mining the
+spawner block out stops it.

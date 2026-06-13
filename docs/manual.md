@@ -136,6 +136,21 @@ Higher-tier pickaxes (sapphire, gold, diamond) also mine **faster**. Dirt, sand,
 wood, leaves, and crops need no special tool. Ores hide underground and in caves;
 the rarer the ore, the deeper it tends to sit.
 
+## Dungeons and loot
+
+Digging around underground can turn up a **dungeon**: a small cobblestone room,
+flecked with mossy cobble, sealed in the rock away from your spawn. Inside are
+**loot chests** — open them for a free haul of food, ores, and sometimes real
+gear (a sword, armor, even a diamond pickaxe if you're lucky). Each chest's loot
+is fixed until you reach it, and once you've opened (or broken) it, it won't
+refill — so there's no farming the same chest twice.
+
+The catch: most dungeons hold a **spawner**, a dark caged block that conjures a
+hostile every few seconds as long as you're standing near it. They keep coming
+until you back off — or **mine the spawner block out**, which shuts it down for
+good (it's tough and drops nothing). Grab the loot, deal with the mob, and leave,
+or clear the spawner first if you want to loot in peace.
+
 ## Crafting
 
 Open the inventory (`I`) to reach the crafting panel. Pick a recipe whose
