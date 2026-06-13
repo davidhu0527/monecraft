@@ -12,6 +12,11 @@
   --mc-text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
   --mc-button: #6f6f6f;
   --mc-button-hover: #7f8caf;
+  /* Item tooltip: near-black fill with Minecraft's violet gradient border. */
+  --mc-tooltip-bg: #100010ee;
+  --mc-tooltip-border-a: #28007f;
+  --mc-tooltip-border-b: #5b00b5;
+  --mc-tooltip-sub: #a8a8a8;
   /* Monospace stack, kept for the F3 debug readout (column alignment). */
   --mc-font-mono: "Lucida Console", Monaco, "Courier New", monospace;
   /* Generated noise tiles (set at runtime by installUiTiles). The chrome grain

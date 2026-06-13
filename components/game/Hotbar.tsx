@@ -1,4 +1,5 @@
 import ItemIcon from "@/components/game/ItemIcon";
+import { useItemTooltip } from "@/components/game/ItemTooltip";
 import type { InventorySlot } from "@/lib/game/types";
 
 type HotbarProps = {
@@ -18,6 +19,7 @@ export default function Hotbar({ inventory, selectedSlot, hotbarSlots, onSelectS
   const visible = inventory.slice(0, hotbarSlots);
   const selected = visible[selectedSlot];
   const selectedLabel = selected?.id && selected.count > 0 ? selected.label : "";
+  const { tooltip, bind } = useItemTooltip();
 
   return (
     <div className="hotbar-area">
@@ -33,12 +35,13 @@ export default function Hotbar({ inventory, selectedSlot, hotbarSlots, onSelectS
             className={idx === selectedSlot ? "hotbar-slot active" : "hotbar-slot"}
             onClick={() => onSelectSlot(idx)}
             aria-label={slot.id && slot.count > 0 ? `Slot ${idx + 1}: ${slot.label}` : `Slot ${idx + 1}: empty`}
-            title={slot.id && slot.count > 0 ? slot.label : undefined}
+            {...bind(slot.id && slot.count > 0 ? { title: slot.label } : null)}
           >
             <ItemIcon slot={slot} size={32} />
           </button>
         ))}
       </div>
+      {tooltip}
     </div>
   );
 }

@@ -148,6 +148,36 @@
   height: 2px;
 }
 
+/* --- Minecraft-style item tooltip (cursor-following, portaled to body) --- */
+
+.item-tooltip {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  max-width: 280px;
+  padding: 5px 8px;
+  display: grid;
+  gap: 2px;
+  background: var(--mc-tooltip-bg);
+  border: 2px solid transparent;
+  border-image: linear-gradient(180deg, var(--mc-tooltip-border-a), var(--mc-tooltip-border-b)) 1;
+  outline: 1px solid #100010;
+}
+
+.item-tooltip-title {
+  color: var(--mc-text-light);
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+  white-space: nowrap;
+}
+
+.item-tooltip-line {
+  color: var(--mc-tooltip-sub);
+  font-size: 12px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
 .crosshair {
   position: absolute;
   left: 50%;
