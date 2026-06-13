@@ -77,6 +77,12 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.Bed && face === "top" && y < 5) c = tone([0.95, 0.95, 0.97], 0.95 + n * 0.1); // pillow band
         if (block >= BlockId.WheatStage0 && block <= BlockId.WheatStage3 && face === "side" && x % 3 === 1) c = tone(base, 0.66); // gaps read as stalks
         if (block === BlockId.Furnace && face === "side" && x >= 5 && x <= 10 && y >= 8 && y <= 12) c = tone([0.95, 0.45, 0.12], 0.85 + n * 0.3); // glowing mouth
+        if (block === BlockId.Chest) {
+          if ((x + y) % 4 === 0) c = tone(base, 0.82); // plank grain
+          if (face === "top" && y === 8) c = tone(base, 0.6); // lid seam
+          if (face === "side" && y === 7) c = tone(base, 0.58); // lid joint band
+          if (face === "side" && x >= 7 && x <= 8 && y >= 6 && y <= 9) c = tone([0.62, 0.64, 0.68], 0.9 + n * 0.2); // metal latch
+        }
 
         ctx.fillStyle = rgb(c);
         ctx.fillRect(ox + x, oy + y, 1, 1);

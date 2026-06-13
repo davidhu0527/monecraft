@@ -34,22 +34,22 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                              |
-| ------------------ | ------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                |
-| `Space`            | Jump                                                                |
-| `C`                | Crouch (slower, careful movement)                                   |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                  |
-| Mouse              | Look around (click the game first to lock the pointer)              |
-| Left-click (hold)  | Break the targeted block / attack a mob                             |
-| Right-click or `E` | Place the selected block / interact (bed, furnace, hoe, seeds)      |
-| `1`–`9`            | Select a hotbar slot                                                |
-| `I`                | Open / close inventory & crafting                                   |
-| `F`                | Eat the selected food                                               |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front |
-| `U`                | Emergency unstuck (teleport to safe ground if wedged)               |
-| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
+| Key / input        | Action                                                                |
+| ------------------ | --------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                  |
+| `Space`            | Jump                                                                  |
+| `C`                | Crouch (slower, careful movement)                                     |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                    |
+| Mouse              | Look around (click the game first to lock the pointer)                |
+| Left-click (hold)  | Break the targeted block / attack a mob                               |
+| Right-click or `E` | Place the selected block / interact (bed, furnace, chest, hoe, seeds) |
+| `1`–`9`            | Select a hotbar slot                                                  |
+| `I`                | Open / close inventory & crafting                                     |
+| `F`                | Eat the selected food                                                 |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front   |
+| `U`                | Emergency unstuck (teleport to safe ground if wedged)                 |
+| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)         |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                   |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
@@ -148,7 +148,20 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **31 recipes** in the [reference](reference.md#recipes).
+See the full list of **32 recipes** in the [reference](reference.md#recipes).
+
+## Storage
+
+Your pack only holds 36 slots, so build **chests** to stash the overflow. Craft a
+chest from **8 planks**, place it, and **right-click** it to open it: a **27-slot**
+grid appears above your inventory. Move items the same way you rearrange the
+inventory — **click a slot, then click where it should go** — across either grid.
+Close the panel (`I` or `Esc`) and the chest keeps its contents, which are **saved
+with your world**.
+
+Breaking a chest doesn't destroy what's inside: its contents **spill back into your
+inventory** (and you get the chest item back). If your inventory is too full to hold
+everything, the break is refused and the chest stays put — empty it a bit first.
 
 ## Mobs and breeding
 
@@ -203,7 +216,8 @@ pick your **player skin** — from the pause menu (`Esc`).
 
 Your world autosaves to the browser's `localStorage` every **15 seconds**, and you
 can **Save**, **Load**, or **Reset** manually from the pause menu. A save stores the
-world seed plus your edits, inventory, armor, stats, time of day, and bed spawn —
-so the world regenerates identically and picks up where you left off. Because saves
+world seed plus your edits, inventory, armor, stats, time of day, bed spawn, and the
+contents of every chest — so the world regenerates identically and picks up where
+you left off. Because saves
 live in the browser, they're tied to that browser on that device; "Reset" starts a
 fresh world.

@@ -107,6 +107,12 @@ waking (a fresh dawn).
 
 `HOTBAR_SLOTS`, `INVENTORY_SLOTS`, `MAX_STACK_SIZE`. **Save-sensitive** — see below.
 
+`CHEST_SLOTS` (27) is the storage capacity of a placed chest, read by the interact,
+mining, and save paths (`lib/game/engine/systems/interact.ts`, `…/mining.ts`,
+`lib/game/save.ts`) and the inventory panel grid. It is **soft** save-sensitive:
+shrinking it after chests have been saved with items past the new limit would drop
+those overflow slots on load (`readContainers` rebuilds a `CHEST_SLOTS`-length array).
+
 ## Persistence & rendering
 
 `AUTOSAVE_INTERVAL_MS`, `SAVE_KEY`, `STUCK_RESET_SECONDS`, `RENDER_RADIUS`,
@@ -123,7 +129,7 @@ tolerated before the auto-unstuck teleport fires.
 Change these only with care:
 
 - **`SAVE_KEY`** (`"minecraft_save_v5"`) is the localStorage key name. Note it's
-  versioned independently of the save **schema** (currently v3, per
+  versioned independently of the save **schema** (currently v4, per
   [save-format.md](save-format.md)) — renaming `SAVE_KEY` orphans every existing
   player's save. Don't bump it to express a schema change; add a migration instead.
 - **`INVENTORY_SLOTS` / `HOTBAR_SLOTS` / `MAX_STACK_SIZE`** affect the saved

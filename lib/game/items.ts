@@ -47,7 +47,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.WheatStage1]: 1,
   [BlockId.WheatStage2]: 1,
   [BlockId.WheatStage3]: 1,
-  [BlockId.Furnace]: 5
+  [BlockId.Furnace]: 5,
+  [BlockId.Chest]: 3
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -69,6 +70,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "cactus", label: "Cactus", kind: "block", blockId: BlockId.Cactus },
   { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
   { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
+  { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -165,6 +167,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Cactus]: "cactus",
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
+  [BlockId.Chest]: "chest",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",

@@ -10,7 +10,7 @@ A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves 
 - `W + CapsLock`: Sprint (drains hunger)
 - `Mouse`: Look around (click the game first to lock the pointer)
 - `Left click` (hold): Break block / attack mobs
-- `Right click` or `E`: Place selected block
+- `Right click` or `E`: Place selected block / interact (bed, furnace, chest)
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)

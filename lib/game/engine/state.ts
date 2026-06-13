@@ -93,6 +93,10 @@ export type GameState = {
   inventoryOpen: boolean;
   /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
   craftingStation: "furnace" | null;
+  /** Chest contents (block-entities) keyed by the block's voxel index. */
+  containers: Map<number, InventorySlot[]>;
+  /** Voxel index of the chest open in the inventory panel, or null. */
+  openContainerIndex: number | null;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;
@@ -179,6 +183,8 @@ export type GameSnapshot = {
   sleeping: boolean;
   /** Open crafting station (gates smelting recipes in the inventory panel). */
   craftingStation: "furnace" | null;
+  /** Contents of the open chest, or null when no chest is open. */
+  container: InventorySlot[] | null;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
@@ -201,6 +207,8 @@ export type GameEvent =
   | { type: "tilledSoil" }
   | { type: "plantedSeed" }
   | { type: "openedStation"; station: "furnace" }
+  | { type: "openedContainer" }
+  | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }

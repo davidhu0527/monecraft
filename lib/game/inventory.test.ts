@@ -11,8 +11,10 @@ import {
   consumeToolDurability,
   countsById,
   craft,
+  moveStack,
   swapSlots,
   toggleEquipArmor,
+  tryInsertSlots,
   unequipMissingArmor
 } from "@/lib/game/inventory";
 import type { InventorySlot } from "@/lib/game/types";
@@ -113,6 +115,38 @@ describe("durability", () => {
   });
 });
 
+describe("tryInsertSlots", () => {
+  test("merges stackables into existing stacks then empty slots", () => {
+    const inv = makeSlots(["dirt", MAX_STACK_SIZE - 2]);
+    const next = tryInsertSlots(inv, [createSlot("dirt", 5)])!;
+    expect(next[0].count).toBe(MAX_STACK_SIZE);
+    expect(next[1].id).toBe("dirt");
+    expect(next[1].count).toBe(3);
+  });
+
+  test("durability items take a whole slot each and keep their durability", () => {
+    const inv = makeSlots();
+    const pick: InventorySlot = { ...createSlot("wood_pickaxe", 1), durability: 7 };
+    const next = tryInsertSlots(inv, [pick, createSlot("knife", 1)])!;
+    const placedPick = next.find((slot) => slot.id === "wood_pickaxe")!;
+    expect(placedPick.durability).toBe(7);
+    expect(next.some((slot) => slot.id === "knife")).toBe(true);
+  });
+
+  test("is all-or-nothing: returns null and touches nothing when short on room", () => {
+    const full = Array.from({ length: INVENTORY_SLOTS }, () => createSlot("stone", MAX_STACK_SIZE));
+    expect(tryInsertSlots(full, [createSlot("dirt", 1)])).toBeNull();
+    expect(full[0].id).toBe("stone"); // input untouched
+  });
+
+  test("skips empty and unknown incoming slots", () => {
+    const inv = makeSlots(["dirt", 1]);
+    const next = tryInsertSlots(inv, [createEmptySlot(), { id: "ghost", label: "Ghost", kind: "material", count: 4 }])!;
+    expect(countsById(next).get("dirt")).toBe(1);
+    expect(countsById(next).get("ghost")).toBeUndefined();
+  });
+});
+
 describe("crafting", () => {
   test("canCraft needs both the cost and room for the result", () => {
     expect(canCraft(makeSlots(["wood", 2]), planksRecipe)).toBe(true);
@@ -153,6 +187,35 @@ describe("swap and armor", () => {
     expect(next[1].id).toBe("dirt");
     expect(swapSlots(slots, 0, 0)).toBeNull();
     expect(swapSlots(slots, 0, INVENTORY_SLOTS)).toBeNull();
+  });
+
+  test("moveStack swaps across two arrays and writes both back", () => {
+    const player = makeSlots(["dirt", 5]);
+    const chest = makeSlots(["stone", 7]);
+    const moved = moveStack(player, 0, chest, 0)!;
+    expect(moved.a[0].id).toBe("stone");
+    expect(moved.b[0].id).toBe("dirt");
+    expect(player[0].id).toBe("dirt"); // inputs untouched
+    expect(chest[0].id).toBe("stone");
+  });
+
+  test("moveStack within one array degrades to a swap (a === b)", () => {
+    const slots = makeSlots(["dirt", 5], ["stone", 7]);
+    const moved = moveStack(slots, 0, slots, 1)!;
+    expect(moved.a).toBe(moved.b); // same array returned for both
+    expect(moved.a[0].id).toBe("stone");
+    expect(moved.a[1].id).toBe("dirt");
+    expect(moveStack(slots, 0, slots, 0)).toBeNull(); // no-op
+    expect(moveStack(slots, 0, makeSlots(), INVENTORY_SLOTS)).toBeNull(); // out of range
+  });
+
+  test("moveStack preserves durability of a moved tool", () => {
+    const player = makeSlots(["wood_pickaxe", 1]);
+    player[0] = { ...player[0], durability: 12 };
+    const chest = makeSlots();
+    const moved = moveStack(player, 0, chest, 0)!;
+    expect(moved.b[0].id).toBe("wood_pickaxe");
+    expect(moved.b[0].durability).toBe(12);
   });
 
   test("toggleEquipArmor equips then unequips", () => {
