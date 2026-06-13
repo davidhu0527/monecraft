@@ -277,6 +277,28 @@ describe("chests", () => {
     expect(engine.state.containers.get(idx)![0].id).toBeNull();
   });
 
+  test("moveStack within the player inventory leaves the open chest untouched", () => {
+    const engine = makeEngine();
+    const idx = 5000;
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    engine.state.openContainerIndex = idx;
+    engine.state.inventoryOpen = true;
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[0] = createSlot("dirt", 4);
+    engine.state.inventory[1] = createEmptySlot();
+
+    // Rearranging the player inventory while a chest is open must not write into
+    // the container (regression: the second write-back used to misroute here).
+    engine.dispatch({ type: "moveStack", from: 0, to: 1 });
+
+    expect(engine.state.inventory[1].id).toBe("dirt");
+    expect(engine.state.inventory[0].id).toBeNull();
+    expect(engine.state.containers.get(idx)!.every((slot) => slot.id === null)).toBe(true);
+  });
+
   test("closing the inventory clears the open chest", () => {
     const engine = makeEngine();
     engine.state.containers.set(

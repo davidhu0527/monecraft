@@ -391,12 +391,17 @@ export class GameEngine {
     const moved = inv.moveStack(a.arr, a.local, b.arr, b.local);
     if (!moved) return;
 
-    const writeBack = (arr: InventorySlot[], next: InventorySlot[]): void => {
-      if (arr === state.inventory) state.inventory = next;
+    // Resolve each side's destination BEFORE writing: the first write reassigns
+    // state.inventory, which would make a later `arr === state.inventory` check
+    // stale and misroute an inventory↔inventory move into the open chest.
+    const aIsInventory = a.arr === state.inventory;
+    const bIsInventory = b.arr === state.inventory;
+    const writeBack = (isInventory: boolean, next: InventorySlot[]): void => {
+      if (isInventory) state.inventory = next;
       else if (state.openContainerIndex !== null) state.containers.set(state.openContainerIndex, next);
     };
-    writeBack(a.arr, moved.a);
-    writeBack(b.arr, moved.b);
+    writeBack(aIsInventory, moved.a);
+    writeBack(bIsInventory, moved.b);
   }
 
   private applyDamage = (amount: number): void => {

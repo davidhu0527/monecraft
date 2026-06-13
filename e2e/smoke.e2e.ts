@@ -108,20 +108,29 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   await acquirePointerLock(page);
   await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
 
-  // Place a chest at the block underfoot and aim straight down at it.
-  await page.evaluate(() => {
-    const state = window.__monecraft!.engine.state;
+  // Build a deterministic spot: a chest as the floor with cleared headroom, the
+  // player standing on it looking straight down, then right-click — all in one
+  // step so the down-ray can only hit the chest (interact wins over placement,
+  // so it opens). `round` (not `floor`) tolerates the player resting a hair
+  // below the integer after collision resolution.
+  const chestIndex = await page.evaluate(() => {
+    const engine = window.__monecraft!.engine;
+    const state = engine.state;
     const x = Math.floor(state.player.position.x);
-    const y = Math.floor(state.player.position.y) - 1;
     const z = Math.floor(state.player.position.z);
-    state.player.position.x = x + 0.5;
-    state.player.position.z = z + 0.5;
+    const groundY = Math.round(state.player.position.y) - 1;
+    state.blockChanges.set(x, groundY, z, 27); // BlockId.Chest, the floor
+    state.blockChanges.set(x, groundY + 1, z, 0); // Air headroom (feet/body/head)
+    state.blockChanges.set(x, groundY + 2, z, 0);
+    state.blockChanges.set(x, groundY + 3, z, 0);
+    state.player.position.set(x + 0.5, groundY + 1, z + 0.5);
+    state.player.velocity.set(0, 0, 0);
     state.player.pitch = -Math.PI / 2 + 0.02;
-    state.blockChanges.set(x, y, z, 27); // BlockId.Chest
+    engine.dispatch({ type: "placeBlock" });
+    return state.world.index(x, groundY, z);
   });
 
-  // Right-click opens it (interact wins over placement); the chest grid appears.
-  await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "placeBlock" }));
+  // The chest grid appears once the snapshot propagates to React.
   await expect(page.getByTestId("chest-grid")).toBeVisible();
 
   // Move the starter grass stack (inventory slot 0) into the first chest slot
@@ -138,10 +147,7 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
 
-  const restoredId = await page.evaluate(() => {
-    const containers = [...window.__monecraft!.engine.state.containers.values()];
-    return containers[0]?.[0]?.id ?? null;
-  });
+  const restoredId = await page.evaluate((idx) => window.__monecraft!.engine.state.containers.get(idx)?.[0]?.id ?? null, chestIndex);
   expect(restoredId).toBe("grass");
 });
 
