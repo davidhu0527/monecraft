@@ -35,9 +35,10 @@ import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryInteractBlock } from "./systems/interact";
+import { tryInteractBlock, tryUseHeldItem } from "./systems/interact";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
+import { tickRandomBlocks } from "./systems/randomTicks";
 import { spawnInitialMobs, tickHostileSpawnDirector } from "./systems/spawnDirector";
 
 export type GameEngineOptions = {
@@ -179,8 +180,9 @@ export class GameEngine {
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
-    tickMining(state, input, dt, this.emit);
+    tickMining(state, input, dt, this.emit, this.rng);
     tickDayNight(state, dt);
+    tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
     this.tickDebugInfo(dt);
@@ -229,9 +231,11 @@ export class GameEngine {
       }
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
-        // Right-click precedence: interact with the aimed block first (beds,
-        // and later furnaces); only place a block if nothing was interacted.
+        // Right-click precedence: interact with the aimed block (beds, and
+        // later furnaces), then use the held item (hoe, seeds); only place a
+        // block if neither consumed the click.
         if (tryInteractBlock(state, this.emit)) break;
+        if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
         break;
       }

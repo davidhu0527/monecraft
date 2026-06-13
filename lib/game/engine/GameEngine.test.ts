@@ -753,3 +753,109 @@ describe("beds and sleep", () => {
     expect(state.player.position.y).not.toBeCloseTo(bedSpotY, 2);
   });
 });
+
+describe("farming", () => {
+  /** Settles the player and aims at a block one cell ahead at eye height; returns its coords. */
+  function aimAtBlockAhead(engine: GameEngine, block: BlockId): { x: number; y: number; z: number } {
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, block);
+    return { x: ex, y: ey, z: ez - 1 };
+  }
+
+  function giveSelected(engine: GameEngine, itemId: string, count: number): void {
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot(itemId, count);
+    state.selectedSlot = slot;
+  }
+
+  /** Mines the block directly under the player (look straight down, hold the mouse). */
+  function harvestUnderfoot(engine: GameEngine, block: BlockId): { x: number; y: number; z: number } {
+    run(engine, 1);
+    const { state } = engine;
+    const px = Math.floor(state.player.position.x);
+    const pz = Math.floor(state.player.position.z);
+    state.player.position.x = px + 0.5;
+    state.player.position.z = pz + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    const py = Math.floor(state.player.position.y) - 1;
+    // Bedrock floor below so that once the crop breaks the player lands on an
+    // unmineable block — only the crop is harvested, keeping drop counts exact.
+    state.blockChanges.set(px, py - 1, pz, BlockId.Bedrock);
+    state.blockChanges.set(px, py, pz, block);
+    return { x: px, y: py, z: pz };
+  }
+
+  test("a hoe tills grass into farmland and wears down", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const target = aimAtBlockAhead(engine, BlockId.Grass);
+    giveSelected(engine, "wood_hoe", 1);
+    const durBefore = engine.state.inventory[engine.state.selectedSlot].durability!;
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(target.x, target.y, target.z)).toBe(BlockId.Farmland);
+    expect(engine.consumeEvents().some((event) => event.type === "tilledSoil")).toBe(true);
+    expect(engine.state.inventory[engine.state.selectedSlot].durability).toBe(durBefore - 1);
+  });
+
+  test("seeds plant wheat on farmland and consume one seed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const farmland = aimAtBlockAhead(engine, BlockId.Farmland);
+    engine.state.blockChanges.set(farmland.x, farmland.y + 1, farmland.z, BlockId.Air); // clear space above
+    giveSelected(engine, "seeds", 3);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(farmland.x, farmland.y + 1, farmland.z)).toBe(BlockId.WheatStage0);
+    expect(engine.consumeEvents().some((event) => event.type === "plantedSeed")).toBe(true);
+    expect(countsById(engine.state.inventory).get("seeds")).toBe(2);
+  });
+
+  test("harvesting mature wheat yields wheat and at least one seed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const crop = harvestUnderfoot(engine, BlockId.WheatStage3);
+    const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
+    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
+    expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore + 1);
+    expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
+  test("harvesting an immature crop returns only a seed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const crop = harvestUnderfoot(engine, BlockId.WheatStage1);
+    const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
+    const seedsBefore = countsById(engine.state.inventory).get("seeds") ?? 0;
+    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
+    expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore);
+    expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBe(seedsBefore + 1);
+  });
+
+  test("bread crafts from wheat and restores its hunger value", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    giveSelected(engine, "wheat", 3);
+    engine.dispatch({ type: "craft", recipeId: "bread" });
+    expect(countsById(engine.state.inventory).get("bread")).toBe(1);
+
+    const breadSlot = engine.state.inventory.findIndex((entry) => entry.id === "bread");
+    engine.state.selectedSlot = breadSlot;
+    engine.state.hunger = 5;
+    engine.dispatch({ type: "eatFood" });
+    expect(engine.state.hunger).toBe(11); // 5 + 6
+  });
+});

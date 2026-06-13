@@ -56,6 +56,16 @@ export const WAKE_DAY_PHASE = 0.07;
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;
 
+// Random block ticks (crop growth; the system is extensible to other blocks).
+// Each interval samples N columns within RADIUS of the player and runs the
+// block's handler. ~128 samples/s over a 64x64 area ≈ 50 s/stage (~2.5 min to
+// mature). GRASS_SEED_DROP_CHANCE is the per-break odds a grass block drops a seed.
+export const RANDOM_TICK_INTERVAL_SECONDS = 0.5;
+export const RANDOM_TICK_SAMPLES = 64;
+export const RANDOM_TICK_RADIUS = 32;
+export const CROP_GROWTH_CHANCE = 0.65;
+export const GRASS_SEED_DROP_CHANCE = 0.2;
+
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;

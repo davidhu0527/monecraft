@@ -68,6 +68,7 @@ export type GameTimers = {
   hostileSpawnTimer: number;
   daylightHudTimer: number;
   debugHudTimer: number;
+  randomTickTimer: number;
 };
 
 export type GameState = {
@@ -114,7 +115,8 @@ export function createTimers(): GameTimers {
     stuckTimer: 0,
     hostileSpawnTimer: 0,
     daylightHudTimer: 0,
-    debugHudTimer: 0
+    debugHudTimer: 0,
+    randomTickTimer: 0
   };
 }
 
@@ -180,6 +182,8 @@ export type GameEvent =
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
-  | { type: "wokeUp" };
+  | { type: "wokeUp" }
+  | { type: "tilledSoil" }
+  | { type: "plantedSeed" };
 
 export type EmitGameEvent = (event: GameEvent) => void;

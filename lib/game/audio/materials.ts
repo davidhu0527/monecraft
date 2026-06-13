@@ -27,7 +27,12 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.Water]: "water",
   [BlockId.Snow]: "sand",
   [BlockId.Cactus]: "grass",
-  [BlockId.Bed]: "wood"
+  [BlockId.Bed]: "wood",
+  [BlockId.Farmland]: "grass",
+  [BlockId.WheatStage0]: "grass",
+  [BlockId.WheatStage1]: "grass",
+  [BlockId.WheatStage2]: "grass",
+  [BlockId.WheatStage3]: "grass"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

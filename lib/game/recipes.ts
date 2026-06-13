@@ -12,6 +12,16 @@ export const RECIPES: Recipe[] = [
     ],
     result: { slotId: "bed", count: 1 }
   },
+  {
+    id: "wood_hoe",
+    label: "2 Planks + 1 Wood -> Wood Hoe",
+    cost: [
+      { slotId: "planks", count: 2 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "wood_hoe", count: 1 }
+  },
+  { id: "bread", label: "3 Wheat -> Bread", cost: [{ slotId: "wheat", count: 3 }], result: { slotId: "bread", count: 1 } },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   {
     id: "brick",

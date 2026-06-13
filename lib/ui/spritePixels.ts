@@ -124,6 +124,25 @@ const KNIFE_GRID = [
   "................"
 ];
 
+const HOE_GRID = [
+  "................",
+  "...mmmmm........",
+  "..mlllllm.......",
+  "..mMmmmMm.......",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  "......hH........",
+  ".....HHH........",
+  "................"
+];
+
 const FOOD_GRID = [
   "................",
   "........MMMM....",
@@ -254,6 +273,63 @@ const RAW_MEAT_GRID = [
   "...mMrrrrMm.....",
   "....mMMMMm......",
   ".....mmmm.......",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
+const SEEDS_GRID = [
+  "................",
+  "................",
+  "................",
+  ".....ss.ss......",
+  "....sddssds.....",
+  "....sddssds.....",
+  ".....ss.ss......",
+  "...ss.ss.ss.....",
+  "..sddssddsds....",
+  "..sddssddsds....",
+  "...ss.ss.ss.....",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
+const WHEAT_GRID = [
+  "................",
+  ".......w........",
+  "......wWw.......",
+  ".....wwWww......",
+  "......wWw.......",
+  ".....wwWww......",
+  "......wWw.......",
+  ".....wwWww......",
+  "......wWw.......",
+  "......gWg.......",
+  ".......g........",
+  ".......g........",
+  ".......g........",
+  ".......g........",
+  "................",
+  "................"
+];
+
+const BREAD_GRID = [
+  "................",
+  "................",
+  ".....MMMMM......",
+  "...MMbbbbbMM....",
+  "..MbbbllbbbM....",
+  "..MbllllllbM....",
+  "..MbllsllsbM....",
+  "..MbbllllbbM....",
+  "..MbllsllsbM....",
+  "..MbbbllbbbM....",
+  "...MMbbbbbMM....",
+  ".....MMMMM......",
   "................",
   "................",
   "................",
@@ -418,6 +494,9 @@ const STRING_PALETTE: PixelPalette = { s: [224, 221, 208] };
 const RAW_CHICKEN_PALETTE: PixelPalette = { m: [236, 200, 182], M: [198, 150, 132], r: [242, 184, 174], w: [250, 232, 218] };
 const RAW_MUTTON_PALETTE: PixelPalette = { m: [186, 96, 86], M: [132, 56, 50], r: [202, 84, 84], w: [226, 182, 172] };
 const ROTTEN_FLESH_PALETTE: PixelPalette = { m: [122, 132, 82], M: [80, 90, 54], r: [110, 122, 76], w: [152, 152, 112] };
+const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
+const WHEAT_PALETTE: PixelPalette = { w: [226, 193, 90], W: [176, 142, 55], g: [110, 150, 60] };
+const BREAD_PALETTE: PixelPalette = { M: [120, 70, 35], b: [170, 110, 55], l: [210, 160, 95], s: [140, 90, 45] };
 
 /**
  * Pixel grids for non-block, non-gear items (materials, food). Keyed by item id
@@ -433,7 +512,10 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   string: { grid: STRING_GRID, palette: STRING_PALETTE },
   raw_chicken: { grid: RAW_MEAT_GRID, palette: RAW_CHICKEN_PALETTE },
   raw_mutton: { grid: RAW_MEAT_GRID, palette: RAW_MUTTON_PALETTE },
-  rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE }
+  rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE },
+  seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
+  wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
+  bread: { grid: BREAD_GRID, palette: BREAD_PALETTE }
 };
 
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).
@@ -513,6 +595,7 @@ export function renderSpritePixels(itemId: string): Uint8ClampedArray {
   const custom = ITEM_SPRITE_GRIDS[itemId];
   if (custom) return paintGrid(custom.grid, custom.palette);
   if (def?.kind === "block" && def.blockId !== undefined) return paintIsoBlock(def.blockId);
+  if (def?.kind === "tool" && itemId.endsWith("_hoe")) return paintGrid(HOE_GRID, toolPalette(materialFor(itemId)));
   if (def?.kind === "tool") return paintGrid(PICKAXE_GRID, toolPalette(materialFor(itemId)));
   if (def?.kind === "weapon") {
     if (itemId === "knife") return paintGrid(KNIFE_GRID, toolPalette(STEEL));

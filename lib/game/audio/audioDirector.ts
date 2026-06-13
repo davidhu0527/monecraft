@@ -16,8 +16,10 @@ import {
   MOB_DEATH_SOUND,
   MOB_HIT_SOUND,
   PLACE_SOUNDS,
+  PLANT_SOUND,
   RESPAWN_SOUND,
   SLEEP_SOUND,
+  TILL_SOUND,
   WAKE_SOUND
 } from "./soundParams";
 import { createFootstepScheduler } from "./footsteps";
@@ -207,6 +209,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "wokeUp":
           backend.play(WAKE_SOUND);
+          break;
+        case "tilledSoil":
+          backend.play(TILL_SOUND);
+          break;
+        case "plantedSeed":
+          backend.play(PLANT_SOUND);
           break;
       }
     },

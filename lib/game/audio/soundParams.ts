@@ -787,6 +787,42 @@ export const SLEEP_SOUND: SoundDef = {
   minRetriggerMs: 500
 };
 
+/** Gravelly scrape as a hoe tills soil into farmland. */
+export const TILL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    randomness: 0.15,
+    frequency: 110,
+    sustain: 0.03,
+    release: 0.1,
+    shape: 4,
+    shapeCurve: 0.7,
+    slide: -1,
+    noise: 1.1,
+    sustainVolume: 0.6,
+    decay: 0.04,
+    filter: -350
+  }),
+  minRetriggerMs: 120
+};
+
+/** Soft pop when a seed is planted. */
+export const PLANT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.4,
+    randomness: 0.2,
+    frequency: 420,
+    sustain: 0.01,
+    release: 0.05,
+    shape: 0,
+    pitchJump: 120,
+    pitchJumpTime: 0.02,
+    sustainVolume: 0.6,
+    decay: 0.02
+  }),
+  minRetriggerMs: 120
+};
+
 /** Gentle rising chime on waking — distinct from the brighter respawn stinger. */
 export const WAKE_SOUND: SoundDef = {
   params: zz({

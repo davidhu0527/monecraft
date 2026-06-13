@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
 import { EYE_HEIGHT, MINE_REACH, SLEEP_ALLOWED_BELOW_DAYLIGHT, SLEEP_FADE_SECONDS, SLEEP_HOSTILE_RADIUS } from "@/lib/game/config";
+import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
 import type { EmitGameEvent, GameState } from "../state";
 import { lookDirection } from "./playerMotion";
 
@@ -53,5 +54,44 @@ function interactBed(state: GameState, emit: EmitGameEvent, x: number, y: number
   state.spawnPoint = { x, y, z };
   state.sleepTimer = SLEEP_FADE_SECONDS;
   emit({ type: "sleepStarted" });
+  return true;
+}
+
+/**
+ * Right-click "use" of the held item on the aimed block: a hoe tills grass/dirt
+ * into farmland, seeds plant wheat on farmland. Returns true when an action
+ * happened (consumes the click), false to fall through to block placement.
+ */
+export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () => number): boolean {
+  void rng; // reserved for future randomized uses (bone meal, …)
+  const slot = state.inventory[state.selectedSlot];
+  if (!slot?.id || slot.count <= 0) return false;
+  const isHoe = slot.id.endsWith("_hoe");
+  const isSeeds = slot.id === "seeds";
+  if (!isHoe && !isSeeds) return false;
+
+  const { world, player } = state;
+  scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
+  lookDirection(player.yaw, player.pitch, scratchDir);
+  const result = voxelRaycast(world, scratchEye, scratchDir, MINE_REACH);
+  if (!result) return false;
+  const { x, y, z } = result.hit;
+  const block = world.get(x, y, z) as BlockId;
+
+  if (isHoe) {
+    if (block !== BlockId.Grass && block !== BlockId.Dirt) return false;
+    state.blockChanges.set(x, y, z, BlockId.Farmland);
+    state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+    state.worldMeshDirty = true;
+    emit({ type: "tilledSoil" });
+    return true;
+  }
+
+  // Seeds: plant on farmland when the cell above is clear.
+  if (block !== BlockId.Farmland || world.get(x, y + 1, z) !== BlockId.Air) return false;
+  state.blockChanges.set(x, y + 1, z, BlockId.WheatStage0);
+  state.inventory = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot) ?? state.inventory;
+  state.worldMeshDirty = true;
+  emit({ type: "plantedSeed" });
   return true;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { BlockId } from "@/lib/world";
 import { INVENTORY_SLOTS, MAX_STACK_SIZE } from "@/lib/game/config";
 import {
   ARMOR_SLOTS,
@@ -9,7 +10,8 @@ import {
   ITEM_DEF_BY_ID,
   createEmptyArmorEquipment,
   createInitialInventory,
-  createSlot
+  createSlot,
+  rollBlockDrops
 } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 
@@ -69,6 +71,27 @@ describe("block drops", () => {
     for (const blockId of Object.keys(BLOCK_TO_SLOT)) {
       expect(BREAK_HARDNESS[Number(blockId) as keyof typeof BREAK_HARDNESS]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("block drop rolls", () => {
+  test("grass drops itself, and a seed on a low roll", () => {
+    expect(rollBlockDrops(BlockId.Grass, () => 0.9)).toEqual([{ itemId: "grass", count: 1 }]);
+    const lucky = rollBlockDrops(BlockId.Grass, () => 0);
+    expect(lucky).toContainEqual({ itemId: "grass", count: 1 });
+    expect(lucky).toContainEqual({ itemId: "seeds", count: 1 });
+  });
+
+  test("mature wheat drops wheat and 1-2 seeds", () => {
+    const min = rollBlockDrops(BlockId.WheatStage3, () => 0);
+    expect(min).toContainEqual({ itemId: "wheat", count: 1 });
+    expect(min.find((d) => d.itemId === "seeds")!.count).toBe(1);
+    const max = rollBlockDrops(BlockId.WheatStage3, () => 0.999);
+    expect(max.find((d) => d.itemId === "seeds")!.count).toBe(2);
+  });
+
+  test("immature wheat returns just a seed", () => {
+    expect(rollBlockDrops(BlockId.WheatStage1, () => 0.5)).toEqual([{ itemId: "seeds", count: 1 }]);
   });
 });
 
