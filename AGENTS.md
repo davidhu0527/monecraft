@@ -6,7 +6,7 @@ Guidance for AI coding agents (Codex, Claude Code, Cursor, …) working in this 
 
 A Minecraft-inspired voxel game: Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Three.js, Bun. Single-player, browser-based, client-only, saves to localStorage.
 
-**Zero binary assets**: every asset is generated at runtime — textures and sprites from pixel code, sound and music synthesized via ZZFX/WebAudio. New content should follow this principle unless the user decides otherwise.
+**Zero binary assets**: every asset is generated at runtime — textures and sprites from pixel code, sound and music synthesized via ZZFX/WebAudio. New content should follow this principle unless the user decides otherwise. The one sanctioned exception is the UI pixel font (Pixelify Sans), loaded via `next/font/google` and self-hosted at build in `app/fonts.ts` — don't "fix" it back to a system font.
 
 ## Commands
 
