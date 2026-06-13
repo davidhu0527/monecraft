@@ -31,7 +31,10 @@ export const enum BlockId {
   WheatStage2 = 24,
   WheatStage3 = 25,
   Furnace = 26,
-  Chest = 27
+  Chest = 27,
+  // Dungeon blocks (worldgen-only flavor + the spawner block-entity marker).
+  MossyCobblestone = 28,
+  Spawner = 29
 }
 
 export enum BiomeId {
@@ -63,7 +66,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Cactus]: 0x6aa850,
   [BlockId.Bed]: 0xc0392b,
   [BlockId.Furnace]: 0x63666a,
-  [BlockId.Chest]: 0x9c6a3c
+  [BlockId.Chest]: 0x9c6a3c,
+  [BlockId.MossyCobblestone]: 0x6a7a55
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -98,5 +102,8 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.WheatStage2]: [0.7, 0.69, 0.29],
   [BlockId.WheatStage3]: [0.82, 0.72, 0.3],
   [BlockId.Furnace]: [0.38, 0.39, 0.41],
-  [BlockId.Chest]: [0.58, 0.41, 0.22]
+  [BlockId.Chest]: [0.58, 0.41, 0.22],
+  // Cobble tinted with patches of moss; the spawner is a near-black iron cage.
+  [BlockId.MossyCobblestone]: [0.34, 0.42, 0.3],
+  [BlockId.Spawner]: [0.18, 0.19, 0.22]
 };
