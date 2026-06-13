@@ -58,16 +58,18 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       return;
     }
 
+    // Render-only and engine-supported in every state, so it works even from
+    // the pause menu — like Minecraft's F5.
+    if (evt.code === "KeyV") {
+      engine.dispatch({ type: "toggleCameraView" });
+      return;
+    }
+
     if (engine.state.paused) return;
 
     if (evt.code === "F3") {
       evt.preventDefault();
       engine.dispatch({ type: "toggleDebug" });
-      return;
-    }
-
-    if (evt.code === "KeyV") {
-      engine.dispatch({ type: "toggleCameraView" });
       return;
     }
 

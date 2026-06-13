@@ -84,6 +84,13 @@ test("V cycles the camera views and the scene keeps rendering", async ({ gamePag
   expect(await cameraMode()).toBe("third-front");
   await page.keyboard.press("v");
   expect(await cameraMode()).toBe("first");
+
+  // V keeps working from the pause menu (render-only, like Minecraft F5).
+  await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
+  await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+  await page.keyboard.press("v");
+  expect(await cameraMode()).toBe("third-rear");
+  await page.keyboard.press("Escape"); // resume
 });
 
 test("the pause menu freezes the game and resumes it", async ({ gamePage: page }) => {
