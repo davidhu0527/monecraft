@@ -219,6 +219,7 @@
 .debug-line {
   background: rgba(16, 16, 16, 0.45);
   color: #e8e8e8;
+  font-family: var(--mc-font-mono);
   font-size: 12px;
   line-height: 1.35;
   padding: 1px 5px;

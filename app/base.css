@@ -12,6 +12,8 @@
   --mc-text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
   --mc-button: #6f6f6f;
   --mc-button-hover: #7f8caf;
+  /* Monospace stack, kept for the F3 debug readout (column alignment). */
+  --mc-font-mono: "Lucida Console", Monaco, "Courier New", monospace;
   /* Generated noise tiles (set at runtime by installUiTiles). */
   --mc-tile-dirt: none;
   --mc-tile-stone: none;
@@ -27,7 +29,9 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  font-family: "Lucida Console", Monaco, "Courier New", monospace;
+  /* --mc-font (Pixelify Sans, set on <html> by next/font) already carries the
+     monospace fallback list, so text renders even before the font loads. */
+  font-family: var(--mc-font), var(--mc-font-mono);
   background: #87bfff;
 }
 
