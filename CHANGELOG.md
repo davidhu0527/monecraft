@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Camera view toggle (V)**: cycles first-person → third-person rear → third-person front, like Minecraft's F5 (V instead, because F5 reloads the page in browsers)
+  - New humanoid player body (head, torso, two arms, two legs) in the zero-asset box-mesh style, visible only in third person — walk gait scaled by speed, a chop animation on attacks and while mining, the look pitch on the head, and the held hotbar item rendered in the right hand via the shared item-model builder
+  - The third-person camera boom raycasts against terrain and clamps so walls never occlude the player; the front view flips the heading and inverts the tilt while mouse control of the player stays unchanged
+  - Gameplay is intentionally eye-relative in every mode (mining/placing reach, combat aim, audio panning are unaffected); the crosshair stays centered, matching Minecraft
+  - The view mode is session-only (resets to first-person on reload). No save-format or worldgen impact
+
 ## [0.5.0] - 2026-06-13
 
 ### Added

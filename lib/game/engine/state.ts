@@ -4,6 +4,15 @@ import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
+/** Session-only camera presentation mode; never persisted. Gameplay stays eye-relative in all modes. */
+export type CameraMode = "first" | "third-rear" | "third-front";
+
+const CAMERA_MODE_CYCLE: readonly CameraMode[] = ["first", "third-rear", "third-front"];
+
+export function nextCameraMode(mode: CameraMode): CameraMode {
+  return CAMERA_MODE_CYCLE[(CAMERA_MODE_CYCLE.indexOf(mode) + 1) % CAMERA_MODE_CYCLE.length];
+}
+
 export type PlayerState = {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -77,6 +86,7 @@ export type GameState = {
   paused: boolean;
   debugOpen: boolean;
   debugInfo: DebugInfo | null;
+  cameraMode: CameraMode;
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
@@ -142,6 +152,7 @@ export type GameSnapshot = {
   paused: boolean;
   debugOpen: boolean;
   debug: DebugInfo | null;
+  cameraMode: CameraMode;
   /** Total defense points of equipped armor — drives the HUD armor bar. */
   armorPoints: number;
   capsActive: boolean;

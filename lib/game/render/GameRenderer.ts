@@ -1,11 +1,17 @@
 import * as THREE from "three";
-import { buildGeometryRegion, createBlockAtlasTexture, VoxelWorld } from "@/lib/world";
-import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS, WALK_SPEED } from "@/lib/game/config";
+import { buildGeometryRegion, createBlockAtlasTexture, voxelRaycast, VoxelWorld } from "@/lib/world";
+import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS, THIRD_PERSON_DISTANCE, THIRD_PERSON_MARGIN, WALK_SPEED } from "@/lib/game/config";
 import { sunAngleAt } from "@/lib/game/engine/systems/dayNight";
 import type { GameState } from "@/lib/game/engine/state";
+import { cameraOffsetDirection, computeCameraPose } from "./cameraView";
 import { createCrackOverlay, type CrackOverlayView } from "./crackOverlay";
 import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
+import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+
+const scratchEye = new THREE.Vector3();
+const scratchDir = new THREE.Vector3();
+const scratchPose = new THREE.Vector3();
 
 export type CreateRendererResult = { ok: true; renderer: GameRenderer } | { ok: false; error: string };
 
@@ -33,6 +39,7 @@ export class GameRenderer {
   private readonly heldItem: HeldItemView;
   private readonly crackOverlay: CrackOverlayView;
   private readonly mobVisuals: MobVisuals;
+  private readonly playerVisuals: PlayerVisuals;
 
   /** WebGL context creation can fail (blocked, unsupported) — surface it instead of throwing. */
   static create(mount: HTMLElement): CreateRendererResult {
@@ -76,6 +83,7 @@ export class GameRenderer {
     this.heldItem = createHeldItemView(this.camera);
     this.crackOverlay = createCrackOverlay(this.scene);
     this.mobVisuals = createMobVisuals(this.scene);
+    this.playerVisuals = createPlayerVisuals(this.scene);
   }
 
   get domElement(): HTMLCanvasElement {
@@ -94,10 +102,12 @@ export class GameRenderer {
     this.heldItem.update(state.inventory[state.selectedSlot], {
       timeMs,
       miningActive: state.mining.targetKey !== "",
-      moveFactor: state.player.onGround ? Math.min(1, Math.hypot(state.player.velocity.x, state.player.velocity.z) / WALK_SPEED) : 0
+      moveFactor: state.player.onGround ? Math.min(1, Math.hypot(state.player.velocity.x, state.player.velocity.z) / WALK_SPEED) : 0,
+      visible: state.cameraMode === "first"
     });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
+    this.playerVisuals.sync(state, timeMs);
     this.syncDayNight(state);
   }
 
@@ -105,9 +115,10 @@ export class GameRenderer {
     this.webgl.render(this.scene, this.camera);
   }
 
-  /** One-shot held-item swing for attack clicks (hit or miss). */
+  /** One-shot swing for attack clicks (hit or miss) — held item and body arm. */
   triggerSwing(): void {
     this.heldItem.triggerSwing();
+    this.playerVisuals.triggerSwing();
   }
 
   handleResize(): void {
@@ -117,6 +128,7 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.playerVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();
@@ -129,10 +141,21 @@ export class GameRenderer {
 
   private syncCamera(state: GameState): void {
     const { position, yaw, pitch } = state.player;
-    this.camera.position.set(position.x, position.y + EYE_HEIGHT, position.z);
+    scratchEye.set(position.x, position.y + EYE_HEIGHT, position.z);
+
+    let distance = 0;
+    if (state.cameraMode !== "first") {
+      // Clamp the boom against terrain so walls never occlude the player.
+      const dir = cameraOffsetDirection(state.cameraMode, yaw, pitch, scratchDir);
+      const hit = voxelRaycast(state.world, scratchEye, dir, THIRD_PERSON_DISTANCE);
+      distance = hit ? Math.max(0, hit.distance - THIRD_PERSON_MARGIN) : THIRD_PERSON_DISTANCE;
+    }
+
+    const pose = computeCameraPose(state.cameraMode, scratchEye.x, scratchEye.y, scratchEye.z, yaw, pitch, distance, scratchPose);
+    this.camera.position.set(pose.posX, pose.posY, pose.posZ);
     this.camera.rotation.order = "YXZ";
-    this.camera.rotation.y = yaw;
-    this.camera.rotation.x = pitch;
+    this.camera.rotation.y = pose.yaw;
+    this.camera.rotation.x = pose.pitch;
   }
 
   private syncWorldMesh(state: GameState): void {

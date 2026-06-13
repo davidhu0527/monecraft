@@ -1,9 +1,7 @@
 import * as THREE from "three";
-import { HELD_BLOCK_COLORS, HELD_BLOCK_FALLBACK_COLOR } from "@/lib/world";
 import type { InventorySlot } from "@/lib/game/types";
-import { renderSpritePixels } from "@/lib/ui/spritePixels";
-import { buildExtrudedSpriteGeometry } from "./extrudedSprite";
 import { computeHeldPose } from "./heldItemPose";
+import { buildItemModel } from "./itemModel";
 
 export type HeldItemFrame = {
   timeMs: number;
@@ -11,6 +9,8 @@ export type HeldItemFrame = {
   miningActive: boolean;
   /** 0..1 horizontal speed relative to walk speed — scales the walk bob. */
   moveFactor: number;
+  /** False in third person — the body's hand shows the item instead. */
+  visible: boolean;
 };
 
 export type HeldItemView = {
@@ -47,28 +47,15 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
     while (materials.length) materials.pop()?.dispose();
   };
 
-  const blockColor = (blockId: number | undefined): number =>
-    (blockId !== undefined ? HELD_BLOCK_COLORS[blockId as keyof typeof HELD_BLOCK_COLORS] : undefined) ?? HELD_BLOCK_FALLBACK_COLOR;
-
-  const buildModel = (slot: InventorySlot, id: string): THREE.Object3D => {
-    if (slot.kind === "block") {
-      const geometry = new THREE.BoxGeometry(0.22, 0.22, 0.22);
-      const material = new THREE.MeshStandardMaterial({ color: blockColor(slot.blockId), roughness: 0.7, metalness: 0.05 });
-      geometries.push(geometry);
-      materials.push(material);
-      return new THREE.Mesh(geometry, material);
-    }
-    // Tools, weapons, food, armor: extrude the same 16x16 pixel grid the
-    // inventory icon uses, so the in-hand model always matches the sprite.
-    const geometry = buildExtrudedSpriteGeometry(renderSpritePixels(id));
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05 });
-    geometries.push(geometry);
-    materials.push(material);
-    return new THREE.Mesh(geometry, material);
-  };
-
   return {
     update(slot, frame) {
+      root.visible = frame.visible;
+      if (!frame.visible) {
+        // Drop queued swings so they don't replay when the view returns.
+        swingQueued = false;
+        return;
+      }
+
       const nextKey = slot?.id && slot.count > 0 && slot.kind ? `${slot.id}` : "";
       if (nextKey !== key) {
         clear();
@@ -77,8 +64,11 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
         swingQueued = false;
         swingStartMs = -Infinity;
         wasMining = false;
-        if (slot && nextKey) {
-          mesh = buildModel(slot, nextKey);
+        const model = buildItemModel(slot);
+        if (model) {
+          geometries.push(model.geometry);
+          materials.push(model.material);
+          mesh = model.object;
           holder.add(mesh);
           key = nextKey;
           equipStartMs = frame.timeMs;

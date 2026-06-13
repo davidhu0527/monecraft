@@ -40,6 +40,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   paused: false,
   debugOpen: false,
   debug: null,
+  cameraMode: "first",
   armorPoints: 0,
   capsActive: false
 };

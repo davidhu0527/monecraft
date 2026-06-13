@@ -9,7 +9,7 @@ import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAt
 import type { SaveData } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
-import { createTimers, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
+import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
@@ -80,6 +80,7 @@ export class GameEngine {
       paused: false,
       debugOpen: false,
       debugInfo: null,
+      cameraMode: "first",
       capsActive: false,
       mobs: [],
       nextMobId: 1,
@@ -221,6 +222,11 @@ export class GameEngine {
       case "toggleDebug": {
         state.debugOpen = !state.debugOpen;
         state.debugInfo = state.debugOpen ? this.currentDebugInfo() : null;
+        break;
+      }
+      case "toggleCameraView": {
+        // Render-only, so it works even while dead or paused (like Minecraft F5).
+        state.cameraMode = nextCameraMode(state.cameraMode);
         break;
       }
       case "respawn": {
@@ -370,6 +376,7 @@ export class GameEngine {
       paused: state.paused,
       debugOpen: state.debugOpen,
       debug: state.debugInfo,
+      cameraMode: state.cameraMode,
       armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
       capsActive: state.capsActive
     };
