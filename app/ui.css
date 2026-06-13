@@ -295,6 +295,16 @@
   margin-bottom: 10px;
 }
 
+.chest-section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #9a9a9a;
+}
+
+.inv-grid.chest-grid {
+  margin-bottom: 0;
+}
+
 .inv-slot {
   position: relative;
   width: 40px;

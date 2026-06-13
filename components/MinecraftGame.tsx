@@ -33,6 +33,7 @@ export default function MinecraftGame() {
     paused,
     sleeping,
     craftingStation,
+    container,
     debugOpen,
     debug,
     saveMessage,
@@ -47,6 +48,7 @@ export default function MinecraftGame() {
     canCraft,
     craft,
     swapInventorySlots,
+    moveStack,
     toggleEquipArmor,
     resumeNow,
     respawnNow,
@@ -105,8 +107,10 @@ export default function MinecraftGame() {
           hotbarSlots={hotbarSlots}
           recipes={recipes}
           craftingStation={craftingStation}
+          container={container}
           canCraft={canCraft}
           onSwapSlots={swapInventorySlots}
+          onMoveStack={moveStack}
           onToggleEquipArmor={toggleEquipArmor}
           onCraft={craft}
         />

@@ -218,11 +218,14 @@ export function useMinecraftGame() {
         }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
-        if (event.type === "openedStation") {
-          // A furnace opened the inventory from a mouse click — release the keys
-          // and pointer lock the same way KeyI does on the DOM side.
+        if (event.type === "openedStation" || event.type === "openedContainer") {
+          // A furnace/chest opened the inventory from a mouse click — release the
+          // keys and pointer lock the same way KeyI does on the DOM side.
           input.clearKeys();
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+        }
+        if (event.type === "breakBlocked") {
+          flashMessage("Not enough room to empty the chest");
         }
         if (event.type === "sleepDenied") {
           flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
@@ -290,6 +293,7 @@ export function useMinecraftGame() {
     paused: snapshot.paused,
     sleeping: snapshot.sleeping,
     craftingStation: snapshot.craftingStation,
+    container: snapshot.container,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
@@ -304,6 +308,7 @@ export function useMinecraftGame() {
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
+    moveStack: (from: number, to: number) => engine?.dispatch({ type: "moveStack", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),
     resumeNow: () => {
       engine?.dispatch({ type: "resume" });

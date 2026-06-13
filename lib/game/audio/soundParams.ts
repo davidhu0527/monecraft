@@ -898,3 +898,24 @@ export const WAKE_SOUND: SoundDef = {
   }),
   minRetriggerMs: 500
 };
+
+/** Short wooden creak when a chest opens. */
+export const CHEST_OPEN_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.15,
+    frequency: 260,
+    attack: 0.01,
+    sustain: 0.05,
+    release: 0.12,
+    shape: 2,
+    shapeCurve: 1.4,
+    noise: 0.4,
+    pitchJump: -90,
+    pitchJumpTime: 0.06,
+    sustainVolume: 0.6,
+    decay: 0.05,
+    filter: -600
+  }),
+  minRetriggerMs: 180
+};

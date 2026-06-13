@@ -21,6 +21,7 @@ import {
   PLANT_SOUND,
   RESPAWN_SOUND,
   SLEEP_SOUND,
+  CHEST_OPEN_SOUND,
   SMELT_SOUND,
   TILL_SOUND,
   WAKE_SOUND
@@ -226,6 +227,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "smelted":
           backend.play(SMELT_SOUND);
+          break;
+        case "openedContainer":
+          backend.play(CHEST_OPEN_SOUND);
           break;
         case "mobFed":
           backend.play(MOB_FED_SOUND);
