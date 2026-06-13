@@ -10,7 +10,7 @@ import { createInputController, type InputController } from "@/lib/game/input/in
 import * as inv from "@/lib/game/inventory";
 import { DEFAULT_SKIN_ID, getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 import { readSkinSettings, writeSkinSettings } from "@/lib/game/skinSettings";
-import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
@@ -44,7 +44,9 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   debug: null,
   cameraMode: "first",
   armorPoints: 0,
-  capsActive: false
+  capsActive: false,
+  sleeping: false,
+  craftingStation: null
 };
 
 const noopSubscribe = () => () => {};
@@ -215,6 +217,18 @@ export function useMinecraftGame() {
         }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
+        if (event.type === "openedStation") {
+          // A furnace opened the inventory from a mouse click — release the keys
+          // and pointer lock the same way KeyI does on the DOM side.
+          input.clearKeys();
+          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+        }
+        if (event.type === "sleepDenied") {
+          flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
+        }
+        if (event.type === "pickedUp") {
+          flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
+        }
         audio.handleEvent(event);
       }
 
@@ -272,6 +286,8 @@ export function useMinecraftGame() {
     hostileCount: snapshot.hostileCount,
     respawnSeconds: snapshot.respawnSeconds,
     paused: snapshot.paused,
+    sleeping: snapshot.sleeping,
+    craftingStation: snapshot.craftingStation,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,

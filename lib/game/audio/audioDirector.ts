@@ -13,9 +13,17 @@ import {
   LAND_SOUND,
   MOB_AMBIENT_SOUNDS,
   MOB_ATTACK_SOUNDS,
+  MOB_BRED_SOUND,
+  MOB_DEATH_SOUND,
+  MOB_FED_SOUND,
   MOB_HIT_SOUND,
   PLACE_SOUNDS,
-  RESPAWN_SOUND
+  PLANT_SOUND,
+  RESPAWN_SOUND,
+  SLEEP_SOUND,
+  SMELT_SOUND,
+  TILL_SOUND,
+  WAKE_SOUND
 } from "./soundParams";
 import { createFootstepScheduler } from "./footsteps";
 import { createMobAmbienceScheduler } from "./mobAmbience";
@@ -190,11 +198,35 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "mobHit":
           backend.play(MOB_HIT_SOUND);
           break;
+        case "mobDied":
+          backend.play(MOB_DEATH_SOUND);
+          break;
         case "died":
           backend.play(DEATH_SOUND);
           break;
         case "respawned":
           backend.play(RESPAWN_SOUND);
+          break;
+        case "sleepStarted":
+          backend.play(SLEEP_SOUND);
+          break;
+        case "wokeUp":
+          backend.play(WAKE_SOUND);
+          break;
+        case "tilledSoil":
+          backend.play(TILL_SOUND);
+          break;
+        case "plantedSeed":
+          backend.play(PLANT_SOUND);
+          break;
+        case "smelted":
+          backend.play(SMELT_SOUND);
+          break;
+        case "mobFed":
+          backend.play(MOB_FED_SOUND);
+          break;
+        case "mobBred":
+          backend.play(MOB_BRED_SOUND);
           break;
       }
     },

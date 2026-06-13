@@ -631,6 +631,27 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
   }
 };
 
+/** Soft downward thud when a mob dies and drops its loot. */
+export const MOB_DEATH_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.6,
+    randomness: 0.1,
+    frequency: 160,
+    sustain: 0.03,
+    release: 0.16,
+    shape: 4,
+    shapeCurve: 1.2,
+    slide: -5,
+    pitchJump: -60,
+    pitchJumpTime: 0.05,
+    noise: 0.5,
+    sustainVolume: 0.7,
+    decay: 0.05,
+    filter: -500
+  }),
+  minRetriggerMs: 120
+};
+
 /** Thwack when the player's melee attack lands on any mob. */
 export const MOB_HIT_SOUND: SoundDef = {
   params: zz({
@@ -742,6 +763,138 @@ export const RESPAWN_SOUND: SoundDef = {
     delay: 0.08,
     sustainVolume: 0.8,
     decay: 0.15
+  }),
+  minRetriggerMs: 500
+};
+
+/** Soft descending pad as the player drifts off to sleep. */
+export const SLEEP_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    frequency: 320,
+    attack: 0.05,
+    sustain: 0.25,
+    release: 0.5,
+    shape: 1,
+    shapeCurve: 1.4,
+    slide: -2,
+    pitchJump: -120,
+    pitchJumpTime: 0.25,
+    sustainVolume: 0.7,
+    decay: 0.3,
+    filter: -700
+  }),
+  minRetriggerMs: 500
+};
+
+/** Gravelly scrape as a hoe tills soil into farmland. */
+export const TILL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    randomness: 0.15,
+    frequency: 110,
+    sustain: 0.03,
+    release: 0.1,
+    shape: 4,
+    shapeCurve: 0.7,
+    slide: -1,
+    noise: 1.1,
+    sustainVolume: 0.6,
+    decay: 0.04,
+    filter: -350
+  }),
+  minRetriggerMs: 120
+};
+
+/** Soft pop when a seed is planted. */
+export const PLANT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.4,
+    randomness: 0.2,
+    frequency: 420,
+    sustain: 0.01,
+    release: 0.05,
+    shape: 0,
+    pitchJump: 120,
+    pitchJumpTime: 0.02,
+    sustainVolume: 0.6,
+    decay: 0.02
+  }),
+  minRetriggerMs: 120
+};
+
+/** Soft munch when an animal is fed. */
+export const MOB_FED_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.45,
+    randomness: 0.2,
+    frequency: 160,
+    sustain: 0.04,
+    release: 0.07,
+    shape: 4,
+    shapeCurve: 0.8,
+    repeatTime: 0.08,
+    noise: 0.4,
+    sustainVolume: 0.6,
+    decay: 0.03,
+    filter: -380
+  }),
+  minRetriggerMs: 150
+};
+
+/** Bright two-note chirp when a baby is born. */
+export const MOB_BRED_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.1,
+    frequency: 520,
+    attack: 0.01,
+    sustain: 0.05,
+    release: 0.12,
+    shape: 1,
+    shapeCurve: 1.5,
+    pitchJump: 260,
+    pitchJumpTime: 0.07,
+    sustainVolume: 0.7,
+    decay: 0.06
+  }),
+  minRetriggerMs: 200
+};
+
+/** Low crackle when a furnace smelt completes. */
+export const SMELT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.2,
+    frequency: 90,
+    attack: 0.02,
+    sustain: 0.08,
+    release: 0.18,
+    shape: 4,
+    shapeCurve: 1.1,
+    noise: 0.8,
+    sustainVolume: 0.6,
+    decay: 0.08,
+    filter: -450
+  }),
+  minRetriggerMs: 150
+};
+
+/** Gentle rising chime on waking — distinct from the brighter respawn stinger. */
+export const WAKE_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    frequency: 440,
+    attack: 0.02,
+    sustain: 0.15,
+    release: 0.3,
+    shape: 1,
+    shapeCurve: 1.5,
+    pitchJump: 220,
+    pitchJumpTime: 0.14,
+    repeatTime: 0.1,
+    sustainVolume: 0.7,
+    decay: 0.12
   }),
   minRetriggerMs: 500
 };

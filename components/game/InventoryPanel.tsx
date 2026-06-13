@@ -11,10 +11,15 @@ type InventoryPanelProps = {
   selectedHotbarSlot: number;
   hotbarSlots: number;
   recipes: Recipe[];
+  craftingStation: "furnace" | null;
   canCraft: (recipe: Recipe) => boolean;
   onSwapSlots: (fromIndex: number, toIndex: number) => void;
   onToggleEquipArmor: (index: number) => void;
   onCraft: (recipe: Recipe) => void;
+};
+
+const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
+  furnace: "Furnace"
 };
 
 function slotTitle(slot: InventorySlot): string | undefined {
@@ -35,6 +40,7 @@ export default function InventoryPanel({
   selectedHotbarSlot,
   hotbarSlots,
   recipes,
+  craftingStation,
   canCraft,
   onSwapSlots,
   onToggleEquipArmor,
@@ -126,26 +132,29 @@ export default function InventoryPanel({
         <div className="recipe-book">
           <div className="inventory-heading">Crafting</div>
           <div className="recipe-list">
-            {recipes.map((recipe) => (
-              <button
-                key={recipe.id}
-                className="recipe-entry"
-                onClick={() => onCraft(recipe)}
-                disabled={!canCraft(recipe)}
-                aria-label={recipe.label}
-                title={recipe.label}
-              >
-                <span className="recipe-ingredients">
-                  {recipe.cost.map((cost) => (
-                    <ItemIcon key={`${recipe.id}-${cost.slotId}`} slot={createSlot(cost.slotId, cost.count)} size={24} />
-                  ))}
-                </span>
-                <span className="recipe-arrow" aria-hidden>
-                  →
-                </span>
-                <ItemIcon slot={createSlot(recipe.result.slotId, recipe.result.count)} size={24} />
-              </button>
-            ))}
+            {recipes.map((recipe) => {
+              const stationLocked = !!recipe.station && recipe.station !== craftingStation;
+              return (
+                <button
+                  key={recipe.id}
+                  className="recipe-entry"
+                  onClick={() => onCraft(recipe)}
+                  disabled={stationLocked || !canCraft(recipe)}
+                  aria-label={recipe.label}
+                  title={stationLocked ? `Requires ${STATION_LABELS[recipe.station!]}` : recipe.label}
+                >
+                  <span className="recipe-ingredients">
+                    {recipe.cost.map((cost) => (
+                      <ItemIcon key={`${recipe.id}-${cost.slotId}`} slot={createSlot(cost.slotId, cost.count)} size={24} />
+                    ))}
+                  </span>
+                  <span className="recipe-arrow" aria-hidden>
+                    →
+                  </span>
+                  <ItemIcon slot={createSlot(recipe.result.slotId, recipe.result.count)} size={24} />
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

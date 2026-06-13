@@ -6,6 +6,7 @@ import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
+import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
@@ -30,6 +31,8 @@ export default function MinecraftGame() {
     hostileCount,
     respawnSeconds,
     paused,
+    sleeping,
+    craftingStation,
     debugOpen,
     debug,
     saveMessage,
@@ -78,6 +81,12 @@ export default function MinecraftGame() {
 
       {showClickHint ? <div className="click-hint">Click to play</div> : null}
 
+      {saveMessage && !paused ? (
+        <div className="hud-toast" role="status">
+          {saveMessage}
+        </div>
+      ) : null}
+
       <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
       <div className="hud-bottom">
@@ -92,6 +101,7 @@ export default function MinecraftGame() {
           selectedHotbarSlot={selectedSlot}
           hotbarSlots={hotbarSlots}
           recipes={recipes}
+          craftingStation={craftingStation}
           canCraft={canCraft}
           onSwapSlots={swapInventorySlots}
           onToggleEquipArmor={toggleEquipArmor}
@@ -114,6 +124,8 @@ export default function MinecraftGame() {
       ) : null}
 
       <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
+
+      <SleepOverlay sleeping={sleeping} />
 
       <div className="crosshair" />
       <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>
