@@ -35,6 +35,8 @@ export default function MinecraftGame() {
     saveMessage,
     audioSettings,
     updateAudioSettings,
+    skinId,
+    updateSkin,
     hotbarSlots,
     recipes,
     maxHearts,
@@ -102,6 +104,8 @@ export default function MinecraftGame() {
           saveMessage={saveMessage}
           audioSettings={audioSettings}
           onAudioSettingsChange={updateAudioSettings}
+          skinId={skinId}
+          onSkinChange={updateSkin}
           onBack={resumeNow}
           onSave={saveNow}
           onLoad={loadNow}

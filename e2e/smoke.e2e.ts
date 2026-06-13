@@ -109,6 +109,21 @@ test("the pause menu freezes the game and resumes it", async ({ gamePage: page }
   expect(await page.evaluate(() => window.__monecraft!.engine.state.dayClock)).toBeGreaterThan(clock2);
 });
 
+test("picking a skin persists across a reload", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
+  await page.getByRole("button", { name: "Robot skin" }).click();
+
+  const stored = await page.evaluate(() => localStorage.getItem("minecraft_skin_v1"));
+  expect(JSON.parse(stored!)).toEqual({ skinId: "robot" });
+
+  await page.reload();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Robot skin" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Steve skin" })).toHaveAttribute("aria-pressed", "false");
+});
+
 test("saving from the pause menu persists the world across a reload", async ({ gamePage: page }) => {
   await calmDaytime(page);
   const seed = await page.evaluate(() => window.__monecraft!.engine.state.world.seed);
