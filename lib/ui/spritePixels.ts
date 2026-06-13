@@ -143,6 +143,123 @@ const FOOD_GRID = [
   "..w............."
 ];
 
+// --- Material & food item grids (16x16). Legend varies per palette below. ---
+
+const WOOL_GRID = [
+  "................",
+  "....llllll......",
+  "...lmmmmmml.....",
+  "..lmmmmmmmml....",
+  "..lmmMmmMmml....",
+  ".lmmmmmmmmmml...",
+  ".lmmMmmmMmmml...",
+  ".lmmmmmmmmmml...",
+  ".lmmmmMmmmmml...",
+  "..lmmmmmmmml....",
+  "..lmmMmmmMml....",
+  "...lmmmmmml.....",
+  "....llllll......",
+  "................",
+  "................",
+  "................"
+];
+
+const FEATHER_GRID = [
+  "................",
+  ".........ww.....",
+  "........wwww....",
+  ".......wwswl....",
+  "......wwsswl....",
+  ".....wwsswl.....",
+  ".....wssswl.....",
+  "....wsssw.l.....",
+  "....wssw..l.....",
+  "...wssw...l.....",
+  "...wsw....l.....",
+  "..wsw.....l.....",
+  "..sw......l.....",
+  ".sw.......l.....",
+  ".w........l.....",
+  "................"
+];
+
+const BONE_GRID = [
+  "................",
+  "...ll....ll.....",
+  "..lwwl..lwwl....",
+  "..lwwwllwwwl....",
+  "..lwwwwwwwwl....",
+  "...lwwwwwwl.....",
+  ".....lwwl.......",
+  ".....lwwl.......",
+  ".....lwwl.......",
+  ".....lwwl.......",
+  "...lwwwwwwl.....",
+  "..lwwwwwwwwl....",
+  "..lwwwllwwwl....",
+  "..lwwl..lwwl....",
+  "...ll....ll.....",
+  "................"
+];
+
+const LEATHER_GRID = [
+  "................",
+  "...mmmmmmmm.....",
+  "..mMmmmmmmMm....",
+  "..mmmmmmmmmm....",
+  "..mmMmmmmMmm....",
+  "..mmmmmmmmmm....",
+  "..mmmmMmmmmm....",
+  "..mmMmmmmMmm....",
+  "..mmmmmmmmmm....",
+  "..mMmmmmmmMm....",
+  "...mmmmmmmm.....",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
+const STRING_GRID = [
+  "................",
+  "......ssss......",
+  ".....s....s.....",
+  "....s..ss..s....",
+  "...s..s..s..s...",
+  "...s.s....s.s...",
+  "...s.s....s.s...",
+  "...s.s....s.s...",
+  "...s..s..s..s...",
+  "....s..ss..s....",
+  ".....s....s.....",
+  "......ssss......",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
+// Shared chunk-of-meat shape, recolored per meat (chicken/mutton/rotten).
+const RAW_MEAT_GRID = [
+  "................",
+  ".....mmmm.......",
+  "....mMMMMm......",
+  "...mMrrrrMm.....",
+  "..mMrrrrrrMm....",
+  "..mrrrrwrrMm....",
+  "..mrrwrrrrMm....",
+  "..mrrrrrrrMm....",
+  "..mMrrrrrrMm....",
+  "...mMrrrrMm.....",
+  "....mMMMMm......",
+  ".....mmmm.......",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
 const HELMET_GRID = [
   "................",
   "................",
@@ -293,6 +410,32 @@ const FOOD_PALETTE: PixelPalette = {
   w: [252, 248, 240]
 };
 
+const WOOL_PALETTE: PixelPalette = { m: [236, 236, 236], M: [198, 198, 200], l: [252, 252, 252] };
+const FEATHER_PALETTE: PixelPalette = { w: [246, 247, 250], s: [176, 182, 194], l: [255, 255, 255] };
+const BONE_PALETTE: PixelPalette = { w: [236, 233, 220], l: [198, 194, 178] };
+const LEATHER_PALETTE: PixelPalette = { m: [150, 95, 55], M: [98, 60, 33] };
+const STRING_PALETTE: PixelPalette = { s: [224, 221, 208] };
+const RAW_CHICKEN_PALETTE: PixelPalette = { m: [236, 200, 182], M: [198, 150, 132], r: [242, 184, 174], w: [250, 232, 218] };
+const RAW_MUTTON_PALETTE: PixelPalette = { m: [186, 96, 86], M: [132, 56, 50], r: [202, 84, 84], w: [226, 182, 172] };
+const ROTTEN_FLESH_PALETTE: PixelPalette = { m: [122, 132, 82], M: [80, 90, 54], r: [110, 122, 76], w: [152, 152, 112] };
+
+/**
+ * Pixel grids for non-block, non-gear items (materials, food). Keyed by item id
+ * so adding an item only needs an entry here plus its ITEM_DEFS row. The render
+ * function consults this before the kind-based fallbacks.
+ */
+const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette }> = {
+  food: { grid: FOOD_GRID, palette: FOOD_PALETTE },
+  wool: { grid: WOOL_GRID, palette: WOOL_PALETTE },
+  feather: { grid: FEATHER_GRID, palette: FEATHER_PALETTE },
+  bone: { grid: BONE_GRID, palette: BONE_PALETTE },
+  leather: { grid: LEATHER_GRID, palette: LEATHER_PALETTE },
+  string: { grid: STRING_GRID, palette: STRING_PALETTE },
+  raw_chicken: { grid: RAW_MEAT_GRID, palette: RAW_CHICKEN_PALETTE },
+  raw_mutton: { grid: RAW_MEAT_GRID, palette: RAW_MUTTON_PALETTE },
+  rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE }
+};
+
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).
 const ORE_ACCENTS: Partial<Record<BlockId, Rgb>> = {
   [BlockId.SliverOre]: [222, 226, 233],
@@ -367,7 +510,8 @@ function materialFor(itemId: string): { m: Rgb; M: Rgb; l: Rgb } {
 /** 16x16 RGBA pixels for any item id; magenta checker for unknown ids. */
 export function renderSpritePixels(itemId: string): Uint8ClampedArray {
   const def = ITEM_DEF_BY_ID[itemId];
-  if (itemId === "food") return paintGrid(FOOD_GRID, FOOD_PALETTE);
+  const custom = ITEM_SPRITE_GRIDS[itemId];
+  if (custom) return paintGrid(custom.grid, custom.palette);
   if (def?.kind === "block" && def.blockId !== undefined) return paintIsoBlock(def.blockId);
   if (def?.kind === "tool") return paintGrid(PICKAXE_GRID, toolPalette(materialFor(itemId)));
   if (def?.kind === "weapon") {

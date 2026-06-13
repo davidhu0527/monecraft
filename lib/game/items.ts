@@ -67,7 +67,17 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
-  { id: "food", label: "Food", kind: "block" },
+  { id: "food", label: "Food", kind: "food", hunger: 7 },
+  // Mob materials — craft ingredients with no direct use on their own yet.
+  { id: "wool", label: "Wool", kind: "material" },
+  { id: "feather", label: "Feather", kind: "material" },
+  { id: "bone", label: "Bone", kind: "material" },
+  { id: "leather", label: "Leather", kind: "material" },
+  { id: "string", label: "String", kind: "material" },
+  // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
+  { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
+  { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
+  { id: "raw_mutton", label: "Raw Mutton", kind: "food", hunger: 3 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },

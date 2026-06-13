@@ -170,6 +170,7 @@ export type GameEvent =
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
+  | { type: "mobDied"; kind: MobKind }
   | { type: "attackSwung" };
 
 export type EmitGameEvent = (event: GameEvent) => void;

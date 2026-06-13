@@ -23,7 +23,6 @@ export const SPRINT_MIN_HUNGER = 6;
 export const SPRINT_BLOCKS_PER_HUNGER = 100;
 export const WALK_BLOCKS_PER_HUNGER = 300;
 export const JUMPS_PER_HUNGER = 50;
-export const FOOD_HUNGER = 7;
 
 // Inventory
 export const HOTBAR_SLOTS = 9;

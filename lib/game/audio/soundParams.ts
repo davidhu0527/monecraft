@@ -631,6 +631,27 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
   }
 };
 
+/** Soft downward thud when a mob dies and drops its loot. */
+export const MOB_DEATH_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.6,
+    randomness: 0.1,
+    frequency: 160,
+    sustain: 0.03,
+    release: 0.16,
+    shape: 4,
+    shapeCurve: 1.2,
+    slide: -5,
+    pitchJump: -60,
+    pitchJumpTime: 0.05,
+    noise: 0.5,
+    sustainVolume: 0.7,
+    decay: 0.05,
+    filter: -500
+  }),
+  minRetriggerMs: 120
+};
+
 /** Thwack when the player's melee attack lands on any mob. */
 export const MOB_HIT_SOUND: SoundDef = {
   params: zz({

@@ -13,6 +13,7 @@ import {
   LAND_SOUND,
   MOB_AMBIENT_SOUNDS,
   MOB_ATTACK_SOUNDS,
+  MOB_DEATH_SOUND,
   MOB_HIT_SOUND,
   PLACE_SOUNDS,
   RESPAWN_SOUND
@@ -189,6 +190,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "mobHit":
           backend.play(MOB_HIT_SOUND);
+          break;
+        case "mobDied":
+          backend.play(MOB_DEATH_SOUND);
           break;
         case "died":
           backend.play(DEATH_SOUND);

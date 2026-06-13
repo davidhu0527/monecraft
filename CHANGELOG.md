@@ -6,7 +6,11 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- **Player skin presets**: an Appearance section in the pause menu with six classic styles — Steve (default), Alex, Zombie, Skeleton, Knight, Robot — each shown as a generated 16×16 pixel bust portrait derived from the same palette that colors the third-person body (zero-asset, like all art)
+- **Mob loot & drops**: mobs now drop kind-specific items when they die instead of the old flat "cobble for hostiles, food for everything else" rule. Sheep drop wool + raw mutton, chickens feather + raw chicken, horses leather, zombies rotten flesh, skeletons bone, spiders string — counts are randomized per the engine's RNG (`lib/game/mobLoot.ts`). A new `mobDied` engine event plays a synthesized death thud
+  - New items: `wool`, `feather`, `bone`, `leather`, `string` (crafting materials) and `rotten_flesh`, `raw_chicken`, `raw_mutton` (edible food), each with a generated 16×16 sprite (zero-asset)
+  - **Per-food hunger**: food now restores a value carried on the item itself rather than one global constant. The generic `food` item still restores 7; raw meats restore 3, rotten flesh 2. New `food` and `material` item kinds; the legacy `food` item is reinterpreted (old saves load unchanged — saves store only item id + count)
+  - New recipe: 4 string → 1 wool, so spider drops feed the wool supply (and, later, beds)
+  - No save-format or worldgen impact
   - Selection recolors the body live (material color swap, no rebuild) and persists as a player preference under its own localStorage key (`minecraft_skin_v1`), separate from the world save — it survives world resets. No save-format or worldgen impact
 - **Camera view toggle (V)**: cycles first-person → third-person rear → third-person front, like Minecraft's F5 (V instead, because F5 reloads the page in browsers)
   - New humanoid player body (head, torso, two arms, two legs) in the zero-asset box-mesh style, visible only in third person — walk gait scaled by speed, a chop animation on attacks and while mining, the look pitch on the head, and the held hotbar item rendered in the right hand via the shared item-model builder

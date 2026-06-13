@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { BlockId } from "@/lib/world";
 
-export type ItemKind = "block" | "weapon" | "tool" | "armor";
+export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
 export type EquippedArmor = Record<ArmorSlot, string | null>;
 
@@ -16,6 +16,8 @@ export type ItemDef = {
   armorSlot?: ArmorSlot;
   defense?: number;
   maxDurability?: number;
+  /** Hunger points restored when eaten (food items only). */
+  hunger?: number;
 };
 
 export type InventorySlot = {
@@ -31,6 +33,7 @@ export type InventorySlot = {
   defense?: number;
   durability?: number;
   maxDurability?: number;
+  hunger?: number;
 };
 
 export type Recipe = {

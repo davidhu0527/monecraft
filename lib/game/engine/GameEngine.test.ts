@@ -441,6 +441,38 @@ describe("gameplay events", () => {
     expect(state.hunger).toBeGreaterThan(5);
   });
 
+  test("eating a meat restores its own hunger value", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("raw_chicken", 1); // hunger 3
+    state.selectedSlot = slot;
+    state.hunger = 5;
+    engine.dispatch({ type: "eatFood" });
+    expect(state.hunger).toBe(8);
+    expect(countsById(state.inventory).get("raw_chicken")).toBeUndefined();
+  });
+
+  test("killing a mob drops its loot and emits mobDied", () => {
+    // rng 0 → every drop rolls its minimum count (zombie: 1 rotten flesh).
+    const engine = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    spawnTestMob(engine, "zombie", true, { x: 0, y: EYE_HEIGHT, z: -2 });
+    state.mobs[state.mobs.length - 1].hp = 1; // one fist hit (6 dmg) kills it
+    const before = countsById(state.inventory).get("rotten_flesh") ?? 0;
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" });
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "mobDied" && event.kind === "zombie")).toBe(true);
+    expect(countsById(state.inventory).get("rotten_flesh")).toBe(before + 1);
+  });
+
   test("jumping and touching down emit jumped and landed", () => {
     const engine = makeEngine();
     calmDaytime(engine);

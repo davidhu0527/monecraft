@@ -6,6 +6,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import { inventorySlotsSnapshot, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
+import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { SaveData } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
@@ -179,11 +180,11 @@ export class GameEngine {
       case "eatFood": {
         if (state.isDead || state.inventoryOpen) break;
         const slot = state.inventory[state.selectedSlot];
-        if (!slot?.id || slot.id !== "food" || slot.count <= 0) break;
-        const next = inv.adjustSlotCount(state.inventory, "food", -1, state.selectedSlot);
+        if (!slot?.id || slot.kind !== "food" || !slot.hunger || slot.count <= 0) break;
+        const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
         if (!next) break;
         state.inventory = next;
-        state.hunger = restoreHunger(state.hunger);
+        state.hunger = restoreHunger(state.hunger, slot.hunger);
         this.emit({ type: "ateFood" });
         break;
       }
@@ -299,8 +300,10 @@ export class GameEngine {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
-    const dropId = mob.hostile ? "cobble" : "food";
-    state.inventory = inv.adjustSlotCount(state.inventory, dropId, 1) ?? state.inventory;
+    for (const drop of rollMobDrops(mob.kind, this.rng)) {
+      state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+    }
+    this.emit({ type: "mobDied", kind: mob.kind });
   };
 
   private get mobTickDeps() {
