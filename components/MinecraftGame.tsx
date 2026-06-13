@@ -76,6 +76,7 @@ export default function MinecraftGame() {
   return (
     <div className="game-root">
       <div ref={attachMount} className="game-canvas-wrap" />
+      <div className="vignette" aria-hidden />
 
       {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
@@ -93,6 +94,8 @@ export default function MinecraftGame() {
         <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
         <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
       </div>
+
+      {inventoryOpen || paused ? <div className="menu-backdrop" /> : null}
 
       {inventoryOpen ? (
         <InventoryPanel

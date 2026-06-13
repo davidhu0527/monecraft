@@ -27,6 +27,8 @@
   --mc-tile-panel: none;
   --mc-tile-well: none;
   --mc-tile-button: none;
+  /* Strength of the always-on screen-edge vignette (fed into rgba alpha). */
+  --mc-vignette: 0.28;
 }
 
 * {
@@ -56,4 +58,23 @@ body {
 .game-canvas-wrap {
   position: absolute;
   inset: 0;
+}
+
+/* Subtle always-on vignette over the 3D world; sits above the canvas but below
+   all HUD (z-index >= 4) and never blocks the click that acquires pointer lock. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, var(--mc-vignette)) 100%);
+}
+
+@keyframes mc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
