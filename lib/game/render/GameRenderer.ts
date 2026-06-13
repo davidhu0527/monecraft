@@ -11,6 +11,7 @@ import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+import { createSkyView, type SkyView } from "./skyView";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
@@ -44,6 +45,7 @@ export class GameRenderer {
   private readonly mobVisuals: MobVisuals;
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
+  private readonly sky: SkyView;
   private lastSyncMs = Number.NaN;
   private dustDistance = 0;
   private lastFootX = Number.NaN;
@@ -93,6 +95,7 @@ export class GameRenderer {
     this.mobVisuals = createMobVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
+    this.sky = createSkyView(this.scene, this.camera);
   }
 
   get domElement(): HTMLCanvasElement {
@@ -123,6 +126,7 @@ export class GameRenderer {
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
     this.playerVisuals.sync(state, timeMs);
+    this.sky.sync(state, timeMs);
     this.syncDayNight(state);
   }
 
@@ -276,6 +280,7 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.sky.dispose();
     this.particles.dispose();
     this.playerVisuals.dispose();
     this.mobVisuals.dispose();
