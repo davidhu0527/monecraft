@@ -1,7 +1,16 @@
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
-import { BREED_FED_WINDOW_SECONDS, EYE_HEIGHT, MINE_REACH, SLEEP_ALLOWED_BELOW_DAYLIGHT, SLEEP_FADE_SECONDS, SLEEP_HOSTILE_RADIUS } from "@/lib/game/config";
+import {
+  BREED_FED_WINDOW_SECONDS,
+  CHEST_SLOTS,
+  EYE_HEIGHT,
+  MINE_REACH,
+  SLEEP_ALLOWED_BELOW_DAYLIGHT,
+  SLEEP_FADE_SECONDS,
+  SLEEP_HOSTILE_RADIUS
+} from "@/lib/game/config";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
+import { createEmptySlot } from "@/lib/game/items";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
 import { findAimedMobIndex } from "./combat";
@@ -11,11 +20,12 @@ const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace";
+export type InteractiveKind = "bed" | "furnace" | "chest";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
-  [BlockId.Furnace]: "furnace"
+  [BlockId.Furnace]: "furnace",
+  [BlockId.Chest]: "chest"
 };
 
 /**
@@ -39,7 +49,23 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
 
   if (kind === "bed") return interactBed(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "furnace") return interactFurnace(state, emit);
+  if (kind === "chest") return interactChest(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
+}
+
+/** Opens the chest at (x,y,z) in the inventory panel, creating its (lazy) empty store. */
+function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: number, z: number): boolean {
+  const idx = state.world.index(x, y, z);
+  if (!state.containers.has(idx)) {
+    state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+  }
+  state.openContainerIndex = idx;
+  state.inventoryOpen = true;
+  emit({ type: "openedContainer" });
+  return true;
 }
 
 /** What each breedable animal is fed to enter "in love" mode. */

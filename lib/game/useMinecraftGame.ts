@@ -46,7 +46,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   armorPoints: 0,
   capsActive: false,
   sleeping: false,
-  craftingStation: null
+  craftingStation: null,
+  container: null
 };
 
 const noopSubscribe = () => () => {};
