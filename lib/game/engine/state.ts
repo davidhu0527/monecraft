@@ -94,6 +94,10 @@ export type GameState = {
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
   daylightPercent: number;
+  /** Seconds left in the sleep fade; > 0 freezes the sim until time skips. */
+  sleepTimer: number;
+  /** Bed respawn point (block coords), or null to respawn at a random land point. */
+  spawnPoint: { x: number; y: number; z: number } | null;
   mining: MiningState;
   timers: GameTimers;
   /** Set when world geometry changed; the renderer rebuilds the mesh and clears it. */
@@ -156,6 +160,8 @@ export type GameSnapshot = {
   /** Total defense points of equipped armor — drives the HUD armor bar. */
   armorPoints: number;
   capsActive: boolean;
+  /** True during the sleep fade — drives the fade-to-black overlay. */
+  sleeping: boolean;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
@@ -171,6 +177,9 @@ export type GameEvent =
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
   | { type: "mobDied"; kind: MobKind }
-  | { type: "attackSwung" };
+  | { type: "attackSwung" }
+  | { type: "sleepStarted" }
+  | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
+  | { type: "wokeUp" };
 
 export type EmitGameEvent = (event: GameEvent) => void;

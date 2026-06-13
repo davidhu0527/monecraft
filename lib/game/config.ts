@@ -43,6 +43,15 @@ export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
 
+// Beds & sleep
+// Sleeping is only allowed once it is night by the game's own definition (the
+// hostile-spawn threshold). The fade is the frozen window before time skips;
+// waking lands at this fraction of the cycle (a rising ~0.45 daylight morning).
+export const SLEEP_ALLOWED_BELOW_DAYLIGHT = 0.28;
+export const SLEEP_HOSTILE_RADIUS = 12;
+export const SLEEP_FADE_SECONDS = 1.5;
+export const WAKE_DAY_PHASE = 0.07;
+
 // Mob director
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;

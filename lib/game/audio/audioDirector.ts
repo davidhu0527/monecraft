@@ -16,7 +16,9 @@ import {
   MOB_DEATH_SOUND,
   MOB_HIT_SOUND,
   PLACE_SOUNDS,
-  RESPAWN_SOUND
+  RESPAWN_SOUND,
+  SLEEP_SOUND,
+  WAKE_SOUND
 } from "./soundParams";
 import { createFootstepScheduler } from "./footsteps";
 import { createMobAmbienceScheduler } from "./mobAmbience";
@@ -199,6 +201,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "respawned":
           backend.play(RESPAWN_SOUND);
+          break;
+        case "sleepStarted":
+          backend.play(SLEEP_SOUND);
+          break;
+        case "wokeUp":
+          backend.play(WAKE_SOUND);
           break;
       }
     },

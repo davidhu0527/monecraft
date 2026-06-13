@@ -40,7 +40,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.SapphireOre]: 12,
   [BlockId.DiamondOre]: 14,
   [BlockId.Snow]: 2,
-  [BlockId.Cactus]: 2
+  [BlockId.Cactus]: 2,
+  [BlockId.Bed]: 2
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -60,6 +61,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "diamond_ore", label: "Diamond Ore", kind: "block", blockId: BlockId.DiamondOre },
   { id: "snow", label: "Snow", kind: "block", blockId: BlockId.Snow },
   { id: "cactus", label: "Cactus", kind: "block", blockId: BlockId.Cactus },
+  { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -145,5 +147,6 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.SapphireOre]: "sapphire_ore",
   [BlockId.DiamondOre]: "diamond_ore",
   [BlockId.Snow]: "snow",
-  [BlockId.Cactus]: "cactus"
+  [BlockId.Cactus]: "cactus",
+  [BlockId.Bed]: "bed"
 };

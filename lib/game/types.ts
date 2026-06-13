@@ -65,5 +65,18 @@ export type SaveDataV1 = {
   player: { x: number; y: number; z: number };
 };
 
-/** Current save shape: same fields as v1, reinterpreted for 36 slots / 9-slot hotbar. */
-export type SaveData = Omit<SaveDataV1, "version"> & { version: 2 };
+/** v2 save shape: same fields as v1, reinterpreted for 36 slots / 9-slot hotbar. */
+export type SaveDataV2 = Omit<SaveDataV1, "version"> & { version: 2 };
+
+/**
+ * Current save shape (v3): v2 plus persisted time-of-day, player stats, and the
+ * bed respawn point. All new fields are optional so the v2→v3 migration is a
+ * pure version bump and pre-v3 saves load with sensible defaults.
+ */
+export type SaveData = Omit<SaveDataV2, "version"> & {
+  version: 3;
+  dayClock?: number;
+  hearts?: number;
+  hunger?: number;
+  spawnPoint?: { x: number; y: number; z: number } | null;
+};

@@ -45,6 +45,12 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Design the sound by ear in the [ZZFX designer](https://killedbyapixel.github.io/ZzFX/), then transcribe the parameters into a `SoundDef` in `lib/game/audio/soundParams.ts` using the named-field `zz({...})` helper (field order matches the designer's positional array).
 - Coverage is pinned: `materials.test.ts` and `soundParams.test.ts` fail on missing material/mob rows, and routing is testable headlessly with the fake `SynthBackend` pattern in `audioDirector.test.ts`. Actual sound quality is a manual `bun run dev` pass.
 
+## An interactive block (right-click behavior)
+
+- Right-click (and KeyE) dispatch `placeBlock`, which runs a fixed precedence in `GameEngine.dispatch` before falling through to placement: feed an aimed mob → `tryInteractBlock` → use the held item → place. To make a block do something on right-click, register it in `INTERACTIVE_BLOCKS` and add a branch in `tryInteractBlock` (`lib/game/engine/systems/interact.ts`).
+- The handler returns `true` to consume the click (no block is placed) — return `true` even when the action is refused (e.g. a bed during the day) so the player doesn't place a block into the bed by accident.
+- The bed is the reference implementation: it sets `state.spawnPoint`, starts the sleep fade (`state.sleepTimer`), and the `step` loop skips the clock to morning when the fade ends. See [architecture.md](architecture.md) for the step order.
+
 ## A new mechanic
 
 Add a system module under `lib/game/engine/systems/` (a function over `GameState`), give it a slot in the `GameEngine.step` sequence, and put its tunables in `lib/game/config.ts`. If the UI triggers it, add a `Command` variant. Write its headless test next to it.

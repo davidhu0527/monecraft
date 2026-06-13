@@ -44,7 +44,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   debug: null,
   cameraMode: "first",
   armorPoints: 0,
-  capsActive: false
+  capsActive: false,
+  sleeping: false
 };
 
 const noopSubscribe = () => () => {};
@@ -215,6 +216,9 @@ export function useMinecraftGame() {
         }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
+        if (event.type === "sleepDenied") {
+          flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
+        }
         audio.handleEvent(event);
       }
 
@@ -272,6 +276,7 @@ export function useMinecraftGame() {
     hostileCount: snapshot.hostileCount,
     respawnSeconds: snapshot.respawnSeconds,
     paused: snapshot.paused,
+    sleeping: snapshot.sleeping,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,

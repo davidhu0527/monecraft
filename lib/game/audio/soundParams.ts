@@ -766,3 +766,42 @@ export const RESPAWN_SOUND: SoundDef = {
   }),
   minRetriggerMs: 500
 };
+
+/** Soft descending pad as the player drifts off to sleep. */
+export const SLEEP_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    frequency: 320,
+    attack: 0.05,
+    sustain: 0.25,
+    release: 0.5,
+    shape: 1,
+    shapeCurve: 1.4,
+    slide: -2,
+    pitchJump: -120,
+    pitchJumpTime: 0.25,
+    sustainVolume: 0.7,
+    decay: 0.3,
+    filter: -700
+  }),
+  minRetriggerMs: 500
+};
+
+/** Gentle rising chime on waking — distinct from the brighter respawn stinger. */
+export const WAKE_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    frequency: 440,
+    attack: 0.02,
+    sustain: 0.15,
+    release: 0.3,
+    shape: 1,
+    shapeCurve: 1.5,
+    pitchJump: 220,
+    pitchJumpTime: 0.14,
+    repeatTime: 0.1,
+    sustainVolume: 0.7,
+    decay: 0.12
+  }),
+  minRetriggerMs: 500
+};

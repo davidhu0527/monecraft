@@ -1,10 +1,29 @@
 import * as THREE from "three";
-import { collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
-import { HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, RENDER_RADIUS, STUCK_RESET_SECONDS } from "@/lib/game/config";
+import { BlockId, collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import {
+  DAY_CYCLE_SECONDS,
+  HOTBAR_SLOTS,
+  MAX_HUNGER,
+  MAX_HEARTS,
+  PLAYER_HALF_WIDTH,
+  PLAYER_HEIGHT,
+  RENDER_RADIUS,
+  STUCK_RESET_SECONDS,
+  WAKE_DAY_PHASE
+} from "@/lib/game/config";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
-import { inventorySlotsSnapshot, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
+import {
+  inventorySlotsSnapshot,
+  restoreDayClock,
+  restoreEquippedArmor,
+  restoreHearts,
+  restoreHungerLevel,
+  restoreInventorySlots,
+  restoreSelectedSlot,
+  restoreSpawnPoint
+} from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { SaveData } from "@/lib/game/types";
@@ -16,6 +35,7 @@ import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
+import { tryInteractBlock } from "./systems/interact";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
 import { spawnInitialMobs, tickHostileSpawnDirector } from "./systems/spawnDirector";
@@ -88,6 +108,8 @@ export class GameEngine {
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
+      sleepTimer: 0,
+      spawnPoint: null,
       mining: { targetKey: "", progress: 0 },
       timers: createTimers(),
       worldMeshDirty: true
@@ -97,6 +119,15 @@ export class GameEngine {
       this.state.inventory = restoreInventorySlots(save) ?? this.state.inventory;
       this.state.equippedArmor = restoreEquippedArmor(save) ?? this.state.equippedArmor;
       this.state.selectedSlot = restoreSelectedSlot(save) ?? this.state.selectedSlot;
+      this.state.hearts = restoreHearts(save) ?? this.state.hearts;
+      this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
+      this.state.spawnPoint = restoreSpawnPoint(save);
+      const savedClock = restoreDayClock(save);
+      if (savedClock !== null) {
+        this.state.dayClock = savedClock;
+        this.state.daylight = daylightAt(savedClock);
+        this.state.daylightPercent = Math.round(this.state.daylight * 100);
+      }
       if (save.player) this.state.player.position.set(save.player.x, save.player.y, save.player.z);
     }
 
@@ -131,6 +162,14 @@ export class GameEngine {
     if (state.isDead) {
       if (tickRespawnTimer(state, dt)) this.respawn();
       else tickMobs(state, dt, this.mobTickDeps);
+      this.refreshSnapshot();
+      return;
+    }
+
+    // Sleeping: a full freeze during the fade, then a jump to the next morning.
+    if (state.sleepTimer > 0) {
+      state.sleepTimer = Math.max(0, state.sleepTimer - dt);
+      if (state.sleepTimer === 0) this.wakeToMorning();
       this.refreshSnapshot();
       return;
     }
@@ -178,7 +217,7 @@ export class GameEngine {
         break;
       }
       case "eatFood": {
-        if (state.isDead || state.inventoryOpen) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         const slot = state.inventory[state.selectedSlot];
         if (!slot?.id || slot.kind !== "food" || !slot.hunger || slot.count <= 0) break;
         const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
@@ -189,12 +228,15 @@ export class GameEngine {
         break;
       }
       case "placeBlock": {
-        if (state.isDead || state.inventoryOpen) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        // Right-click precedence: interact with the aimed block first (beds,
+        // and later furnaces); only place a block if nothing was interacted.
+        if (tryInteractBlock(state, this.emit)) break;
         placeSelectedBlock(state, this.emit);
         break;
       }
       case "attack": {
-        if (state.isDead || state.inventoryOpen) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         this.emit({ type: "attackSwung" });
         const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt);
         if (hitKind) {
@@ -251,7 +293,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 2,
+      version: 3,
       seed: state.world.seed,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
@@ -261,7 +303,11 @@ export class GameEngine {
         x: state.player.position.x,
         y: state.player.position.y,
         z: state.player.position.z
-      }
+      },
+      dayClock: state.dayClock,
+      hearts: state.hearts,
+      hunger: state.hunger,
+      spawnPoint: state.spawnPoint
     };
   }
 
@@ -327,13 +373,29 @@ export class GameEngine {
 
   private respawn(): void {
     const state = this.state;
-    const spawn = randomLandPointNear(state.world, this.surfaceYAt, state.world.sizeX / 2, state.world.sizeZ / 2, RENDER_RADIUS * 0.9, this.rng);
-    state.player.position.set(spawn.x, spawn.y + 2, spawn.z);
+    const bed = state.spawnPoint;
+    if (bed && state.world.get(bed.x, bed.y, bed.z) === BlockId.Bed) {
+      // Respawn standing on the bed; the bed block is non-solid head room above it.
+      state.player.position.set(bed.x + 0.5, bed.y + 1.05, bed.z + 0.5);
+    } else {
+      const spawn = randomLandPointNear(state.world, this.surfaceYAt, state.world.sizeX / 2, state.world.sizeZ / 2, RENDER_RADIUS * 0.9, this.rng);
+      state.player.position.set(spawn.x, spawn.y + 2, spawn.z);
+    }
     state.player.velocity.set(0, 0, 0);
     state.player.pitch = 0;
     resetMining(state);
     state.worldMeshDirty = true;
     this.events.push({ type: "respawned" });
+  }
+
+  /** Advances the day clock to the next morning after a sleep completes. */
+  private wakeToMorning(): void {
+    const state = this.state;
+    const nextDay = Math.floor(state.dayClock / DAY_CYCLE_SECONDS) + 1;
+    state.dayClock = (nextDay + WAKE_DAY_PHASE) * DAY_CYCLE_SECONDS;
+    state.daylight = daylightAt(state.dayClock);
+    state.daylightPercent = Math.round(state.daylight * 100);
+    this.emit({ type: "wokeUp" });
   }
 
   /** Unequips armor that left the inventory (broken or dropped). */
@@ -381,7 +443,8 @@ export class GameEngine {
       debug: state.debugInfo,
       cameraMode: state.cameraMode,
       armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
-      capsActive: state.capsActive
+      capsActive: state.capsActive,
+      sleeping: state.sleepTimer > 0
     };
   }
 

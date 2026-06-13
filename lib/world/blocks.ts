@@ -22,7 +22,8 @@ export const enum BlockId {
   DiamondOre = 16,
   Water = 17,
   Snow = 18,
-  Cactus = 19
+  Cactus = 19,
+  Bed = 20
 }
 
 export enum BiomeId {
@@ -51,7 +52,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.SapphireOre]: 0x3f92d6,
   [BlockId.DiamondOre]: 0x85e9f4,
   [BlockId.Snow]: 0xf2f5fa,
-  [BlockId.Cactus]: 0x6aa850
+  [BlockId.Cactus]: 0x6aa850,
+  [BlockId.Bed]: 0xc0392b
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -77,5 +79,6 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.DiamondOre]: [0.54, 0.56, 0.58],
   [BlockId.Water]: [0.26, 0.45, 0.78],
   [BlockId.Snow]: [0.92, 0.94, 0.97],
-  [BlockId.Cactus]: [0.33, 0.55, 0.27]
+  [BlockId.Cactus]: [0.33, 0.55, 0.27],
+  [BlockId.Bed]: [0.72, 0.2, 0.22]
 };

@@ -74,6 +74,7 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.Sand && n > 0.84) c = tone(base, 1.12);
         if (block === BlockId.Cactus && face === "side" && x % 4 === 0) c = tone(base, 0.72);
         if (block === BlockId.Snow) c = tone(base, 0.97 + n * 0.06);
+        if (block === BlockId.Bed && face === "top" && y < 5) c = tone([0.95, 0.95, 0.97], 0.95 + n * 0.1); // pillow band
 
         ctx.fillStyle = rgb(c);
         ctx.fillRect(ox + x, oy + y, 1, 1);

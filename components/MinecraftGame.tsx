@@ -6,6 +6,7 @@ import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
+import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
@@ -30,6 +31,7 @@ export default function MinecraftGame() {
     hostileCount,
     respawnSeconds,
     paused,
+    sleeping,
     debugOpen,
     debug,
     saveMessage,
@@ -114,6 +116,8 @@ export default function MinecraftGame() {
       ) : null}
 
       <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
+
+      <SleepOverlay sleeping={sleeping} />
 
       <div className="crosshair" />
       <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>

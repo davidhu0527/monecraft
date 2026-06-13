@@ -37,14 +37,15 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 0. Pause gate: while `state.paused`, `step` refreshes the snapshot and returns — mobs, the day clock, mining, and stats all freeze (autosave still serializes fine)
 1. Stuck detection / auto-unstuck (`STUCK_RESET_SECONDS`)
 2. Death check + respawn countdown (while dead, only mobs tick)
-3. Player movement & physics (`systems/playerMotion.ts` — derives direction from `yaw`, scratch vectors, no per-frame allocations)
-4. Hunger drain from sprint/walk/jump budgets + health regen (`systems/playerStats.ts`)
-5. Mining progress and block breaking (`systems/mining.ts`; placement also lives here)
-6. Day-night clock (`systems/dayNight.ts` — `daylightAt()` is the single daylight formula)
-7. Night hostile spawning (`systems/spawnDirector.ts`, interval/cap in config)
-8. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
+3. Sleep gate: while `state.sleepTimer > 0`, `step` decrements the fade and returns (full freeze, like pause); at zero it skips the clock to the next morning
+4. Player movement & physics (`systems/playerMotion.ts` — derives direction from `yaw`, scratch vectors, no per-frame allocations)
+5. Hunger drain from sprint/walk/jump budgets + health regen (`systems/playerStats.ts`)
+6. Mining progress and block breaking (`systems/mining.ts`; placement also lives here)
+7. Day-night clock (`systems/dayNight.ts` — `daylightAt()` is the single daylight formula)
+8. Night hostile spawning (`systems/spawnDirector.ts`, interval/cap in config)
+9. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
 
-Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
+Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. The `placeBlock` command runs a fixed right-click precedence — `tryInteractBlock` (`systems/interact.ts`, e.g. sleep in a bed) before `placeSelectedBlock` — so interactive blocks take the click instead of getting a block placed against them. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
 
 ## Renderer (`lib/game/render/`)
 

@@ -1,14 +1,14 @@
-import { HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_STACK_SIZE } from "@/lib/game/config";
+import { HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
-import type { EquippedArmor, SaveData, SaveDataV1, InventorySlot } from "@/lib/game/types";
+import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, InventorySlot } from "@/lib/game/types";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
  * hotbar): non-empty slots are packed in order, stackable items merge into
  * earlier stacks, and anything that still overflows 36 slots is dropped.
  */
-export function migrateSaveV1toV2(save: SaveDataV1): SaveData {
-  const migrated: SaveData = { ...save, version: 2, selectedSlot: Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot)) };
+export function migrateSaveV1toV2(save: SaveDataV1): SaveDataV2 {
+  const migrated: SaveDataV2 = { ...save, version: 2, selectedSlot: Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot)) };
 
   if (Array.isArray(save.inventorySlots)) {
     const packed: Array<{ id: string | null; count: number; durability?: number }> = [];
@@ -36,16 +36,26 @@ export function migrateSaveV1toV2(save: SaveDataV1): SaveData {
   return migrated;
 }
 
+/**
+ * Migrates a v2 save to v3 — a pure version bump. The new persisted fields
+ * (dayClock, hearts, hunger, spawnPoint) are optional, so an older save simply
+ * loads with the engine's defaults for them.
+ */
+export function migrateSaveV2toV3(save: SaveDataV2): SaveData {
+  return { ...save, version: 3 };
+}
+
 // Storage is injectable so save logic can be tested without a browser.
 export function readSave(saveKey: string, storage: Storage = localStorage): SaveData | null {
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveData | SaveDataV1;
+    const parsed = JSON.parse(raw) as SaveData | SaveDataV2 | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    if (parsed.version === 1) return migrateSaveV1toV2(parsed);
-    if (parsed.version !== 2) return null;
-    return parsed;
+    let migrated: SaveDataV2 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
+    if (migrated.version !== 3) return null;
+    return migrated;
   } catch {
     return null;
   }
@@ -123,4 +133,29 @@ export function restoreEquippedArmor(save: SaveData): EquippedArmor | null {
 export function restoreSelectedSlot(save: SaveData): number | null {
   if (typeof save.selectedSlot !== "number") return null;
   return Math.max(0, Math.min(HOTBAR_SLOTS - 1, save.selectedSlot));
+}
+
+/** Restores the day clock from a save (finite, non-negative); null if absent/invalid. */
+export function restoreDayClock(save: SaveData): number | null {
+  if (typeof save.dayClock !== "number" || !Number.isFinite(save.dayClock) || save.dayClock < 0) return null;
+  return save.dayClock;
+}
+
+/** Restores hearts clamped to 1..MAX_HEARTS; null if absent/invalid. */
+export function restoreHearts(save: SaveData): number | null {
+  if (typeof save.hearts !== "number" || !Number.isFinite(save.hearts)) return null;
+  return Math.max(1, Math.min(MAX_HEARTS, Math.floor(save.hearts)));
+}
+
+/** Restores hunger clamped to 0..MAX_HUNGER; null if absent/invalid. */
+export function restoreHungerLevel(save: SaveData): number | null {
+  if (typeof save.hunger !== "number" || !Number.isFinite(save.hunger)) return null;
+  return Math.max(0, Math.min(MAX_HUNGER, Math.floor(save.hunger)));
+}
+
+/** Restores the bed respawn point; null if absent or explicitly cleared. */
+export function restoreSpawnPoint(save: SaveData): { x: number; y: number; z: number } | null {
+  const sp = save.spawnPoint;
+  if (!sp || !Number.isFinite(sp.x) || !Number.isFinite(sp.y) || !Number.isFinite(sp.z)) return null;
+  return { x: Math.floor(sp.x), y: Math.floor(sp.y), z: Math.floor(sp.z) };
 }

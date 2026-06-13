@@ -70,6 +70,37 @@ test("holding the mouse mines the block underfoot", async ({ gamePage: page }) =
   await page.mouse.up();
 });
 
+test("right-click still places a block when not aimed at an interactive one", async ({ gamePage: page }) => {
+  // The bed/furnace interact dispatcher sits in front of placement; this guards
+  // that a non-interactive target still falls through to placing a block.
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle
+
+  // Carve a clear lane ending in a stone backstop, dead ahead at eye height.
+  const placed = await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + 1.62);
+    // 1 = Grass, 0 = Air, 3 = Stone (BlockId enum values).
+    state.blockChanges.set(ex, ey, ez - 1, 0);
+    state.blockChanges.set(ex, ey, ez - 2, 0);
+    state.blockChanges.set(ex, ey, ez - 3, 3);
+    state.selectedSlot = 0; // starter grass blocks
+    const before = state.world.get(ex, ey, ez - 2);
+    window.__monecraft!.engine.dispatch({ type: "placeBlock" });
+    const after = state.world.get(ex, ey, ez - 2);
+    return { before, after };
+  });
+  expect(placed.before).toBe(0); // air
+  expect(placed.after).toBe(1); // grass placed
+});
+
 test("V cycles the camera views and the scene keeps rendering", async ({ gamePage: page }) => {
   await calmDaytime(page);
   const cameraMode = () => page.evaluate(() => window.__monecraft!.engine.state.cameraMode);
@@ -134,7 +165,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v5"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(2);
+  expect(JSON.parse(saved!).version).toBe(3);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

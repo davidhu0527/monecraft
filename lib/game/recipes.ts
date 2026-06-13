@@ -3,6 +3,15 @@ import type { Recipe } from "@/lib/game/types";
 export const RECIPES: Recipe[] = [
   { id: "planks", label: "2 Wood -> 4 Planks", cost: [{ slotId: "wood", count: 2 }], result: { slotId: "planks", count: 4 } },
   { id: "wool_from_string", label: "4 String -> 1 Wool", cost: [{ slotId: "string", count: 4 }], result: { slotId: "wool", count: 1 } },
+  {
+    id: "bed",
+    label: "3 Wool + 3 Planks -> Bed",
+    cost: [
+      { slotId: "wool", count: 3 },
+      { slotId: "planks", count: 3 }
+    ],
+    result: { slotId: "bed", count: 1 }
+  },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   {
     id: "brick",

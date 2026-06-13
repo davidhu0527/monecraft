@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
 import {
+  DAY_CYCLE_SECONDS,
   EYE_HEIGHT,
   MAX_HUNGER,
   MAX_HEARTS,
@@ -14,6 +15,7 @@ import {
 import { countsById } from "@/lib/game/inventory";
 import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
+import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import type { FrameInput } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -600,5 +602,154 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(1);
     state.blockChanges.set(30, y, 30, original as BlockId);
     expect(state.blockChanges.changes().length).toBe(0);
+  });
+
+  test("save format is version 3 and carries clock, stats, and spawn point", () => {
+    const engine = makeEngine();
+    engine.state.dayClock = 123;
+    engine.state.hearts = 14;
+    engine.state.hunger = 9;
+    engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
+    const save = engine.serialize();
+    expect(save.version).toBe(3);
+
+    const restored = makeEngine(save);
+    expect(restored.state.dayClock).toBe(123);
+    expect(restored.state.hearts).toBe(14);
+    expect(restored.state.hunger).toBe(9);
+    expect(restored.state.spawnPoint).toEqual({ x: 12, y: 40, z: 8 });
+    // Daylight is re-derived from the restored clock, not left at dawn.
+    expect(restored.state.daylight).toBeCloseTo(daylightAt(123), 5);
+  });
+});
+
+describe("beds and sleep", () => {
+  /** Settles the player, then drops a bed block one cell ahead at eye height and aims at it. */
+  function placeBedAhead(engine: GameEngine): { x: number; y: number; z: number } {
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Bed);
+    return { x: ex, y: ey, z: ez - 1 };
+  }
+
+  function pushHostile(engine: GameEngine, offset: { x: number; y: number; z: number }): void {
+    const p = engine.state.player.position;
+    engine.state.mobs.push({
+      id: engine.state.nextMobId++,
+      kind: "zombie",
+      hostile: true,
+      hp: 10,
+      position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 11,
+      attackDamage: 3,
+      attackCooldown: 1.35,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0
+    });
+  }
+
+  test("crafting a bed consumes wool and planks", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const free = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[free] = createSlot("wool", 3);
+    const free2 = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory[free2] = createSlot("planks", 3);
+    engine.dispatch({ type: "craft", recipeId: "bed" });
+    expect(countsById(engine.state.inventory).get("bed")).toBe(1);
+  });
+
+  test("interacting with a bed at night skips to morning and sets the spawn point", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 180; // deep night
+    const bed = placeBedAhead(engine);
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile); // none within sleep radius
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" }); // right-click the bed
+    expect(engine.consumeEvents().some((event) => event.type === "sleepStarted")).toBe(true);
+    expect(engine.state.sleepTimer).toBeGreaterThan(0);
+    expect(engine.getSnapshot().sleeping).toBe(true);
+    expect(engine.state.spawnPoint).toEqual(bed);
+
+    run(engine, 2); // let the fade complete and the clock jump
+    expect(engine.state.sleepTimer).toBe(0);
+    expect(engine.state.dayClock).toBeGreaterThan(DAY_CYCLE_SECONDS);
+    expect(engine.state.daylight).toBeGreaterThan(0.28); // woke to morning
+  });
+
+  test("a bed cannot be used during the day", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 60; // midday
+    placeBedAhead(engine);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "sleepDenied" && event.reason === "daylight")).toBe(true);
+    expect(engine.state.sleepTimer).toBe(0);
+  });
+
+  test("a bed cannot be used with a hostile nearby", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 180;
+    placeBedAhead(engine);
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    pushHostile(engine, { x: 3, y: 0, z: 0 }); // within SLEEP_HOSTILE_RADIUS (12)
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "sleepDenied" && event.reason === "hostiles")).toBe(true);
+    expect(engine.state.sleepTimer).toBe(0);
+  });
+
+  test("dying respawns at the bed when the spawn point still holds one", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const bx = 20;
+    const by = state.world.highestSolidY(bx, 20) + 1;
+    const bz = 20;
+    state.blockChanges.set(bx, by, bz, BlockId.Bed);
+    state.spawnPoint = { x: bx, y: by, z: bz };
+    state.hearts = 1;
+    state.player.position.y = -10; // into the void
+    run(engine, 2); // die
+    expect(state.isDead).toBe(true);
+    engine.dispatch({ type: "respawn" });
+    run(engine, 0.1);
+    expect(state.isDead).toBe(false);
+    expect(state.player.position.x).toBeCloseTo(bx + 0.5, 3);
+    expect(state.player.position.z).toBeCloseTo(bz + 0.5, 3);
+  });
+
+  test("a destroyed bed falls back to a random respawn", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.spawnPoint = { x: 5, y: 40, z: 5 }; // block here is NOT a bed (never placed)
+    const bedSpotY = 40 + 1.05;
+    state.hearts = 1;
+    state.player.position.y = -10;
+    run(engine, 2);
+    engine.dispatch({ type: "respawn" });
+    run(engine, 0.1);
+    expect(state.isDead).toBe(false);
+    // Did not teleport onto the missing bed; took the random land point instead.
+    expect(state.player.position.y).not.toBeCloseTo(bedSpotY, 2);
   });
 });
