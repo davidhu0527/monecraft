@@ -363,12 +363,13 @@ export class GameEngine {
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
     // Babies drop nothing — only grown animals yield loot.
-    if (mob.ageTimer <= 0) {
-      for (const drop of rollMobDrops(mob.kind, this.rng)) {
-        state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
-      }
+    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng) : [];
+    for (const drop of drops) {
+      state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
     this.emit({ type: "mobDied", kind: mob.kind });
+    // Drops land straight in inventory (no ground item), so announce them.
+    if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
   };
 
   private get mobTickDeps() {

@@ -254,6 +254,26 @@
   }
 }
 
+/* Transient in-game toast (item pickups, sleep-denied notices) — sits just
+   above the hotbar, like Minecraft's held-item name popup. */
+.hud-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 5;
+  color: var(--mc-text-light);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: var(--mc-text-shadow);
+  background: rgba(16, 16, 16, 0.5);
+  padding: 5px 12px;
+  outline: 2px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  user-select: none;
+}
+
 .renderer-error {
   position: absolute;
   top: 50%;

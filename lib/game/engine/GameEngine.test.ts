@@ -475,6 +475,7 @@ describe("gameplay events", () => {
     const events = engine.consumeEvents();
     expect(events.some((event) => event.type === "mobDied" && event.kind === "zombie")).toBe(true);
     expect(countsById(state.inventory).get("rotten_flesh")).toBe(before + 1);
+    expect(events.some((event) => event.type === "pickedUp" && event.items.some((it) => it.itemId === "rotten_flesh"))).toBe(true);
   });
 
   test("jumping and touching down emit jumped and landed", () => {
@@ -982,8 +983,11 @@ describe("animal breeding", () => {
     const baby = engine.state.mobs.find((mob) => mob.id === id)!;
     baby.hp = 1; // one fist hit kills it
     const before = countsById(engine.state.inventory);
+    engine.consumeEvents();
     engine.dispatch({ type: "attack" });
+    const events = engine.consumeEvents();
     expect(engine.state.mobs.some((mob) => mob.id === id)).toBe(false); // died
+    expect(events.some((event) => event.type === "pickedUp")).toBe(false); // no loot toast for a baby
     const after = countsById(engine.state.inventory);
     expect(after.get("wool") ?? 0).toBe(before.get("wool") ?? 0);
     expect(after.get("raw_mutton") ?? 0).toBe(before.get("raw_mutton") ?? 0);

@@ -198,6 +198,7 @@ export type GameEvent =
   | { type: "openedStation"; station: "furnace" }
   | { type: "smelted" }
   | { type: "mobFed"; kind: MobKind }
-  | { type: "mobBred"; kind: MobKind };
+  | { type: "mobBred"; kind: MobKind }
+  | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

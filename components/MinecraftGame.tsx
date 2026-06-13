@@ -81,6 +81,12 @@ export default function MinecraftGame() {
 
       {showClickHint ? <div className="click-hint">Click to play</div> : null}
 
+      {saveMessage && !paused ? (
+        <div className="hud-toast" role="status">
+          {saveMessage}
+        </div>
+      ) : null}
+
       <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
       <div className="hud-bottom">
