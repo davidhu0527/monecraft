@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import { BlockId, collectDungeonSites, collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
 import {
   DAY_CYCLE_SECONDS,
   HOTBAR_SLOTS,
@@ -17,6 +17,7 @@ import * as inv from "@/lib/game/inventory";
 import {
   inventorySlotsSnapshot,
   readContainers,
+  readLootedChests,
   restoreDayClock,
   restoreEquippedArmor,
   restoreHearts,
@@ -24,7 +25,8 @@ import {
   restoreInventorySlots,
   restoreSelectedSlot,
   restoreSpawnPoint,
-  serializeContainers
+  serializeContainers,
+  serializeLootedChests
 } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
@@ -78,6 +80,9 @@ export class GameEngine {
     const size = options.worldSize ?? { x: WORLD_SIZE_X, y: WORLD_SIZE_Y, z: WORLD_SIZE_Z };
     const world = new VoxelWorld(size.x, size.y, size.z, seed);
     generateWorld(world);
+    // Re-derive the dungeon chest/spawner positions from the seed (the world is
+    // regenerated deterministically each load, so these match generation).
+    const dungeonSites = collectDungeonSites(world);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
@@ -106,6 +111,9 @@ export class GameEngine {
       craftingStation: null,
       containers: new Map(),
       openContainerIndex: null,
+      dungeonChestIndices: new Set(dungeonSites.chestIndices),
+      dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
+      lootedDungeonChests: new Set(),
       paused: false,
       debugOpen: false,
       debugInfo: null,
@@ -131,6 +139,7 @@ export class GameEngine {
       this.state.hearts = restoreHearts(save) ?? this.state.hearts;
       this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
       this.state.spawnPoint = restoreSpawnPoint(save);
+      this.state.lootedDungeonChests = new Set(readLootedChests(save));
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
@@ -335,7 +344,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 4,
+      version: 5,
       seed: state.world.seed,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
@@ -350,7 +359,8 @@ export class GameEngine {
       hearts: state.hearts,
       hunger: state.hunger,
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
-      blockEntities: serializeContainers(state.containers)
+      blockEntities: serializeContainers(state.containers),
+      lootedChests: serializeLootedChests(state.lootedDungeonChests)
     };
   }
 

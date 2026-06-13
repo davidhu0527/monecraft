@@ -97,6 +97,12 @@ export type GameState = {
   containers: Map<number, InventorySlot[]>;
   /** Voxel index of the chest open in the inventory panel, or null. */
   openContainerIndex: number | null;
+  /** Worldgen dungeon chest voxel indices (session; re-derived from the seed each load). */
+  dungeonChestIndices: Set<number>;
+  /** Worldgen dungeon spawner voxel indices (session; re-derived from the seed each load). */
+  dungeonSpawnerIndices: Set<number>;
+  /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
+  lootedDungeonChests: Set<number>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;

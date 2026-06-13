@@ -6,17 +6,20 @@ import {
   migrateSaveV1toV2,
   migrateSaveV2toV3,
   migrateSaveV3toV4,
+  migrateSaveV4toV5,
   readContainers,
+  readLootedChests,
   readSave,
   restoreDayClock,
   restoreHearts,
   restoreHungerLevel,
   restoreSpawnPoint,
   serializeContainers,
+  serializeLootedChests,
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3 } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -36,7 +39,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 4,
+    version: 5,
     seed: 1337,
     changes: [
       [42, 0],
@@ -53,7 +56,8 @@ function sampleSave(): SaveData {
     dayClock: 123.5,
     hearts: 14,
     hunger: 9,
-    spawnPoint: { x: 10, y: 40, z: 20 }
+    spawnPoint: { x: 10, y: 40, z: 20 },
+    lootedChests: [100, 200]
   };
 }
 
@@ -76,7 +80,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(4);
+    expect(parsed!.version).toBe(5);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -98,7 +102,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(4); // chained v1 -> v2 -> v3 -> v4
+    expect(parsed!.version).toBe(5); // chained v1 -> v2 -> v3 -> v4 -> v5
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -174,11 +178,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v4", () => {
+  test("readSave migrates a v2 save through to v5", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(4);
+    expect(parsed!.version).toBe(5);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -215,7 +219,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(4);
+    expect(parsed.version).toBe(5);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -267,6 +271,51 @@ describe("v3 to v4 migration & chest containers", () => {
   });
 });
 
+describe("v4 to v5 migration & dungeon looted chests", () => {
+  function v4Save(overrides: Partial<SaveDataV4> = {}): SaveDataV4 {
+    return {
+      version: 4,
+      seed: 1337,
+      changes: [[42, 0]],
+      inventorySlots: [{ id: "dirt", count: 3 }],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  test("migrateSaveV4toV5 is a pure version bump leaving lootedChests absent", () => {
+    const migrated = migrateSaveV4toV5(v4Save());
+    expect(migrated.version).toBe(5);
+    expect(migrated.lootedChests).toBeUndefined();
+    expect(migrated.changes).toEqual([[42, 0]]);
+  });
+
+  test("a pre-dungeon (v4) save loads with no looted chests", () => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(5);
+    expect(readLootedChests(parsed)).toEqual([]);
+  });
+
+  test("serializeLootedChests / readLootedChests round-trip the index set", () => {
+    const out = serializeLootedChests(new Set([7, 42, 1000]));
+    expect(out.sort((a, b) => a - b)).toEqual([7, 42, 1000]);
+    expect(readLootedChests({ ...sampleSave(), lootedChests: out })).toEqual(out);
+  });
+
+  test("readLootedChests rejects non-array and filters non-finite indices", () => {
+    expect(readLootedChests({ ...sampleSave(), lootedChests: undefined })).toEqual([]);
+    expect(readLootedChests({ ...sampleSave(), lootedChests: [1, Number.NaN, 3, Infinity] })).toEqual([1, 3]);
+  });
+
+  test("lootedChests survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, sampleSave(), storage);
+    expect(readSave(KEY, storage)!.lootedChests).toEqual([100, 200]);
+  });
+});
+
 describe("stat restoration helpers", () => {
   const base = sampleSave();
 
@@ -303,7 +352,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 5 };
+    const save = { ...sampleSave(), version: 6 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 

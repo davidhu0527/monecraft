@@ -18,6 +18,7 @@ import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
+import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import type { FrameInput } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -382,6 +383,71 @@ describe("chests", () => {
     expect(container![0].id).toBe("gold_ore");
     expect(container![0].count).toBe(3);
     expect(container![1].durability).toBe(200);
+  });
+
+  // ── Dungeon loot chests ────────────────────────────────────────────────
+  // The small 64³ test world places no dungeons (every candidate falls inside
+  // the spawn-clearance radius), so these inject a dungeon chest by hand.
+
+  test("a dungeon chest fills with loot once on first access, then never again", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(22, 40, 22);
+    engine.state.dungeonChestIndices.add(idx);
+
+    fillDungeonChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
+
+    // Emptying it and re-accessing must not re-roll: the looted set is the gate.
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    fillDungeonChestIfUnlooted(engine.state, idx);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
+  });
+
+  test("a looted dungeon chest never re-rolls after a reload (exploit closed)", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(20, 40, 20);
+    engine.state.blockChanges.set(20, 40, 20, BlockId.Chest);
+    engine.state.dungeonChestIndices.add(idx);
+
+    fillDungeonChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
+    // Player loots everything; the now-empty container drops out of the save.
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+
+    const restored = makeEngine(engine.serialize());
+    // The reload re-derives dungeon sites from the seed; this hand-injected chest
+    // would normally be among them, so simulate that — the point under test is
+    // that the *persisted looted set*, not the chest's emptiness, blocks re-roll.
+    restored.state.dungeonChestIndices.add(idx);
+    expect(restored.state.lootedDungeonChests.has(idx)).toBe(true);
+
+    fillDungeonChestIfUnlooted(restored.state, idx);
+    const after = restored.state.containers.get(idx) ?? [];
+    expect(after.some((slot) => slot.id && slot.count > 0)).toBe(false);
+  });
+
+  test("breaking an unopened dungeon chest still yields its loot", () => {
+    const engine = makeEngine();
+    const { idx } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(...indexToXYZ(state, idx), BlockId.Chest);
+    state.dungeonChestIndices.add(idx);
+    state.inventory = Array.from({ length: state.inventory.length }, () => createEmptySlot()); // room to receive
+    engine.consumeEvents();
+
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    expect(state.world.blocks[idx]).toBe(BlockId.Air);
+    expect(state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
+    expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
   });
 });
 
@@ -805,14 +871,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 4 and carries clock, stats, and spawn point", () => {
+  test("save format is version 5 and carries clock, stats, and spawn point", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(4);
+    expect(save.version).toBe(5);
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);

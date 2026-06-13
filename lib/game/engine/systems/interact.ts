@@ -14,6 +14,7 @@ import { createEmptySlot } from "@/lib/game/items";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
 import { findAimedMobIndex } from "./combat";
+import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 
 const scratchEye = new THREE.Vector3();
@@ -62,6 +63,8 @@ function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: numb
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
   }
+  // A worldgen dungeon chest rolls its loot here, on first open (then never again).
+  fillDungeonChestIfUnlooted(state, idx);
   state.openContainerIndex = idx;
   state.inventoryOpen = true;
   emit({ type: "openedContainer" });
