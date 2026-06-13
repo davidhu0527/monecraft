@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { BlockId, collidesAt, voxelRaycast } from "@/lib/world";
-import { BARE_HAND_MINE_POWER, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
-import { BREAK_HARDNESS, rollBlockDrops } from "@/lib/game/items";
-import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
+import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
+import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
+import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { lookDirection } from "./playerMotion";
 import type { InventorySlot } from "@/lib/game/types";
@@ -45,6 +45,30 @@ function addBlockDrop(state: GameState, block: BlockId, rng: () => number): void
   }
 }
 
+/**
+ * Empties a broken chest into the inventory. Returns true if the break may
+ * proceed (the chest was empty, or its contents all fit), false to refuse it
+ * (no room — the chest is left intact). On success the container entry is
+ * removed and a pickedUp toast announces what was retrieved.
+ */
+function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): boolean {
+  const container = state.containers.get(idx);
+  const items = container?.filter((slot) => slot.id && slot.count > 0) ?? [];
+  if (items.length > 0) {
+    const merged = tryInsertSlots(state.inventory, items);
+    if (!merged) {
+      emit({ type: "breakBlocked", reason: "containerFull" });
+      return false;
+    }
+    state.inventory = merged;
+    const picked = new Map<string, number>();
+    for (const slot of items) picked.set(slot.id!, (picked.get(slot.id!) ?? 0) + slot.count);
+    emit({ type: "pickedUp", items: [...picked].map(([itemId, count]) => ({ itemId, count })) });
+  }
+  state.containers.delete(idx);
+  return true;
+}
+
 /** Advances mining progress while the mouse is held; breaks the block at full progress. */
 export function tickMining(state: GameState, input: FrameInput, dt: number, emit: EmitGameEvent, rng: () => number): void {
   if (!input.leftMouseHeld) {
@@ -85,12 +109,19 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   mining.progress += dt * miningSpeed(tool) * MINING_RATE;
   if (mining.progress < hardness) return;
 
+  // Breaking a chest empties it into the inventory first; if it does not all
+  // fit, refuse the break so nothing is lost (the chest stays intact).
+  if (targetBlock === BlockId.Chest && !spillChestOnBreak(state, world.index(bx, by, bz), emit)) {
+    resetMining(state);
+    return;
+  }
+
   state.blockChanges.set(bx, by, bz, BlockId.Air);
   if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
   addBlockDrop(state, targetBlock as BlockId, rng);
   state.worldMeshDirty = true;
   resetMining(state);
-  emit({ type: "blockBroken", blockId: targetBlock as BlockId });
+  emit({ type: "blockBroken", blockId: targetBlock as BlockId, x: bx, y: by, z: bz });
 }
 
 /** Places the selected block against the targeted face, refusing self-entombment. */
@@ -120,6 +151,14 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
     return;
   }
 
+  // A placed chest gets a fresh, empty block-entity store.
+  if (slot.blockId === BlockId.Chest) {
+    state.containers.set(
+      world.index(tx, ty, tz),
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+  }
+
   state.worldMeshDirty = true;
-  emit({ type: "blockPlaced", blockId: slot.blockId });
+  emit({ type: "blockPlaced", blockId: slot.blockId, x: tx, y: ty, z: tz });
 }

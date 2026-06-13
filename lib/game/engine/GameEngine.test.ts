@@ -12,8 +12,10 @@ import {
   SPRINT_BLOCKS_PER_HUNGER,
   SPRINT_MIN_HUNGER
 } from "@/lib/game/config";
+import { CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
-import { createSlot } from "@/lib/game/items";
+import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import type { FrameInput } from "@/lib/game/engine/state";
@@ -196,6 +198,202 @@ describe("mining", () => {
     expect(engine.state.blockChanges.changes().length).toBe(0);
   });
 });
+
+describe("chests", () => {
+  /** Settles the player, centers it in its cell, and aims straight down at the floor block. */
+  function aimDownAtFloor(engine: GameEngine): { x: number; y: number; z: number; idx: number } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const y = Math.floor(state.player.position.y) - 1;
+    const z = Math.floor(state.player.position.z);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    return { x, y, z, idx: state.world.index(x, y, z) };
+  }
+
+  test("placing a chest creates an empty container at its voxel index", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 3, BlockId.Stone);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("chest", 1);
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Chest);
+    const container = state.containers.get(state.world.index(ex, ey, ez - 2));
+    expect(container).toBeDefined();
+    expect(container).toHaveLength(CHEST_SLOTS);
+    expect(container!.every((slot) => slot.id === null)).toBe(true);
+  });
+
+  test("right-clicking a chest opens it in the inventory panel", () => {
+    const engine = makeEngine();
+    const { idx } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(...indexToXYZ(state, idx), BlockId.Chest);
+
+    engine.dispatch({ type: "placeBlock" }); // right-click → interact wins over place
+
+    expect(state.openContainerIndex).toBe(idx);
+    expect(state.inventoryOpen).toBe(true);
+    expect(engine.getSnapshot().container).toHaveLength(CHEST_SLOTS);
+  });
+
+  test("moveStack moves an item between inventory and the open chest, and back", () => {
+    const engine = makeEngine();
+    const idx = 5000;
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    engine.state.openContainerIndex = idx;
+    engine.state.inventoryOpen = true;
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[0] = createSlot("dirt", 10);
+
+    engine.dispatch({ type: "moveStack", from: 0, to: CONTAINER_SLOT_BASE + 0 });
+    expect(engine.state.inventory[0].id).toBeNull();
+    expect(engine.state.containers.get(idx)![0].id).toBe("dirt");
+    expect(engine.state.containers.get(idx)![0].count).toBe(10);
+
+    engine.dispatch({ type: "moveStack", from: CONTAINER_SLOT_BASE + 0, to: 0 });
+    expect(engine.state.inventory[0].id).toBe("dirt");
+    expect(engine.state.containers.get(idx)![0].id).toBeNull();
+  });
+
+  test("moveStack within the player inventory leaves the open chest untouched", () => {
+    const engine = makeEngine();
+    const idx = 5000;
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    engine.state.openContainerIndex = idx;
+    engine.state.inventoryOpen = true;
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[0] = createSlot("dirt", 4);
+    engine.state.inventory[1] = createEmptySlot();
+
+    // Rearranging the player inventory while a chest is open must not write into
+    // the container (regression: the second write-back used to misroute here).
+    engine.dispatch({ type: "moveStack", from: 0, to: 1 });
+
+    expect(engine.state.inventory[1].id).toBe("dirt");
+    expect(engine.state.inventory[0].id).toBeNull();
+    expect(engine.state.containers.get(idx)!.every((slot) => slot.id === null)).toBe(true);
+  });
+
+  test("closing the inventory clears the open chest", () => {
+    const engine = makeEngine();
+    engine.state.containers.set(
+      5000,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    engine.state.openContainerIndex = 5000;
+    engine.state.inventoryOpen = true;
+    engine.dispatch({ type: "toggleInventory" }); // closes
+    expect(engine.state.inventoryOpen).toBe(false);
+    expect(engine.state.openContainerIndex).toBeNull();
+    expect(engine.getSnapshot().container).toBeNull();
+  });
+
+  test("breaking an empty chest drops the chest item and removes its container", () => {
+    const engine = makeEngine();
+    const { idx } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(...indexToXYZ(state, idx), BlockId.Chest);
+    state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    expect(state.world.blocks[idx]).toBe(BlockId.Air);
+    expect(state.containers.has(idx)).toBe(false);
+    expect(countsById(state.inventory).get("chest")).toBe(1);
+  });
+
+  test("breaking a full chest spills its contents into the inventory", () => {
+    const engine = makeEngine();
+    const { idx } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(...indexToXYZ(state, idx), BlockId.Chest);
+    const slots = Array.from({ length: CHEST_SLOTS }, () => createEmptySlot());
+    slots[0] = createSlot("diamond_ore", 7);
+    state.containers.set(idx, slots);
+    engine.consumeEvents();
+
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    expect(state.world.blocks[idx]).toBe(BlockId.Air);
+    expect(state.containers.has(idx)).toBe(false);
+    expect(countsById(state.inventory).get("diamond_ore")).toBe(7);
+  });
+
+  test("a full chest refuses to break into a full inventory, staying intact", () => {
+    const engine = makeEngine();
+    const { idx } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(...indexToXYZ(state, idx), BlockId.Chest);
+    const slots = Array.from({ length: CHEST_SLOTS }, () => createEmptySlot());
+    slots[0] = createSlot("dirt", 5);
+    state.containers.set(idx, slots);
+    // Fill every inventory slot so the spill cannot land anywhere.
+    state.inventory = Array.from({ length: state.inventory.length }, () => createSlot("stone", 99));
+    engine.consumeEvents();
+
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    const events = engine.consumeEvents();
+
+    expect(state.world.blocks[idx]).toBe(BlockId.Chest); // not broken
+    expect(state.containers.get(idx)![0].id).toBe("dirt"); // contents kept
+    expect(events.some((event) => event.type === "breakBlocked")).toBe(true);
+  });
+
+  test("chest contents survive a save round-trip", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(20, 40, 20);
+    engine.state.blockChanges.set(20, 40, 20, BlockId.Chest);
+    const slots = Array.from({ length: CHEST_SLOTS }, () => createEmptySlot());
+    slots[0] = createSlot("gold_ore", 3);
+    slots[1] = { ...createSlot("diamond_sword", 1), durability: 200 };
+    engine.state.containers.set(idx, slots);
+
+    const restored = makeEngine(engine.serialize());
+    const container = restored.state.containers.get(idx);
+    expect(container).toBeDefined();
+    expect(container![0].id).toBe("gold_ore");
+    expect(container![0].count).toBe(3);
+    expect(container![1].durability).toBe(200);
+  });
+});
+
+/** Decodes a voxel index back to [x, y, z] for the active world. */
+function indexToXYZ(state: GameEngine["state"], idx: number): [number, number, number] {
+  const layer = state.world.sizeX * state.world.sizeZ;
+  const y = Math.floor(idx / layer);
+  const rem = idx - y * layer;
+  const z = Math.floor(rem / state.world.sizeX);
+  const x = rem - z * state.world.sizeX;
+  return [x, y, z];
+}
 
 describe("commands", () => {
   test("selectSlot clamps to the hotbar", () => {
@@ -607,14 +805,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 3 and carries clock, stats, and spawn point", () => {
+  test("save format is version 4 and carries clock, stats, and spawn point", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(3);
+    expect(save.version).toBe(4);
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);

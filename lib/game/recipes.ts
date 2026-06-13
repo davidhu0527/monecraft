@@ -23,6 +23,7 @@ export const RECIPES: Recipe[] = [
   },
   { id: "bread", label: "3 Wheat -> Bread", cost: [{ slotId: "wheat", count: 3 }], result: { slotId: "bread", count: 1 } },
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
+  { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
   {
     id: "cook_chicken",
     label: "Raw Chicken + Planks -> Cooked Chicken",

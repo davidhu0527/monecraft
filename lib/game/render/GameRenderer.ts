@@ -1,14 +1,18 @@
 import * as THREE from "three";
-import { buildGeometryRegion, createBlockAtlasTexture, voxelRaycast, VoxelWorld } from "@/lib/world";
+import { BLOCK_COLORS, buildGeometryRegion, createBlockAtlasTexture, voxelRaycast, VoxelWorld } from "@/lib/world";
 import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS, THIRD_PERSON_DISTANCE, THIRD_PERSON_MARGIN, WALK_SPEED } from "@/lib/game/config";
 import { sunAngleAt } from "@/lib/game/engine/systems/dayNight";
-import type { GameState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState } from "@/lib/game/engine/state";
+import { MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { PlayerPalette } from "@/lib/game/playerSkins";
 import { cameraOffsetDirection, computeCameraPose } from "./cameraView";
 import { createCrackOverlay, type CrackOverlayView } from "./crackOverlay";
 import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
+import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+import { createPrecipitation, type PrecipitationView } from "./precipitation";
+import { createSkyView, type SkyView } from "./skyView";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
@@ -41,6 +45,14 @@ export class GameRenderer {
   private readonly crackOverlay: CrackOverlayView;
   private readonly mobVisuals: MobVisuals;
   private readonly playerVisuals: PlayerVisuals;
+  private readonly particles: ParticleSystem;
+  private readonly sky: SkyView;
+  private readonly precip: PrecipitationView;
+  private readonly overcastGray = new THREE.Color(0x6b7480);
+  private lastSyncMs = Number.NaN;
+  private dustDistance = 0;
+  private lastFootX = Number.NaN;
+  private lastFootZ = Number.NaN;
 
   /** WebGL context creation can fail (blocked, unsupported) — surface it instead of throwing. */
   static create(mount: HTMLElement): CreateRendererResult {
@@ -85,6 +97,9 @@ export class GameRenderer {
     this.crackOverlay = createCrackOverlay(this.scene);
     this.mobVisuals = createMobVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
+    this.particles = createParticleSystem(this.scene);
+    this.sky = createSkyView(this.scene, this.camera);
+    this.precip = createPrecipitation(this.scene);
   }
 
   get domElement(): HTMLCanvasElement {
@@ -98,7 +113,14 @@ export class GameRenderer {
 
   /** Pulls everything visible from the simulation state. Call once per frame, then render(). */
   sync(state: GameState, timeMs: number): void {
+    const dtMs = Number.isNaN(this.lastSyncMs) ? 16 : Math.max(0, timeMs - this.lastSyncMs);
+    this.lastSyncMs = timeMs;
+    if (!state.paused) {
+      this.particles.update(dtMs);
+      this.emitFootstepDust(state);
+    }
     this.syncCamera(state);
+    if (!state.paused) this.precip.sync(state, dtMs, this.camera.position);
     this.syncWorldMesh(state);
     this.heldItem.update(state.inventory[state.selectedSlot], {
       timeMs,
@@ -109,6 +131,7 @@ export class GameRenderer {
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
     this.playerVisuals.sync(state, timeMs);
+    this.sky.sync(state, timeMs);
     this.syncDayNight(state);
   }
 
@@ -120,6 +143,134 @@ export class GameRenderer {
   triggerSwing(): void {
     this.heldItem.triggerSwing();
     this.playerVisuals.triggerSwing();
+  }
+
+  /** Spawns particle bursts for one-shot gameplay events (parallel to audio). */
+  handleEvent(event: GameEvent, state: GameState): void {
+    switch (event.type) {
+      case "blockBroken":
+        this.particles.emitBurst({
+          x: event.x + 0.5,
+          y: event.y + 0.5,
+          z: event.z + 0.5,
+          count: 10,
+          color: BLOCK_COLORS[event.blockId] ?? [0.6, 0.6, 0.6],
+          speed: 3.2,
+          spread: 1.0,
+          gravity: 14,
+          drag: 1.6,
+          life: [0.35, 0.7],
+          size: 0.16,
+          colorJitter: 0.08
+        });
+        break;
+      case "blockPlaced":
+        this.particles.emitBurst({
+          x: event.x + 0.5,
+          y: event.y + 0.5,
+          z: event.z + 0.5,
+          count: 6,
+          color: BLOCK_COLORS[event.blockId] ?? [0.6, 0.6, 0.6],
+          speed: 1.2,
+          spread: 0.6,
+          gravity: 6,
+          drag: 2.2,
+          life: [0.25, 0.45],
+          size: 0.12,
+          upBias: 0.6
+        });
+        break;
+      case "mobDied":
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 0.4,
+          z: event.z,
+          count: 14,
+          color: hexToRgb(MOB_TEMPLATES[event.kind].modelArgs[0] as number),
+          speed: 2.6,
+          spread: 1.4,
+          gravity: 10,
+          drag: 1.4,
+          life: [0.4, 0.8],
+          size: 0.18
+        });
+        break;
+      case "ateFood":
+        this.particles.emitBurst({
+          x: state.player.position.x,
+          y: state.player.position.y + 1.4,
+          z: state.player.position.z,
+          count: 5,
+          color: [0.82, 0.6, 0.4],
+          speed: 1.6,
+          spread: 0.8,
+          gravity: 12,
+          drag: 1.5,
+          life: [0.25, 0.5],
+          size: 0.1
+        });
+        break;
+      case "landed":
+        this.particles.emitBurst({
+          x: state.player.position.x,
+          y: state.player.position.y,
+          z: state.player.position.z,
+          count: Math.min(12, 3 + Math.floor(event.impact)),
+          color: [0.7, 0.62, 0.5],
+          speed: 0.8 + event.impact * 0.12,
+          spread: 1.2,
+          gravity: 8,
+          drag: 2.5,
+          life: [0.2, 0.45],
+          size: 0.13,
+          upBias: 0.4
+        });
+        break;
+      case "jumped":
+        this.particles.emitBurst({
+          x: state.player.position.x,
+          y: state.player.position.y,
+          z: state.player.position.z,
+          count: 4,
+          color: [0.7, 0.62, 0.5],
+          speed: 1.0,
+          spread: 1.0,
+          gravity: 8,
+          drag: 2.5,
+          life: [0.15, 0.35],
+          size: 0.11
+        });
+        break;
+    }
+  }
+
+  /** Kicks a small dust puff every couple of strides while walking on the ground. */
+  private emitFootstepDust(state: GameState): void {
+    const { player } = state;
+    if (state.isDead || !player.onGround || Number.isNaN(this.lastFootX)) {
+      this.lastFootX = player.position.x;
+      this.lastFootZ = player.position.z;
+      return;
+    }
+    this.dustDistance += Math.hypot(player.position.x - this.lastFootX, player.position.z - this.lastFootZ);
+    this.lastFootX = player.position.x;
+    this.lastFootZ = player.position.z;
+    if (this.dustDistance < 2.4) return;
+    this.dustDistance = 0;
+    this.particles.emitBurst({
+      x: player.position.x,
+      y: player.position.y + 0.05,
+      z: player.position.z,
+      count: 2,
+      color: [0.66, 0.58, 0.46],
+      speed: 0.5,
+      spread: 0.5,
+      gravity: 6,
+      drag: 2.6,
+      life: [0.2, 0.4],
+      size: 0.1,
+      upBias: 0.3
+    });
   }
 
   /** Applies a skin preset's palette to the player body (live recolor). */
@@ -134,6 +285,9 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.precip.dispose();
+    this.sky.dispose();
+    this.particles.dispose();
     this.playerVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
@@ -193,6 +347,16 @@ export class GameRenderer {
     this.hemiLight.intensity = 0.24 + daylight * 1.05;
 
     this.liveSky.copy(this.nightSky).lerp(this.daySky, daylight);
+
+    // Overcast: precipitation pulls the sky toward gray, dims the light, and
+    // draws the fog in for an enclosed feel. Cosmetic — daylight itself is unchanged.
+    const overcast = state.weather.kind === "clear" ? 0 : state.weather.intensity;
+    if (overcast > 0) {
+      this.liveSky.lerp(this.overcastGray, overcast * 0.6);
+      this.sun.intensity *= 1 - overcast * 0.5;
+      this.hemiLight.intensity *= 1 - overcast * 0.35;
+    }
     this.scene.fog?.color.copy(this.liveSky);
+    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.far = 200 - overcast * 90;
   }
 }

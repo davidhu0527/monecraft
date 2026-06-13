@@ -2,7 +2,8 @@ import { describe, expect, mock, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import InventoryPanel from "@/components/game/InventoryPanel";
-import { HOTBAR_SLOTS, INVENTORY_SLOTS } from "@/lib/game/config";
+import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS } from "@/lib/game/config";
+import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import type { InventorySlot } from "@/lib/game/types";
@@ -23,8 +24,10 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     craftingStation: null as "furnace" | null,
+    container: null as InventorySlot[] | null,
     canCraft: () => true,
     onSwapSlots: mock(),
+    onMoveStack: mock(),
     onToggleEquipArmor: mock(),
     onCraft: mock(),
     ...overrides
@@ -95,7 +98,8 @@ describe("InventoryPanel", () => {
     const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: "helmet" } });
     const helmetSlot = screen.getByRole("button", { name: "Helmet: Helmet" });
     expect(helmetSlot.className).toContain("filled");
-    expect(helmetSlot.getAttribute("title")).toBe("Helmet (260/260)");
+    await user.hover(helmetSlot);
+    expect(screen.getByText("Durability 260 / 260")).toBeTruthy(); // surfaced in the hover tooltip
     await user.click(helmetSlot);
     expect(props.onToggleEquipArmor).toHaveBeenCalledWith(2); // the helmet's inventory index
   });
@@ -128,7 +132,6 @@ describe("InventoryPanel", () => {
     const props = renderPanel({ craftingStation: null });
     const button = screen.getByRole("button", { name: cook.label }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
-    expect(button.getAttribute("title")).toBe("Requires Furnace");
     await user.click(button);
     expect(props.onCraft).not.toHaveBeenCalled();
   });
@@ -141,5 +144,20 @@ describe("InventoryPanel", () => {
     expect(button.disabled).toBe(false);
     await user.click(button);
     expect(props.onCraft).toHaveBeenCalledWith(cook);
+  });
+
+  test("an open chest renders its grid as an extra row of slots", () => {
+    renderPanel({ container: Array.from({ length: CHEST_SLOTS }, () => createEmptySlot()) });
+    expect(screen.getByTestId("chest-grid")).toBeTruthy();
+    expect(slotButtons()).toHaveLength(INVENTORY_SLOTS + CHEST_SLOTS);
+  });
+
+  test("moving an item from inventory into the chest calls onMoveStack, not onSwapSlots", async () => {
+    const user = userEvent.setup();
+    const props = renderPanel({ container: Array.from({ length: CHEST_SLOTS }, () => createEmptySlot()) });
+    await user.click(screen.getByRole("button", { name: "Slot 1: Dirt" })); // inventory index 0
+    await user.click(screen.getByRole("button", { name: "Chest slot 1: empty" })); // chest index 0
+    expect(props.onMoveStack).toHaveBeenCalledWith(0, CONTAINER_SLOT_BASE);
+    expect(props.onSwapSlots).not.toHaveBeenCalled();
   });
 });

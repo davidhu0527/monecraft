@@ -28,6 +28,8 @@ export const JUMPS_PER_HUNGER = 50;
 export const HOTBAR_SLOTS = 9;
 export const INVENTORY_SLOTS = 36;
 export const MAX_STACK_SIZE = 99;
+// Storage slots in a placed chest (a 9x3 grid, like a Minecraft single chest).
+export const CHEST_SLOTS = 27;
 
 // Mining & combat
 export const MINE_REACH = 7;
@@ -42,6 +44,12 @@ export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
+
+// Weather (cosmetic, transient — never persisted, never touches spawn balance).
+// Time is split into fixed windows; a seeded hash of the window index decides
+// whether it precipitates, and a triangular envelope ramps intensity in/out.
+export const WEATHER_CYCLE_SECONDS = 180;
+export const WEATHER_RAIN_FRACTION = 0.35;
 
 // Beds & sleep
 // Sleeping is only allowed once it is night by the game's own definition (the

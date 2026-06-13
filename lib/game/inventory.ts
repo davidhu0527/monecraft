@@ -169,6 +169,77 @@ export function swapSlots(slots: InventorySlot[], fromIndex: number, toIndex: nu
   return next;
 }
 
+/**
+ * Swaps a slot between two (possibly identical) arrays — the cross-container
+ * generalization of swapSlots, used to move items between the player inventory
+ * and an open chest. When both refs point at the same array it degrades to a
+ * plain swap and returns that one array as both `a` and `b`. Returns null on a
+ * no-op or out-of-range index.
+ */
+export function moveStack(a: InventorySlot[], indexA: number, b: InventorySlot[], indexB: number): { a: InventorySlot[]; b: InventorySlot[] } | null {
+  if (a === b) {
+    const swapped = swapSlots(a, indexA, indexB);
+    return swapped ? { a: swapped, b: swapped } : null;
+  }
+  if (indexA < 0 || indexA >= a.length || indexB < 0 || indexB >= b.length) return null;
+  const nextA = cloneSlots(a);
+  const nextB = cloneSlots(b);
+  const temp = nextA[indexA];
+  nextA[indexA] = nextB[indexB];
+  nextB[indexB] = temp;
+  return { a: nextA, b: nextB };
+}
+
+/**
+ * All-or-nothing insert of whole slot objects into `inventory` (used when a
+ * broken chest spills its contents). Stackable items merge into existing stacks
+ * then empty slots; durability items (tools/weapons/armor) take a whole empty
+ * slot each so each piece keeps its own `durability`. Returns a new array, or
+ * null if everything does not fit — the caller then leaves the inventory (and
+ * the chest) untouched.
+ */
+export function tryInsertSlots(inventory: InventorySlot[], incoming: InventorySlot[]): InventorySlot[] | null {
+  const next = cloneSlots(inventory);
+
+  const insertStackable = (id: string, count: number): boolean => {
+    let remaining = count;
+    for (let i = 0; i < next.length && remaining > 0; i += 1) {
+      const slot = next[i];
+      if (slot.id !== id || slot.count >= MAX_STACK_SIZE) continue;
+      const add = Math.min(remaining, MAX_STACK_SIZE - slot.count);
+      slot.count += add;
+      remaining -= add;
+    }
+    for (let i = 0; i < next.length && remaining > 0; i += 1) {
+      if (next[i].id !== null || next[i].count !== 0) continue;
+      const add = Math.min(remaining, MAX_STACK_SIZE);
+      next[i] = createSlot(id, add);
+      remaining -= add;
+    }
+    return remaining === 0;
+  };
+
+  const insertDurable = (slot: InventorySlot): boolean => {
+    let remaining = slot.count;
+    for (let i = 0; i < next.length && remaining > 0; i += 1) {
+      if (next[i].id !== null || next[i].count !== 0) continue;
+      next[i] = { ...slot, count: 1 };
+      remaining -= 1;
+    }
+    return remaining === 0;
+  };
+
+  for (const slot of incoming) {
+    if (!slot.id || slot.count <= 0) continue;
+    const def = ITEM_DEF_BY_ID[slot.id];
+    if (!def) continue; // unknown ids carry no data to preserve
+    const placed = def.maxDurability ? insertDurable(slot) : insertStackable(slot.id, slot.count);
+    if (!placed) return null;
+  }
+
+  return next;
+}
+
 /** Toggles the armor piece at `index` in its armor slot. */
 export function toggleEquipArmor(slots: InventorySlot[], equipped: EquippedArmor, index: number): EquippedArmor | null {
   if (index < 0 || index >= slots.length) return null;

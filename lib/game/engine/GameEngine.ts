@@ -16,21 +16,24 @@ import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import {
   inventorySlotsSnapshot,
+  readContainers,
   restoreDayClock,
   restoreEquippedArmor,
   restoreHearts,
   restoreHungerLevel,
   restoreInventorySlots,
   restoreSelectedSlot,
-  restoreSpawnPoint
+  restoreSpawnPoint,
+  serializeContainers
 } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
-import type { SaveData } from "@/lib/game/types";
+import type { InventorySlot, SaveData } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
-import type { Command } from "./commands";
+import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
+import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
@@ -101,6 +104,8 @@ export class GameEngine {
       respawnTimer: 0,
       inventoryOpen: false,
       craftingStation: null,
+      containers: new Map(),
+      openContainerIndex: null,
       paused: false,
       debugOpen: false,
       debugInfo: null,
@@ -111,6 +116,7 @@ export class GameEngine {
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
+      weather: { kind: "clear", intensity: 0 },
       sleepTimer: 0,
       spawnPoint: null,
       mining: { targetKey: "", progress: 0 },
@@ -125,6 +131,12 @@ export class GameEngine {
       this.state.hearts = restoreHearts(save) ?? this.state.hearts;
       this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
       this.state.spawnPoint = restoreSpawnPoint(save);
+      // Restore chest contents only for indices that still hold a Chest block.
+      for (const { index, slots } of readContainers(save)) {
+        if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
+          this.state.containers.set(index, slots);
+        }
+      }
       const savedClock = restoreDayClock(save);
       if (savedClock !== null) {
         this.state.dayClock = savedClock;
@@ -140,6 +152,9 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
+    // Seed weather from the (possibly restored) dayClock + player position so a
+    // loaded save's first frame/snapshot is consistent before the first step().
+    tickWeather(this.state);
     this.snapshot = this.buildSnapshot();
   }
 
@@ -184,6 +199,7 @@ export class GameEngine {
     tickHealthRegen(state, dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickDayNight(state, dt);
+    tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
@@ -205,7 +221,10 @@ export class GameEngine {
       }
       case "toggleInventory": {
         state.inventoryOpen = !state.inventoryOpen;
-        if (!state.inventoryOpen) state.craftingStation = null; // leaving the panel closes the station
+        if (!state.inventoryOpen) {
+          state.craftingStation = null; // leaving the panel closes the station
+          state.openContainerIndex = null; // ...and the open chest
+        }
         break;
       }
       case "craft": {
@@ -222,6 +241,10 @@ export class GameEngine {
       }
       case "swapSlots": {
         state.inventory = inv.swapSlots(state.inventory, command.from, command.to) ?? state.inventory;
+        break;
+      }
+      case "moveStack": {
+        this.applyMoveStack(command.from, command.to);
         break;
       }
       case "toggleEquipArmor": {
@@ -274,6 +297,7 @@ export class GameEngine {
         if (state.inventoryOpen || state.isDead || state.sleepTimer > 0) break;
         state.paused = true;
         state.craftingStation = null;
+        state.openContainerIndex = null;
         break;
       }
       case "resume": {
@@ -311,7 +335,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 3,
+      version: 4,
       seed: state.world.seed,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
@@ -325,7 +349,8 @@ export class GameEngine {
       dayClock: state.dayClock,
       hearts: state.hearts,
       hunger: state.hunger,
-      spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null
+      spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
+      blockEntities: serializeContainers(state.containers)
     };
   }
 
@@ -348,6 +373,37 @@ export class GameEngine {
     this.events.push(event);
   };
 
+  /**
+   * Moves a slot between the player inventory and the open chest. Indices at or
+   * above CONTAINER_SLOT_BASE address the container; below it, the inventory.
+   * Writes back whichever of the two arrays the move touched.
+   */
+  private applyMoveStack(from: number, to: number): void {
+    const state = this.state;
+    const container = state.openContainerIndex !== null ? state.containers.get(state.openContainerIndex) : undefined;
+    const resolve = (index: number): { arr: InventorySlot[]; local: number } | null => {
+      if (index >= CONTAINER_SLOT_BASE) return container ? { arr: container, local: index - CONTAINER_SLOT_BASE } : null;
+      return { arr: state.inventory, local: index };
+    };
+    const a = resolve(from);
+    const b = resolve(to);
+    if (!a || !b) return;
+    const moved = inv.moveStack(a.arr, a.local, b.arr, b.local);
+    if (!moved) return;
+
+    // Resolve each side's destination BEFORE writing: the first write reassigns
+    // state.inventory, which would make a later `arr === state.inventory` check
+    // stale and misroute an inventory↔inventory move into the open chest.
+    const aIsInventory = a.arr === state.inventory;
+    const bIsInventory = b.arr === state.inventory;
+    const writeBack = (isInventory: boolean, next: InventorySlot[]): void => {
+      if (isInventory) state.inventory = next;
+      else if (state.openContainerIndex !== null) state.containers.set(state.openContainerIndex, next);
+    };
+    writeBack(aIsInventory, moved.a);
+    writeBack(bIsInventory, moved.b);
+  }
+
   private applyDamage = (amount: number): void => {
     const heartsBefore = this.state.hearts;
     const died = applyDamageWithArmor(this.state, amount);
@@ -369,7 +425,7 @@ export class GameEngine {
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
-    this.emit({ type: "mobDied", kind: mob.kind });
+    this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
   };
@@ -467,7 +523,8 @@ export class GameEngine {
       armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
       capsActive: state.capsActive,
       sleeping: state.sleepTimer > 0,
-      craftingStation: state.craftingStation
+      craftingStation: state.craftingStation,
+      container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null
     };
   }
 

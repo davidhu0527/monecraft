@@ -33,6 +33,7 @@ export default function MinecraftGame() {
     paused,
     sleeping,
     craftingStation,
+    container,
     debugOpen,
     debug,
     saveMessage,
@@ -47,6 +48,7 @@ export default function MinecraftGame() {
     canCraft,
     craft,
     swapInventorySlots,
+    moveStack,
     toggleEquipArmor,
     resumeNow,
     respawnNow,
@@ -76,6 +78,7 @@ export default function MinecraftGame() {
   return (
     <div className="game-root">
       <div ref={attachMount} className="game-canvas-wrap" />
+      <div className="vignette" aria-hidden="true" />
 
       {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
@@ -94,6 +97,8 @@ export default function MinecraftGame() {
         <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
       </div>
 
+      {inventoryOpen || paused ? <div className="menu-backdrop" /> : null}
+
       {inventoryOpen ? (
         <InventoryPanel
           inventory={inventory}
@@ -102,8 +107,10 @@ export default function MinecraftGame() {
           hotbarSlots={hotbarSlots}
           recipes={recipes}
           craftingStation={craftingStation}
+          container={container}
           canCraft={canCraft}
           onSwapSlots={swapInventorySlots}
+          onMoveStack={moveStack}
           onToggleEquipArmor={toggleEquipArmor}
           onCraft={craft}
         />

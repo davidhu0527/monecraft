@@ -44,7 +44,9 @@ test("inventory opens and crafting works end to end", async ({ gamePage: page })
   expect(await itemCount(page, "planks")).toBe(planksBefore + 4);
   expect(await itemCount(page, "wood")).toBe(62);
   // The UI re-rendered from the new snapshot: the planks stack count updated.
-  await expect(panel.locator('.inv-slot[title="Planks"]').first()).toContainText(`${planksBefore + 4}`);
+  // Slots carry the item in their aria-label ("Slot N: Planks") — the old
+  // native `title` was replaced by the custom hover tooltip.
+  await expect(panel.locator('.inv-slot[aria-label$=": Planks"]').first()).toContainText(`${planksBefore + 4}`);
 
   await page.keyboard.press("i");
   await expect(panel).not.toBeVisible();
@@ -99,6 +101,54 @@ test("right-click still places a block when not aimed at an interactive one", as
   });
   expect(placed.before).toBe(0); // air
   expect(placed.after).toBe(1); // grass placed
+});
+
+test("a chest opens, stores an item, and keeps it across a reload", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
+
+  // Build a deterministic spot: a chest as the floor with cleared headroom, the
+  // player standing on it looking straight down, then right-click — all in one
+  // step so the down-ray can only hit the chest (interact wins over placement,
+  // so it opens). `round` (not `floor`) tolerates the player resting a hair
+  // below the integer after collision resolution.
+  const chestIndex = await page.evaluate(() => {
+    const engine = window.__monecraft!.engine;
+    const state = engine.state;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const groundY = Math.round(state.player.position.y) - 1;
+    state.blockChanges.set(x, groundY, z, 27); // BlockId.Chest, the floor
+    state.blockChanges.set(x, groundY + 1, z, 0); // Air headroom (feet/body/head)
+    state.blockChanges.set(x, groundY + 2, z, 0);
+    state.blockChanges.set(x, groundY + 3, z, 0);
+    state.player.position.set(x + 0.5, groundY + 1, z + 0.5);
+    state.player.velocity.set(0, 0, 0);
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    engine.dispatch({ type: "placeBlock" });
+    return state.world.index(x, groundY, z);
+  });
+
+  // The chest grid appears once the snapshot propagates to React.
+  await expect(page.getByTestId("chest-grid")).toBeVisible();
+
+  // Move the starter grass stack (inventory slot 0) into the first chest slot
+  // through the same command the panel dispatches (chest slot 0 = base + 0).
+  await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "moveStack", from: 0, to: 1000 }));
+  const storedId = await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    return state.containers.get(state.openContainerIndex!)![0].id;
+  });
+  expect(storedId).toBe("grass");
+
+  // Persist and reload: the chest block-entity survives in the v4 save.
+  await page.evaluate(() => localStorage.setItem("minecraft_save_v5", JSON.stringify(window.__monecraft!.engine.serialize())));
+  await page.reload();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  const restoredId = await page.evaluate((idx) => window.__monecraft!.engine.state.containers.get(idx)?.[0]?.id ?? null, chestIndex);
+  expect(restoredId).toBe("grass");
 });
 
 test("V cycles the camera views and the scene keeps rendering", async ({ gamePage: page }) => {
@@ -165,7 +215,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v5"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(3);
+  expect(JSON.parse(saved!).version).toBe(4);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

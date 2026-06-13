@@ -50,7 +50,15 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 - Right-click (and KeyE) dispatch `placeBlock`, which runs a fixed precedence in `GameEngine.dispatch` before falling through to placement: feed an aimed mob → `tryInteractBlock` → use the held item → place. To make a block do something on right-click, register it in `INTERACTIVE_BLOCKS` and add a branch in `tryInteractBlock` (`lib/game/engine/systems/interact.ts`).
 - The handler returns `true` to consume the click (no block is placed) — return `true` even when the action is refused (e.g. a bed during the day) so the player doesn't place a block into the bed by accident.
-- Two reference implementations: the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"). A station-opening block also needs an `openedStation` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
+- Three reference implementations: the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"); the **chest** opens the inventory and sets `state.openContainerIndex` (see below). A block that opens the inventory from a mouse click also needs an `openedStation`/`openedContainer` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
+
+## A container block (block-entity storage)
+
+- Blocks are bare `BlockId`s, so any block that needs **attached data** (a chest's items) stores it in `state.containers: Map<voxelIndex, InventorySlot[]>`, keyed by `world.index(x,y,z)`. The chest is the reference:
+  - **Open**: `interactChest` (an `INTERACTIVE_BLOCKS` branch) lazily creates the slot array, sets `state.openContainerIndex`, opens the inventory, and emits `openedContainer`. The snapshot exposes `container`, and `InventoryPanel` renders a second grid; `toggleInventory`/`pause` clear `openContainerIndex`.
+  - **Move items**: the `moveStack` command swaps a slot across the inventory/chest boundary using the pure `inventory.moveStack` (chest indices offset by `CONTAINER_SLOT_BASE` in `commands.ts`).
+  - **Place / break**: placing the block (`mining.placeSelectedBlock`) seeds an empty container; breaking it spills the contents into the inventory via `inventory.tryInsertSlots` (all-or-nothing — a break is refused with a `breakBlocked` event when they don't fit).
+  - **Persist**: `serialize()` writes non-empty containers to `blockEntities` (`save.serializeContainers`); boot restores them (`save.readContainers`) only for indices that still hold the block. This is an **additive save bump** — see [save-format.md](save-format.md).
 
 ## A random-tick behavior (growth / spread)
 

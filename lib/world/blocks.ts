@@ -30,7 +30,8 @@ export const enum BlockId {
   WheatStage1 = 23,
   WheatStage2 = 24,
   WheatStage3 = 25,
-  Furnace = 26
+  Furnace = 26,
+  Chest = 27
 }
 
 export enum BiomeId {
@@ -61,7 +62,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Snow]: 0xf2f5fa,
   [BlockId.Cactus]: 0x6aa850,
   [BlockId.Bed]: 0xc0392b,
-  [BlockId.Furnace]: 0x63666a
+  [BlockId.Furnace]: 0x63666a,
+  [BlockId.Chest]: 0x9c6a3c
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -95,5 +97,6 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.WheatStage1]: [0.55, 0.66, 0.27],
   [BlockId.WheatStage2]: [0.7, 0.69, 0.29],
   [BlockId.WheatStage3]: [0.82, 0.72, 0.3],
-  [BlockId.Furnace]: [0.38, 0.39, 0.41]
+  [BlockId.Furnace]: [0.38, 0.39, 0.41],
+  [BlockId.Chest]: [0.58, 0.41, 0.22]
 };
