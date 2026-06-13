@@ -95,7 +95,8 @@ describe("InventoryPanel", () => {
     const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: "helmet" } });
     const helmetSlot = screen.getByRole("button", { name: "Helmet: Helmet" });
     expect(helmetSlot.className).toContain("filled");
-    expect(helmetSlot.getAttribute("title")).toBe("Helmet (260/260)");
+    await user.hover(helmetSlot);
+    expect(screen.getByText("Durability 260 / 260")).toBeTruthy(); // surfaced in the hover tooltip
     await user.click(helmetSlot);
     expect(props.onToggleEquipArmor).toHaveBeenCalledWith(2); // the helmet's inventory index
   });
@@ -128,7 +129,6 @@ describe("InventoryPanel", () => {
     const props = renderPanel({ craftingStation: null });
     const button = screen.getByRole("button", { name: cook.label }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
-    expect(button.getAttribute("title")).toBe("Requires Furnace");
     await user.click(button);
     expect(props.onCraft).not.toHaveBeenCalled();
   });

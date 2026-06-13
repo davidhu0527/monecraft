@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ItemIcon from "@/components/game/ItemIcon";
+import { itemTooltipFor, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
 import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot } from "@/lib/game/items";
 import { itemIconUrl } from "@/lib/ui/sprites";
@@ -22,12 +23,6 @@ const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
   furnace: "Furnace"
 };
 
-function slotTitle(slot: InventorySlot): string | undefined {
-  if (!slot.id || slot.count <= 0) return undefined;
-  if (slot.maxDurability) return `${slot.label} (${slot.durability ?? slot.maxDurability}/${slot.maxDurability})`;
-  return slot.label;
-}
-
 /**
  * The survival inventory: armor column, 27-slot storage grid, hotbar row, and
  * a recipe book where every entry shows ingredient icons and the result.
@@ -47,6 +42,7 @@ export default function InventoryPanel({
   onCraft
 }: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  const { tooltip, bind } = useItemTooltip();
 
   const onSlotClick = (index: number) => {
     const slot = inventory[index];
@@ -75,7 +71,7 @@ export default function InventoryPanel({
       key={`inv-slot-${idx}`}
       className={["inv-slot", extraClass, pendingIndex === idx ? "pending" : "", isEquipped(slot) ? "equipped" : ""].filter(Boolean).join(" ")}
       onClick={() => onSlotClick(idx)}
-      title={slotTitle(slot)}
+      {...bind(itemTooltipFor(slot))}
       aria-label={slot.id && slot.count > 0 ? `Slot ${idx + 1}: ${slot.label}` : `Slot ${idx + 1}: empty`}
     >
       <ItemIcon slot={slot} size={32} />
@@ -101,7 +97,7 @@ export default function InventoryPanel({
                     key={`armor-${armorSlot}`}
                     className={equippedItem ? "inv-slot armor-slot filled" : "inv-slot armor-slot"}
                     onClick={() => equippedIndex >= 0 && onToggleEquipArmor(equippedIndex)}
-                    title={equippedItem ? slotTitle(equippedItem) : `${ARMOR_SLOT_LABELS[armorSlot]} (empty)`}
+                    {...bind(equippedItem ? itemTooltipFor(equippedItem) : { title: `${ARMOR_SLOT_LABELS[armorSlot]} (empty)` })}
                     aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${equippedItem.label}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
                   >
                     {equippedItem ? (
@@ -141,7 +137,7 @@ export default function InventoryPanel({
                   onClick={() => onCraft(recipe)}
                   disabled={stationLocked || !canCraft(recipe)}
                   aria-label={recipe.label}
-                  title={stationLocked ? `Requires ${STATION_LABELS[recipe.station!]}` : recipe.label}
+                  {...bind({ title: recipe.label, lines: stationLocked ? [`Requires ${STATION_LABELS[recipe.station!]}`] : undefined })}
                 >
                   <span className="recipe-ingredients">
                     {recipe.cost.map((cost) => (
@@ -158,6 +154,7 @@ export default function InventoryPanel({
           </div>
         </div>
       </div>
+      {tooltip}
     </div>
   );
 }

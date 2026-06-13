@@ -12,9 +12,23 @@
   --mc-text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
   --mc-button: #6f6f6f;
   --mc-button-hover: #7f8caf;
-  /* Generated noise tiles (set at runtime by installUiTiles). */
+  /* Item tooltip: near-black fill with Minecraft's violet gradient border. */
+  --mc-tooltip-bg: #100010ee;
+  --mc-tooltip-border-a: #28007f;
+  --mc-tooltip-border-b: #5b00b5;
+  --mc-tooltip-sub: #a8a8a8;
+  /* Monospace stack, kept for the F3 debug readout (column alignment). */
+  --mc-font-mono: "Lucida Console", Monaco, "Courier New", monospace;
+  /* Generated noise tiles (set at runtime by installUiTiles). The chrome grain
+     tiles default to `none` so panels fall back to their flat color pre-install
+     and during SSR. */
   --mc-tile-dirt: none;
   --mc-tile-stone: none;
+  --mc-tile-panel: none;
+  --mc-tile-well: none;
+  --mc-tile-button: none;
+  /* Strength of the always-on screen-edge vignette (fed into rgba alpha). */
+  --mc-vignette: 0.28;
 }
 
 * {
@@ -27,7 +41,14 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  font-family: "Lucida Console", Monaco, "Courier New", monospace;
+  /* --mc-font (Monocraft, set on <html> by next/font) already carries the
+     monospace fallback list, so text renders even before the font loads. */
+  font-family: var(--mc-font), var(--mc-font-mono);
+  /* Monocraft ships coding ligatures (-> => >= ...); keep UI text literal. */
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
   background: #87bfff;
 }
 
@@ -42,4 +63,54 @@ body {
 .game-canvas-wrap {
   position: absolute;
   inset: 0;
+}
+
+/* Subtle always-on vignette over the 3D world; sits above the canvas but below
+   all HUD (z-index >= 4) and never blocks the click that acquires pointer lock. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, var(--mc-vignette)) 100%);
+}
+
+@keyframes mc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Centered-panel entrance; keeps the translate(-50%, -50%) centering transform. */
+@keyframes mc-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Honor reduced-motion: drop entrance animations and hover/press movement. */
+@media (prefers-reduced-motion: reduce) {
+  .inventory-panel,
+  .pause-overlay,
+  .pause-menu,
+  .menu-backdrop,
+  .hotbar-item-name,
+  .click-hint {
+    animation: none !important;
+  }
+
+  .inv-slot,
+  .hotbar-slot,
+  .mc-button {
+    transition: none !important;
+    transform: none !important;
+  }
 }

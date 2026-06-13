@@ -1,5 +1,16 @@
 /* Full-screen overlays: pause menu, F3 debug readout, click-to-play hint. */
 
+/* Shared dimmer behind any open menu (inventory or pause). Sits above the
+   canvas/hotbar (z 4) and below the inventory (z 6) and pause menu (z 9), so a
+   single element darkens the frozen world without double-dimming. */
+.menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.55);
+  animation: mc-fade-in 140ms ease-out;
+}
+
 .pause-overlay {
   position: absolute;
   inset: 0;
@@ -7,7 +18,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  animation: mc-fade-in 140ms ease-out;
 }
 
 .pause-menu {
@@ -33,13 +44,14 @@
   font-weight: 700;
   color: var(--mc-text-light);
   text-shadow: var(--mc-text-shadow);
-  background: var(--mc-button);
+  background: var(--mc-tile-button), var(--mc-button);
   border-style: solid;
   border-width: 2px;
   border-color: #a8a8a8 #2c2c2c #2c2c2c #a8a8a8;
   outline: 2px solid rgba(0, 0, 0, 0.85);
   cursor: pointer;
   user-select: none;
+  transition: background-color 80ms ease;
 }
 
 .mc-button:hover,
@@ -50,6 +62,7 @@
 
 .mc-button:active {
   border-color: #2c2c2c #a8a8a8 #a8a8a8 #2c2c2c;
+  transform: translateY(1px);
 }
 
 .mc-button:disabled {
@@ -115,7 +128,7 @@
   font-weight: 700;
   color: var(--mc-text-light);
   text-shadow: var(--mc-text-shadow);
-  background: var(--mc-button);
+  background: var(--mc-tile-button), var(--mc-button);
   border-style: solid;
   border-width: 2px;
   border-color: #a8a8a8 #2c2c2c #2c2c2c #a8a8a8;
@@ -140,7 +153,7 @@
   width: 100%;
   height: 18px;
   margin: 0;
-  background: var(--mc-button);
+  background: var(--mc-tile-button), var(--mc-button);
   border-style: solid;
   border-width: 2px;
   border-color: #2c2c2c #a8a8a8 #a8a8a8 #2c2c2c;
@@ -219,6 +232,7 @@
 .debug-line {
   background: rgba(16, 16, 16, 0.45);
   color: #e8e8e8;
+  font-family: var(--mc-font-mono);
   font-size: 12px;
   line-height: 1.35;
   padding: 1px 5px;
@@ -280,7 +294,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   max-width: min(92vw, 460px);
-  background: var(--mc-panel);
+  background: var(--mc-tile-panel), var(--mc-panel);
   border-style: solid;
   border-width: 3px;
   border-color: var(--mc-bevel-light) var(--mc-bevel-dark) var(--mc-bevel-dark) var(--mc-bevel-light);
