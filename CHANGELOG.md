@@ -30,6 +30,10 @@ All notable changes to this project are documented in this file.
   - Gameplay is intentionally eye-relative in every mode (mining/placing reach, combat aim, audio panning are unaffected); the crosshair stays centered, matching Minecraft
   - The view mode is session-only (resets to first-person on reload). No save-format or worldgen impact
 
+### Documentation
+
+- **Refreshed `docs/architecture.md`** to match the shipped engine: the per-frame step order now lists the random-tick (crop growth) and animal-breeding systems, the right-click precedence documents the full feed → interact → use-held → place chain, the mob/block drop tables (`rollMobDrops`/`rollBlockDrops`) are described, and the `window.__monecraft` debug handle the Playwright `e2e/` suite drives through is noted
+
 ## [0.5.0] - 2026-06-13
 
 ### Added
