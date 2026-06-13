@@ -32,6 +32,7 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
+- **Added `docs/manual.md`**, a player-facing guide: getting started / your first day, the full control map, survival (health, hunger gates, combat, armor, death), the day-night thresholds, mining with tool-tier gating, crafting and smelting, the mob roster and breeding, farming, beds and sleeping, the procedural audio, and saving. Linked from the README and AGENTS.md
 - **Refreshed `docs/architecture.md`** to match the shipped engine: the per-frame step order now lists the random-tick (crop growth) and animal-breeding systems, the right-click precedence documents the full feed → interact → use-held → place chain, the mob/block drop tables (`rollMobDrops`/`rollBlockDrops`) are described, and the `window.__monecraft` debug handle the Playwright `e2e/` suite drives through is noted
 
 ## [0.5.0] - 2026-06-13
