@@ -28,6 +28,12 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Give it a voice: `MOB_AMBIENT_SOUNDS` and `MOB_ATTACK_SOUNDS` rows in `lib/game/audio/soundParams.ts`, and a call interval in `lib/game/audio/mobAmbience.ts` (`CALL_INTERVALS`) — all keyed by `MobKind`, so typecheck enforces them.
 - A headless test in `lib/game/engine/GameEngine.test.ts` is cheap: boot the engine, fast-forward to night, assert the mob appears/behaves.
 
+## A new player skin preset
+
+- Add an entry to `SKIN_PRESETS` in `lib/game/playerSkins.ts` (id, label, seven-color palette). That's the whole feature: the pause-menu grid, the generated bust portrait (`lib/ui/skinPortrait.ts`), and the 3D body recolor all derive from the palette.
+- The `SkinId` union and the preset integrity tests (`playerSkins.test.ts`, `skinPortrait.test.ts`) enforce consistency at typecheck/test time — a new id is automatically validated in storage and rendered in the picker.
+- Judge the colors by eye: `bun run dev`, V for third person, Esc → Appearance.
+
 ## A new sound
 
 - One-shots ride on engine events: add a variant to `GameEvent` (`lib/game/engine/state.ts`), emit it from the relevant system via the injected `emit` callback, and route it in `audioDirector.ts`'s `handleEvent`. Continuous sounds derive from state in the director's `sync` instead.

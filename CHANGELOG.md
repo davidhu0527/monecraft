@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Player skin presets**: an Appearance section in the pause menu with six classic styles — Steve (default), Alex, Zombie, Skeleton, Knight, Robot — each shown as a generated 16×16 pixel bust portrait derived from the same palette that colors the third-person body (zero-asset, like all art)
+  - Selection recolors the body live (material color swap, no rebuild) and persists as a player preference under its own localStorage key (`minecraft_skin_v1`), separate from the world save — it survives world resets. No save-format or worldgen impact
 - **Camera view toggle (V)**: cycles first-person → third-person rear → third-person front, like Minecraft's F5 (V instead, because F5 reloads the page in browsers)
   - New humanoid player body (head, torso, two arms, two legs) in the zero-asset box-mesh style, visible only in third person — walk gait scaled by speed, a chop animation on attacks and while mining, the look pitch on the head, and the held hotbar item rendered in the right hand via the shared item-model builder
   - The third-person camera boom raycasts against terrain and clamps so walls never occlude the player; the front view flips the heading and inverts the tilt while mouse control of the player stays unchanged
