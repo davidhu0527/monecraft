@@ -76,7 +76,7 @@ export default function MinecraftGame() {
   return (
     <div className="game-root">
       <div ref={attachMount} className="game-canvas-wrap" />
-      <div className="vignette" aria-hidden />
+      <div className="vignette" aria-hidden="true" />
 
       {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 

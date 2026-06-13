@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ItemIcon from "@/components/game/ItemIcon";
-import { type TooltipContent, useItemTooltip } from "@/components/game/ItemTooltip";
+import { itemTooltipFor, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
 import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot } from "@/lib/game/items";
 import { itemIconUrl } from "@/lib/ui/sprites";
@@ -22,12 +22,6 @@ type InventoryPanelProps = {
 const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
   furnace: "Furnace"
 };
-
-function slotTooltip(slot: InventorySlot): TooltipContent {
-  if (!slot.id || slot.count <= 0) return null;
-  if (slot.maxDurability) return { title: slot.label, lines: [`Durability ${slot.durability ?? slot.maxDurability} / ${slot.maxDurability}`] };
-  return { title: slot.label };
-}
 
 /**
  * The survival inventory: armor column, 27-slot storage grid, hotbar row, and
@@ -77,7 +71,7 @@ export default function InventoryPanel({
       key={`inv-slot-${idx}`}
       className={["inv-slot", extraClass, pendingIndex === idx ? "pending" : "", isEquipped(slot) ? "equipped" : ""].filter(Boolean).join(" ")}
       onClick={() => onSlotClick(idx)}
-      {...bind(slotTooltip(slot))}
+      {...bind(itemTooltipFor(slot))}
       aria-label={slot.id && slot.count > 0 ? `Slot ${idx + 1}: ${slot.label}` : `Slot ${idx + 1}: empty`}
     >
       <ItemIcon slot={slot} size={32} />
@@ -103,7 +97,7 @@ export default function InventoryPanel({
                     key={`armor-${armorSlot}`}
                     className={equippedItem ? "inv-slot armor-slot filled" : "inv-slot armor-slot"}
                     onClick={() => equippedIndex >= 0 && onToggleEquipArmor(equippedIndex)}
-                    {...bind(equippedItem ? slotTooltip(equippedItem) : { title: `${ARMOR_SLOT_LABELS[armorSlot]} (empty)` })}
+                    {...bind(equippedItem ? itemTooltipFor(equippedItem) : { title: `${ARMOR_SLOT_LABELS[armorSlot]} (empty)` })}
                     aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${equippedItem.label}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
                   >
                     {equippedItem ? (

@@ -44,7 +44,9 @@ test("inventory opens and crafting works end to end", async ({ gamePage: page })
   expect(await itemCount(page, "planks")).toBe(planksBefore + 4);
   expect(await itemCount(page, "wood")).toBe(62);
   // The UI re-rendered from the new snapshot: the planks stack count updated.
-  await expect(panel.locator('.inv-slot[title="Planks"]').first()).toContainText(`${planksBefore + 4}`);
+  // Slots carry the item in their aria-label ("Slot N: Planks") — the old
+  // native `title` was replaced by the custom hover tooltip.
+  await expect(panel.locator('.inv-slot[aria-label$=": Planks"]').first()).toContainText(`${planksBefore + 4}`);
 
   await page.keyboard.press("i");
   await expect(panel).not.toBeVisible();
