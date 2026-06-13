@@ -14,11 +14,11 @@ export const DEFAULT_SKIN_SETTINGS: SkinSettings = { skinId: DEFAULT_SKIN_ID };
 export function readSkinSettings(storage: Storage = localStorage): SkinSettings {
   try {
     const raw = storage.getItem(SKIN_SETTINGS_KEY);
-    if (!raw) return DEFAULT_SKIN_SETTINGS;
+    if (!raw) return { ...DEFAULT_SKIN_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<SkinSettings> | null;
     return { skinId: isSkinId(parsed?.skinId) ? parsed.skinId : DEFAULT_SKIN_ID };
   } catch {
-    return DEFAULT_SKIN_SETTINGS;
+    return { ...DEFAULT_SKIN_SETTINGS };
   }
 }
 
