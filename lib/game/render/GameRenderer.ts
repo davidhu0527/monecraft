@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BLOCK_COLORS, buildGeometryRegion, createBlockAtlasTexture, voxelRaycast, VoxelWorld } from "@/lib/world";
+import { BLOCK_COLORS, buildGeometryLayersRegion, createBlockAtlasTexture, voxelRaycast, VoxelWorld } from "@/lib/world";
 import { EYE_HEIGHT, RENDER_GRID, RENDER_RADIUS, THIRD_PERSON_DISTANCE, THIRD_PERSON_MARGIN, WALK_SPEED } from "@/lib/game/config";
 import { sunAngleAt } from "@/lib/game/engine/systems/dayNight";
 import type { GameEvent, GameState } from "@/lib/game/engine/state";
@@ -38,7 +38,9 @@ export class GameRenderer {
   private readonly nightSky = new THREE.Color(0x06111f);
   private readonly liveSky = new THREE.Color(0x8bc2ff);
   private readonly worldMaterial: THREE.MeshStandardMaterial;
+  private readonly glassMaterial: THREE.MeshStandardMaterial;
   private worldMesh: THREE.Mesh;
+  private glassMesh: THREE.Mesh;
   private currentRegionX = Number.NaN;
   private currentRegionZ = Number.NaN;
   private readonly heldItem: HeldItemView;
@@ -89,8 +91,20 @@ export class GameRenderer {
       metalness: 0.02,
       side: THREE.DoubleSide
     });
+    this.glassMaterial = new THREE.MeshStandardMaterial({
+      map: this.worldMaterial.map,
+      vertexColors: true,
+      roughness: 0.18,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.24,
+      depthWrite: false
+    });
     this.worldMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.worldMaterial);
+    this.glassMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.glassMaterial);
     this.scene.add(this.worldMesh);
+    this.scene.add(this.glassMesh);
     this.scene.add(this.camera);
 
     this.heldItem = createHeldItemView(this.camera);
@@ -293,8 +307,11 @@ export class GameRenderer {
     this.crackOverlay.dispose();
     this.heldItem.dispose();
     this.scene.remove(this.worldMesh);
+    this.scene.remove(this.glassMesh);
     this.worldMesh.geometry.dispose();
+    this.glassMesh.geometry.dispose();
     this.worldMaterial.dispose();
+    this.glassMaterial.dispose();
     this.webgl.dispose();
     this.mount.removeChild(this.webgl.domElement);
   }
@@ -331,11 +348,15 @@ export class GameRenderer {
   }
 
   private rebuildWorldMesh(world: VoxelWorld, regionX: number, regionZ: number): void {
-    const geometry = buildGeometryRegion(world, regionX - RENDER_RADIUS, regionX + RENDER_RADIUS, regionZ - RENDER_RADIUS, regionZ + RENDER_RADIUS);
+    const geometry = buildGeometryLayersRegion(world, regionX - RENDER_RADIUS, regionX + RENDER_RADIUS, regionZ - RENDER_RADIUS, regionZ + RENDER_RADIUS);
     this.scene.remove(this.worldMesh);
+    this.scene.remove(this.glassMesh);
     this.worldMesh.geometry.dispose();
-    this.worldMesh = new THREE.Mesh(geometry, this.worldMaterial);
+    this.glassMesh.geometry.dispose();
+    this.worldMesh = new THREE.Mesh(geometry.opaque, this.worldMaterial);
+    this.glassMesh = new THREE.Mesh(geometry.glass, this.glassMaterial);
     this.scene.add(this.worldMesh);
+    this.scene.add(this.glassMesh);
   }
 
   private syncDayNight(state: GameState): void {

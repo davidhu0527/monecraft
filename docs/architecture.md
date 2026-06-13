@@ -98,7 +98,7 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 - `blocks.ts` — `BlockId`, `BiomeId`, `WORLD_SIZE_*`, and both block palettes (`BLOCK_COLORS` paints the atlas; `HELD_BLOCK_COLORS` tints the held-item model — intentionally different values).
 - `voxelWorld.ts` — `VoxelWorld` stores voxels in a flat `Uint8Array` (index = `x + z*sizeX + y*sizeX*sizeZ`) plus cheap queries (`get`/`set`/`isSolid`/`highestSolidY`/`getBiome`).
 - `generation.ts` — `generateWorld(world)`: deterministic terrain, caves, water, ores, trees, houses. Constants live in the frozen `GEN` object. **Byte-identical output per seed is a save-format contract**, pinned by `generation.test.ts` hash tests — fix code, never hashes.
-- `meshing.ts` — `buildGeometryRegion(world, …)` with face culling, baked ambient occlusion, and atlas UVs.
+- `meshing.ts` — `buildGeometryRegion(world, …)` with face culling, baked ambient occlusion, and atlas UVs; `buildGeometryLayersRegion` splits opaque terrain from clear glass for the renderer.
 - `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
 - `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.
 
@@ -106,7 +106,7 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 
 Hard-won invariants — easy to silently break:
 
-- **Water is special in meshing**: it's the only block whose faces render even against a same-type neighbor in `buildGeometryRegion`, and the single world material is `THREE.DoubleSide` so water is visible from inside. There is one material for all blocks — per-block render settings require restructuring. New transparent blocks must extend this face logic.
+- **Transparent blocks are explicit render layers**: `buildGeometryLayersRegion` sends glass to a blended, non-depth-writing material while opaque terrain keeps normal depth writes. Glass-to-glass and water-to-water internal faces are culled; opaque faces touching glass remain visible through it. Water still uses the opaque layer and all world materials are `THREE.DoubleSide` so water is visible from inside. New transparent blocks must extend both the layer routing and face-visibility rules.
 - **Being in water is not "stuck"**: the unstuck teleport fires only on solid-block overlap or falling below the world (y < 2). Don't make water count as a collision in `collidesAt` — players are allowed to stay submerged.
 - **Daylight thresholds** (daylight ranges 0.04–1.0, named in `config.ts`): hostiles night-spawn below 0.28; spiders are hostile only below 0.42 (passive in twilight); zombies/skeletons burn above 0.72. The game boots at dawn (~0.05), so initial hostiles aggro immediately — headless tests use a `calmDaytime` helper.
 - **DDA boundary ambiguity**: a raycast origin exactly on a cell boundary (integer coordinate) may target a diagonal neighbor — relevant for tests that aim at specific blocks.

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Placed glass now renders as a clear, low-reflection transparent layer. Internal faces between adjacent glass blocks are culled, while neighboring opaque block faces remain visible through it. No save-format or worldgen impact.
+
 ## [0.6.0] - 2026-06-13
 
 ### Added

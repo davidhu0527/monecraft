@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld, buildGeometryRegion, generateWorld } from "@/lib/world";
+import { BiomeId, BlockId, VoxelWorld, buildGeometryLayersRegion, buildGeometryRegion, generateWorld } from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -190,5 +190,16 @@ describe("meshing", () => {
     world.set(4, 3, 3, BlockId.Water);
     const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
     expect(geometry.getAttribute("position").count).toBe(72); // all 6 faces of each
+  });
+
+  test("glass is split into a clear layer and keeps adjacent opaque faces visible", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.Stone);
+    world.set(4, 3, 3, BlockId.Glass);
+    world.set(5, 3, 3, BlockId.Glass);
+    const geometry = buildGeometryLayersRegion(world, 0, 7, 0, 7);
+
+    expect(geometry.opaque.getAttribute("position").count).toBe(36);
+    expect(geometry.glass.getAttribute("position").count).toBe(60);
   });
 });

@@ -84,7 +84,7 @@ hands or any tool. Bedrock and water cannot be broken.
 | Snow              | 2        | any            | Mountain peaks                                                                                                |
 | Leaves            | 2        | any            | From trees; drops dirt                                                                                        |
 | Cactus            | 2        | any            | Desert decoration                                                                                             |
-| Glass             | 2        | any            | Crafted from sand                                                                                             |
+| Glass             | 2        | any            | Crafted from sand; clear when placed                                                                          |
 | Wood              | 3        | any            | Tree trunks                                                                                                   |
 | Planks            | 3        | any            | Crafted from wood                                                                                             |
 | Stone             | 5        | Wood Pickaxe   | Drops the stone item                                                                                          |
