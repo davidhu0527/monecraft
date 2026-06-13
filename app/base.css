@@ -41,9 +41,14 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  /* --mc-font (Pixelify Sans, set on <html> by next/font) already carries the
+  /* --mc-font (Monocraft, set on <html> by next/font) already carries the
      monospace fallback list, so text renders even before the font loads. */
   font-family: var(--mc-font), var(--mc-font-mono);
+  /* Monocraft ships coding ligatures (-> => >= ...); keep UI text literal. */
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
   background: #87bfff;
 }
 
