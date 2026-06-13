@@ -317,7 +317,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 3,
+      version: 4,
       seed: state.world.seed,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),

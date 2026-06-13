@@ -5,15 +5,18 @@ import {
   inventorySlotsSnapshot,
   migrateSaveV1toV2,
   migrateSaveV2toV3,
+  migrateSaveV3toV4,
+  readContainers,
   readSave,
   restoreDayClock,
   restoreHearts,
   restoreHungerLevel,
   restoreSpawnPoint,
+  serializeContainers,
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { SaveData, SaveDataV1, SaveDataV2 } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -33,7 +36,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 3,
+    version: 4,
     seed: 1337,
     changes: [
       [42, 0],
@@ -73,7 +76,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(3);
+    expect(parsed!.version).toBe(4);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -95,7 +98,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(3); // chained v1 -> v2 -> v3
+    expect(parsed!.version).toBe(4); // chained v1 -> v2 -> v3 -> v4
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -171,11 +174,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save to v3", () => {
+  test("readSave migrates a v2 save through to v4", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(3);
+    expect(parsed!.version).toBe(4);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -186,6 +189,81 @@ describe("v2 to v3 migration", () => {
     expect(parsed.hearts).toBe(14);
     expect(parsed.hunger).toBe(9);
     expect(parsed.spawnPoint).toEqual({ x: 10, y: 40, z: 20 });
+  });
+});
+
+describe("v3 to v4 migration & chest containers", () => {
+  function v3Save(overrides: Partial<SaveDataV3> = {}): SaveDataV3 {
+    return {
+      version: 3,
+      seed: 1337,
+      changes: [[42, 0]],
+      inventorySlots: [{ id: "dirt", count: 3 }],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  test("migrateSaveV3toV4 is a pure version bump leaving blockEntities absent", () => {
+    const migrated = migrateSaveV3toV4(v3Save());
+    expect(migrated.version).toBe(4);
+    expect(migrated.blockEntities).toBeUndefined();
+    expect(migrated.changes).toEqual([[42, 0]]);
+  });
+
+  test("a pre-chest (v3) save loads with no containers", () => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(4);
+    expect(readContainers(parsed)).toEqual([]);
+  });
+
+  test("serializeContainers keeps only non-empty chests and snapshots their slots", () => {
+    const full = [createSlot("dirt", 5), createEmptySlot()];
+    const empty = [createEmptySlot(), createEmptySlot()];
+    const out = serializeContainers(
+      new Map<number, InventorySlot[]>([
+        [100, full],
+        [200, empty]
+      ])
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].index).toBe(100);
+    expect(out[0].slots[0]).toEqual({ id: "dirt", count: 5, durability: undefined });
+  });
+
+  test("a chest round-trips through save with durability preserved", () => {
+    const slots = [createSlot("dirt", 5), { ...createSlot("diamond_sword", 1), durability: 200 }];
+    const save: SaveData = { ...sampleSave(), blockEntities: serializeContainers(new Map([[100, slots]])) };
+    const storage = memoryStorage();
+    writeSave(KEY, save, storage);
+    const restored = readContainers(readSave(KEY, storage)!);
+    expect(restored).toHaveLength(1);
+    expect(restored[0].index).toBe(100);
+    expect(restored[0].slots).toHaveLength(27); // padded to CHEST_SLOTS
+    expect(restored[0].slots[0].id).toBe("dirt");
+    expect(restored[0].slots[1].durability).toBe(200);
+  });
+
+  test("readContainers drops unknown ids and malformed entries", () => {
+    const save: SaveData = {
+      ...sampleSave(),
+      blockEntities: [
+        {
+          index: 100,
+          slots: [
+            { id: "no_such_item", count: 3 },
+            { id: "stone", count: 2 }
+          ]
+        },
+        { index: Number.NaN, slots: [] }
+      ]
+    };
+    const restored = readContainers(save);
+    expect(restored).toHaveLength(1); // NaN index dropped
+    expect(restored[0].slots[0].id).toBeNull(); // unknown id -> empty
+    expect(restored[0].slots[1].id).toBe("stone");
   });
 });
 
@@ -225,7 +303,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 4 };
+    const save = { ...sampleSave(), version: 5 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
