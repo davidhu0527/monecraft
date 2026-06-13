@@ -144,7 +144,9 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   const tx = result.previous.x;
   const ty = result.previous.y;
   const tz = result.previous.z;
-  if (!world.inBounds(tx, ty, tz) || world.get(tx, ty, tz) !== BlockId.Air) return;
+  if (!world.inBounds(tx, ty, tz)) return;
+  const replacedBlock = world.get(tx, ty, tz);
+  if (replacedBlock !== BlockId.Air && replacedBlock !== BlockId.Water) return;
 
   const slot = state.inventory[state.selectedSlot];
   if (!slot || !slot.id || slot.kind !== "block" || slot.count <= 0 || slot.blockId === undefined) return;
@@ -153,9 +155,11 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   const afterTake = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
   if (!afterTake) return;
   state.inventory = afterTake;
+  let replacedUpper: BlockId | null = null;
   if (slot.id === "door") {
     const support = world.get(tx, ty - 1, tz);
-    if (ty + 1 >= world.sizeY || world.get(tx, ty + 1, tz) !== BlockId.Air || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
+    replacedUpper = world.get(tx, ty + 1, tz) as BlockId;
+    if (ty + 1 >= world.sizeY || (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
       state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
       return;
     }
@@ -166,8 +170,8 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
     state.blockChanges.set(tx, ty, tz, slot.blockId);
   }
   if (collidesAt(world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
-    state.blockChanges.set(tx, ty, tz, BlockId.Air);
-    if (slot.id === "door") state.blockChanges.set(tx, ty + 1, tz, BlockId.Air);
+    state.blockChanges.set(tx, ty, tz, replacedBlock as BlockId);
+    if (replacedUpper !== null) state.blockChanges.set(tx, ty + 1, tz, replacedUpper);
     state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
     return;
   }

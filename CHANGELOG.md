@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - **Wood doors**: craft one from 6 planks and place it on a solid floor to create a thin, two-block-tall panel. Right-click either half to open or close the whole door; open doors rotate onto their hinge edge, while closed doors block players and mobs. Door facing, open state, and both halves persist through the existing block-diff save, and breaking either half removes the whole door and returns one item. Only the player interaction path toggles doors; mobs stop at closed doors and cannot operate them. No save-format or worldgen impact.
+- **Water building and exposure damage**: block placement may now replace water cells, so underwater structures can be built against submerged terrain. Remaining continuously immersed for more than 60 seconds starts dealing 3 HP (1.5 hearts) of armor-bypassing damage every second; leaving water fully resets both timers. Exposure is session-only and is not serialized. No save-format or worldgen impact.
 
 ## [0.6.0] - 2026-06-13
 

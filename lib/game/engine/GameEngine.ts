@@ -34,9 +34,9 @@ import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
-import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
+import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
-import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
+import { restoreHunger, tickHungerDrain, tickHealthRegen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
@@ -197,6 +197,7 @@ export class GameEngine {
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
+    tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
     tickMining(state, input, dt, this.emit, this.rng);
     tickDayNight(state, dt);
     tickWeather(state);
@@ -408,6 +409,17 @@ export class GameEngine {
     const heartsBefore = this.state.hearts;
     const died = applyDamageWithArmor(this.state, amount);
     this.syncEquippedArmor();
+    if (died) {
+      resetMining(this.state);
+      this.emit({ type: "died" });
+    } else if (this.state.hearts < heartsBefore) {
+      this.emit({ type: "playerHurt" });
+    }
+  };
+
+  private applyEnvironmentalDamage = (amount: number): void => {
+    const heartsBefore = this.state.hearts;
+    const died = applyUnmitigatedDamage(this.state, amount);
     if (died) {
       resetMining(this.state);
       this.emit({ type: "died" });

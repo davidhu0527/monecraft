@@ -65,6 +65,8 @@ export type DebugInfo = {
 export type GameTimers = {
   voidTimer: number;
   regenTimer: number;
+  waterExposureTimer: number;
+  waterDamageTimer: number;
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
@@ -125,6 +127,8 @@ export function createTimers(): GameTimers {
   return {
     voidTimer: 0,
     regenTimer: 0,
+    waterExposureTimer: 0,
+    waterDamageTimer: 0,
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,

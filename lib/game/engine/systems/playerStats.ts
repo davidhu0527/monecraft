@@ -3,10 +3,15 @@ import {
   JUMPS_PER_HUNGER,
   MAX_HUNGER,
   MAX_HEARTS,
+  PLAYER_HEIGHT,
   REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
+  WATER_DAMAGE_DELAY_SECONDS,
+  WATER_DAMAGE_HP,
+  WATER_DAMAGE_INTERVAL_SECONDS,
   WALK_BLOCKS_PER_HUNGER
 } from "@/lib/game/config";
+import { BlockId } from "@/lib/world";
 import type { GameState } from "../state";
 import type { MoveTickResult } from "./playerMotion";
 
@@ -55,6 +60,28 @@ export function tickHealthRegen(state: GameState, dt: number): void {
     }
   } else {
     state.timers.regenTimer = 0;
+  }
+}
+
+/** Damages a continuously immersed player after one minute; leaving water fully resets the clock. */
+export function tickWaterExposure(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+  const { player, timers, world } = state;
+  const x = Math.floor(player.position.x);
+  const y = Math.floor(player.position.y + PLAYER_HEIGHT * 0.5);
+  const z = Math.floor(player.position.z);
+  if (world.get(x, y, z) !== BlockId.Water) {
+    timers.waterExposureTimer = 0;
+    timers.waterDamageTimer = 0;
+    return;
+  }
+
+  timers.waterExposureTimer += dt;
+  if (timers.waterExposureTimer <= WATER_DAMAGE_DELAY_SECONDS) return;
+
+  timers.waterDamageTimer += dt;
+  while (timers.waterDamageTimer >= WATER_DAMAGE_INTERVAL_SECONDS && !state.isDead) {
+    timers.waterDamageTimer -= WATER_DAMAGE_INTERVAL_SECONDS;
+    applyDamage(WATER_DAMAGE_HP);
   }
 }
 

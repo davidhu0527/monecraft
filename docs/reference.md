@@ -104,7 +104,7 @@ hands or any tool. Bedrock and water cannot be broken.
 | Wheat (stage 0–2) | 1        | any            | Immature crop; drops its seed                                                                                 |
 | Wheat (stage 3)   | 1        | any            | Mature crop; drops wheat + 1–2 seeds                                                                          |
 | Bedrock           | —        | unbreakable    | World floor and border                                                                                        |
-| Water             | —        | —              | Liquid; sea level fills below y≈43                                                                            |
+| Water             | —        | —              | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second  |
 
 ## Mobs
 

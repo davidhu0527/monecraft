@@ -10,7 +10,9 @@ import {
   PLAYER_HEIGHT,
   REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
-  SPRINT_MIN_HUNGER
+  SPRINT_MIN_HUNGER,
+  WATER_DAMAGE_DELAY_SECONDS,
+  WATER_DAMAGE_HP
 } from "@/lib/game/config";
 import { CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
@@ -158,6 +160,51 @@ describe("movement and stats", () => {
     engine.state.hunger = REGEN_MIN_HUNGER - 1;
     run(engine, 6.5);
     expect(engine.state.hearts).toBe(MAX_HEARTS - 3);
+  });
+
+  test("continuous water exposure damages 1.5 hearts per second after one minute", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const y = Math.floor(state.player.position.y + PLAYER_HEIGHT * 0.5);
+    const z = Math.floor(state.player.position.z);
+    state.blockChanges.set(x, y, z, BlockId.Water);
+    const armorSlot = state.inventory.findIndex((slot) => !slot.id);
+    state.inventory = [...state.inventory];
+    state.inventory[armorSlot] = createSlot("chestplate", 1);
+    state.equippedArmor.chestplate = "chestplate";
+    const durability = state.inventory[armorSlot].durability;
+    state.timers.waterExposureTimer = WATER_DAMAGE_DELAY_SECONDS - 0.5;
+    engine.consumeEvents();
+
+    run(engine, 0.4);
+    expect(state.hearts).toBe(MAX_HEARTS);
+    run(engine, 1.2);
+    expect(state.hearts).toBe(MAX_HEARTS - WATER_DAMAGE_HP);
+    expect(state.inventory[armorSlot].durability).toBe(durability);
+    expect(engine.consumeEvents().some((event) => event.type === "playerHurt")).toBe(true);
+  });
+
+  test("leaving water resets both exposure counters", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const y = Math.floor(state.player.position.y + PLAYER_HEIGHT * 0.5);
+    const z = Math.floor(state.player.position.z);
+    state.blockChanges.set(x, y, z, BlockId.Water);
+    state.timers.waterExposureTimer = 42;
+    state.timers.waterDamageTimer = 0.8;
+    state.blockChanges.set(x, y, z, BlockId.Air);
+
+    engine.step(0.1, input());
+    expect(state.timers.waterExposureTimer).toBe(0);
+    expect(state.timers.waterDamageTimer).toBe(0);
   });
 });
 
@@ -735,6 +782,49 @@ describe("gameplay events", () => {
     const events = engine.consumeEvents();
     expect(events.some((event) => event.type === "blockPlaced" && event.blockId === BlockId.Grass)).toBe(true);
     expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Grass);
+  });
+
+  test("placing a block replaces the targeted water cell", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Water);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Water);
+    state.blockChanges.set(ex, ey, ez - 3, BlockId.Stone);
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Grass);
+  });
+
+  test("a refused self-overlapping placement restores the water cell", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(ex, ey, ez, BlockId.Water);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Stone);
+    const grassBefore = countsById(state.inventory).get("grass");
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(ex, ey, ez)).toBe(BlockId.Water);
+    expect(countsById(state.inventory).get("grass")).toBe(grassBefore);
   });
 
   test("eating emits ateFood", () => {

@@ -23,6 +23,20 @@ export function applyDamageWithArmor(state: GameState, amount: number): boolean 
   return true;
 }
 
+/** Applies environmental damage exactly, bypassing armor and durability wear. */
+export function applyUnmitigatedDamage(state: GameState, amount: number): boolean {
+  if (state.isDead) return false;
+  const value = Math.max(0, Math.floor(amount));
+  if (value <= 0) return false;
+
+  state.hearts = Math.max(0, state.hearts - value);
+  if (state.hearts > 0) return false;
+
+  state.isDead = true;
+  state.respawnTimer = RESPAWN_SECONDS;
+  return true;
+}
+
 /**
  * Counts down the respawn timer while dead. Returns true when the player
  * comes back to life this tick — the engine then performs the respawn.
@@ -36,5 +50,7 @@ export function tickRespawnTimer(state: GameState, dt: number): boolean {
   state.hunger = MAX_HUNGER;
   state.isDead = false;
   state.respawnTimer = 0;
+  state.timers.waterExposureTimer = 0;
+  state.timers.waterDamageTimer = 0;
   return true;
 }

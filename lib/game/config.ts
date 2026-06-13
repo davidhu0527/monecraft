@@ -16,6 +16,9 @@ export const MAX_HEARTS = 20;
 export const MAX_HUNGER = 20;
 export const RESPAWN_SECONDS = 3;
 export const HEALTH_REGEN_INTERVAL_SECONDS = 3;
+export const WATER_DAMAGE_DELAY_SECONDS = 60;
+export const WATER_DAMAGE_INTERVAL_SECONDS = 1;
+export const WATER_DAMAGE_HP = 3; // 1.5 hearts
 // Health regen only runs at or above this hunger level; sprint needs more than SPRINT_MIN_HUNGER.
 export const REGEN_MIN_HUNGER = 12;
 export const SPRINT_MIN_HUNGER = 6;

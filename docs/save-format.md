@@ -18,6 +18,9 @@ Stored in localStorage under `SAVE_KEY` (`minecraft_save_v5`, defined in `lib/ga
 
 Audio volume preferences live under a **separate** key (`minecraft_audio_v1`, `lib/game/audio/settings.ts`) and are not part of the world save or its versioning.
 
+Continuous-water exposure and damage cadence live only in transient `GameTimers`.
+Saving/reloading or respawning resets the one-minute exposure clock.
+
 ### Version history
 
 - **v4** — adds optional `blockEntities` (chest contents). `migrateSaveV3toV4` is a pure version bump (absent → restores as no containers), so **`SAVE_KEY` is unchanged** (chests are never generated; worldgen and the index formula are untouched) and v1/v2/v3 saves load fine. `readSave` chains v1 → v2 → v3 → v4.

@@ -28,7 +28,8 @@ changing them affects which gaps the player fits through.
 
 `MAX_HEARTS`, `MAX_HUNGER`, `RESPAWN_SECONDS`, `HEALTH_REGEN_INTERVAL_SECONDS`,
 `REGEN_MIN_HUNGER`, `SPRINT_MIN_HUNGER`, `SPRINT_BLOCKS_PER_HUNGER`,
-`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`.
+`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`, `WATER_DAMAGE_DELAY_SECONDS`,
+`WATER_DAMAGE_INTERVAL_SECONDS`, `WATER_DAMAGE_HP`.
 
 Read by `systems/playerStats.ts` (drain + regen) and `systems/playerLife.ts`
 (respawn). This group is where "how hard is it to stay alive" is set. The
@@ -37,6 +38,10 @@ eating. The two gates are the key feedback loop: you must stay above
 `REGEN_MIN_HUNGER` (12) to heal and above `SPRINT_MIN_HUNGER` (6) to sprint, so
 hunger pressure indirectly throttles both combat recovery and escape speed. Keep
 `REGEN_MIN_HUNGER > SPRINT_MIN_HUNGER` so there's a "can run but can't heal" band.
+Water exposure is continuous body-midpoint immersion: leaving water resets both
+timers. After `WATER_DAMAGE_DELAY_SECONDS` (60), environmental damage bypasses
+armor every `WATER_DAMAGE_INTERVAL_SECONDS` (1) for `WATER_DAMAGE_HP` (3 HP = 1.5
+hearts). These counters are transient and reset on reload/respawn.
 
 ## Danger — day-night & the mob director
 
