@@ -229,6 +229,7 @@ export function useMinecraftGame() {
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
         }
+        renderer.handleEvent(event, gameEngine.state);
         audio.handleEvent(event);
       }
 

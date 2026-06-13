@@ -94,14 +94,14 @@ describe("audio director", () => {
   test("does nothing before unlock", () => {
     const fake = createFakeGraph();
     const director = createAudioDirector({ createGraph: () => fake.graph });
-    director.handleEvent({ type: "blockBroken", blockId: BlockId.Stone });
+    director.handleEvent({ type: "blockBroken", blockId: BlockId.Stone, x: 0, y: 0, z: 0 });
     expect(fake.played.length).toBe(0);
   });
 
   test("routes block events through the material mapping", async () => {
     const { director, played } = await createUnlockedDirector();
-    director.handleEvent({ type: "blockBroken", blockId: BlockId.Cobblestone });
-    director.handleEvent({ type: "blockPlaced", blockId: BlockId.Planks });
+    director.handleEvent({ type: "blockBroken", blockId: BlockId.Cobblestone, x: 0, y: 0, z: 0 });
+    director.handleEvent({ type: "blockPlaced", blockId: BlockId.Planks, x: 0, y: 0, z: 0 });
     director.handleEvent({ type: "playerHurt" });
     expect(played[0].def).toBe(BREAK_SOUNDS.stone);
     expect(played[1].def).toBe(PLACE_SOUNDS.wood);

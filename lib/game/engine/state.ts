@@ -180,15 +180,15 @@ export type GameSnapshot = {
 export type GameEvent =
   | { type: "died" }
   | { type: "respawned" }
-  | { type: "blockBroken"; blockId: BlockId }
-  | { type: "blockPlaced"; blockId: BlockId }
+  | { type: "blockBroken"; blockId: BlockId; x: number; y: number; z: number }
+  | { type: "blockPlaced"; blockId: BlockId; x: number; y: number; z: number }
   | { type: "playerHurt" }
   | { type: "ateFood" }
   | { type: "jumped" }
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
-  | { type: "mobDied"; kind: MobKind }
+  | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

@@ -369,7 +369,7 @@ export class GameEngine {
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
-    this.emit({ type: "mobDied", kind: mob.kind });
+    this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
   };
