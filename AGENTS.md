@@ -38,6 +38,7 @@ For a non-trivial change:
 - [docs/adding-content.md](docs/adding-content.md) — step-by-step: new block / item / recipe / mob / mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema, autosave, compatibility rules
 - [docs/testing.md](docs/testing.md) — test coverage map and the worldgen hash re-baseline policy
+- [docs/tuning.md](docs/tuning.md) — gameplay tunables in `config.ts`, grouped by effect with balance trade-offs
 - [docs/manual.md](docs/manual.md) — player guide (gameplay, survival, crafting, mobs, farming)
 - [docs/reference.md](docs/reference.md) — gameplay reference tables (recipes, blocks, mobs, items)
 - `README.md` — player-facing controls and quick start
