@@ -42,6 +42,10 @@ export type MobState = {
   attackTimer: number;
   halfHeight: number;
   bobSeed: number;
+  /** Seconds left "in love" after being fed; pairs with another to breed. */
+  fedTimer: number;
+  /** Seconds left as a baby; > 0 means a scaled-down, no-drop juvenile. */
+  ageTimer: number;
 };
 
 export type MiningState = {
@@ -69,6 +73,7 @@ export type GameTimers = {
   daylightHudTimer: number;
   debugHudTimer: number;
   randomTickTimer: number;
+  breedTimer: number;
 };
 
 export type GameState = {
@@ -118,7 +123,8 @@ export function createTimers(): GameTimers {
     hostileSpawnTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,
-    randomTickTimer: 0
+    randomTickTimer: 0,
+    breedTimer: 0
   };
 }
 
@@ -190,6 +196,8 @@ export type GameEvent =
   | { type: "tilledSoil" }
   | { type: "plantedSeed" }
   | { type: "openedStation"; station: "furnace" }
-  | { type: "smelted" };
+  | { type: "smelted" }
+  | { type: "mobFed"; kind: MobKind }
+  | { type: "mobBred"; kind: MobKind };
 
 export type EmitGameEvent = (event: GameEvent) => void;

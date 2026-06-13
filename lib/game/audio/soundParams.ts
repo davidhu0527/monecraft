@@ -823,6 +823,44 @@ export const PLANT_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** Soft munch when an animal is fed. */
+export const MOB_FED_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.45,
+    randomness: 0.2,
+    frequency: 160,
+    sustain: 0.04,
+    release: 0.07,
+    shape: 4,
+    shapeCurve: 0.8,
+    repeatTime: 0.08,
+    noise: 0.4,
+    sustainVolume: 0.6,
+    decay: 0.03,
+    filter: -380
+  }),
+  minRetriggerMs: 150
+};
+
+/** Bright two-note chirp when a baby is born. */
+export const MOB_BRED_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.1,
+    frequency: 520,
+    attack: 0.01,
+    sustain: 0.05,
+    release: 0.12,
+    shape: 1,
+    shapeCurve: 1.5,
+    pitchJump: 260,
+    pitchJumpTime: 0.07,
+    sustainVolume: 0.7,
+    decay: 0.06
+  }),
+  minRetriggerMs: 200
+};
+
 /** Low crackle when a furnace smelt completes. */
 export const SMELT_SOUND: SoundDef = {
   params: zz({

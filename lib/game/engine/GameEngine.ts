@@ -35,10 +35,11 @@ import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryInteractBlock, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
 import { tryAttackMob, weaponDamage } from "./systems/combat";
 import { tickMobs } from "./systems/mobAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
+import { tickBreeding } from "./systems/breeding";
 import { spawnInitialMobs, tickHostileSpawnDirector } from "./systems/spawnDirector";
 
 export type GameEngineOptions = {
@@ -186,6 +187,7 @@ export class GameEngine {
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
+    tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);
 
     this.refreshSnapshot();
@@ -239,9 +241,10 @@ export class GameEngine {
       }
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
-        // Right-click precedence: interact with the aimed block (beds, and
-        // later furnaces), then use the held item (hoe, seeds); only place a
-        // block if neither consumed the click.
+        // Right-click precedence: feed an aimed animal, then interact with the
+        // aimed block (bed, furnace), then use the held item (hoe, seeds); only
+        // place a block if none of those consumed the click.
+        if (tryFeedAimedMob(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
@@ -359,8 +362,11 @@ export class GameEngine {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
-    for (const drop of rollMobDrops(mob.kind, this.rng)) {
-      state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+    // Babies drop nothing — only grown animals yield loot.
+    if (mob.ageTimer <= 0) {
+      for (const drop of rollMobDrops(mob.kind, this.rng)) {
+        state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+      }
     }
     this.emit({ type: "mobDied", kind: mob.kind });
   };

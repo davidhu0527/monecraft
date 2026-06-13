@@ -56,6 +56,16 @@ export const WAKE_DAY_PHASE = 0.07;
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;
 
+// Animal breeding. Feeding a passive animal puts it "in love" for a window; two
+// in-love adults of the same kind within range spawn a baby that grows up after
+// a timer. The passive cap and the wheat/seed cost bound the population.
+export const BREED_FED_WINDOW_SECONDS = 30;
+export const BREED_PARTNER_RADIUS = 3;
+export const BREED_CHECK_INTERVAL_SECONDS = 0.5;
+export const BABY_GROW_SECONDS = 90;
+export const BABY_SCALE = 0.55;
+export const PASSIVE_CAP = 24;
+
 // Random block ticks (crop growth; the system is extensible to other blocks).
 // Each interval samples N columns within RADIUS of the player and runs the
 // block's handler. ~128 samples/s over a 64x64 area ≈ 50 s/stage (~2.5 min to

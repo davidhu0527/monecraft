@@ -383,7 +383,9 @@ describe("gameplay events", () => {
       attackCooldown: 5,
       attackTimer: 0,
       halfHeight: 0.9,
-      bobSeed: 0
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
     });
   }
 
@@ -658,7 +660,9 @@ describe("beds and sleep", () => {
       attackCooldown: 1.35,
       attackTimer: 0,
       halfHeight: 0.9,
-      bobSeed: 0
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
     });
   }
 
@@ -913,5 +917,75 @@ describe("furnace and cooking", () => {
     engine.dispatch({ type: "toggleInventory" });
     expect(engine.state.inventoryOpen).toBe(false);
     expect(engine.state.craftingStation).toBeNull();
+  });
+});
+
+describe("animal breeding", () => {
+  function pushSheepAhead(engine: GameEngine, ageTimer = 0): number {
+    const { state } = engine;
+    const p = state.player.position;
+    const id = state.nextMobId++;
+    state.mobs.push({
+      id,
+      kind: "sheep",
+      hostile: false,
+      hp: 10,
+      position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer
+    });
+    return id;
+  }
+
+  function giveSelected(engine: GameEngine, itemId: string, count: number): void {
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot(itemId, count);
+    state.selectedSlot = slot;
+  }
+
+  test("right-clicking an animal with its food feeds it instead of placing", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = 0;
+    const id = pushSheepAhead(engine);
+    giveSelected(engine, "wheat", 2);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "mobFed" && event.kind === "sheep")).toBe(true);
+    expect(countsById(engine.state.inventory).get("wheat")).toBe(1);
+    const sheep = engine.state.mobs.find((mob) => mob.id === id)!;
+    expect(sheep.fedTimer).toBeGreaterThan(0);
+  });
+
+  test("killing a baby drops nothing", () => {
+    const engine = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = 0;
+    const id = pushSheepAhead(engine, 50); // a baby (ageTimer > 0)
+    const baby = engine.state.mobs.find((mob) => mob.id === id)!;
+    baby.hp = 1; // one fist hit kills it
+    const before = countsById(engine.state.inventory);
+    engine.dispatch({ type: "attack" });
+    expect(engine.state.mobs.some((mob) => mob.id === id)).toBe(false); // died
+    const after = countsById(engine.state.inventory);
+    expect(after.get("wool") ?? 0).toBe(before.get("wool") ?? 0);
+    expect(after.get("raw_mutton") ?? 0).toBe(before.get("raw_mutton") ?? 0);
   });
 });

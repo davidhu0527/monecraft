@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
-import { EYE_HEIGHT, MINE_REACH, SLEEP_ALLOWED_BELOW_DAYLIGHT, SLEEP_FADE_SECONDS, SLEEP_HOSTILE_RADIUS } from "@/lib/game/config";
+import { BREED_FED_WINDOW_SECONDS, EYE_HEIGHT, MINE_REACH, SLEEP_ALLOWED_BELOW_DAYLIGHT, SLEEP_FADE_SECONDS, SLEEP_HOSTILE_RADIUS } from "@/lib/game/config";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
+import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
+import { findAimedMobIndex } from "./combat";
 import { lookDirection } from "./playerMotion";
 
 const scratchEye = new THREE.Vector3();
@@ -38,6 +40,33 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
   if (kind === "bed") return interactBed(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "furnace") return interactFurnace(state, emit);
   return false;
+}
+
+/** What each breedable animal is fed to enter "in love" mode. */
+const FEED_ITEMS: Partial<Record<MobKind, string>> = {
+  sheep: "wheat",
+  horse: "wheat",
+  chicken: "seeds"
+};
+
+/**
+ * Right-click an adult animal with its feed item to put it "in love" (toward
+ * breeding). First in the right-click precedence so feeding wins over placing or
+ * tilling when an animal is in the crosshair. Returns true when an animal was fed.
+ */
+export function tryFeedAimedMob(state: GameState, emit: EmitGameEvent): boolean {
+  const slot = state.inventory[state.selectedSlot];
+  if (!slot?.id || slot.count <= 0) return false;
+  const index = findAimedMobIndex(state);
+  if (index < 0) return false;
+  const mob = state.mobs[index];
+  if (mob.hostile || FEED_ITEMS[mob.kind] !== slot.id) return false;
+  if (mob.ageTimer > 0 || mob.fedTimer > 0) return false; // babies and already-in-love animals decline
+
+  state.inventory = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot) ?? state.inventory;
+  mob.fedTimer = BREED_FED_WINDOW_SECONDS;
+  emit({ type: "mobFed", kind: mob.kind });
+  return true;
 }
 
 /** Opens the inventory in furnace mode so its smelting recipes unlock. */

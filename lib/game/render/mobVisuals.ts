@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { BABY_SCALE } from "@/lib/game/config";
 import { createMobModelForKind } from "@/lib/game/mobs";
 import type { MobModel } from "@/lib/game/types";
 import type { MobState } from "@/lib/game/engine/state";
@@ -37,6 +38,7 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         const bob = Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
         model.group.position.set(mob.position.x, mob.position.y + bob, mob.position.z);
         model.group.rotation.y = mob.yaw;
+        model.group.scale.setScalar(mob.ageTimer > 0 ? BABY_SCALE : 1);
 
         const gait = Math.sin(timeMs * 0.015 * mob.moveSpeed + mob.bobSeed) * 0.3;
         if (model.legs.length === 4) {

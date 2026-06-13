@@ -13,7 +13,9 @@ import {
   LAND_SOUND,
   MOB_AMBIENT_SOUNDS,
   MOB_ATTACK_SOUNDS,
+  MOB_BRED_SOUND,
   MOB_DEATH_SOUND,
+  MOB_FED_SOUND,
   MOB_HIT_SOUND,
   PLACE_SOUNDS,
   PLANT_SOUND,
@@ -219,6 +221,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "smelted":
           backend.play(SMELT_SOUND);
+          break;
+        case "mobFed":
+          backend.play(MOB_FED_SOUND);
+          break;
+        case "mobBred":
+          backend.play(MOB_BRED_SOUND);
           break;
       }
     },
