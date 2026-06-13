@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { createPlayerVisuals, type PlayerVisualsState } from "@/lib/game/render/playerVisuals";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { getSkinPreset } from "@/lib/game/playerSkins";
 
 function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsState {
   return {
@@ -95,6 +96,20 @@ describe("playerVisuals", () => {
     visuals.sync(makeState(), 1000);
     visuals.sync(makeState(), 1130);
     expect(rightArm.rotation.x).toBeLessThan(-1);
+    visuals.dispose();
+  });
+
+  test("setPalette recolors the visible body live", () => {
+    const scene = new THREE.Scene();
+    const visuals = createPlayerVisuals(scene);
+    visuals.sync(makeState(), 0);
+
+    const knight = getSkinPreset("knight").palette;
+    visuals.setPalette(knight);
+
+    const head = bodyGroup(scene).getObjectByName("head")!;
+    const skull = head.children[0] as THREE.Mesh;
+    expect((skull.material as THREE.MeshStandardMaterial).color.getHex()).toBe(knight.skin);
     visuals.dispose();
   });
 

@@ -14,7 +14,7 @@ A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves 
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)
-- `Esc`: Pause menu (save / load / reset and the sound/music volume sliders live there) · `F3`: Debug overlay
+- `Esc`: Pause menu (save / load / reset, sound/music volume sliders, and the Appearance skin picker live there) · `F3`: Debug overlay
 
 ## Run
 
