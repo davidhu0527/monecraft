@@ -110,6 +110,12 @@ curve from ~0.04 at midnight to ~1.0 at noon. Three thresholds matter:
 The game boots at a dim dawn, so the very first mobs can already be active —
 build or sleep quickly.
 
+**Weather and sky.** It periodically **rains** — or **snows** up in the mountains —
+with clouds rolling in, the sky greying over, and the light dimming; deserts and
+oceans stay clear. At night the sky fills with **stars and a moon**, while clouds
+drift overhead by day. Weather is atmospheric only: it doesn't change how mobs
+spawn or behave, and it isn't saved.
+
 ## Mining and building
 
 **Break** a block by holding left-click; a crack overlay shows progress, and harder

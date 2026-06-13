@@ -43,6 +43,12 @@ export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
 
+// Weather (cosmetic, transient — never persisted, never touches spawn balance).
+// Time is split into fixed windows; a seeded hash of the window index decides
+// whether it precipitates, and a triangular envelope ramps intensity in/out.
+export const WEATHER_CYCLE_SECONDS = 180;
+export const WEATHER_RAIN_FRACTION = 0.35;
+
 // Beds & sleep
 // Sleeping is only allowed once it is night by the game's own definition (the
 // hostile-spawn threshold). The fade is the frozen window before time skips;

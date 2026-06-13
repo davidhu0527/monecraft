@@ -90,7 +90,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   addBlockDrop(state, targetBlock as BlockId, rng);
   state.worldMeshDirty = true;
   resetMining(state);
-  emit({ type: "blockBroken", blockId: targetBlock as BlockId });
+  emit({ type: "blockBroken", blockId: targetBlock as BlockId, x: bx, y: by, z: bz });
 }
 
 /** Places the selected block against the targeted face, refusing self-entombment. */
@@ -121,5 +121,5 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   }
 
   state.worldMeshDirty = true;
-  emit({ type: "blockPlaced", blockId: slot.blockId });
+  emit({ type: "blockPlaced", blockId: slot.blockId, x: tx, y: ty, z: tz });
 }

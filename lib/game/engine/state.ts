@@ -76,6 +76,9 @@ export type GameTimers = {
   breedTimer: number;
 };
 
+export type WeatherKind = "clear" | "rain" | "snow";
+export type WeatherState = { kind: WeatherKind; intensity: number };
+
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
@@ -102,6 +105,8 @@ export type GameState = {
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
   daylightPercent: number;
+  /** Cosmetic, transient weather (never serialized). Drives precip + sky + audio. */
+  weather: WeatherState;
   /** Seconds left in the sleep fade; > 0 freezes the sim until time skips. */
   sleepTimer: number;
   /** Bed respawn point (block coords), or null to respawn at a random land point. */
@@ -180,15 +185,15 @@ export type GameSnapshot = {
 export type GameEvent =
   | { type: "died" }
   | { type: "respawned" }
-  | { type: "blockBroken"; blockId: BlockId }
-  | { type: "blockPlaced"; blockId: BlockId }
+  | { type: "blockBroken"; blockId: BlockId; x: number; y: number; z: number }
+  | { type: "blockPlaced"; blockId: BlockId; x: number; y: number; z: number }
   | { type: "playerHurt" }
   | { type: "ateFood" }
   | { type: "jumped" }
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
-  | { type: "mobDied"; kind: MobKind }
+  | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

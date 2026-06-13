@@ -31,6 +31,7 @@ import { createBlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
+import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen } from "./systems/playerStats";
@@ -111,6 +112,7 @@ export class GameEngine {
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
+      weather: { kind: "clear", intensity: 0 },
       sleepTimer: 0,
       spawnPoint: null,
       mining: { targetKey: "", progress: 0 },
@@ -140,6 +142,9 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
+    // Seed weather from the (possibly restored) dayClock + player position so a
+    // loaded save's first frame/snapshot is consistent before the first step().
+    tickWeather(this.state);
     this.snapshot = this.buildSnapshot();
   }
 
@@ -184,6 +189,7 @@ export class GameEngine {
     tickHealthRegen(state, dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickDayNight(state, dt);
+    tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickMobs(state, dt, this.mobTickDeps);
@@ -369,7 +375,7 @@ export class GameEngine {
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
-    this.emit({ type: "mobDied", kind: mob.kind });
+    this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
   };
