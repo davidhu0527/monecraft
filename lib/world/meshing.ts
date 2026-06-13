@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { ATLAS_COLUMNS, ATLAS_ROWS, tileIndexFor } from "./atlas";
 import { BlockId } from "./blocks";
+import { doorBounds, isDoorBlock } from "./doors";
 import { VoxelWorld } from "./voxelWorld";
 
 export type GeometryLayers = {
@@ -199,12 +200,35 @@ function buildGeometryBuffers(
     return Math.max(0.8, 1 - occ * 0.06);
   };
 
+  const pushBlockCuboid = (target: GeometryBuffers, block: number, x: number, y: number, z: number, minX: number, maxX: number, minZ: number, maxZ: number) => {
+    for (const face of FACE_DEFS) {
+      const nx = face.dir[0];
+      const ny = face.dir[1];
+      const nz = face.dir[2];
+      const color = materialTint(ny);
+      const [u0, v0, u1, v1] = tileUV(block, ny);
+      const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + cy, z + (cz ? maxZ : minZ)] as const);
+      const [a, b, c, d] = corners;
+      pushVertex(target, ...a, nx, ny, nz, color, u0, v1);
+      pushVertex(target, ...b, nx, ny, nz, color, u0, v0);
+      pushVertex(target, ...c, nx, ny, nz, color, u1, v0);
+      pushVertex(target, ...a, nx, ny, nz, color, u0, v1);
+      pushVertex(target, ...c, nx, ny, nz, color, u1, v0);
+      pushVertex(target, ...d, nx, ny, nz, color, u1, v1);
+    }
+  };
+
   for (let y = clampedMinY; y <= clampedMaxY; y += 1) {
     for (let z = clampedMinZ; z <= clampedMaxZ; z += 1) {
       for (let x = clampedMinX; x <= clampedMaxX; x += 1) {
         const block = world.get(x, y, z);
         if (block === BlockId.Air) continue;
         const target = splitGlass && block === BlockId.Glass ? glass : opaque;
+        if (isDoorBlock(block)) {
+          const bounds = doorBounds(block)!;
+          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, bounds.minZ, bounds.maxZ);
+          continue;
+        }
         for (const face of FACE_DEFS) {
           const nx = face.dir[0];
           const ny = face.dir[1];
@@ -212,7 +236,7 @@ function buildGeometryBuffers(
           const neighbor = world.get(x + nx, y + ny, z + nz);
           if (block === BlockId.Water || block === BlockId.Glass) {
             if (neighbor === block) continue;
-          } else if (neighbor !== BlockId.Glass && world.isSolid(x + nx, y + ny, z + nz)) {
+          } else if (neighbor !== BlockId.Glass && !isDoorBlock(neighbor) && world.isSolid(x + nx, y + ny, z + nz)) {
             continue;
           }
 

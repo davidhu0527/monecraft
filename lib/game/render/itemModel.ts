@@ -21,13 +21,13 @@ const blockColor = (blockId: number | undefined): number =>
 export function buildItemModel(slot: InventorySlot | undefined): ItemModel | null {
   if (!slot?.id || slot.count <= 0 || !slot.kind) return null;
 
-  if (slot.kind === "block") {
+  if (slot.kind === "block" && slot.id !== "door") {
     const geometry = new THREE.BoxGeometry(0.22, 0.22, 0.22);
     const material = new THREE.MeshStandardMaterial({ color: blockColor(slot.blockId), roughness: 0.7, metalness: 0.05 });
     return { object: new THREE.Mesh(geometry, material), geometry, material };
   }
 
-  // Tools, weapons, food, armor: extrude the same 16x16 pixel grid the
+  // Doors, tools, weapons, food, armor: extrude the same 16x16 pixel grid the
   // inventory icon uses, so the in-hand model always matches the sprite.
   const geometry = buildExtrudedSpriteGeometry(renderSpritePixels(slot.id));
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05 });

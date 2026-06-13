@@ -202,4 +202,18 @@ describe("meshing", () => {
     expect(geometry.opaque.getAttribute("position").count).toBe(36);
     expect(geometry.glass.getAttribute("position").count).toBe(60);
   });
+
+  test("a two-block door meshes as two thin cuboids", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.DoorNorthLower);
+    world.set(3, 4, 3, BlockId.DoorNorthUpper);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
+    const positions = geometry.getAttribute("position");
+    expect(positions.count).toBe(72);
+    expect(geometry.boundingBox).toBeNull();
+    geometry.computeBoundingBox();
+    expect(geometry.boundingBox!.min.z).toBeCloseTo(3.40625);
+    expect(geometry.boundingBox!.max.z).toBeCloseTo(3.59375);
+    expect(geometry.boundingBox!.max.y - geometry.boundingBox!.min.y).toBe(2);
+  });
 });

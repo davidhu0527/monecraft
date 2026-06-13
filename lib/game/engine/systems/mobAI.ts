@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { voxelRaycast } from "@/lib/world";
+import { collidesAt, voxelRaycast } from "@/lib/world";
 import { HOSTILE_BURN_ABOVE_DAYLIGHT, SPIDER_AGGRO_BELOW_DAYLIGHT } from "@/lib/game/config";
 import type { EmitGameEvent, GameState } from "../state";
 import type { SurfaceYAtFn } from "@/lib/game/spawn";
@@ -11,6 +11,7 @@ const scratchToPlayer3D = new THREE.Vector3();
 const scratchMobEye = new THREE.Vector3();
 const scratchPlayerAim = new THREE.Vector3();
 const scratchRay = new THREE.Vector3();
+const scratchMobFeet = new THREE.Vector3();
 
 export type MobTickDeps = {
   surfaceYAt: SurfaceYAtFn;
@@ -61,7 +62,15 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       mob.turnTimer = 1;
     }
 
-    const ground = deps.surfaceYAt(nx, nz);
+    let ground = deps.surfaceYAt(nx, nz);
+    scratchMobFeet.set(nx, ground, nz);
+    if (collidesAt(world, scratchMobFeet, 0.28, mob.halfHeight * 2)) {
+      mob.direction.multiplyScalar(-1);
+      nx = mob.position.x;
+      nz = mob.position.z;
+      ground = mob.position.y - mob.halfHeight;
+      mob.turnTimer = 1;
+    }
     mob.position.set(nx, ground + mob.halfHeight, nz);
     mob.yaw = Math.atan2(mob.direction.x, mob.direction.z);
 

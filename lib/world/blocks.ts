@@ -31,7 +31,23 @@ export const enum BlockId {
   WheatStage2 = 24,
   WheatStage3 = 25,
   Furnace = 26,
-  Chest = 27
+  Chest = 27,
+  DoorNorthLower = 28,
+  DoorNorthUpper = 29,
+  DoorEastLower = 30,
+  DoorEastUpper = 31,
+  DoorSouthLower = 32,
+  DoorSouthUpper = 33,
+  DoorWestLower = 34,
+  DoorWestUpper = 35,
+  DoorNorthOpenLower = 36,
+  DoorNorthOpenUpper = 37,
+  DoorEastOpenLower = 38,
+  DoorEastOpenUpper = 39,
+  DoorSouthOpenLower = 40,
+  DoorSouthOpenUpper = 41,
+  DoorWestOpenLower = 42,
+  DoorWestOpenUpper = 43
 }
 
 export enum BiomeId {
@@ -63,7 +79,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Cactus]: 0x6aa850,
   [BlockId.Bed]: 0xc0392b,
   [BlockId.Furnace]: 0x63666a,
-  [BlockId.Chest]: 0x9c6a3c
+  [BlockId.Chest]: 0x9c6a3c,
+  [BlockId.DoorNorthLower]: 0xa8753f
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -98,5 +115,21 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.WheatStage2]: [0.7, 0.69, 0.29],
   [BlockId.WheatStage3]: [0.82, 0.72, 0.3],
   [BlockId.Furnace]: [0.38, 0.39, 0.41],
-  [BlockId.Chest]: [0.58, 0.41, 0.22]
+  [BlockId.Chest]: [0.58, 0.41, 0.22],
+  [BlockId.DoorNorthLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorNorthUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorNorthOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorNorthOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2]
 };

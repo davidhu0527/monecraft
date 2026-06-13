@@ -103,10 +103,13 @@ describe("audio director", () => {
     const { director, played } = await createUnlockedDirector();
     director.handleEvent({ type: "blockBroken", blockId: BlockId.Cobblestone, x: 0, y: 0, z: 0 });
     director.handleEvent({ type: "blockPlaced", blockId: BlockId.Planks, x: 0, y: 0, z: 0 });
+    director.handleEvent({ type: "doorToggled", open: true });
     director.handleEvent({ type: "playerHurt" });
     expect(played[0].def).toBe(BREAK_SOUNDS.stone);
     expect(played[1].def).toBe(PLACE_SOUNDS.wood);
-    expect(played[2].def).toBe(HURT_SOUND);
+    expect(played[2].def).toBe(PLACE_SOUNDS.wood);
+    expect(played[2].opts.gain).toBe(0.8);
+    expect(played[3].def).toBe(HURT_SOUND);
   });
 
   test("landing volume scales with impact", async () => {

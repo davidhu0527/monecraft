@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, collidesAt, voxelRaycast } from "@/lib/world";
+import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlock, voxelRaycast } from "@/lib/world";
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
@@ -116,7 +116,16 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
     return;
   }
 
-  state.blockChanges.set(bx, by, bz, BlockId.Air);
+  if (isDoorBlock(targetBlock)) {
+    const door = doorState(targetBlock)!;
+    const other = doorState(world.get(bx, door.upper ? by - 1 : by + 1, bz));
+    state.blockChanges.set(bx, by, bz, BlockId.Air);
+    if (other && other.upper !== door.upper) {
+      state.blockChanges.set(bx, door.upper ? by - 1 : by + 1, bz, BlockId.Air);
+    }
+  } else {
+    state.blockChanges.set(bx, by, bz, BlockId.Air);
+  }
   if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
   addBlockDrop(state, targetBlock as BlockId, rng);
   state.worldMeshDirty = true;
@@ -144,9 +153,21 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   const afterTake = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
   if (!afterTake) return;
   state.inventory = afterTake;
-  state.blockChanges.set(tx, ty, tz, slot.blockId);
+  if (slot.id === "door") {
+    const support = world.get(tx, ty - 1, tz);
+    if (ty + 1 >= world.sizeY || world.get(tx, ty + 1, tz) !== BlockId.Air || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
+      state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
+      return;
+    }
+    const facing = doorFacingFromYaw(state.player.yaw);
+    state.blockChanges.set(tx, ty, tz, doorBlock(facing, false, false));
+    state.blockChanges.set(tx, ty + 1, tz, doorBlock(facing, false, true));
+  } else {
+    state.blockChanges.set(tx, ty, tz, slot.blockId);
+  }
   if (collidesAt(world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
     state.blockChanges.set(tx, ty, tz, BlockId.Air);
+    if (slot.id === "door") state.blockChanges.set(tx, ty + 1, tz, BlockId.Air);
     state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
     return;
   }

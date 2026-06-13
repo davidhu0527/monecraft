@@ -385,6 +385,115 @@ describe("chests", () => {
   });
 });
 
+describe("doors", () => {
+  function setAimedDoor(engine: GameEngine, open = false): { x: number; y: number; z: number } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(x, y, z, open ? BlockId.DoorNorthOpenLower : BlockId.DoorNorthLower);
+    state.blockChanges.set(x, y + 1, z, open ? BlockId.DoorNorthOpenUpper : BlockId.DoorNorthUpper);
+    return { x, y, z };
+  }
+
+  test("right-clicking either half toggles both halves", () => {
+    const engine = makeEngine();
+    const door = setAimedDoor(engine);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.DoorNorthOpenLower);
+    expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.DoorNorthOpenUpper);
+    expect(engine.consumeEvents()).toContainEqual({ type: "doorToggled", open: true });
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.DoorNorthLower);
+    expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.DoorNorthUpper);
+  });
+
+  test("placing one door item creates a supported two-block door", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const floorY = Math.floor(state.player.position.y) - 1;
+    state.player.position.set(x + 0.5, floorY + 1, z + 0.5);
+    state.player.yaw = 0;
+    state.player.pitch = -0.6;
+    for (let dz = -1; dz >= -5; dz -= 1) {
+      state.blockChanges.set(x, floorY, z + dz, BlockId.Stone);
+      state.blockChanges.set(x, floorY + 1, z + dz, BlockId.Air);
+      state.blockChanges.set(x, floorY + 2, z + dz, BlockId.Air);
+    }
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("door", 1);
+
+    engine.dispatch({ type: "placeBlock" });
+
+    const placed: Array<{ y: number; block: number }> = [];
+    for (let dz = -1; dz >= -5; dz -= 1) {
+      for (let y = floorY + 1; y <= floorY + 2; y += 1) {
+        const block = state.world.get(x, y, z + dz);
+        if (block >= BlockId.DoorNorthLower && block <= BlockId.DoorWestOpenUpper) placed.push({ y, block });
+      }
+    }
+    expect(placed).toHaveLength(2);
+    expect(placed[0].block).toBe(BlockId.DoorNorthLower);
+    expect(placed[1].block).toBe(BlockId.DoorNorthUpper);
+    expect(state.inventory[state.selectedSlot].id).toBeNull();
+  });
+
+  test("breaking either half removes the whole door and drops one item", () => {
+    const engine = makeEngine();
+    const door = setAimedDoor(engine);
+    const before = countsById(engine.state.inventory).get("door") ?? 0;
+    run(engine, 5, input({ leftMouseHeld: true, pointerLocked: true }));
+    expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.Air);
+    expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.Air);
+    expect(countsById(engine.state.inventory).get("door")).toBe(before + 1);
+  });
+
+  test("door state persists through the ordinary block-change save", () => {
+    const engine = makeEngine();
+    const door = setAimedDoor(engine, true);
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.world.get(door.x, door.y, door.z)).toBe(BlockId.DoorNorthOpenLower);
+    expect(restored.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.DoorNorthOpenUpper);
+  });
+
+  test("mobs cannot toggle a door and stop at its closed panel", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const { state } = engine;
+    const mob = state.mobs.find((entry) => !entry.hostile)!;
+    const ground = 30;
+    state.player.position.set(50, ground, 50);
+    for (let z = 19; z <= 22; z += 1) {
+      for (let y = ground; y < state.world.sizeY; y += 1) state.blockChanges.set(20, y, z, BlockId.Air);
+      state.blockChanges.set(20, ground - 1, z, BlockId.Stone);
+    }
+    mob.position.set(20.5, ground + mob.halfHeight, 21.1);
+    mob.direction.set(0, 0, -1);
+    mob.turnTimer = 10;
+    state.blockChanges.set(20, ground, 20, BlockId.DoorNorthLower);
+    state.blockChanges.set(20, ground + 1, 20, BlockId.DoorNorthUpper);
+    const beforeZ = mob.position.z;
+    engine.step(0.5, input());
+    expect(mob.position.z).toBe(beforeZ);
+    expect(state.world.get(20, ground, 20)).toBe(BlockId.DoorNorthLower);
+    expect(state.world.get(20, ground + 1, 20)).toBe(BlockId.DoorNorthUpper);
+  });
+});
+
 /** Decodes a voxel index back to [x, y, z] for the active world. */
 function indexToXYZ(state: GameEngine["state"], idx: number): [number, number, number] {
   const layer = state.world.sizeX * state.world.sizeZ;

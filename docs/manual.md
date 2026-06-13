@@ -148,7 +148,15 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **32 recipes** in the [reference](reference.md#recipes).
+See the full list of **33 recipes** in the [reference](reference.md#recipes).
+
+## Doors
+
+Craft a **wood door** from **6 planks** and place it on a solid floor with two
+clear blocks above it. A door is a thin, two-block-tall panel: right-click either
+half to open or close the whole door. Closed doors block players and mobs; open
+doors rotate against their hinge so you can pass. Mobs cannot open or close doors.
+Breaking either half removes the whole door and returns one door item.
 
 ## Storage
 

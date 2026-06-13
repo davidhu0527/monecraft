@@ -5,7 +5,7 @@
 `SaveData` (version 4) in `lib/game/types.ts`:
 
 - world `seed`
-- a block **diff** list — `changes: [blockIndex, blockId][]`; edits that revert to the generated baseline are pruned (player-placed crops, beds, furnaces, and chests ride this list — they are ordinary block edits)
+- a block **diff** list — `changes: [blockIndex, blockId][]`; edits that revert to the generated baseline are pruned (player-placed crops, beds, furnaces, chests, and both halves/states of doors ride this list — they are ordinary block edits)
 - inventory slots with durability (36 slots; the first 9 are the hotbar)
 - equipped armor
 - selected hotbar slot (0–8)

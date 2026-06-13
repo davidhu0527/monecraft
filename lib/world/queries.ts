@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { VoxelWorld } from "./voxelWorld";
+import { doorBounds, isDoorBlock } from "./doors";
 
 export type RaycastResult = {
   hit: THREE.Vector3;
@@ -78,7 +79,15 @@ export function collidesAt(world: VoxelWorld, position: THREE.Vector3, halfWidth
   for (let y = minY; y <= maxY; y += 1) {
     for (let z = minZ; z <= maxZ; z += 1) {
       for (let x = minX; x <= maxX; x += 1) {
-        if (world.isSolid(x, y, z)) return true;
+        const block = world.get(x, y, z);
+        if (!world.isSolid(x, y, z)) continue;
+        if (!isDoorBlock(block)) return true;
+        const bounds = doorBounds(block)!;
+        const bodyMinX = position.x - halfWidth + eps;
+        const bodyMaxX = position.x + halfWidth - eps;
+        const bodyMinZ = position.z - halfWidth + eps;
+        const bodyMaxZ = position.z + halfWidth - eps;
+        if (bodyMaxX > x + bounds.minX && bodyMinX < x + bounds.maxX && bodyMaxZ > z + bounds.minZ && bodyMinZ < z + bounds.maxZ) return true;
       }
     }
   }

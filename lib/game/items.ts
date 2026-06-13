@@ -1,4 +1,4 @@
-import { BlockId } from "@/lib/world";
+import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
 import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS } from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
@@ -24,6 +24,7 @@ export function createEmptyArmorEquipment(): EquippedArmor {
 }
 
 export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
+  ...Object.fromEntries(DOOR_BLOCK_IDS.map((block) => [block, 3])),
   [BlockId.Grass]: 2,
   [BlockId.Dirt]: 2,
   [BlockId.Sand]: 2,
@@ -71,6 +72,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
   { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
+  { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -168,6 +170,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
   [BlockId.Chest]: "chest",
+  [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",
@@ -181,6 +184,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
  * wheat drops wheat plus 1–2 seeds. `rng` is injectable for deterministic tests.
  */
 export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
+  if (isDoorBlock(block)) return [{ itemId: "door", count: 1 }];
   const drops: Array<{ itemId: string; count: number }> = [];
   const base = BLOCK_TO_SLOT[block];
   if (base) drops.push({ itemId: base, count: 1 });

@@ -10,20 +10,21 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Recipes
 
-**32 recipes.** All use the always-available crafting grid except the two
+**33 recipes.** All use the always-available crafting grid except the two
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
 
-| Result    | Ingredients       |
-| --------- | ----------------- |
-| 4 Planks  | 2 Wood            |
-| 2 Glass   | 4 Sand            |
-| 2 Brick   | 2 Dirt + 2 Stone  |
-| 1 Furnace | 8 Cobble          |
-| 1 Chest   | 8 Planks          |
-| 1 Bed     | 3 Wool + 3 Planks |
-| 1 Wool    | 4 String          |
+| Result      | Ingredients       |
+| ----------- | ----------------- |
+| 4 Planks    | 2 Wood            |
+| 2 Glass     | 4 Sand            |
+| 2 Brick     | 2 Dirt + 2 Stone  |
+| 1 Furnace   | 8 Cobble          |
+| 1 Chest     | 8 Planks          |
+| 1 Wood Door | 6 Planks          |
+| 1 Bed       | 3 Wool + 3 Planks |
+| 1 Wool      | 4 String          |
 
 ### Tools
 
@@ -72,7 +73,7 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Blocks
 
-**27 block types** (plus air). Hardness is relative break time — higher is slower.
+**28 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock and water cannot be broken.
 
@@ -92,6 +93,7 @@ hands or any tool. Bedrock and water cannot be broken.
 | Brick             | 5        | Wood Pickaxe   | Crafted; also found in houses                                                                                 |
 | Furnace           | 5        | Wood Pickaxe   | **Interactive** — opens smelting recipes                                                                      |
 | Chest             | 3        | any            | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
+| Wood Door         | 3        | any            | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                           |
 | Sliver Ore        | 7        | Stone Pickaxe  | —                                                                                                             |
 | Ruby Ore          | 9        | Sliver Pickaxe | —                                                                                                             |
 | Gold Ore          | 11       | Sliver Pickaxe | —                                                                                                             |

@@ -208,6 +208,7 @@ export type GameEvent =
   | { type: "plantedSeed" }
   | { type: "openedStation"; station: "furnace" }
   | { type: "openedContainer" }
+  | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "mobFed"; kind: MobKind }

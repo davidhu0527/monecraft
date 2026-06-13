@@ -34,7 +34,23 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.WheatStage2]: "grass",
   [BlockId.WheatStage3]: "grass",
   [BlockId.Furnace]: "stone",
-  [BlockId.Chest]: "wood"
+  [BlockId.Chest]: "wood",
+  [BlockId.DoorNorthLower]: "wood",
+  [BlockId.DoorNorthUpper]: "wood",
+  [BlockId.DoorEastLower]: "wood",
+  [BlockId.DoorEastUpper]: "wood",
+  [BlockId.DoorSouthLower]: "wood",
+  [BlockId.DoorSouthUpper]: "wood",
+  [BlockId.DoorWestLower]: "wood",
+  [BlockId.DoorWestUpper]: "wood",
+  [BlockId.DoorNorthOpenLower]: "wood",
+  [BlockId.DoorNorthOpenUpper]: "wood",
+  [BlockId.DoorEastOpenLower]: "wood",
+  [BlockId.DoorEastOpenUpper]: "wood",
+  [BlockId.DoorSouthOpenLower]: "wood",
+  [BlockId.DoorSouthOpenUpper]: "wood",
+  [BlockId.DoorWestOpenLower]: "wood",
+  [BlockId.DoorWestOpenUpper]: "wood"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

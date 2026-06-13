@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { BLOCK_COLORS, BlockId } from "./blocks";
+import { doorState, isDoorBlock } from "./doors";
 
 // Procedural texture atlas: one 16x16 tile per block face variant, painted on a
 // canvas at startup. This is the only world module that touches the DOM.
@@ -82,6 +83,16 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           if (face === "top" && y === 8) c = tone(base, 0.6); // lid seam
           if (face === "side" && y === 7) c = tone(base, 0.58); // lid joint band
           if (face === "side" && x >= 7 && x <= 8 && y >= 6 && y <= 9) c = tone([0.62, 0.64, 0.68], 0.9 + n * 0.2); // metal latch
+        }
+        if (isDoorBlock(block)) {
+          const state = doorState(block)!;
+          const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;
+          const border = x < 2 || x > 13 || panelY < 2 || panelY > 29;
+          const inset = x >= 4 && x <= 11 && ((panelY >= 4 && panelY <= 13) || (panelY >= 18 && panelY <= 27));
+          if (border) c = tone(base, 0.62);
+          else if (inset) c = tone(base, 0.78 + n * 0.08);
+          else c = tone(base, 0.95 + n * 0.12);
+          if (!state.upper && x >= 11 && x <= 12 && y >= 5 && y <= 6) c = tone([0.82, 0.72, 0.36], 0.9 + n * 0.15);
         }
 
         ctx.fillStyle = rgb(c);

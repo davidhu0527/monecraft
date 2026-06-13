@@ -8,7 +8,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 2. Add a `BREAK_HARDNESS` entry in `lib/game/items.ts` (omitted blocks default to hardness 2).
 3. Make it placeable/droppable: an `ITEM_DEFS` entry (`kind: "block"`, `blockId`) plus a `BLOCK_TO_SLOT` mapping — without the mapping, mining it drops nothing. The inventory icon (isometric cube) auto-generates from `BLOCK_COLORS`; ore-style blocks can add an accent color in `lib/ui/spritePixels.ts` (`ORE_ACCENTS`).
 4. Optionally add `RECIPES` entries in `lib/game/recipes.ts`.
-5. Non-solid or transparent blocks need engine work: `isSolid()` in `lib/world/voxelWorld.ts` for collisions, and face-visibility logic in `lib/world/meshing.ts` (see the water gotcha in [architecture.md](architecture.md)).
+5. Non-cube, non-solid, or transparent blocks need engine work: collision in `lib/world/queries.ts` / `voxelWorld.ts` and geometry/face visibility in `lib/world/meshing.ts`. Doors are the reference for shared custom bounds; glass is the reference for a separate render layer.
 6. Map it to a sound family in `lib/game/audio/materials.ts` — the `BlockId → MaterialGroup` record is exhaustive, so typecheck fails until the entry exists.
 7. The item/recipe integrity tests (`lib/game/config.test.ts`) will fail if a mapping is missing or inconsistent — run `bun test`.
 
@@ -50,7 +50,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 - Right-click (and KeyE) dispatch `placeBlock`, which runs a fixed precedence in `GameEngine.dispatch` before falling through to placement: feed an aimed mob → `tryInteractBlock` → use the held item → place. To make a block do something on right-click, register it in `INTERACTIVE_BLOCKS` and add a branch in `tryInteractBlock` (`lib/game/engine/systems/interact.ts`).
 - The handler returns `true` to consume the click (no block is placed) — return `true` even when the action is refused (e.g. a bed during the day) so the player doesn't place a block into the bed by accident.
-- Three reference implementations: the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"); the **chest** opens the inventory and sets `state.openContainerIndex` (see below). A block that opens the inventory from a mouse click also needs an `openedStation`/`openedContainer` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
+- Four reference implementations: the **door** atomically toggles matching upper/lower state IDs; the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"); the **chest** opens the inventory and sets `state.openContainerIndex` (see below). A block that opens the inventory from a mouse click also needs an `openedStation`/`openedContainer` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
 
 ## A container block (block-entity storage)
 
