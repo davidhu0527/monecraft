@@ -10,7 +10,7 @@ power, a sword's damage, a food's hunger) are **not** here; they live with the
 content in [`items.ts`](../lib/game/items.ts) (see the [reference](reference.md)).
 Worldgen constants live in the frozen `GEN` object in
 [`generation.ts`](../lib/world/generation.ts) and are pinned by hash tests — see
-[save-format.md](save-format.md).
+[testing.md](testing.md).
 
 ## Player feel — physics & movement
 

@@ -49,7 +49,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `V`                | Cycle camera: first-person → third-person rear → third-person front |
 | `U`                | Emergency unstuck (teleport to safe ground if wedged)               |
 | `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
-| `F3`               | Debug overlay (position, daylight)                                  |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
