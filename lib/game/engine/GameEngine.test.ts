@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
 import {
+  DAY_CYCLE_SECONDS,
   EYE_HEIGHT,
   MAX_HUNGER,
   MAX_HEARTS,
@@ -14,6 +15,7 @@ import {
 import { countsById } from "@/lib/game/inventory";
 import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
+import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import type { FrameInput } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -271,6 +273,25 @@ describe("commands", () => {
     expect(engine.getSnapshot().debug).toBeNull();
   });
 
+  test("toggleCameraView cycles first → third-rear → third-front → first", () => {
+    const engine = makeEngine();
+    expect(engine.getSnapshot().cameraMode).toBe("first");
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("third-rear");
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("third-front");
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("first");
+  });
+
+  test("camera mode works while dead and is never persisted", () => {
+    const engine = makeEngine();
+    engine.state.isDead = true;
+    engine.dispatch({ type: "toggleCameraView" });
+    expect(engine.getSnapshot().cameraMode).toBe("third-rear");
+    expect("cameraMode" in engine.serialize()).toBe(false);
+  });
+
   test("respawn command skips the countdown and restores full stats", () => {
     const engine = makeEngine();
     calmDaytime(engine); // hostiles at dawn could re-kill the fresh respawn
@@ -362,7 +383,9 @@ describe("gameplay events", () => {
       attackCooldown: 5,
       attackTimer: 0,
       halfHeight: 0.9,
-      bobSeed: 0
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
     });
   }
 
@@ -420,6 +443,39 @@ describe("gameplay events", () => {
     engine.dispatch({ type: "eatFood" });
     expect(engine.consumeEvents().some((event) => event.type === "ateFood")).toBe(true);
     expect(state.hunger).toBeGreaterThan(5);
+  });
+
+  test("eating a meat restores its own hunger value", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("raw_chicken", 1); // hunger 3
+    state.selectedSlot = slot;
+    state.hunger = 5;
+    engine.dispatch({ type: "eatFood" });
+    expect(state.hunger).toBe(8);
+    expect(countsById(state.inventory).get("raw_chicken")).toBeUndefined();
+  });
+
+  test("killing a mob drops its loot and emits mobDied", () => {
+    // rng 0 → every drop rolls its minimum count (zombie: 1 rotten flesh).
+    const engine = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    spawnTestMob(engine, "zombie", true, { x: 0, y: EYE_HEIGHT, z: -2 });
+    state.mobs[state.mobs.length - 1].hp = 1; // one fist hit (6 dmg) kills it
+    const before = countsById(state.inventory).get("rotten_flesh") ?? 0;
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" });
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "mobDied" && event.kind === "zombie")).toBe(true);
+    expect(countsById(state.inventory).get("rotten_flesh")).toBe(before + 1);
+    expect(events.some((event) => event.type === "pickedUp" && event.items.some((it) => it.itemId === "rotten_flesh"))).toBe(true);
   });
 
   test("jumping and touching down emit jumped and landed", () => {
@@ -549,5 +605,402 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(1);
     state.blockChanges.set(30, y, 30, original as BlockId);
     expect(state.blockChanges.changes().length).toBe(0);
+  });
+
+  test("save format is version 3 and carries clock, stats, and spawn point", () => {
+    const engine = makeEngine();
+    engine.state.dayClock = 123;
+    engine.state.hearts = 14;
+    engine.state.hunger = 9;
+    engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
+    const save = engine.serialize();
+    expect(save.version).toBe(3);
+
+    const restored = makeEngine(save);
+    expect(restored.state.dayClock).toBe(123);
+    expect(restored.state.hearts).toBe(14);
+    expect(restored.state.hunger).toBe(9);
+    expect(restored.state.spawnPoint).toEqual({ x: 12, y: 40, z: 8 });
+    // Daylight is re-derived from the restored clock, not left at dawn.
+    expect(restored.state.daylight).toBeCloseTo(daylightAt(123), 5);
+  });
+});
+
+describe("beds and sleep", () => {
+  /** Settles the player, then drops a bed block one cell ahead at eye height and aims at it. */
+  function placeBedAhead(engine: GameEngine): { x: number; y: number; z: number } {
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Bed);
+    return { x: ex, y: ey, z: ez - 1 };
+  }
+
+  function pushHostile(engine: GameEngine, offset: { x: number; y: number; z: number }): void {
+    const p = engine.state.player.position;
+    engine.state.mobs.push({
+      id: engine.state.nextMobId++,
+      kind: "zombie",
+      hostile: true,
+      hp: 10,
+      position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 11,
+      attackDamage: 3,
+      attackCooldown: 1.35,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    });
+  }
+
+  test("crafting a bed consumes wool and planks", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const free = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[free] = createSlot("wool", 3);
+    const free2 = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory[free2] = createSlot("planks", 3);
+    engine.dispatch({ type: "craft", recipeId: "bed" });
+    expect(countsById(engine.state.inventory).get("bed")).toBe(1);
+  });
+
+  test("interacting with a bed at night skips to morning and sets the spawn point", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 180; // deep night
+    const bed = placeBedAhead(engine);
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile); // none within sleep radius
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" }); // right-click the bed
+    expect(engine.consumeEvents().some((event) => event.type === "sleepStarted")).toBe(true);
+    expect(engine.state.sleepTimer).toBeGreaterThan(0);
+    expect(engine.getSnapshot().sleeping).toBe(true);
+    expect(engine.state.spawnPoint).toEqual(bed);
+
+    run(engine, 2); // let the fade complete and the clock jump
+    expect(engine.state.sleepTimer).toBe(0);
+    expect(engine.state.dayClock).toBeGreaterThan(DAY_CYCLE_SECONDS);
+    expect(engine.state.daylight).toBeGreaterThan(0.28); // woke to morning
+  });
+
+  test("pausing is ignored while sleeping so the fade can't stall", () => {
+    const engine = makeEngine();
+    engine.state.dayClock = 180; // night
+    engine.state.sleepTimer = 1.0; // mid-fade
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false); // pause refused during sleep
+    run(engine, 1.2); // the fade completes and the clock jumps
+    expect(engine.state.sleepTimer).toBe(0);
+    expect(engine.state.dayClock).toBeGreaterThan(DAY_CYCLE_SECONDS);
+  });
+
+  test("a bed cannot be used during the day", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 60; // midday
+    placeBedAhead(engine);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    const events = engine.consumeEvents();
+    expect(events.some((event) => event.type === "sleepDenied" && event.reason === "daylight")).toBe(true);
+    expect(engine.state.sleepTimer).toBe(0);
+  });
+
+  test("a bed cannot be used with a hostile nearby", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 180;
+    placeBedAhead(engine);
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    pushHostile(engine, { x: 3, y: 0, z: 0 }); // within SLEEP_HOSTILE_RADIUS (12)
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "sleepDenied" && event.reason === "hostiles")).toBe(true);
+    expect(engine.state.sleepTimer).toBe(0);
+  });
+
+  test("dying respawns at the bed when the spawn point still holds one", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const bx = 20;
+    const by = state.world.highestSolidY(bx, 20) + 1;
+    const bz = 20;
+    state.blockChanges.set(bx, by, bz, BlockId.Bed);
+    state.spawnPoint = { x: bx, y: by, z: bz };
+    state.hearts = 1;
+    state.player.position.y = -10; // into the void
+    run(engine, 2); // die
+    expect(state.isDead).toBe(true);
+    engine.dispatch({ type: "respawn" });
+    run(engine, 0.1);
+    expect(state.isDead).toBe(false);
+    expect(state.player.position.x).toBeCloseTo(bx + 0.5, 3);
+    expect(state.player.position.z).toBeCloseTo(bz + 0.5, 3);
+  });
+
+  test("a destroyed bed falls back to a random respawn", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.spawnPoint = { x: 5, y: 40, z: 5 }; // block here is NOT a bed (never placed)
+    const bedSpotY = 40 + 1.05;
+    state.hearts = 1;
+    state.player.position.y = -10;
+    run(engine, 2);
+    engine.dispatch({ type: "respawn" });
+    run(engine, 0.1);
+    expect(state.isDead).toBe(false);
+    // Did not teleport onto the missing bed; took the random land point instead.
+    expect(state.player.position.y).not.toBeCloseTo(bedSpotY, 2);
+  });
+});
+
+describe("farming", () => {
+  /** Settles the player and aims at a block one cell ahead at eye height; returns its coords. */
+  function aimAtBlockAhead(engine: GameEngine, block: BlockId): { x: number; y: number; z: number } {
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, block);
+    return { x: ex, y: ey, z: ez - 1 };
+  }
+
+  function giveSelected(engine: GameEngine, itemId: string, count: number): void {
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot(itemId, count);
+    state.selectedSlot = slot;
+  }
+
+  /** Mines the block directly under the player (look straight down, hold the mouse). */
+  function harvestUnderfoot(engine: GameEngine, block: BlockId): { x: number; y: number; z: number } {
+    run(engine, 1);
+    const { state } = engine;
+    const px = Math.floor(state.player.position.x);
+    const pz = Math.floor(state.player.position.z);
+    state.player.position.x = px + 0.5;
+    state.player.position.z = pz + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    const py = Math.floor(state.player.position.y) - 1;
+    // Bedrock floor below so that once the crop breaks the player lands on an
+    // unmineable block — only the crop is harvested, keeping drop counts exact.
+    state.blockChanges.set(px, py - 1, pz, BlockId.Bedrock);
+    state.blockChanges.set(px, py, pz, block);
+    return { x: px, y: py, z: pz };
+  }
+
+  test("a hoe tills grass into farmland and wears down", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const target = aimAtBlockAhead(engine, BlockId.Grass);
+    giveSelected(engine, "wood_hoe", 1);
+    const durBefore = engine.state.inventory[engine.state.selectedSlot].durability!;
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(target.x, target.y, target.z)).toBe(BlockId.Farmland);
+    expect(engine.consumeEvents().some((event) => event.type === "tilledSoil")).toBe(true);
+    expect(engine.state.inventory[engine.state.selectedSlot].durability).toBe(durBefore - 1);
+  });
+
+  test("seeds plant wheat on farmland and consume one seed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const farmland = aimAtBlockAhead(engine, BlockId.Farmland);
+    engine.state.blockChanges.set(farmland.x, farmland.y + 1, farmland.z, BlockId.Air); // clear space above
+    giveSelected(engine, "seeds", 3);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(farmland.x, farmland.y + 1, farmland.z)).toBe(BlockId.WheatStage0);
+    expect(engine.consumeEvents().some((event) => event.type === "plantedSeed")).toBe(true);
+    expect(countsById(engine.state.inventory).get("seeds")).toBe(2);
+  });
+
+  test("harvesting mature wheat yields wheat and at least one seed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const crop = harvestUnderfoot(engine, BlockId.WheatStage3);
+    const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
+    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
+    expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore + 1);
+    expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
+  test("harvesting an immature crop returns only a seed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const crop = harvestUnderfoot(engine, BlockId.WheatStage1);
+    const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
+    const seedsBefore = countsById(engine.state.inventory).get("seeds") ?? 0;
+    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
+    expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore);
+    expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBe(seedsBefore + 1);
+  });
+
+  test("bread crafts from wheat and restores its hunger value", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    giveSelected(engine, "wheat", 3);
+    engine.dispatch({ type: "craft", recipeId: "bread" });
+    expect(countsById(engine.state.inventory).get("bread")).toBe(1);
+
+    const breadSlot = engine.state.inventory.findIndex((entry) => entry.id === "bread");
+    engine.state.selectedSlot = breadSlot;
+    engine.state.hunger = 5;
+    engine.dispatch({ type: "eatFood" });
+    expect(engine.state.hunger).toBe(11); // 5 + 6
+  });
+});
+
+describe("furnace and cooking", () => {
+  function giveItem(engine: GameEngine, itemId: string, count: number): void {
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot(itemId, count);
+  }
+
+  test("right-clicking a furnace opens the inventory in furnace mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Furnace);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "furnace")).toBe(true);
+    expect(state.inventoryOpen).toBe(true);
+    expect(state.craftingStation).toBe("furnace");
+  });
+
+  test("a furnace recipe only crafts with the furnace open, and emits smelted", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    giveItem(engine, "raw_chicken", 1); // planks are in the starter loadout
+
+    engine.dispatch({ type: "craft", recipeId: "cook_chicken" }); // no station open
+    expect(countsById(state.inventory).get("cooked_chicken")).toBeUndefined();
+    expect(countsById(state.inventory).get("raw_chicken")).toBe(1); // ingredients untouched
+
+    state.craftingStation = "furnace";
+    engine.consumeEvents();
+    engine.dispatch({ type: "craft", recipeId: "cook_chicken" });
+    expect(countsById(state.inventory).get("cooked_chicken")).toBe(1);
+    expect(countsById(state.inventory).get("raw_chicken")).toBeUndefined();
+    expect(engine.consumeEvents().some((event) => event.type === "smelted")).toBe(true);
+  });
+
+  test("closing the inventory clears the open station", () => {
+    const engine = makeEngine();
+    engine.state.inventoryOpen = true;
+    engine.state.craftingStation = "furnace";
+    engine.dispatch({ type: "toggleInventory" });
+    expect(engine.state.inventoryOpen).toBe(false);
+    expect(engine.state.craftingStation).toBeNull();
+  });
+});
+
+describe("animal breeding", () => {
+  function pushSheepAhead(engine: GameEngine, ageTimer = 0): number {
+    const { state } = engine;
+    const p = state.player.position;
+    const id = state.nextMobId++;
+    state.mobs.push({
+      id,
+      kind: "sheep",
+      hostile: false,
+      hp: 10,
+      position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer
+    });
+    return id;
+  }
+
+  function giveSelected(engine: GameEngine, itemId: string, count: number): void {
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot(itemId, count);
+    state.selectedSlot = slot;
+  }
+
+  test("right-clicking an animal with its food feeds it instead of placing", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = 0;
+    const id = pushSheepAhead(engine);
+    giveSelected(engine, "wheat", 2);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "mobFed" && event.kind === "sheep")).toBe(true);
+    expect(countsById(engine.state.inventory).get("wheat")).toBe(1);
+    const sheep = engine.state.mobs.find((mob) => mob.id === id)!;
+    expect(sheep.fedTimer).toBeGreaterThan(0);
+  });
+
+  test("killing a baby drops nothing", () => {
+    const engine = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    calmDaytime(engine);
+    run(engine, 1);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = 0;
+    const id = pushSheepAhead(engine, 50); // a baby (ageTimer > 0)
+    const baby = engine.state.mobs.find((mob) => mob.id === id)!;
+    baby.hp = 1; // one fist hit kills it
+    const before = countsById(engine.state.inventory);
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" });
+    const events = engine.consumeEvents();
+    expect(engine.state.mobs.some((mob) => mob.id === id)).toBe(false); // died
+    expect(events.some((event) => event.type === "pickedUp")).toBe(false); // no loot toast for a baby
+    const after = countsById(engine.state.inventory);
+    expect(after.get("wool") ?? 0).toBe(before.get("wool") ?? 0);
+    expect(after.get("raw_mutton") ?? 0).toBe(before.get("raw_mutton") ?? 0);
   });
 });

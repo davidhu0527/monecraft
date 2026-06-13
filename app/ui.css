@@ -392,6 +392,22 @@
   min-width: 220px;
 }
 
+/* --- Sleep fade-to-black --- */
+
+.sleep-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.3s ease-in-out;
+}
+
+.sleep-overlay.on {
+  opacity: 1;
+}
+
 @media (max-width: 720px) {
   .hud-bottom {
     bottom: 4px;

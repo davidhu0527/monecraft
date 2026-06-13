@@ -8,7 +8,9 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
 import * as inv from "@/lib/game/inventory";
-import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
+import { DEFAULT_SKIN_ID, getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
+import { readSkinSettings, writeSkinSettings } from "@/lib/game/skinSettings";
+import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
@@ -40,8 +42,11 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   paused: false,
   debugOpen: false,
   debug: null,
+  cameraMode: "first",
   armorPoints: 0,
-  capsActive: false
+  capsActive: false,
+  sleeping: false,
+  craftingStation: null
 };
 
 const noopSubscribe = () => () => {};
@@ -76,14 +81,24 @@ export function useMinecraftGame() {
   const audioRef = useRef<AudioDirector | null>(null);
   // The rAF effect must not re-run on volume tweaks — it reads through a ref.
   const audioSettingsRef = useRef(audioSettings);
+  const [skinId, setSkinId] = useState<SkinId>(DEFAULT_SKIN_ID);
+  const skinIdRef = useRef(skinId);
+  const rendererRef = useRef<GameRenderer | null>(null);
 
-  // Persisted volumes load after mount: render never touches localStorage
+  // Persisted preferences load after mount: render never touches localStorage
   // (SSR), and the setState hops a microtask like the renderer-error report.
+  // This effect runs before the renderer effect (ctx is set by a callback ref
+  // in a later commit), so the refs are populated by the time either exists.
   useEffect(() => {
     const stored = readAudioSettings();
     audioSettingsRef.current = stored;
     audioRef.current?.setSettings(stored);
-    queueMicrotask(() => setAudioSettings(stored));
+    const { skinId: storedSkin } = readSkinSettings();
+    skinIdRef.current = storedSkin;
+    queueMicrotask(() => {
+      setAudioSettings(stored);
+      setSkinId(storedSkin);
+    });
   }, []);
 
   const updateAudioSettings = useCallback((partial: Partial<AudioSettings>) => {
@@ -92,6 +107,13 @@ export function useMinecraftGame() {
     setAudioSettings(next);
     writeAudioSettings(next);
     audioRef.current?.setSettings(next);
+  }, []);
+
+  const updateSkin = useCallback((id: SkinId) => {
+    skinIdRef.current = id;
+    setSkinId(id);
+    writeSkinSettings({ skinId: id });
+    rendererRef.current?.setPlayerSkin(getSkinPreset(id).palette);
   }, []);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
@@ -134,6 +156,9 @@ export function useMinecraftGame() {
     }
     const renderer = created.renderer;
     canvasRef.current = renderer.domElement;
+    rendererRef.current = renderer;
+    // Before the first rAF, so no frame can ever show the default palette.
+    renderer.setPlayerSkin(getSkinPreset(skinIdRef.current).palette);
 
     const audio = createAudioDirector();
     audio.setSettings(audioSettingsRef.current);
@@ -192,6 +217,18 @@ export function useMinecraftGame() {
         }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
+        if (event.type === "openedStation") {
+          // A furnace opened the inventory from a mouse click — release the keys
+          // and pointer lock the same way KeyI does on the DOM side.
+          input.clearKeys();
+          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+        }
+        if (event.type === "sleepDenied") {
+          flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
+        }
+        if (event.type === "pickedUp") {
+          flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
+        }
         audio.handleEvent(event);
       }
 
@@ -208,6 +245,7 @@ export function useMinecraftGame() {
     return () => {
       delete window.__monecraft;
       canvasRef.current = null;
+      rendererRef.current = null;
       minimap?.dispose();
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
@@ -248,11 +286,15 @@ export function useMinecraftGame() {
     hostileCount: snapshot.hostileCount,
     respawnSeconds: snapshot.respawnSeconds,
     paused: snapshot.paused,
+    sleeping: snapshot.sleeping,
+    craftingStation: snapshot.craftingStation,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
     audioSettings,
     updateAudioSettings,
+    skinId,
+    updateSkin,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     maxHearts: MAX_HEARTS,

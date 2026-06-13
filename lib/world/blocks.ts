@@ -22,7 +22,15 @@ export const enum BlockId {
   DiamondOre = 16,
   Water = 17,
   Snow = 18,
-  Cactus = 19
+  Cactus = 19,
+  Bed = 20,
+  Farmland = 21,
+  // Wheat growth stages — consecutive ids so a crop advances by +1 (see randomTicks.ts).
+  WheatStage0 = 22,
+  WheatStage1 = 23,
+  WheatStage2 = 24,
+  WheatStage3 = 25,
+  Furnace = 26
 }
 
 export enum BiomeId {
@@ -51,7 +59,9 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.SapphireOre]: 0x3f92d6,
   [BlockId.DiamondOre]: 0x85e9f4,
   [BlockId.Snow]: 0xf2f5fa,
-  [BlockId.Cactus]: 0x6aa850
+  [BlockId.Cactus]: 0x6aa850,
+  [BlockId.Bed]: 0xc0392b,
+  [BlockId.Furnace]: 0x63666a
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -77,5 +87,13 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.DiamondOre]: [0.54, 0.56, 0.58],
   [BlockId.Water]: [0.26, 0.45, 0.78],
   [BlockId.Snow]: [0.92, 0.94, 0.97],
-  [BlockId.Cactus]: [0.33, 0.55, 0.27]
+  [BlockId.Cactus]: [0.33, 0.55, 0.27],
+  [BlockId.Bed]: [0.72, 0.2, 0.22],
+  [BlockId.Farmland]: [0.36, 0.25, 0.16],
+  // Wheat ripens green -> gold across the four stages.
+  [BlockId.WheatStage0]: [0.4, 0.62, 0.25],
+  [BlockId.WheatStage1]: [0.55, 0.66, 0.27],
+  [BlockId.WheatStage2]: [0.7, 0.69, 0.29],
+  [BlockId.WheatStage3]: [0.82, 0.72, 0.3],
+  [BlockId.Furnace]: [0.38, 0.39, 0.41]
 };

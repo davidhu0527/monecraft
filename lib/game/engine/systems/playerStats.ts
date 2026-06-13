@@ -1,5 +1,4 @@
 import {
-  FOOD_HUNGER,
   HEALTH_REGEN_INTERVAL_SECONDS,
   JUMPS_PER_HUNGER,
   MAX_HUNGER,
@@ -59,7 +58,7 @@ export function tickHealthRegen(state: GameState, dt: number): void {
   }
 }
 
-/** Restores hunger when food is eaten. */
-export function restoreHunger(hunger: number): number {
-  return Math.min(MAX_HUNGER, hunger + FOOD_HUNGER);
+/** Restores hunger by a food's value when it is eaten, clamped to the max. */
+export function restoreHunger(hunger: number, amount: number): number {
+  return Math.min(MAX_HUNGER, hunger + amount);
 }

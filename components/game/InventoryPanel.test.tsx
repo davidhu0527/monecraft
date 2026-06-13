@@ -22,6 +22,7 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     selectedHotbarSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
+    craftingStation: null as "furnace" | null,
     canCraft: () => true,
     onSwapSlots: mock(),
     onToggleEquipArmor: mock(),
@@ -119,5 +120,26 @@ describe("InventoryPanel", () => {
 
     await user.click(planksButton);
     expect(props.onCraft).toHaveBeenCalledWith(planks);
+  });
+
+  test("a furnace recipe is locked with no station open", async () => {
+    const user = userEvent.setup();
+    const cook = RECIPES.find((recipe) => recipe.id === "cook_chicken")!;
+    const props = renderPanel({ craftingStation: null });
+    const button = screen.getByRole("button", { name: cook.label }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("title")).toBe("Requires Furnace");
+    await user.click(button);
+    expect(props.onCraft).not.toHaveBeenCalled();
+  });
+
+  test("a furnace recipe unlocks when the furnace is open", async () => {
+    const user = userEvent.setup();
+    const cook = RECIPES.find((recipe) => recipe.id === "cook_chicken")!;
+    const props = renderPanel({ craftingStation: "furnace" });
+    const button = screen.getByRole("button", { name: cook.label }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await user.click(button);
+    expect(props.onCraft).toHaveBeenCalledWith(cook);
   });
 });

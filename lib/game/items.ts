@@ -1,5 +1,5 @@
 import { BlockId } from "@/lib/world";
-import { INVENTORY_SLOTS } from "@/lib/game/config";
+import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS } from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
@@ -40,7 +40,14 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.SapphireOre]: 12,
   [BlockId.DiamondOre]: 14,
   [BlockId.Snow]: 2,
-  [BlockId.Cactus]: 2
+  [BlockId.Cactus]: 2,
+  [BlockId.Bed]: 2,
+  [BlockId.Farmland]: 1,
+  [BlockId.WheatStage0]: 1,
+  [BlockId.WheatStage1]: 1,
+  [BlockId.WheatStage2]: 1,
+  [BlockId.WheatStage3]: 1,
+  [BlockId.Furnace]: 5
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -60,6 +67,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "diamond_ore", label: "Diamond Ore", kind: "block", blockId: BlockId.DiamondOre },
   { id: "snow", label: "Snow", kind: "block", blockId: BlockId.Snow },
   { id: "cactus", label: "Cactus", kind: "block", blockId: BlockId.Cactus },
+  { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
+  { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -67,7 +76,25 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
-  { id: "food", label: "Food", kind: "block" },
+  { id: "food", label: "Food", kind: "food", hunger: 7 },
+  // Mob materials — craft ingredients with no direct use on their own yet.
+  { id: "wool", label: "Wool", kind: "material" },
+  { id: "feather", label: "Feather", kind: "material" },
+  { id: "bone", label: "Bone", kind: "material" },
+  { id: "leather", label: "Leather", kind: "material" },
+  { id: "string", label: "String", kind: "material" },
+  // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
+  { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
+  { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
+  { id: "raw_mutton", label: "Raw Mutton", kind: "food", hunger: 3 },
+  // Farming
+  { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
+  { id: "seeds", label: "Wheat Seeds", kind: "material" },
+  { id: "wheat", label: "Wheat", kind: "material" },
+  { id: "bread", label: "Bread", kind: "food", hunger: 6 },
+  // Cooked meats — smelted in a furnace; restore more than their raw form.
+  { id: "cooked_chicken", label: "Cooked Chicken", kind: "food", hunger: 8 },
+  { id: "cooked_mutton", label: "Cooked Mutton", kind: "food", hunger: 8 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },
@@ -135,5 +162,32 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.SapphireOre]: "sapphire_ore",
   [BlockId.DiamondOre]: "diamond_ore",
   [BlockId.Snow]: "snow",
-  [BlockId.Cactus]: "cactus"
+  [BlockId.Cactus]: "cactus",
+  [BlockId.Bed]: "bed",
+  [BlockId.Furnace]: "furnace",
+  // Tilled soil reverts to dirt; immature wheat returns its seed.
+  [BlockId.Farmland]: "dirt",
+  [BlockId.WheatStage0]: "seeds",
+  [BlockId.WheatStage1]: "seeds",
+  [BlockId.WheatStage2]: "seeds"
 };
+
+/**
+ * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
+ * grass occasionally also drops a seed (the natural seed source), and mature
+ * wheat drops wheat plus 1–2 seeds. `rng` is injectable for deterministic tests.
+ */
+export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
+  const drops: Array<{ itemId: string; count: number }> = [];
+  const base = BLOCK_TO_SLOT[block];
+  if (base) drops.push({ itemId: base, count: 1 });
+
+  if (block === BlockId.Grass && rng() < GRASS_SEED_DROP_CHANCE) {
+    drops.push({ itemId: "seeds", count: 1 });
+  }
+  if (block === BlockId.WheatStage3) {
+    drops.push({ itemId: "wheat", count: 1 });
+    drops.push({ itemId: "seeds", count: 1 + Math.floor(rng() * 2) });
+  }
+  return drops;
+}

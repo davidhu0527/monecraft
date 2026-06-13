@@ -2,6 +2,47 @@ import type { Recipe } from "@/lib/game/types";
 
 export const RECIPES: Recipe[] = [
   { id: "planks", label: "2 Wood -> 4 Planks", cost: [{ slotId: "wood", count: 2 }], result: { slotId: "planks", count: 4 } },
+  { id: "wool_from_string", label: "4 String -> 1 Wool", cost: [{ slotId: "string", count: 4 }], result: { slotId: "wool", count: 1 } },
+  {
+    id: "bed",
+    label: "3 Wool + 3 Planks -> Bed",
+    cost: [
+      { slotId: "wool", count: 3 },
+      { slotId: "planks", count: 3 }
+    ],
+    result: { slotId: "bed", count: 1 }
+  },
+  {
+    id: "wood_hoe",
+    label: "2 Planks + 1 Wood -> Wood Hoe",
+    cost: [
+      { slotId: "planks", count: 2 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "wood_hoe", count: 1 }
+  },
+  { id: "bread", label: "3 Wheat -> Bread", cost: [{ slotId: "wheat", count: 3 }], result: { slotId: "bread", count: 1 } },
+  { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
+  {
+    id: "cook_chicken",
+    label: "Raw Chicken + Planks -> Cooked Chicken",
+    cost: [
+      { slotId: "raw_chicken", count: 1 },
+      { slotId: "planks", count: 1 }
+    ],
+    result: { slotId: "cooked_chicken", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_mutton",
+    label: "Raw Mutton + Planks -> Cooked Mutton",
+    cost: [
+      { slotId: "raw_mutton", count: 1 },
+      { slotId: "planks", count: 1 }
+    ],
+    result: { slotId: "cooked_mutton", count: 1 },
+    station: "furnace"
+  },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   {
     id: "brick",

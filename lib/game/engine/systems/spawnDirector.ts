@@ -35,7 +35,9 @@ export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () =>
       attackCooldown: template.attackCooldown,
       attackTimer: rng(),
       halfHeight,
-      bobSeed: rng() * 10
+      bobSeed: rng() * 10,
+      fedTimer: 0,
+      ageTimer: 0
     };
     state.nextMobId += 1;
     state.mobs.push(mob);

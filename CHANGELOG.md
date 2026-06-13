@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Pickup & status toasts**: because mob loot drops straight into inventory storage (no ground item), kills could feel like they paid out nothing. A kill now shows a brief on-screen toast just above the hotbar (e.g. "+2 Wool, +1 Raw Mutton"). The same in-game toast also surfaces the sleep-denied messages ("You can only sleep at night" / "Monsters are nearby"), which previously only rendered inside the pause menu and so were invisible during play
+- **Animal breeding**: right-click a sheep or horse with wheat (or a chicken with seeds) to put it "in love"; two in-love adults of the same kind standing close together spawn a baby that follows the parents, can't be farmed for drops, and grows to full size after ~90 seconds. This makes mob drops renewable, closing the loop back to combat loot. The passive population is capped (24) and feeding costs crops, so it stays bounded
+  - New `MobState.fedTimer`/`ageTimer`, a `breeding` system ticked after mob AI, and a shared `findAimedMobIndex` so feeding and attacking use the same "what's in my crosshair" rule. Feeding joins the right-click precedence ahead of block interaction. New fed/bred sounds; babies render at 55% scale. Breeding state is session-only (mobs are never saved). No save-format or worldgen impact
+- **Furnace & cooking**: craft a furnace (8 cobble) and right-click it to open the crafting panel in furnace mode, which unlocks smelting recipes — raw chicken or mutton + 1 planks (the fuel) cook into the cooked version, restoring 8 hunger versus 3 raw. Smelting recipes show as locked ("Requires Furnace") until a furnace is open
+  - Reuses the Phase 2 interact system and the existing crafting panel — no separate furnace UI. Recipes gained an optional `station` field; the gate is enforced engine-side in the `craft` command (UI gating alone is spoofable). New `Furnace` block with a glowing-mouth atlas tile, `cooked_chicken`/`cooked_mutton` items, and a smelt sound. No save-format or worldgen impact
+- **Farming & food**: craft a wood hoe (2 planks + 1 wood), right-click grass or dirt to till it into farmland, then right-click farmland with seeds to plant wheat. Crops grow through four stages over ~2.5 minutes and, when mature, harvest into wheat plus 1–2 seeds; an immature crop just returns its seed. Craft 3 wheat into bread (restores 6 hunger)
+  - Seeds come from breaking grass (20% chance per block) — `addBlockDrop` now rolls a per-block `rollBlockDrops` table (`lib/game/items.ts`) instead of a single fixed drop
+  - New **random-tick system** (`lib/game/engine/systems/randomTicks.ts`): each interval samples columns near the player and runs per-block handlers — the extensible basis for crop growth (and future saplings / grass spread). Crops are solid full-cube blocks (so they can be targeted and harvested) with each growth stage its own `BlockId`, which means they persist through the existing block-diff save with **no save-format change**
+  - New `Farmland` + `WheatStage0..3` blocks, `wood_hoe`/`seeds`/`wheat`/`bread` items with generated sprites, and till/plant sounds. The right-click "use held item" step joins the interact precedence (after block interaction, before placement). No worldgen changes
+- **Beds & sleeping**: craft a bed (3 wool + 3 planks), place it, and right-click it at night to skip to morning — the screen fades to black, the day clock jumps to a fresh dawn, and the bed becomes your respawn point (respawn falls back to a random land point if the bed is gone). Sleeping is refused during the day or with a hostile within 12 blocks, with an on-screen reason
+  - New **right-click interact system** (`lib/game/engine/systems/interact.ts`): a fixed precedence in the `placeBlock` command runs block interaction before placement, so interactive blocks (beds now; furnaces later) take the click instead of getting a block placed on them. New `Bed` block + `bed` item, synthesized sleep/wake sounds, and a `SleepOverlay` fade component
+  - **Save format v3** (additive — `SAVE_KEY` unchanged, v1/v2 saves still load): time of day (`dayClock`), `hearts`, `hunger`, and the bed `spawnPoint` now persist. Previously all four reset on reload, so sleeping through the night wouldn't have survived a reload. `readSave` chains the migrations v1 → v2 → v3
+- **Mob loot & drops**: mobs now drop kind-specific items when they die instead of the old flat "cobble for hostiles, food for everything else" rule. Sheep drop wool + raw mutton, chickens feather + raw chicken, horses leather, zombies rotten flesh, skeletons bone, spiders string — counts are randomized per the engine's RNG (`lib/game/mobLoot.ts`). A new `mobDied` engine event plays a synthesized death thud
+  - New items: `wool`, `feather`, `bone`, `leather`, `string` (crafting materials) and `rotten_flesh`, `raw_chicken`, `raw_mutton` (edible food), each with a generated 16×16 sprite (zero-asset)
+  - **Per-food hunger**: food now restores a value carried on the item itself rather than one global constant. The generic `food` item still restores 7; raw meats restore 3, rotten flesh 2. New `food` and `material` item kinds; the legacy `food` item is reinterpreted (old saves load unchanged — saves store only item id + count)
+  - New recipe: 4 string → 1 wool, so spider drops feed the wool supply (and, later, beds)
+  - No save-format or worldgen impact
+  - Selection recolors the body live (material color swap, no rebuild) and persists as a player preference under its own localStorage key (`minecraft_skin_v1`), separate from the world save — it survives world resets. No save-format or worldgen impact
+- **Camera view toggle (V)**: cycles first-person → third-person rear → third-person front, like Minecraft's F5 (V instead, because F5 reloads the page in browsers)
+  - New humanoid player body (head, torso, two arms, two legs) in the zero-asset box-mesh style, visible only in third person — walk gait scaled by speed, a chop animation on attacks and while mining, the look pitch on the head, and the held hotbar item rendered in the right hand via the shared item-model builder
+  - The third-person camera boom raycasts against terrain and clamps so walls never occlude the player; the front view flips the heading and inverts the tilt while mouse control of the player stays unchanged
+  - Gameplay is intentionally eye-relative in every mode (mining/placing reach, combat aim, audio panning are unaffected); the crosshair stays centered, matching Minecraft
+  - The view mode is session-only (resets to first-person on reload). No save-format or worldgen impact
+
 ## [0.5.0] - 2026-06-13
 
 ### Added

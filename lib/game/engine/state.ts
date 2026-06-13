@@ -4,6 +4,15 @@ import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
+/** Session-only camera presentation mode; never persisted. Gameplay stays eye-relative in all modes. */
+export type CameraMode = "first" | "third-rear" | "third-front";
+
+const CAMERA_MODE_CYCLE: readonly CameraMode[] = ["first", "third-rear", "third-front"];
+
+export function nextCameraMode(mode: CameraMode): CameraMode {
+  return CAMERA_MODE_CYCLE[(CAMERA_MODE_CYCLE.indexOf(mode) + 1) % CAMERA_MODE_CYCLE.length];
+}
+
 export type PlayerState = {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -33,6 +42,10 @@ export type MobState = {
   attackTimer: number;
   halfHeight: number;
   bobSeed: number;
+  /** Seconds left "in love" after being fed; pairs with another to breed. */
+  fedTimer: number;
+  /** Seconds left as a baby; > 0 means a scaled-down, no-drop juvenile. */
+  ageTimer: number;
 };
 
 export type MiningState = {
@@ -59,6 +72,8 @@ export type GameTimers = {
   hostileSpawnTimer: number;
   daylightHudTimer: number;
   debugHudTimer: number;
+  randomTickTimer: number;
+  breedTimer: number;
 };
 
 export type GameState = {
@@ -73,10 +88,13 @@ export type GameState = {
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
+  /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
+  craftingStation: "furnace" | null;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;
   debugInfo: DebugInfo | null;
+  cameraMode: CameraMode;
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
@@ -84,6 +102,10 @@ export type GameState = {
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
   daylightPercent: number;
+  /** Seconds left in the sleep fade; > 0 freezes the sim until time skips. */
+  sleepTimer: number;
+  /** Bed respawn point (block coords), or null to respawn at a random land point. */
+  spawnPoint: { x: number; y: number; z: number } | null;
   mining: MiningState;
   timers: GameTimers;
   /** Set when world geometry changed; the renderer rebuilds the mesh and clears it. */
@@ -100,7 +122,9 @@ export function createTimers(): GameTimers {
     stuckTimer: 0,
     hostileSpawnTimer: 0,
     daylightHudTimer: 0,
-    debugHudTimer: 0
+    debugHudTimer: 0,
+    randomTickTimer: 0,
+    breedTimer: 0
   };
 }
 
@@ -142,9 +166,14 @@ export type GameSnapshot = {
   paused: boolean;
   debugOpen: boolean;
   debug: DebugInfo | null;
+  cameraMode: CameraMode;
   /** Total defense points of equipped armor — drives the HUD armor bar. */
   armorPoints: number;
   capsActive: boolean;
+  /** True during the sleep fade — drives the fade-to-black overlay. */
+  sleeping: boolean;
+  /** Open crafting station (gates smelting recipes in the inventory panel). */
+  craftingStation: "furnace" | null;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
@@ -159,6 +188,17 @@ export type GameEvent =
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }
   | { type: "mobHit"; kind: MobKind }
-  | { type: "attackSwung" };
+  | { type: "mobDied"; kind: MobKind }
+  | { type: "attackSwung" }
+  | { type: "sleepStarted" }
+  | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
+  | { type: "wokeUp" }
+  | { type: "tilledSoil" }
+  | { type: "plantedSeed" }
+  | { type: "openedStation"; station: "furnace" }
+  | { type: "smelted" }
+  | { type: "mobFed"; kind: MobKind }
+  | { type: "mobBred"; kind: MobKind }
+  | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

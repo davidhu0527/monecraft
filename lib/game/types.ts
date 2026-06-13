@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { BlockId } from "@/lib/world";
 
-export type ItemKind = "block" | "weapon" | "tool" | "armor";
+export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
 export type EquippedArmor = Record<ArmorSlot, string | null>;
 
@@ -16,6 +16,8 @@ export type ItemDef = {
   armorSlot?: ArmorSlot;
   defense?: number;
   maxDurability?: number;
+  /** Hunger points restored when eaten (food items only). */
+  hunger?: number;
 };
 
 export type InventorySlot = {
@@ -31,6 +33,7 @@ export type InventorySlot = {
   defense?: number;
   durability?: number;
   maxDurability?: number;
+  hunger?: number;
 };
 
 export type Recipe = {
@@ -38,6 +41,8 @@ export type Recipe = {
   label: string;
   cost: Array<{ slotId: string; count: number }>;
   result: { slotId: string; count: number };
+  /** Crafting station required; omitted means the basic crafting grid. */
+  station?: "furnace";
 };
 
 export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider";
@@ -62,5 +67,18 @@ export type SaveDataV1 = {
   player: { x: number; y: number; z: number };
 };
 
-/** Current save shape: same fields as v1, reinterpreted for 36 slots / 9-slot hotbar. */
-export type SaveData = Omit<SaveDataV1, "version"> & { version: 2 };
+/** v2 save shape: same fields as v1, reinterpreted for 36 slots / 9-slot hotbar. */
+export type SaveDataV2 = Omit<SaveDataV1, "version"> & { version: 2 };
+
+/**
+ * Current save shape (v3): v2 plus persisted time-of-day, player stats, and the
+ * bed respawn point. All new fields are optional so the v2→v3 migration is a
+ * pure version bump and pre-v3 saves load with sensible defaults.
+ */
+export type SaveData = Omit<SaveDataV2, "version"> & {
+  version: 3;
+  dayClock?: number;
+  hearts?: number;
+  hunger?: number;
+  spawnPoint?: { x: number; y: number; z: number } | null;
+};

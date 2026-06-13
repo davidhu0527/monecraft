@@ -3,12 +3,15 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PauseMenu from "@/components/game/PauseMenu";
 import { DEFAULT_AUDIO_SETTINGS } from "@/lib/game/audio/audioDirector";
+import { DEFAULT_SKIN_ID, SKIN_PRESETS } from "@/lib/game/playerSkins";
 
 function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
   const props = {
     saveMessage: "",
     audioSettings: DEFAULT_AUDIO_SETTINGS,
     onAudioSettingsChange: mock(),
+    skinId: DEFAULT_SKIN_ID,
+    onSkinChange: mock(),
     onBack: mock(),
     onSave: mock(),
     onLoad: mock(),
@@ -69,5 +72,23 @@ describe("PauseMenu", () => {
     const props = renderMenu({ audioSettings: { master: 1, music: 1, muted: true } });
     await user.click(screen.getByRole("button", { name: "Unmute Sound" }));
     expect(props.onAudioSettingsChange).toHaveBeenCalledWith({ muted: false });
+  });
+
+  test("shows every skin preset with only the active one pressed", () => {
+    renderMenu({ skinId: "knight" });
+    const swatches = screen.getAllByRole("button", { name: /skin$/ });
+    expect(swatches).toHaveLength(SKIN_PRESETS.length);
+    for (const swatch of swatches) {
+      const pressed = swatch.getAttribute("aria-pressed");
+      expect(pressed).toBe(swatch.getAttribute("aria-label") === "Knight skin" ? "true" : "false");
+    }
+  });
+
+  test("clicking a skin swatch reports its preset id", async () => {
+    const user = userEvent.setup();
+    const props = renderMenu();
+    await user.click(screen.getByRole("button", { name: "Robot skin" }));
+    expect(props.onSkinChange).toHaveBeenCalledTimes(1);
+    expect(props.onSkinChange).toHaveBeenCalledWith("robot");
   });
 });

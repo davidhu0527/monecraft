@@ -10,7 +10,7 @@ function heldHolder(camera: THREE.Camera): THREE.Group {
 }
 
 function frame(timeMs = 0, overrides: Partial<HeldItemFrame> = {}): HeldItemFrame {
-  return { timeMs, miningActive: false, moveFactor: 0, ...overrides };
+  return { timeMs, miningActive: false, moveFactor: 0, visible: true, ...overrides };
 }
 
 describe("heldItem", () => {
@@ -131,6 +131,24 @@ describe("heldItem", () => {
     view.update(createSlot("wood_pickaxe", 1), frame(-1000));
     view.update(createSlot("wood_pickaxe", 1), frame(0, { miningActive: true }));
     view.update(createSlot("knife", 1), frame(SWING_MS / 2)); // mining stopped by the switch
+    expect(holder.position.z).toBeCloseTo(BASE_POSE.posZ);
+    view.dispose();
+  });
+
+  test("hidden frames hide the overlay and drop queued swings", () => {
+    const camera = new THREE.PerspectiveCamera();
+    const view = createHeldItemView(camera);
+    const root = camera.children[0] as THREE.Group;
+    const holder = heldHolder(camera);
+
+    view.update(createSlot("knife", 1), frame(-1000));
+    view.triggerSwing();
+    view.update(createSlot("knife", 1), frame(0, { visible: false }));
+    expect(root.visible).toBe(false);
+
+    // Back to first person: the dropped swing must not replay.
+    view.update(createSlot("knife", 1), frame(SWING_MS / 2));
+    expect(root.visible).toBe(true);
     expect(holder.position.z).toBeCloseTo(BASE_POSE.posZ);
     view.dispose();
   });

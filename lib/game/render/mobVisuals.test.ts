@@ -22,6 +22,8 @@ function makeMob(id: number, overrides: Partial<MobState> = {}): MobState {
     attackTimer: 0,
     halfHeight: mobHalfHeight("sheep"),
     bobSeed: 1,
+    fedTimer: 0,
+    ageTimer: 0,
     ...overrides
   };
 }

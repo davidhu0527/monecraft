@@ -16,4 +16,5 @@ export type Command =
   | { type: "pause" }
   | { type: "resume" }
   | { type: "toggleDebug" }
+  | { type: "toggleCameraView" }
   | { type: "respawn" };

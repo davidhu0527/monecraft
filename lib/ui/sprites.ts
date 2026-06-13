@@ -1,5 +1,7 @@
 import { renderSpritePixels, SPRITE_SIZE } from "./spritePixels";
 import { renderHudIconPixels, type HudIconName } from "./hudPixels";
+import { renderSkinPortraitPixels } from "./skinPortrait";
+import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 
 /**
  * DOM side of the sprite system: turns pure pixel buffers into cached data
@@ -40,4 +42,9 @@ export function itemIconUrl(itemId: string): string {
 /** Data URL for a HUD icon (hearts, drumsticks, armor). */
 export function hudIconUrl(name: HudIconName): string {
   return spriteDataUrl(`hud:${name}`, () => renderHudIconPixels(name));
+}
+
+/** Data URL for a skin preset's 16x16 bust portrait (pause-menu picker). */
+export function skinPortraitUrl(skinId: SkinId): string {
+  return spriteDataUrl(`skin:${skinId}`, () => renderSkinPortraitPixels(getSkinPreset(skinId).palette));
 }

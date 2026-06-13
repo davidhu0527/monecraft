@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { BlockId, collidesAt, voxelRaycast } from "@/lib/world";
 import { BARE_HAND_MINE_POWER, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
-import { BLOCK_TO_SLOT, BREAK_HARDNESS } from "@/lib/game/items";
+import { BREAK_HARDNESS, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { lookDirection } from "./playerMotion";
@@ -39,14 +39,14 @@ export function resetMining(state: GameState): void {
   state.mining.progress = 0;
 }
 
-function addBlockDrop(state: GameState, block: BlockId): void {
-  const slotId = BLOCK_TO_SLOT[block];
-  if (!slotId) return;
-  state.inventory = adjustSlotCount(state.inventory, slotId, 1) ?? state.inventory;
+function addBlockDrop(state: GameState, block: BlockId, rng: () => number): void {
+  for (const drop of rollBlockDrops(block, rng)) {
+    state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+  }
 }
 
 /** Advances mining progress while the mouse is held; breaks the block at full progress. */
-export function tickMining(state: GameState, input: FrameInput, dt: number, emit: EmitGameEvent): void {
+export function tickMining(state: GameState, input: FrameInput, dt: number, emit: EmitGameEvent, rng: () => number): void {
   if (!input.leftMouseHeld) {
     // Releasing the button abandons progress (matching the crack overlay).
     if (state.mining.progress > 0) resetMining(state);
@@ -87,7 +87,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
 
   state.blockChanges.set(bx, by, bz, BlockId.Air);
   if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
-  addBlockDrop(state, targetBlock as BlockId);
+  addBlockDrop(state, targetBlock as BlockId, rng);
   state.worldMeshDirty = true;
   resetMining(state);
   emit({ type: "blockBroken", blockId: targetBlock as BlockId });

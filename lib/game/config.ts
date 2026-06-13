@@ -23,7 +23,6 @@ export const SPRINT_MIN_HUNGER = 6;
 export const SPRINT_BLOCKS_PER_HUNGER = 100;
 export const WALK_BLOCKS_PER_HUNGER = 300;
 export const JUMPS_PER_HUNGER = 50;
-export const FOOD_HUNGER = 7;
 
 // Inventory
 export const HOTBAR_SLOTS = 9;
@@ -44,9 +43,38 @@ export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
 
+// Beds & sleep
+// Sleeping is only allowed once it is night by the game's own definition (the
+// hostile-spawn threshold). The fade is the frozen window before time skips;
+// waking lands at this fraction of the cycle (a rising ~0.45 daylight morning).
+export const SLEEP_ALLOWED_BELOW_DAYLIGHT = 0.28;
+export const SLEEP_HOSTILE_RADIUS = 12;
+export const SLEEP_FADE_SECONDS = 1.5;
+export const WAKE_DAY_PHASE = 0.07;
+
 // Mob director
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;
+
+// Animal breeding. Feeding a passive animal puts it "in love" for a window; two
+// in-love adults of the same kind within range spawn a baby that grows up after
+// a timer. The passive cap and the wheat/seed cost bound the population.
+export const BREED_FED_WINDOW_SECONDS = 30;
+export const BREED_PARTNER_RADIUS = 3;
+export const BREED_CHECK_INTERVAL_SECONDS = 0.5;
+export const BABY_GROW_SECONDS = 90;
+export const BABY_SCALE = 0.55;
+export const PASSIVE_CAP = 24;
+
+// Random block ticks (crop growth; the system is extensible to other blocks).
+// Each interval samples N columns within RADIUS of the player and runs the
+// block's handler. ~128 samples/s over a 64x64 area ≈ 50 s/stage (~2.5 min to
+// mature). GRASS_SEED_DROP_CHANCE is the per-break odds a grass block drops a seed.
+export const RANDOM_TICK_INTERVAL_SECONDS = 0.5;
+export const RANDOM_TICK_SAMPLES = 64;
+export const RANDOM_TICK_RADIUS = 32;
+export const CROP_GROWTH_CHANCE = 0.65;
+export const GRASS_SEED_DROP_CHANCE = 0.2;
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
@@ -56,3 +84,7 @@ export const SAVE_KEY = "minecraft_save_v5";
 // Rendering
 export const RENDER_RADIUS = 90;
 export const RENDER_GRID = 20;
+// Third-person camera boom, clamped against walls with a margin that keeps
+// the near plane (0.1) out of the blocking block.
+export const THIRD_PERSON_DISTANCE = 4;
+export const THIRD_PERSON_MARGIN = 0.2;
