@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Furnace & cooking**: craft a furnace (8 cobble) and right-click it to open the crafting panel in furnace mode, which unlocks smelting recipes — raw chicken or mutton + 1 planks (the fuel) cook into the cooked version, restoring 8 hunger versus 3 raw. Smelting recipes show as locked ("Requires Furnace") until a furnace is open
+  - Reuses the Phase 2 interact system and the existing crafting panel — no separate furnace UI. Recipes gained an optional `station` field; the gate is enforced engine-side in the `craft` command (UI gating alone is spoofable). New `Furnace` block with a glowing-mouth atlas tile, `cooked_chicken`/`cooked_mutton` items, and a smelt sound. No save-format or worldgen impact
 - **Farming & food**: craft a wood hoe (2 planks + 1 wood), right-click grass or dirt to till it into farmland, then right-click farmland with seeds to plant wheat. Crops grow through four stages over ~2.5 minutes and, when mature, harvest into wheat plus 1–2 seeds; an immature crop just returns its seed. Craft 3 wheat into bread (restores 6 hunger)
   - Seeds come from breaking grass (20% chance per block) — `addBlockDrop` now rolls a per-block `rollBlockDrops` table (`lib/game/items.ts`) instead of a single fixed drop
   - New **random-tick system** (`lib/game/engine/systems/randomTicks.ts`): each interval samples columns near the player and runs per-block handlers — the extensible basis for crop growth (and future saplings / grass spread). Crops are solid full-cube blocks (so they can be targeted and harvested) with each growth stage its own `BlockId`, which means they persist through the existing block-diff save with **no save-format change**

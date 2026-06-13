@@ -32,6 +32,7 @@ export default function MinecraftGame() {
     respawnSeconds,
     paused,
     sleeping,
+    craftingStation,
     debugOpen,
     debug,
     saveMessage,
@@ -94,6 +95,7 @@ export default function MinecraftGame() {
           selectedHotbarSlot={selectedSlot}
           hotbarSlots={hotbarSlots}
           recipes={recipes}
+          craftingStation={craftingStation}
           canCraft={canCraft}
           onSwapSlots={swapInventorySlots}
           onToggleEquipArmor={toggleEquipArmor}

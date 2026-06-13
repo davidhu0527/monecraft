@@ -83,6 +83,8 @@ export type GameState = {
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
+  /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
+  craftingStation: "furnace" | null;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;
@@ -164,6 +166,8 @@ export type GameSnapshot = {
   capsActive: boolean;
   /** True during the sleep fade — drives the fade-to-black overlay. */
   sleeping: boolean;
+  /** Open crafting station (gates smelting recipes in the inventory panel). */
+  craftingStation: "furnace" | null;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
@@ -184,6 +188,8 @@ export type GameEvent =
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
   | { type: "wokeUp" }
   | { type: "tilledSoil" }
-  | { type: "plantedSeed" };
+  | { type: "plantedSeed" }
+  | { type: "openedStation"; station: "furnace" }
+  | { type: "smelted" };
 
 export type EmitGameEvent = (event: GameEvent) => void;

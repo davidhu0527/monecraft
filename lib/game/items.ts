@@ -46,7 +46,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.WheatStage0]: 1,
   [BlockId.WheatStage1]: 1,
   [BlockId.WheatStage2]: 1,
-  [BlockId.WheatStage3]: 1
+  [BlockId.WheatStage3]: 1,
+  [BlockId.Furnace]: 5
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -67,6 +68,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "snow", label: "Snow", kind: "block", blockId: BlockId.Snow },
   { id: "cactus", label: "Cactus", kind: "block", blockId: BlockId.Cactus },
   { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
+  { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -90,6 +92,9 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "seeds", label: "Wheat Seeds", kind: "material" },
   { id: "wheat", label: "Wheat", kind: "material" },
   { id: "bread", label: "Bread", kind: "food", hunger: 6 },
+  // Cooked meats — smelted in a furnace; restore more than their raw form.
+  { id: "cooked_chicken", label: "Cooked Chicken", kind: "food", hunger: 8 },
+  { id: "cooked_mutton", label: "Cooked Mutton", kind: "food", hunger: 8 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },
@@ -159,6 +164,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Snow]: "snow",
   [BlockId.Cactus]: "cactus",
   [BlockId.Bed]: "bed",
+  [BlockId.Furnace]: "furnace",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",

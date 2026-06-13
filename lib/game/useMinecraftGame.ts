@@ -45,7 +45,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   cameraMode: "first",
   armorPoints: 0,
   capsActive: false,
-  sleeping: false
+  sleeping: false,
+  craftingStation: null
 };
 
 const noopSubscribe = () => () => {};
@@ -216,6 +217,12 @@ export function useMinecraftGame() {
         }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
+        if (event.type === "openedStation") {
+          // A furnace opened the inventory from a mouse click — release the keys
+          // and pointer lock the same way KeyI does on the DOM side.
+          input.clearKeys();
+          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+        }
         if (event.type === "sleepDenied") {
           flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
         }
@@ -277,6 +284,7 @@ export function useMinecraftGame() {
     respawnSeconds: snapshot.respawnSeconds,
     paused: snapshot.paused,
     sleeping: snapshot.sleeping,
+    craftingStation: snapshot.craftingStation,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,

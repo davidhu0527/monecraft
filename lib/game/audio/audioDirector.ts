@@ -19,6 +19,7 @@ import {
   PLANT_SOUND,
   RESPAWN_SOUND,
   SLEEP_SOUND,
+  SMELT_SOUND,
   TILL_SOUND,
   WAKE_SOUND
 } from "./soundParams";
@@ -215,6 +216,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "plantedSeed":
           backend.play(PLANT_SOUND);
+          break;
+        case "smelted":
+          backend.play(SMELT_SOUND);
           break;
       }
     },

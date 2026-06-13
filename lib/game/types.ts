@@ -41,6 +41,8 @@ export type Recipe = {
   label: string;
   cost: Array<{ slotId: string; count: number }>;
   result: { slotId: string; count: number };
+  /** Crafting station required; omitted means the basic crafting grid. */
+  station?: "furnace";
 };
 
 export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider";

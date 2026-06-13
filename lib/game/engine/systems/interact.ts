@@ -9,10 +9,11 @@ const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed";
+export type InteractiveKind = "bed" | "furnace";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
-  [BlockId.Bed]: "bed"
+  [BlockId.Bed]: "bed",
+  [BlockId.Furnace]: "furnace"
 };
 
 /**
@@ -35,7 +36,16 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
   if (!kind) return false;
 
   if (kind === "bed") return interactBed(state, emit, result.hit.x, result.hit.y, result.hit.z);
+  if (kind === "furnace") return interactFurnace(state, emit);
   return false;
+}
+
+/** Opens the inventory in furnace mode so its smelting recipes unlock. */
+function interactFurnace(state: GameState, emit: EmitGameEvent): boolean {
+  state.inventoryOpen = true;
+  state.craftingStation = "furnace";
+  emit({ type: "openedStation", station: "furnace" });
+  return true;
 }
 
 /** Sleep in a bed: only at night, only when no hostile is near. Sets the respawn point. */

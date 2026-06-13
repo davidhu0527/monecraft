@@ -99,6 +99,7 @@ export class GameEngine {
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
+      craftingStation: null,
       paused: false,
       debugOpen: false,
       debugInfo: null,
@@ -202,12 +203,19 @@ export class GameEngine {
       }
       case "toggleInventory": {
         state.inventoryOpen = !state.inventoryOpen;
+        if (!state.inventoryOpen) state.craftingStation = null; // leaving the panel closes the station
         break;
       }
       case "craft": {
         const recipe = RECIPES.find((entry) => entry.id === command.recipeId);
         if (!recipe || state.isDead) break;
-        state.inventory = inv.craft(state.inventory, recipe) ?? state.inventory;
+        // Station recipes (e.g. furnace smelting) require that station to be open.
+        // The UI gates these too, but dispatch is the spoofable surface to guard.
+        if (recipe.station && recipe.station !== state.craftingStation) break;
+        const next = inv.craft(state.inventory, recipe);
+        if (!next) break;
+        state.inventory = next;
+        if (recipe.station) this.emit({ type: "smelted" });
         break;
       }
       case "swapSlots": {
@@ -260,6 +268,7 @@ export class GameEngine {
         // plain gameplay lock-loss (or an explicit Escape) opens the pause menu.
         if (state.inventoryOpen || state.isDead) break;
         state.paused = true;
+        state.craftingStation = null;
         break;
       }
       case "resume": {
@@ -448,7 +457,8 @@ export class GameEngine {
       cameraMode: state.cameraMode,
       armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
       capsActive: state.capsActive,
-      sleeping: state.sleepTimer > 0
+      sleeping: state.sleepTimer > 0,
+      craftingStation: state.craftingStation
     };
   }
 

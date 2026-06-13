@@ -859,3 +859,59 @@ describe("farming", () => {
     expect(engine.state.hunger).toBe(11); // 5 + 6
   });
 });
+
+describe("furnace and cooking", () => {
+  function giveItem(engine: GameEngine, itemId: string, count: number): void {
+    const { state } = engine;
+    const slot = state.inventory.findIndex((entry) => !entry.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot(itemId, count);
+  }
+
+  test("right-clicking a furnace opens the inventory in furnace mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Furnace);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "furnace")).toBe(true);
+    expect(state.inventoryOpen).toBe(true);
+    expect(state.craftingStation).toBe("furnace");
+  });
+
+  test("a furnace recipe only crafts with the furnace open, and emits smelted", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    giveItem(engine, "raw_chicken", 1); // planks are in the starter loadout
+
+    engine.dispatch({ type: "craft", recipeId: "cook_chicken" }); // no station open
+    expect(countsById(state.inventory).get("cooked_chicken")).toBeUndefined();
+    expect(countsById(state.inventory).get("raw_chicken")).toBe(1); // ingredients untouched
+
+    state.craftingStation = "furnace";
+    engine.consumeEvents();
+    engine.dispatch({ type: "craft", recipeId: "cook_chicken" });
+    expect(countsById(state.inventory).get("cooked_chicken")).toBe(1);
+    expect(countsById(state.inventory).get("raw_chicken")).toBeUndefined();
+    expect(engine.consumeEvents().some((event) => event.type === "smelted")).toBe(true);
+  });
+
+  test("closing the inventory clears the open station", () => {
+    const engine = makeEngine();
+    engine.state.inventoryOpen = true;
+    engine.state.craftingStation = "furnace";
+    engine.dispatch({ type: "toggleInventory" });
+    expect(engine.state.inventoryOpen).toBe(false);
+    expect(engine.state.craftingStation).toBeNull();
+  });
+});

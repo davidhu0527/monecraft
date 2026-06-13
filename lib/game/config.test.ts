@@ -58,6 +58,12 @@ describe("recipes", () => {
       expect(recipe.result.count).toBeLessThanOrEqual(MAX_STACK_SIZE);
     }
   });
+
+  test("station recipes name a known station", () => {
+    for (const recipe of RECIPES) {
+      if (recipe.station) expect(recipe.station).toBe("furnace");
+    }
+  });
 });
 
 describe("block drops", () => {

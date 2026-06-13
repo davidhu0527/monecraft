@@ -17,7 +17,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Add to `ITEM_DEFS` in `lib/game/items.ts` — tools take `minePower`/`mineTier`/`maxDurability`, weapons `attack`/`maxDurability`, armor `armorSlot`/`defense`/`maxDurability`. `kind: "food"` items take a `hunger` value (restored on eat); `kind: "material"` items are inert craft ingredients.
 - Give it an inventory sprite in `lib/ui/spritePixels.ts`: tools/swords get one for free if the id is `<material>_pickaxe`/`<material>_sword` and the material exists in `MATERIAL_PALETTES`; food/material items need a 16×16 grid + palette wired into the `ITEM_SPRITE_GRIDS` map (keyed by item id). The `lib/ui/spritePixels.test.ts` integrity test fails on ids that fall back to the placeholder checker — by design.
 - `ITEM_DEF_BY_ID` is derived from `ITEM_DEFS`; never edit it directly.
-- Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`.
+- Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` (e.g. `"furnace"`) makes a recipe a smelting recipe: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book.
 - Items with durability don't stack; durability is initialized in `createSlot` and persisted in saves.
 
 ## A new mob drop
@@ -49,7 +49,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 - Right-click (and KeyE) dispatch `placeBlock`, which runs a fixed precedence in `GameEngine.dispatch` before falling through to placement: feed an aimed mob → `tryInteractBlock` → use the held item → place. To make a block do something on right-click, register it in `INTERACTIVE_BLOCKS` and add a branch in `tryInteractBlock` (`lib/game/engine/systems/interact.ts`).
 - The handler returns `true` to consume the click (no block is placed) — return `true` even when the action is refused (e.g. a bed during the day) so the player doesn't place a block into the bed by accident.
-- The bed is the reference implementation: it sets `state.spawnPoint`, starts the sleep fade (`state.sleepTimer`), and the `step` loop skips the clock to morning when the fade ends. See [architecture.md](architecture.md) for the step order.
+- Two reference implementations: the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"). A station-opening block also needs an `openedStation` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
 
 ## A random-tick behavior (growth / spread)
 

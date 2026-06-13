@@ -76,6 +76,7 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.Snow) c = tone(base, 0.97 + n * 0.06);
         if (block === BlockId.Bed && face === "top" && y < 5) c = tone([0.95, 0.95, 0.97], 0.95 + n * 0.1); // pillow band
         if (block >= BlockId.WheatStage0 && block <= BlockId.WheatStage3 && face === "side" && x % 3 === 1) c = tone(base, 0.66); // gaps read as stalks
+        if (block === BlockId.Furnace && face === "side" && x >= 5 && x <= 10 && y >= 8 && y <= 12) c = tone([0.95, 0.45, 0.12], 0.85 + n * 0.3); // glowing mouth
 
         ctx.fillStyle = rgb(c);
         ctx.fillRect(ox + x, oy + y, 1, 1);

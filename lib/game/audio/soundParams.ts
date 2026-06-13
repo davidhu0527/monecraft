@@ -823,6 +823,25 @@ export const PLANT_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** Low crackle when a furnace smelt completes. */
+export const SMELT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.2,
+    frequency: 90,
+    attack: 0.02,
+    sustain: 0.08,
+    release: 0.18,
+    shape: 4,
+    shapeCurve: 1.1,
+    noise: 0.8,
+    sustainVolume: 0.6,
+    decay: 0.08,
+    filter: -450
+  }),
+  minRetriggerMs: 150
+};
+
 /** Gentle rising chime on waking — distinct from the brighter respawn stinger. */
 export const WAKE_SOUND: SoundDef = {
   params: zz({
