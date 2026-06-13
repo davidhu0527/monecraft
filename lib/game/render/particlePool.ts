@@ -44,6 +44,7 @@ export type EmitParticle = {
 };
 
 export function createParticlePool(cap: number = PARTICLE_CAP): ParticlePool {
+  if (!Number.isInteger(cap) || cap <= 0) throw new RangeError(`Particle pool cap must be a positive integer, got ${cap}`);
   return {
     cap,
     count: 0,
@@ -113,7 +114,7 @@ export function spawnParticle(pool: ParticlePool, p: EmitParticle): void {
  *  expired ones by swap-removal so live particles stay packed in [0, count).
  *  `dt` is clamped so a stalled/backgrounded tab can't teleport everything. */
 export function updateParticlePool(pool: ParticlePool, dt: number): void {
-  const d = Math.max(0, Math.min(dt, 0.1));
+  const d = Math.max(0, Math.min(Number.isNaN(dt) ? 0 : dt, 0.1));
   let i = 0;
   while (i < pool.count) {
     pool.age[i] += d;

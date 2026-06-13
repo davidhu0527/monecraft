@@ -66,4 +66,18 @@ describe("particlePool", () => {
     expect(a.px[0]).toBe(b.px[0]);
     expect(a.vy[0]).toBe(b.vy[0]);
   });
+
+  test("rejects an invalid cap", () => {
+    expect(() => createParticlePool(0)).toThrow(RangeError);
+    expect(() => createParticlePool(-4)).toThrow(RangeError);
+    expect(() => createParticlePool(1.5)).toThrow(RangeError);
+  });
+
+  test("treats a NaN dt as zero rather than corrupting positions", () => {
+    const pool = createParticlePool(4);
+    spawnParticle(pool, sample({ vx: 1, vy: 1, gravity: 9, life: 5 }));
+    updateParticlePool(pool, Number.NaN);
+    expect(pool.px[0]).toBe(0); // no movement
+    expect(Number.isNaN(pool.vy[0])).toBe(false);
+  });
 });

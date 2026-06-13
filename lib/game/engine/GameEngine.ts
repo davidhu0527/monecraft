@@ -142,6 +142,9 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
+    // Seed weather from the (possibly restored) dayClock + player position so a
+    // loaded save's first frame/snapshot is consistent before the first step().
+    tickWeather(this.state);
     this.snapshot = this.buildSnapshot();
   }
 
