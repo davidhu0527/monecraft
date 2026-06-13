@@ -26,7 +26,7 @@ bun run test:e2e   # Playwright browser smoke tests (needs `bunx playwright inst
 For a non-trivial change:
 
 - **Branch** for features and multi-file or dependency changes — a `<type>/<topic>` branch off `main` (e.g. `upgrade/next16-react19-three184`). Small doc-only or single-fix edits can go straight to `main`.
-- **Commit in focused slices.** One logical change per commit (e.g. split a dead-code removal from the feature that replaces it), with an imperative, scoped subject (e.g. `Add block breaking crack overlay`) — plain style, no Conventional-Commit prefixes, no attribution trailers. Keep `bun run lint` green at each commit so the branch stays bisectable.
+- **Commit in focused slices.** One commit per logical slice (e.g. split a dead-code removal from the feature that replaces it). Keep `bun run lint` green at each commit so the branch stays bisectable. Use Conventional Commit messages; no `Co-Authored-By` trailers.
 - **Explain the why in the commit body.** The subject says what changed; the body (separated by a blank line) explains why — the problem or motivation, and any non-obvious decision or trade-off. A body is required for anything beyond trivial edits (typos, formatting); `git log` should make sense without opening the PR.
 - **Update docs in the same change.** When behavior or a documented concept changes, update AGENTS.md / `docs/` and add a `CHANGELOG.md` entry. Flag any save-format or worldgen impact.
 - **Verify before a PR:** `bun run lint`, `bun run typecheck`, `bun run format:check`, `bun test`, and `bun run build` green (the same list CI's `verify` job runs); `bun run test:e2e` for changes touching the renderer, input, or React shell. A manual gameplay pass is only needed for pointer-lock handling or visual-appearance changes (see docs/testing.md).
@@ -38,4 +38,7 @@ For a non-trivial change:
 - [docs/adding-content.md](docs/adding-content.md) — step-by-step: new block / item / recipe / mob / mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema, autosave, compatibility rules
 - [docs/testing.md](docs/testing.md) — test coverage map and the worldgen hash re-baseline policy
+- [docs/tuning.md](docs/tuning.md) — gameplay tunables in `config.ts`, grouped by effect with balance trade-offs
+- [docs/manual.md](docs/manual.md) — player guide (gameplay, survival, crafting, mobs, farming)
+- [docs/reference.md](docs/reference.md) — gameplay reference tables (recipes, blocks, mobs, items)
 - `README.md` — player-facing controls and quick start

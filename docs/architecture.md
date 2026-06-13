@@ -21,6 +21,7 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 - UI state arrives as immutable `GameSnapshot`s via `useSyncExternalStore`; the engine replaces the snapshot object only when a visible value changes, so React re-renders are minimal and identity-driven.
 - UI intents (`craft`, `swapSlots`, `selectSlot`, …) are dispatched as engine `Command`s. The only React state in the shell is pure UI concern: pointer lock, transient save messages, renderer failure.
 - WebGL init failure is surfaced as `rendererError` and rendered as a fallback panel instead of crashing.
+- On mount the shell installs a `window.__monecraft` debug handle (`{ engine, renderer, input, audio }`) and deletes it on unmount. The Playwright suite in `e2e/` drives the game through this handle — asserting on engine state and `renderer.renderedTriangles()` rather than pixels (see [testing.md](testing.md)); it's also handy from the browser console.
 - UI pixel art is procedural: `lib/ui/` generates 16×16 item/HUD sprites as pure pixel buffers (`spritePixels.ts`, `hudPixels.ts` — DOM-free, unit-tested) wrapped by a cached canvas→data-URL layer (`sprites.ts`, falls back to a transparent pixel under happy-dom) plus noise tiles installed as CSS vars (`chromeTiles.ts`). No image assets, no licensing exposure. `lib/ui/` must not import Three.js or the engine.
 - Note for the React Compiler lint rules: consume the hook with destructuring (`const { … } = useMinecraftGame()`); property access on the result object can false-positive `react-hooks/refs`.
 
@@ -42,10 +43,12 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 5. Hunger drain from sprint/walk/jump budgets + health regen (`systems/playerStats.ts`)
 6. Mining progress and block breaking (`systems/mining.ts`; placement also lives here)
 7. Day-night clock (`systems/dayNight.ts` — `daylightAt()` is the single daylight formula)
-8. Night hostile spawning (`systems/spawnDirector.ts`, interval/cap in config)
-9. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
+8. Random block ticks (`systems/randomTicks.ts` — each interval samples columns near the player and runs per-block handlers; drives crop growth and is the extension point for future saplings / grass spread)
+9. Night hostile spawning (`systems/spawnDirector.ts`, interval/cap in config)
+10. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
+11. Animal breeding (`systems/breeding.ts` — feed-to-love timers, baby maturity, pairing in-love adults within range; the passive cap bounds the population)
 
-Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. The `placeBlock` command runs a fixed right-click precedence — `tryInteractBlock` (`systems/interact.ts`, e.g. sleep in a bed) before `placeSelectedBlock` — so interactive blocks take the click instead of getting a block placed against them. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
+Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. The `placeBlock` command runs a fixed right-click precedence (`systems/interact.ts`) — feed an aimed animal (`tryFeedAimedMob`) → interact with the aimed block (`tryInteractBlock`, e.g. sleep in a bed, open a furnace) → use the held item (`tryUseHeldItem`, e.g. a hoe tills soil, seeds plant a crop) → `placeSelectedBlock` — so each interaction consumes the click instead of getting a block placed against it. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
 
 ## Renderer (`lib/game/render/`)
 
@@ -78,7 +81,8 @@ Owns every DOM listener. Continuous input (movement keys, mouse button, pointer 
 ## Inventory and items (`lib/game/`)
 
 - `inventory.ts` — pure slot algebra (`adjustSlotCount`, `craft`, durability, armor); every function returns a new array or `null` for "no change". Crafting refuses when the result doesn't fit rather than destroying overflow.
-- `items.ts` — `ITEM_DEFS`, `BLOCK_TO_SLOT`, `BREAK_HARDNESS`, armor slots, slot factories. `recipes.ts` — `RECIPES`.
+- `items.ts` — `ITEM_DEFS`, `BLOCK_TO_SLOT`, `BREAK_HARDNESS`, armor slots, slot factories. `recipes.ts` — `RECIPES` (each with an optional `station`, e.g. `"furnace"` for smelting).
+- Drop tables: `mobLoot.ts` (`rollMobDrops` — per-`MobKind` loot) and `items.ts` (`rollBlockDrops` — block drops, e.g. grass→occasional seed, mature wheat→wheat + 1–2 seeds). Both take an injectable `rng`, so tests get deterministic counts.
 - `config.ts` — every gameplay tunable, named: physics, hunger rules, daylight thresholds, mob director, mining reach, autosave interval, `SAVE_KEY`.
 - `save.ts` — versioned (de)serialization with an injectable `Storage`; `spawn.ts` — deterministic spawn search + random land points.
 

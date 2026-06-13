@@ -16,6 +16,8 @@ A playable Minecraft-inspired voxel game: procedural terrain with biomes, caves 
 - `V`: Camera view (first-person → third-person rear → third-person front)
 - `Esc`: Pause menu (save / load / reset, sound/music volume sliders, and the Appearance skin picker live there) · `F3`: Debug overlay
 
+New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more — and the [reference tables](docs/reference.md) list every recipe, block, mob, and item.
+
 ## Run
 
 ```bash
@@ -38,6 +40,8 @@ bun run format      # Prettier
 
 All of these are enforced by CI on every PR. The game simulation is a headless engine (no DOM), so gameplay logic is covered by real simulation tests, and a Playwright smoke suite exercises the browser layers — see [docs/testing.md](docs/testing.md).
 
+- [docs/manual.md](docs/manual.md) — player guide: getting started, survival, crafting, mobs, farming
+- [docs/reference.md](docs/reference.md) — scannable tables: recipes, blocks, mobs, and item stats
 - [docs/architecture.md](docs/architecture.md) — engine/renderer/shell layering and invariants
 - [docs/adding-content.md](docs/adding-content.md) — add a block, item, recipe, mob, or mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema and compatibility rules
