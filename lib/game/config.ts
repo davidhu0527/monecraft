@@ -28,6 +28,8 @@ export const JUMPS_PER_HUNGER = 50;
 export const HOTBAR_SLOTS = 9;
 export const INVENTORY_SLOTS = 36;
 export const MAX_STACK_SIZE = 99;
+// Storage slots in a placed chest (a 9x3 grid, like a Minecraft single chest).
+export const CHEST_SLOTS = 27;
 
 // Mining & combat
 export const MINE_REACH = 7;
