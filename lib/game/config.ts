@@ -87,7 +87,9 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-export const SAVE_KEY = "minecraft_save_v5";
+// Bumped to v6 with the dungeon worldgen: dungeons change the deterministic
+// world baseline, so old block-diffs would index against the wrong terrain.
+export const SAVE_KEY = "minecraft_save_v6";
 
 // Rendering
 export const RENDER_RADIUS = 90;
