@@ -7,6 +7,8 @@ export type MobTemplate = {
   detectRange: number;
   attackDamage: number;
   attackCooldown: number;
+  /** Fires arrows and kites instead of meleeing (skeletons, boss). */
+  ranged?: boolean;
   modelArgs: Parameters<typeof createMobModel>;
 };
 
@@ -48,7 +50,8 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     hp: 9,
     detectRange: 12,
     attackDamage: 3,
-    attackCooldown: 1.4,
+    attackCooldown: 1.8,
+    ranged: true,
     modelArgs: [0xe4e4e2, 0xcfcfcb, 0xb4b4b1, 0xff3333, 0x8f8f8f, [0.75, 1.08, 0.48], [0.48, 0.48, 0.48]]
   },
   spider: {
@@ -58,6 +61,16 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     attackDamage: 2,
     attackCooldown: 1.1,
     modelArgs: [0x2e2e2e, 0x1f1f1f, 0x161616, 0xff3333, 0x4a0f0f, [1.15, 0.52, 1.15], [0.5, 0.42, 0.5]]
+  },
+  boss: {
+    speed: 1.1,
+    hp: 400,
+    detectRange: 28,
+    attackDamage: 10,
+    attackCooldown: 1.5,
+    ranged: true,
+    // A towering dark figure with red eyes — body height drives a tall hitbox.
+    modelArgs: [0x3a1f4d, 0x2a1638, 0x1f1029, 0xff2a2a, 0x6a2fa0, [1.7, 2.6, 1.2], [1.0, 0.95, 0.95]]
   }
 };
 

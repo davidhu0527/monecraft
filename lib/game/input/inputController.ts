@@ -85,7 +85,9 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       return;
     }
 
-    if (evt.code === "KeyU") {
+    // Shift-gated so a stray `U` can't teleport the player mid-play; the 0.8s
+    // auto-unstuck safeguard still covers genuine wedged-in-terrain cases.
+    if (evt.shiftKey && evt.code === "KeyU") {
       engine.dispatch({ type: "unstuck" });
       return;
     }

@@ -10,7 +10,8 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 4. Optionally add `RECIPES` entries in `lib/game/recipes.ts`.
 5. Non-cube, non-solid, or transparent blocks need engine work: collision in `lib/world/queries.ts` / `voxelWorld.ts` and geometry/face visibility in `lib/world/meshing.ts`. Doors are the reference for shared custom bounds; glass is the reference for a separate render layer.
 6. Map it to a sound family in `lib/game/audio/materials.ts` — the `BlockId → MaterialGroup` record is exhaustive, so typecheck fails until the entry exists.
-7. The item/recipe integrity tests (`lib/game/config.test.ts`) will fail if a mapping is missing or inconsistent — run `bun test`.
+7. Give it a **lighting class** in `lib/world/lighting.ts`: `opacity` (default is fully opaque — air/glass transmit, water/leaves attenuate) and `emission` (default 0; torches emit 14, lava 15). A light source self-illuminates and lights its neighborhood through the shared flood; an opaque block casts shadow. Both are exercised by `lib/world/lighting.test.ts`.
+8. The item/recipe integrity tests (`lib/game/config.test.ts`) will fail if a mapping is missing or inconsistent — run `bun test`.
 
 ## A new item or recipe
 
@@ -39,6 +40,14 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Give it a voice: `MOB_AMBIENT_SOUNDS` and `MOB_ATTACK_SOUNDS` rows in `lib/game/audio/soundParams.ts`, and a call interval in `lib/game/audio/mobAmbience.ts` (`CALL_INTERVALS`) — all keyed by `MobKind`, so typecheck enforces them.
 - A headless test in `lib/game/engine/GameEngine.test.ts` is cheap: boot the engine, fast-forward to night, assert the mob appears/behaves.
 - To make a passive animal **breedable**, add it to `FEED_ITEMS` in `lib/game/engine/systems/interact.ts` (which food puts it "in love"). Breeding itself is generic: `lib/game/engine/systems/breeding.ts` pairs two fed adults of the same kind into a baby (scaled down via `ageTimer`/`BABY_SCALE`, no drops until grown), bounded by `PASSIVE_CAP`. `MobState.fedTimer`/`ageTimer` and the tunables in `config.ts` drive it; mobs are never persisted, so this is session-only by design.
+- **A new `MobKind` touches five exhaustive `Record<MobKind>` tables** (typecheck enforces all of them): `MOB_TEMPLATES` (`mobs.ts`), `MOB_DROPS` (`mobLoot.ts`), `CALL_INTERVALS` (`mobAmbience.ts`), and `MOB_AMBIENT_SOUNDS` + `MOB_ATTACK_SOUNDS` (`soundParams.ts`). `soundParams.test.ts` iterates `MOB_TEMPLATES`, so the three sound/template tables must stay in lockstep.
+
+## A ranged weapon or ranged mob
+
+- Arrows ride the shared **projectile system** (`lib/game/engine/projectiles.ts`, `engine/systems/projectileAI.ts`): call `spawnArrow(state, x, y, z, dir, { speed, damage, knockback, fromPlayer, ttl })`. `fromPlayer: true` hits mobs, `false` hits the player; arrows never hit their firer. Projectiles are session-only `ProjectileState` (never serialized).
+- A **player ranged weapon** branches the `attack` command: gate on the held item (see `isBow`/`tryFireBow` in `combat.ts`) and fire instead of meleeing. Use a `config.ts` cooldown timer (`GameTimers`, decremented in `GameEngine.step`) for fire rate, and spend ammo + durability via `adjustSlotCount` / `consumeToolDurability`.
+- A **ranged mob** sets `ranged: true` on its `MobTemplate`; `mobAI.ts` then makes it kite (a standoff band) and fire toward the player's chest (with simple lead) instead of meleeing. The boss is the special case there: it approaches, melees up close, fires a spread, and summons minions — see `fireBossSpread` / `tickBossSummon`.
+- The renderer auto-renders any arrow via `projectileVisuals.ts` (a pooled extruded `arrow` sprite); add an impact event (e.g. `arrowHit`) for particles/sound if you want feedback.
 
 ## A new player skin preset
 
@@ -71,6 +80,17 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Block updates that happen "over time" run through `lib/game/engine/systems/randomTicks.ts`: every `RANDOM_TICK_INTERVAL_SECONDS` it samples `RANDOM_TICK_SAMPLES` columns within `RANDOM_TICK_RADIUS` of the player and runs a handler on each column's top block. Register a `BlockId → handler` in `RANDOM_TICK_HANDLERS`; the handler edits via `state.blockChanges` and sets `state.worldMeshDirty`.
 - The crop handler is the reference: wheat stage ids are consecutive, so growth is `block + 1`, and the mature stage has no handler so it stops. Because crops are ordinary block edits, they persist for free via the save's block diff — no new save fields.
 - Tunables live in `config.ts`; the headless test pattern (a minimal `GameState`, a scripted rng that maps a sample onto a known column) is in `randomTicks.test.ts`.
+
+## A worldgen structure (houses, dungeons, …)
+
+- Structures are placed in `lib/world/generation.ts` at the end of the `generateWorld` pipeline. Mirror `placeHouse`/`placeDungeons`: loop a `GEN.<thing>Count`, sample positions, validate, and write blocks with `world.set`. Append your pass **last** so later passes don't overwrite it, and add the count to the frozen `GEN` object.
+- **Any block write changes the deterministic output**, so this breaks the worldgen hash. Re-baseline the `generation.test.ts` digests and bump `SAVE_KEY` per the [testing.md](testing.md) policy; add a structural probe test (count your blocks, assert they generate) that survives the re-baseline.
+- If the structure needs its positions known at runtime (dungeons re-derive chest/spawner indices on load), expose a **derive pass** like `collectDungeonSites`: factor placement into a shared routine that either writes blocks or records indices, drawing from a **dedicated PRNG seeded only from `world.seed`** (not the shared gen stream) with a fixed number of draws per structure, and validate against **seed-pure** terrain (`terrainTopY`, `getBiome`) — never `highestSolidY`, which a cave or player edit can shift out from under the derive pass.
+
+## A loot table / lazy block-entity fill
+
+- Drop tables are pure data + a roll function: copy the `{ itemId, min, max, chance? }` shape and the `clampUnit` roll loop from `lib/game/mobLoot.ts` / `lib/game/dungeonLoot.ts`. Add a `*.test.ts` asserting every `itemId` exists in `ITEM_DEFS` and that rolls are deterministic under an injected rng.
+- To fill a **worldgen-placed** block-entity (a dungeon chest) whose contents can't live in the block-diff baseline: fill it lazily on first access, seeded from `world.seed ^ voxelIndex` (`dungeonLoot.seededRng`), and persist a set of _accessed_ indices (additive save field) — gate the fill on that set, **not** on whether the container is currently non-empty, or an emptied-then-reloaded entity re-rolls. `lib/game/engine/systems/dungeon.ts` (`fillDungeonChestIfUnlooted`), shared by the open and break paths, is the reference; see the exploit-guard test in `GameEngine.test.ts`.
 
 ## A new mechanic
 

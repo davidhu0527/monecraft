@@ -19,6 +19,19 @@ export const HEALTH_REGEN_INTERVAL_SECONDS = 3;
 export const WATER_DAMAGE_DELAY_SECONDS = 60;
 export const WATER_DAMAGE_INTERVAL_SECONDS = 1;
 export const WATER_DAMAGE_HP = 3; // 1.5 hearts
+// Lava burns on contact (no delay), keeps burning briefly after you escape, and
+// bypasses armor — a deep-cave death trap, far deadlier than water.
+export const LAVA_DAMAGE_INTERVAL_SECONDS = 0.5;
+export const LAVA_DAMAGE_HP = 6; // 3 hearts per tick
+export const LAVA_BURN_SECONDS = 3; // damage lingers this long after leaving lava
+// Drowning: the bubble bar empties over OXYGEN_HOLD_SECONDS with the head
+// underwater, then drowning damage starts; it refills quickly on surfacing.
+// Separate from the slow 60s water-exposure timer (which keys on the body).
+export const MAX_OXYGEN = 10;
+export const OXYGEN_HOLD_SECONDS = 15; // full breath -> empty while submerged
+export const OXYGEN_REFILL_SECONDS = 1.5; // empty -> full after surfacing
+export const OXYGEN_DROWN_INTERVAL_SECONDS = 1;
+export const OXYGEN_DROWN_HP = 2; // 1 heart per tick once out of air
 // Health regen only runs at or above this hunger level; sprint needs more than SPRINT_MIN_HUNGER.
 export const REGEN_MIN_HUNGER = 12;
 export const SPRINT_MIN_HUNGER = 6;
@@ -49,6 +62,46 @@ export const SPEAR_STUCK_SECONDS = 2;
 export const SPEAR_THROW_COOLDOWN_SECONDS = 0.45;
 export const SPEAR_HIT_RADIUS = 0.65;
 
+// Ranged combat — arrows are transient projectiles shared by the bow, ranged
+// skeletons, and the boss. Gravity is below the player's so the arc stays flat
+// and readable; substepping the swept block/entity tests stops fast arrows from
+// tunnelling through 1-block walls or thin mobs between frames.
+export const ARROW_SPEED = 34; // m/s launch speed (skeletons/boss scale this down)
+export const ARROW_GRAVITY = 14; // < player GRAVITY (26)
+export const ARROW_TTL = 4; // seconds before an in-flight arrow despawns
+export const ARROW_HIT_RADIUS = 0.45; // hit padding around the arrow point
+export const ARROW_MAX_SUBSTEPS = 4; // cap on per-frame integration substeps
+export const ARROW_MAX_SEGMENT = 0.5; // blocks per substep before the swept tests run
+
+// Bow — instant click-to-fire (no draw-charge); fixed damage, gated by a cooldown.
+export const BOW_ARROW_DAMAGE = 9; // matches a stone sword's melee, but at range
+export const BOW_KNOCKBACK = 0.6;
+export const BOW_COOLDOWN_SECONDS = 0.4;
+export const BOW_DURABILITY_PER_SHOT = 1;
+
+// Ranged mobs (skeletons, boss) — kite within a standoff band and loose arrows
+// instead of meleeing. Lead aims slightly ahead of a moving target.
+export const SKELETON_STANDOFF_MIN = 5; // back away when the player is closer than this
+export const SKELETON_STANDOFF_MAX = 9; // approach when farther; hold in the band
+export const SKELETON_ARROW_DAMAGE = 4;
+export const SKELETON_ARROW_SPEED = 27; // a touch slower than the player's bow (34)
+export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
+export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
+export const MOB_ARROW_KNOCKBACK = 0.35;
+
+// Endgame boss — summoned from a Cursed Totem (diamond-gated). It approaches
+// (does not kite), melees up close, looses a 3-arrow spread at range, and
+// periodically summons minions. Its defeat is the win condition.
+export const BOSS_HP = 400; // a real fight even with diamond gear
+export const BOSS_MELEE_REACH = 3.5;
+export const BOSS_MELEE_DAMAGE = 10;
+export const BOSS_ARROW_DAMAGE = 7;
+export const BOSS_ARROW_SPEED = 30;
+export const BOSS_SPREAD = 0.18; // radians between the three spread arrows
+export const BOSS_SUMMON_RADIUS = 10; // where the boss appears, around the player
+export const BOSS_MINION_CAP = 4; // boss-summoned minions alive at once
+export const BOSS_SUMMON_INTERVAL_SECONDS = 12;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
@@ -74,6 +127,13 @@ export const WAKE_DAY_PHASE = 0.07;
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;
 
+// Dungeon spawners. A spawner drips one hostile every interval while the player
+// is within the activation radius, up to a local cluster cap (and the shared
+// global HOSTILE_CAP). Time-independent — dungeons are dark.
+export const SPAWNER_INTERVAL_SECONDS = 8;
+export const SPAWNER_ACTIVATION_RADIUS = 16;
+export const SPAWNER_LOCAL_CAP = 6;
+
 // Animal breeding. Feeding a passive animal puts it "in love" for a window; two
 // in-love adults of the same kind within range spawn a baby that grows up after
 // a timer. The passive cap and the wheat/seed cost bound the population.
@@ -97,7 +157,12 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-export const SAVE_KEY = "minecraft_save_v5";
+// Bumped whenever the deterministic world baseline changes, so old block-diffs
+// (which index against terrain) can't be applied to a different world: v6 added
+// dungeons; v7 adds deep-cave lava lakes. The save *schema* (SaveData) is
+// unchanged — lighting is a derived cache and lava is worldgen, neither is
+// persisted — so the payload version stays 5.
+export const SAVE_KEY = "minecraft_save_v7";
 
 // Rendering
 export const RENDER_RADIUS = 90;

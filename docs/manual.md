@@ -47,7 +47,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `I`                | Open / close inventory & crafting                                   |
 | `F`                | Eat the selected food                                               |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front |
-| `U`                | Emergency unstuck (teleport to safe ground if wedged)               |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)               |
 | `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
 | `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
 
@@ -63,11 +63,32 @@ into the void, and starvation-adjacent danger chip it away. At zero health you d
 freeze for **3 seconds**, then respawn — at your bed if you've slept in one,
 otherwise at a random land point. Death doesn't wipe your world or inventory.
 
-If you ever get wedged inside terrain, press **`U`** to teleport free. (Standing in
+If you ever get wedged inside terrain, press **`Shift`+`U`** to teleport free. (Standing in
 water is _not_ "stuck" — you're allowed to swim.) You can place blocks into water
 to replace water cells when building underwater. Do not remain continuously
 immersed for more than **60 seconds**: after that grace period you take **1.5
 hearts every second**, ignoring armor. Leaving the water resets the timer.
+
+### Caves are dark — carry a torch
+
+Underground is now genuinely **dark**: sunlight reaches down open shafts and
+spills a little way into cave mouths, but the deep tunnels are pitch black. Craft
+**torches** (1 wood → 4 torches) and place them as you explore — each casts a warm
+pool of light that won't fade at night. Without a light source you're mining blind,
+and the dark is where monsters lurk.
+
+### Drowning and lava
+
+When your **head** goes underwater a row of **air bubbles** appears above the
+hunger bar and drains over about 15 seconds; once it's empty you start **drowning**
+(1 heart/second until you surface). Bubbles refill almost instantly when your head
+comes up. (This is separate from the slow 60-second immersion damage above — wading
+chest-deep never drowns you.)
+
+**Lava** pools in the deepest caves and glows in the dark. It is a death trap:
+touching it burns you **immediately** for 3 hearts every half-second — no grace
+period — and you keep burning for a few seconds even after you scramble off. Armor
+doesn't help. Bridge over it carefully.
 
 ### Hunger
 
@@ -105,6 +126,13 @@ every durable item occupies its own slot.
 chestplate, leggings, and boots from the inventory's armor slots. Each piece adds
 defense and absorbs durability when you're struck — but a hit always deals at
 least **1 damage**, even in a full set.
+
+**Ranged combat.** Craft a **bow** (3 wood + 3 string) and **arrows** (1 stone +
+1 wood + 1 feather makes 4). With the bow selected, **left-click fires an arrow**
+along your aim — arrows arc with gravity, so lead distant or moving targets and
+aim a little high. Each shot spends one arrow and a little bow durability. Watch
+out: **skeletons now shoot back**, keeping their distance and firing arrows, so
+use cover and close the gap or out-shoot them.
 
 ## Day, night, and danger
 
@@ -146,6 +174,21 @@ Higher-tier pickaxes (sapphire, gold, diamond) also mine **faster**. Dirt, sand,
 wood, leaves, and crops need no special tool. Ores hide underground and in caves;
 the rarer the ore, the deeper it tends to sit.
 
+## Dungeons and loot
+
+Digging around underground can turn up a **dungeon**: a small cobblestone room,
+flecked with mossy cobble, sealed in the rock away from your spawn. Inside are
+**loot chests** — open them for a free haul of food, ores, and sometimes real
+gear (a sword, armor, even a diamond pickaxe if you're lucky). Each chest's loot
+is fixed until you reach it, and once you've opened (or broken) it, it won't
+refill — so there's no farming the same chest twice.
+
+The catch: most dungeons hold a **spawner**, a dark caged block that conjures a
+hostile every few seconds as long as you're standing near it. They keep coming
+until you back off — or **mine the spawner block out**, which shuts it down for
+good (it's tough and drops nothing). Grab the loot, deal with the mob, and leave,
+or clear the spawner first if you want to loot in peace.
+
 ## Crafting
 
 Open the inventory (`I`) to reach the crafting panel. Pick a recipe whose
@@ -158,7 +201,7 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **33 recipes** in the [reference](reference.md#recipes).
+See the full list of **45 recipes** in the [reference](reference.md#recipes).
 
 ## Doors
 
@@ -189,9 +232,11 @@ Six creatures roam the world:
   close, and never attack. They drop materials and raw meat when killed.
 - **Hostile** — **zombie**, **skeleton**, **spider**. They hunt you at night,
   chase within their detection range, and attack when they have line of sight.
-  Spiders are only hostile in the dark.
+  **Skeletons are archers** — they keep their distance and fire arrows, so close
+  in or take cover. Spiders are only hostile in the dark.
 
-Full stats and drop tables are in the [bestiary](reference.md#mobs).
+Full stats and drop tables are in the [bestiary](reference.md#mobs). The summoned
+**boss** is covered under [Endgame](#endgame-the-boss).
 
 **Breeding** makes loot renewable. Right-click an adult **sheep or horse with
 wheat**, or a **chicken with seeds**, to put it "in love" for **30 seconds**. Two
@@ -199,6 +244,24 @@ in-love adults of the same kind standing within **3 blocks** produce a **baby**,
 which follows its parents, drops nothing while young, and grows to full size after
 **~90 seconds**. The passive population is capped (and feeding costs crops), so it
 stays under control.
+
+## Endgame: the boss
+
+Once you've reached **diamonds**, the diamond grind finally has a goal. Craft a
+**Cursed Totem** (1 diamond ore + 2 bone + 2 gold ore) and **right-click it in the
+open** to summon the **boss** — a towering figure that erupts nearby. (It refuses
+if a boss is already alive.)
+
+Come prepared: full **armor**, the best sword you can make, a **bow** and plenty of
+**arrows**, and some food. The boss has a huge health pool (shown on a bar at the
+top of the screen), **charges you and bites hard** up close, **fires a spread of
+arrows** at range, and **summons skeletons and zombies** to wear you down. It
+ignores daylight, so you can fight it whenever you like — open ground helps you
+kite it with the bow.
+
+Beat it and you **win**: a victory screen appears, and it drops a **Dragon Heart**.
+Craft that into the **Dragon Sword** — the strongest weapon in the game (60 attack).
+You keep playing afterward, and another totem summons the boss again.
 
 ## Farming
 

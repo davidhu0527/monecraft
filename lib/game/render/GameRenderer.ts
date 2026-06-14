@@ -11,6 +11,7 @@ import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
@@ -20,6 +21,35 @@ const scratchDir = new THREE.Vector3();
 const scratchPose = new THREE.Vector3();
 
 export type CreateRendererResult = { ok: true; renderer: GameRenderer } | { ok: false; error: string };
+
+// Caves keep this faint floor of visibility instead of going pure black, and
+// block light is emitted with this warm tint.
+const SKY_LIGHT_FLOOR = 0.05;
+const TORCH_TINT = "vec3(1.35, 1.06, 0.62)";
+
+/**
+ * Add per-voxel darkness to a lit world material via the baked aLight attribute
+ * (skyExposure, blockLight). The scene's sun + hemisphere already scale with
+ * daylight, so day/night needs no extra uniform and no re-mesh: this patch gates
+ * the scene-lit color by sky exposure — caves go dark while the surface stays
+ * lit and dims at night with the scene lights — then adds block light back as an
+ * albedo-tinted glow that survives the gate, so a torch lights a pitch-black
+ * cave. Anchored on stable ShaderChunk includes; the e2e triangle check guards
+ * against a future Three.js bump breaking the string replace.
+ */
+function patchVoxelLighting(material: THREE.MeshStandardMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = "attribute vec2 aLight;\nvarying vec2 vLight;\n" + shader.vertexShader.replace("void main() {", "void main() {\n  vLight = aLight;");
+    shader.fragmentShader =
+      "varying vec2 vLight;\n" +
+      shader.fragmentShader
+        .replace("#include <color_fragment>", "#include <color_fragment>\n  vec3 mcAlbedo = diffuseColor.rgb;")
+        .replace(
+          "#include <opaque_fragment>",
+          `#include <opaque_fragment>\n  gl_FragColor.rgb = gl_FragColor.rgb * max(vLight.x, ${SKY_LIGHT_FLOOR.toFixed(3)}) + mcAlbedo * vLight.y * ${TORCH_TINT};`
+        );
+  };
+}
 
 /**
  * Maps simulation state to Three.js every frame in sync(): camera from
@@ -48,6 +78,7 @@ export class GameRenderer {
   private readonly crackOverlay: CrackOverlayView;
   private readonly mobVisuals: MobVisuals;
   private readonly spearVisuals: SpearVisuals;
+  private readonly projectileVisuals: ProjectileVisuals;
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -103,6 +134,10 @@ export class GameRenderer {
       opacity: 0.24,
       depthWrite: false
     });
+    // Per-voxel lighting: gate scene-lit terrain by baked sky exposure and add
+    // torch/lava block light back as a glow (see patchVoxelLighting).
+    patchVoxelLighting(this.worldMaterial);
+    patchVoxelLighting(this.glassMaterial);
     this.worldMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.worldMaterial);
     this.glassMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.glassMaterial);
     this.scene.add(this.worldMesh);
@@ -113,6 +148,7 @@ export class GameRenderer {
     this.crackOverlay = createCrackOverlay(this.scene);
     this.mobVisuals = createMobVisuals(this.scene);
     this.spearVisuals = createSpearVisuals(this.scene);
+    this.projectileVisuals = createProjectileVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -148,6 +184,7 @@ export class GameRenderer {
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
     this.spearVisuals.sync(state.thrownSpears);
+    this.projectileVisuals.sync(state.projectiles);
     this.playerVisuals.sync(state, timeMs);
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
@@ -211,6 +248,75 @@ export class GameRenderer {
           drag: 1.4,
           life: [0.4, 0.8],
           size: 0.18
+        });
+        break;
+      case "mobSpawned":
+        // A dark smoke puff conjured from the spawner.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 0.3,
+          z: event.z,
+          count: 16,
+          color: [0.18, 0.16, 0.22],
+          speed: 1.8,
+          spread: 1.2,
+          gravity: -2,
+          drag: 1.8,
+          life: [0.5, 1.0],
+          size: 0.2,
+          upBias: 0.5,
+          colorJitter: 0.05
+        });
+        break;
+      case "arrowHit":
+        // Steel sparks on a block/mob; a redder spray when it bites the player.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: event.target === "player" ? 8 : 6,
+          color: event.target === "player" ? [0.82, 0.22, 0.22] : [0.72, 0.74, 0.78],
+          speed: 2.2,
+          spread: 1.0,
+          gravity: 12,
+          drag: 1.8,
+          life: [0.18, 0.4],
+          size: 0.1
+        });
+        break;
+      case "bossSummoned":
+        // A large, dark conjuring column where the boss appears.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 1.2,
+          z: event.z,
+          count: 40,
+          color: [0.32, 0.12, 0.42],
+          speed: 3.0,
+          spread: 2.0,
+          gravity: -1,
+          drag: 1.4,
+          life: [0.6, 1.3],
+          size: 0.3,
+          upBias: 0.6,
+          colorJitter: 0.08
+        });
+        break;
+      case "bossDefeated":
+        // A bright triumphant burst on the kill.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 1.4,
+          z: event.z,
+          count: 48,
+          color: [0.95, 0.82, 0.45],
+          speed: 4.2,
+          spread: 2.2,
+          gravity: 6,
+          drag: 1.2,
+          life: [0.6, 1.4],
+          size: 0.26,
+          colorJitter: 0.12
         });
         break;
       case "ateFood":
@@ -308,6 +414,7 @@ export class GameRenderer {
     this.particles.dispose();
     this.playerVisuals.dispose();
     this.spearVisuals.dispose();
+    this.projectileVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();

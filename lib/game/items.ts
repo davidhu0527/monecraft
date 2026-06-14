@@ -49,7 +49,11 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.WheatStage2]: 1,
   [BlockId.WheatStage3]: 1,
   [BlockId.Furnace]: 5,
-  [BlockId.Chest]: 3
+  [BlockId.Chest]: 3,
+  [BlockId.MossyCobblestone]: 5,
+  // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
+  [BlockId.Spawner]: 30,
+  [BlockId.Torch]: 1
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -72,6 +76,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
   { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
+  { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
+  { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
@@ -170,6 +176,15 @@ export const ITEM_DEFS: ItemDef[] = [
     throwDamage: 55,
     maxDurability: 680
   },
+  // Bow fires arrows; it never melees (attack 0), so the attack input branches
+  // to firing when a bow is held. Arrows are the consumable ammo.
+  { id: "bow", label: "Bow", kind: "weapon", attack: 0, maxDurability: 200 },
+  { id: "arrow", label: "Arrow", kind: "material" },
+  // Endgame: a diamond-gated totem summons the boss; its Dragon Heart drop
+  // crafts the best-in-game Dragon Sword.
+  { id: "boss_summoner", label: "Cursed Totem", kind: "material" },
+  { id: "dragon_heart", label: "Dragon Heart", kind: "material" },
+  { id: "dragon_sword", label: "Dragon Sword", kind: "weapon", attack: 60, maxDurability: 1200 },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
   { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
   { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },
@@ -237,6 +252,8 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
   [BlockId.Chest]: "chest",
+  [BlockId.MossyCobblestone]: "mossy_cobble",
+  [BlockId.Torch]: "torch",
   [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",

@@ -12,14 +12,19 @@ import {
   SPRINT_BLOCKS_PER_HUNGER,
   SPRINT_MIN_HUNGER,
   WATER_DAMAGE_DELAY_SECONDS,
-  WATER_DAMAGE_HP
+  WATER_DAMAGE_HP,
+  LAVA_DAMAGE_HP,
+  MAX_OXYGEN
 } from "@/lib/game/config";
-import { CHEST_SLOTS } from "@/lib/game/config";
+import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
+import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
+import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
+import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
 import type { FrameInput } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -88,6 +93,45 @@ describe("boot", () => {
     run(engine, 1);
     expect(engine.state.player.position.y).toBeCloseTo(y1, 5);
     expect(engine.state.player.onGround).toBe(true);
+  });
+
+  test("light is baked at load: open sky is lit, solid ground is dark", () => {
+    const { world } = makeEngine().state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    // The top of the world is open air, fully sky-lit.
+    expect(world.getSky(cx, world.sizeY - 1, cz)).toBe(15);
+    // Any solid block is sealed off from the sky and reads dark.
+    const surfaceY = world.highestSolidY(cx, cz);
+    expect(world.isSolid(cx, surfaceY, cz)).toBe(true);
+    expect(world.getSky(cx, surfaceY, cz)).toBe(0);
+    // Generated lava emits block light, so the deep caves carry some.
+    expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(true);
+  });
+
+  test("block edits relight locally: placing darkens the cell, mining restores sky", () => {
+    const { state } = makeEngine();
+    const { world } = state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    const y = world.sizeY - 5; // open air near the top of the world
+    expect(world.getSky(cx, y, cz)).toBe(15);
+    state.blockChanges.set(cx, y, cz, BlockId.Stone);
+    expect(world.getSky(cx, y, cz)).toBe(0); // a solid block is opaque to sky
+    state.blockChanges.set(cx, y, cz, BlockId.Air);
+    expect(world.getSky(cx, y, cz)).toBe(15); // reopened to the sky
+  });
+
+  test("placing a torch emits block light into the neighborhood", () => {
+    const { state } = makeEngine();
+    const { world } = state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    const y = world.sizeY - 5; // open air; block light is independent of the sky
+    expect(world.getBlockLight(cx, y, cz)).toBe(0);
+    state.blockChanges.set(cx, y, cz, BlockId.Torch);
+    expect(world.getBlockLight(cx, y, cz)).toBe(14);
+    expect(world.getBlockLight(cx + 1, y, cz)).toBe(13);
   });
 });
 
@@ -205,6 +249,58 @@ describe("movement and stats", () => {
     engine.step(0.1, input());
     expect(state.timers.waterExposureTimer).toBe(0);
     expect(state.timers.waterDamageTimer).toBe(0);
+  });
+
+  test("standing on lava burns immediately and the burn lingers after leaving", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1); // settle onto the ground
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const underfoot = Math.floor(state.player.position.y - 0.1);
+    state.blockChanges.set(x, underfoot, z, BlockId.Lava);
+
+    const start = state.hearts;
+    engine.step(1 / 60, input());
+    expect(state.hearts).toBe(start - LAVA_DAMAGE_HP); // no grace period, unlike water
+    expect(state.timers.lavaBurnTimer).toBeGreaterThan(0);
+
+    // Step off the lava: the burn keeps dealing damage for a few seconds.
+    state.blockChanges.set(x, underfoot, z, BlockId.Stone);
+    const afterTouch = state.hearts;
+    run(engine, 0.6); // within LAVA_BURN_SECONDS
+    expect(state.hearts).toBeLessThan(afterTouch);
+    expect(state.hearts).toBeGreaterThan(0);
+  });
+
+  test("a submerged head drains oxygen then drowns; surfacing refills it", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1); // settle
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const headY = Math.floor(state.player.position.y + EYE_HEIGHT);
+
+    expect(state.oxygen).toBe(MAX_OXYGEN);
+    state.blockChanges.set(x, headY, z, BlockId.Water); // submerge the head
+    run(engine, 5);
+    expect(state.oxygen).toBeLessThan(MAX_OXYGEN); // breath draining
+    expect(state.oxygen).toBeGreaterThan(0); // not yet empty at 5s of 15
+
+    // Exhaust the air: drowning damage begins (armor-bypassing).
+    state.oxygen = 0;
+    const hp = state.hearts;
+    run(engine, 1.2);
+    expect(state.hearts).toBeLessThan(hp);
+
+    // Surface: oxygen refills back to full.
+    state.blockChanges.set(x, headY, z, BlockId.Air);
+    run(engine, 2);
+    expect(state.oxygen).toBe(MAX_OXYGEN);
   });
 });
 
@@ -429,6 +525,134 @@ describe("chests", () => {
     expect(container![0].id).toBe("gold_ore");
     expect(container![0].count).toBe(3);
     expect(container![1].durability).toBe(200);
+  });
+
+  // ── Dungeon loot chests ────────────────────────────────────────────────
+  // The small 64³ test world places no dungeons (every candidate falls inside
+  // the spawn-clearance radius), so these inject a dungeon chest by hand.
+
+  test("a dungeon chest fills with loot once on first access, then never again", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(22, 40, 22);
+    engine.state.dungeonChestIndices.add(idx);
+
+    fillDungeonChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
+
+    // Emptying it and re-accessing must not re-roll: the looted set is the gate.
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    fillDungeonChestIfUnlooted(engine.state, idx);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
+  });
+
+  test("a looted dungeon chest never re-rolls after a reload (exploit closed)", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(20, 40, 20);
+    engine.state.blockChanges.set(20, 40, 20, BlockId.Chest);
+    engine.state.dungeonChestIndices.add(idx);
+
+    fillDungeonChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
+    // Player loots everything; the now-empty container drops out of the save.
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+
+    const restored = makeEngine(engine.serialize());
+    // The reload re-derives dungeon sites from the seed; this hand-injected chest
+    // would normally be among them, so simulate that — the point under test is
+    // that the *persisted looted set*, not the chest's emptiness, blocks re-roll.
+    restored.state.dungeonChestIndices.add(idx);
+    expect(restored.state.lootedDungeonChests.has(idx)).toBe(true);
+
+    fillDungeonChestIfUnlooted(restored.state, idx);
+    const after = restored.state.containers.get(idx) ?? [];
+    expect(after.some((slot) => slot.id && slot.count > 0)).toBe(false);
+  });
+
+  test("breaking an unopened dungeon chest still yields its loot", () => {
+    const engine = makeEngine();
+    const { idx } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(...indexToXYZ(state, idx), BlockId.Chest);
+    state.dungeonChestIndices.add(idx);
+    state.inventory = Array.from({ length: state.inventory.length }, () => createEmptySlot()); // room to receive
+    engine.consumeEvents();
+
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    expect(state.world.blocks[idx]).toBe(BlockId.Air);
+    expect(state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
+    expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
+  });
+});
+
+describe("dungeon spawners", () => {
+  /** Registers a spawner block near the player and returns its voxel index. */
+  function placeSpawner(engine: GameEngine, offsetX = 0, offsetZ = 0): number {
+    const { state } = engine;
+    state.mobs = [];
+    const sx = 30 + offsetX;
+    const sz = 30 + offsetZ;
+    const sy = state.world.highestSolidY(sx, sz) + 1;
+    state.blockChanges.set(sx, sy, sz, BlockId.Spawner);
+    const idx = state.world.index(sx, sy, sz);
+    state.dungeonSpawnerIndices.add(idx);
+    return idx;
+  }
+
+  test("a nearby spawner drips hostiles up to the local cap, emitting spawn events", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const idx = placeSpawner(engine);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 1, sy, sz + 1); // inside the activation radius
+
+    const rng = mulberry32(7);
+    let spawnEvents = 0;
+    // Each ready interval spawns at most one per spawner; over-fire to hit the cap.
+    for (let i = 0; i < 20; i += 1) {
+      tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, (event) => {
+        if (event.type === "mobSpawned") spawnEvents += 1;
+      });
+    }
+
+    const hostiles = state.mobs.filter((mob) => mob.hostile).length;
+    expect(hostiles).toBe(SPAWNER_LOCAL_CAP);
+    expect(spawnEvents).toBe(SPAWNER_LOCAL_CAP);
+  });
+
+  test("a spawner is inert when the player is out of range", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const idx = placeSpawner(engine);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 40, sy, sz + 40); // well outside the activation radius
+
+    const rng = mulberry32(7);
+    for (let i = 0; i < 10; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
+
+    expect(state.mobs.length).toBe(0);
+  });
+
+  test("a mined-out spawner stops spawning", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const idx = placeSpawner(engine);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 1, sy, sz + 1);
+    state.blockChanges.set(sx, sy, sz, BlockId.Air); // the block is gone, index still registered
+
+    const rng = mulberry32(7);
+    for (let i = 0; i < 10; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
+
+    expect(state.mobs.length).toBe(0);
   });
 });
 
@@ -1077,14 +1301,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 4 and carries clock, stats, and spawn point", () => {
+  test("save format is version 5 and carries clock, stats, and spawn point", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(4);
+    expect(save.version).toBe(5);
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);
@@ -1472,5 +1696,99 @@ describe("animal breeding", () => {
     const after = countsById(engine.state.inventory);
     expect(after.get("wool") ?? 0).toBe(before.get("wool") ?? 0);
     expect(after.get("raw_mutton") ?? 0).toBe(before.get("raw_mutton") ?? 0);
+  });
+});
+
+describe("endgame boss", () => {
+  function giveSummoner(engine: GameEngine, count: number): void {
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[0] = createSlot("boss_summoner", count);
+    engine.state.selectedSlot = 0;
+  }
+
+  test("a Cursed Totem summons one boss, consuming the totem", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 2);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.mobs.filter((mob) => mob.kind === "boss")).toHaveLength(1);
+    expect(countsById(engine.state.inventory).get("boss_summoner")).toBe(1);
+    expect(engine.consumeEvents().some((event) => event.type === "bossSummoned")).toBe(true);
+    expect(engine.getSnapshot().boss).not.toBeNull();
+    expect(engine.getSnapshot().boss!.hpPercent).toBeCloseTo(1, 2);
+  });
+
+  test("a second summon is refused while a boss already walks", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 2);
+    engine.dispatch({ type: "placeBlock" }); // first boss
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" }); // refused
+    expect(engine.state.mobs.filter((mob) => mob.kind === "boss")).toHaveLength(1);
+    expect(countsById(engine.state.inventory).get("boss_summoner")).toBe(1); // totem kept
+    expect(engine.consumeEvents().some((event) => event.type === "summonFailed")).toBe(true);
+  });
+
+  test("the boss health snapshot tracks damage", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+
+    boss.hp = BOSS_HP / 2;
+    run(engine, 0.05); // a step refreshes the snapshot
+    expect(engine.getSnapshot().boss!.hpPercent).toBeCloseTo(0.5, 2);
+  });
+
+  test("defeating the boss drops the Dragon Heart and triggers victory", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+    engine.consumeEvents();
+
+    boss.hp = 0; // next tick removes it
+    run(engine, 0.1);
+
+    expect(engine.state.mobs.some((mob) => mob.kind === "boss")).toBe(false);
+    expect(countsById(engine.state.inventory).get("dragon_heart")).toBe(1);
+    expect(engine.consumeEvents().some((event) => event.type === "bossDefeated")).toBe(true);
+    const snap = engine.getSnapshot();
+    expect(snap.victory).toBe(true);
+    expect(snap.boss).toBeNull();
+
+    // The victory screen owns its lock-loss, so a lock-loss pause is ignored
+    // until it's dismissed (otherwise the pause menu would stack over it).
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+
+    engine.dispatch({ type: "dismissVictory" });
+    expect(engine.getSnapshot().victory).toBe(false);
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(true); // pausing works again once dismissed
+  });
+
+  test("the boss does not burn in daylight", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 60; // bright midday
+    run(engine, 0.5);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+    const hpBefore = boss.hp;
+    run(engine, 2);
+    expect(engine.state.daylight).toBeGreaterThan(0.72);
+    expect(boss.hp).toBe(hpBefore); // immune to the daylight burn
   });
 });

@@ -25,4 +25,5 @@ export type Command =
   | { type: "resume" }
   | { type: "toggleDebug" }
   | { type: "toggleCameraView" }
-  | { type: "respawn" };
+  | { type: "respawn" }
+  | { type: "dismissVictory" };

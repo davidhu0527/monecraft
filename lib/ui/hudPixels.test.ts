@@ -11,7 +11,10 @@ const ALL_ICONS: HudIconName[] = [
   "hunger_container",
   "armor_full",
   "armor_half",
-  "armor_container"
+  "armor_container",
+  "bubble_full",
+  "bubble_half",
+  "bubble_container"
 ];
 
 function opaquePixelCount(pixels: Uint8ClampedArray): number {
@@ -33,6 +36,8 @@ describe("renderHudIconPixels", () => {
     expect(renderHudIconPixels("heart_full")).not.toEqual(renderHudIconPixels("heart_container"));
     expect(renderHudIconPixels("heart_half")).not.toEqual(renderHudIconPixels("heart_full"));
     expect(renderHudIconPixels("heart_half")).not.toEqual(renderHudIconPixels("heart_container"));
+    expect(renderHudIconPixels("bubble_full")).not.toEqual(renderHudIconPixels("bubble_container"));
+    expect(renderHudIconPixels("bubble_half")).not.toEqual(renderHudIconPixels("bubble_full"));
   });
 
   test("the half heart keeps the full color only on the left side", () => {

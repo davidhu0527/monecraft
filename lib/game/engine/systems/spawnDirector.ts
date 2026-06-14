@@ -1,9 +1,19 @@
 import * as THREE from "three";
-import { HOSTILE_CAP, HOSTILE_SPAWN_BELOW_DAYLIGHT, HOSTILE_SPAWN_INTERVAL_SECONDS, RENDER_RADIUS } from "@/lib/game/config";
+import { BlockId } from "@/lib/world";
+import {
+  BOSS_SUMMON_INTERVAL_SECONDS,
+  HOSTILE_CAP,
+  HOSTILE_SPAWN_BELOW_DAYLIGHT,
+  HOSTILE_SPAWN_INTERVAL_SECONDS,
+  RENDER_RADIUS,
+  SPAWNER_ACTIVATION_RADIUS,
+  SPAWNER_INTERVAL_SECONDS,
+  SPAWNER_LOCAL_CAP
+} from "@/lib/game/config";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
-import type { GameState, MobState } from "../state";
+import type { EmitGameEvent, GameState, MobState } from "../state";
 
 export type SpawnGroupArgs = {
   kind: MobKind;
@@ -14,33 +24,48 @@ export type SpawnGroupArgs = {
   radius: number;
 };
 
+/** Adds one mob standing with its feet at (x, y, z) (y is the ground, not the body center). */
+export function pushMob(state: GameState, kind: MobKind, hostile: boolean, x: number, y: number, z: number, rng: () => number): void {
+  const template = MOB_TEMPLATES[kind];
+  const halfHeight = mobHalfHeight(kind);
+  const mob: MobState = {
+    id: state.nextMobId,
+    kind,
+    hostile,
+    hp: template.hp,
+    position: new THREE.Vector3(x, y + halfHeight, z),
+    direction: new THREE.Vector3(rng() - 0.5, 0, rng() - 0.5).normalize(),
+    yaw: 0,
+    turnTimer: 1 + rng() * 3,
+    speed: template.speed,
+    moveSpeed: template.speed,
+    detectRange: template.detectRange,
+    attackDamage: template.attackDamage,
+    attackCooldown: template.attackCooldown,
+    attackTimer: rng(),
+    halfHeight,
+    bobSeed: rng() * 10,
+    fedTimer: 0,
+    ageTimer: 0
+  };
+  state.nextMobId += 1;
+  state.mobs.push(mob);
+}
+
+/**
+ * Spawns the single endgame boss with its feet at (x, y, z), bypassing the
+ * hostile-cap directors (the totem summon is always allowed). Seeds its minion
+ * timer so the first summon waits a full interval.
+ */
+export function spawnBoss(state: GameState, x: number, y: number, z: number, rng: () => number): void {
+  pushMob(state, "boss", true, x, y, z, rng);
+  state.mobs[state.mobs.length - 1].summonTimer = BOSS_SUMMON_INTERVAL_SECONDS;
+}
+
 export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
-  const template = MOB_TEMPLATES[args.kind];
-  const halfHeight = mobHalfHeight(args.kind);
   for (let i = 0; i < args.count; i += 1) {
     const spawnPos = randomLandPointNear(state.world, surfaceYAt, args.centerX, args.centerZ, args.radius, rng);
-    const mob: MobState = {
-      id: state.nextMobId,
-      kind: args.kind,
-      hostile: args.hostile,
-      hp: template.hp,
-      position: new THREE.Vector3(spawnPos.x, spawnPos.y + halfHeight, spawnPos.z),
-      direction: new THREE.Vector3(rng() - 0.5, 0, rng() - 0.5).normalize(),
-      yaw: 0,
-      turnTimer: 1 + rng() * 3,
-      speed: template.speed,
-      moveSpeed: template.speed,
-      detectRange: template.detectRange,
-      attackDamage: template.attackDamage,
-      attackCooldown: template.attackCooldown,
-      attackTimer: rng(),
-      halfHeight,
-      bobSeed: rng() * 10,
-      fedTimer: 0,
-      ageTimer: 0
-    };
-    state.nextMobId += 1;
-    state.mobs.push(mob);
+    pushMob(state, args.kind, args.hostile, spawnPos.x, spawnPos.y, spawnPos.z, rng);
   }
 }
 
@@ -91,4 +116,48 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
     rng,
     surfaceYAt
   );
+}
+
+const SPAWNER_KINDS: ReadonlyArray<"zombie" | "skeleton" | "spider"> = ["zombie", "skeleton", "spider"];
+
+/**
+ * Drips hostiles from dungeon spawners. On each interval, every intact spawner
+ * with the player inside its activation radius spawns one hostile on the room
+ * floor (feet at the spawner's own y, not the surface), bounded by a local
+ * cluster cap and the shared global HOSTILE_CAP. Time-independent — dungeons
+ * are dark. Spawner positions come from the session-derived index set, so
+ * mining out a spawner block stops it (the world.get check below).
+ */
+export function tickSpawnerDirector(state: GameState, dt: number, rng: () => number, emit: EmitGameEvent): void {
+  if (state.dungeonSpawnerIndices.size === 0) return;
+  state.timers.spawnerTimer += dt;
+  if (state.timers.spawnerTimer < SPAWNER_INTERVAL_SECONDS) return;
+  state.timers.spawnerTimer = 0;
+
+  const countHostiles = () => state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0);
+  if (countHostiles() >= HOSTILE_CAP) return;
+
+  const { player, world } = state;
+  const layer = world.sizeX * world.sizeZ;
+  for (const idx of state.dungeonSpawnerIndices) {
+    const sy = Math.floor(idx / layer);
+    const rem = idx - sy * layer;
+    const sz = Math.floor(rem / world.sizeX);
+    const sx = rem - sz * world.sizeX;
+    if (world.get(sx, sy, sz) !== BlockId.Spawner) continue; // mined out → inert
+    if (Math.hypot(player.position.x - (sx + 0.5), player.position.y - (sy + 0.5), player.position.z - (sz + 0.5)) > SPAWNER_ACTIVATION_RADIUS) continue;
+    if (countHostiles() >= HOSTILE_CAP) break;
+
+    const nearby = state.mobs.reduce(
+      (acc, mob) => acc + (mob.hostile && Math.hypot(mob.position.x - (sx + 0.5), mob.position.z - (sz + 0.5)) <= SPAWNER_ACTIVATION_RADIUS ? 1 : 0),
+      0
+    );
+    if (nearby >= SPAWNER_LOCAL_CAP) continue;
+
+    const kind = SPAWNER_KINDS[Math.floor(rng() * SPAWNER_KINDS.length)];
+    const jx = sx + 0.5 + (rng() * 2 - 1) * 1.2;
+    const jz = sz + 0.5 + (rng() * 2 - 1) * 1.2;
+    pushMob(state, kind, true, jx, sy, jz, rng);
+    emit({ type: "mobSpawned", kind, x: sx + 0.5, y: sy + 0.5, z: sz + 0.5 });
+  }
 }

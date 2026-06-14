@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import BossHealthBar from "@/components/game/BossHealthBar";
 import DeathScreen from "@/components/game/DeathScreen";
 import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
@@ -8,6 +9,7 @@ import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
+import VictoryScreen from "@/components/game/VictoryScreen";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
@@ -26,6 +28,7 @@ export default function MinecraftGame() {
     armorPoints,
     hearts,
     hunger,
+    oxygen,
     daylightPercent,
     passiveCount,
     hostileCount,
@@ -34,6 +37,8 @@ export default function MinecraftGame() {
     sleeping,
     craftingStation,
     container,
+    boss,
+    victory,
     debugOpen,
     debug,
     saveMessage,
@@ -45,6 +50,7 @@ export default function MinecraftGame() {
     recipes,
     maxHearts,
     maxHunger,
+    maxOxygen,
     canCraft,
     craft,
     swapInventorySlots,
@@ -52,6 +58,7 @@ export default function MinecraftGame() {
     toggleEquipArmor,
     resumeNow,
     respawnNow,
+    dismissVictory,
     saveNow,
     loadNow,
     resetNow
@@ -84,6 +91,8 @@ export default function MinecraftGame() {
 
       {showClickHint ? <div className="click-hint">Click to play</div> : null}
 
+      <BossHealthBar boss={boss} />
+
       {saveMessage && !paused ? (
         <div className="hud-toast" role="status">
           {saveMessage}
@@ -93,7 +102,15 @@ export default function MinecraftGame() {
       <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
       <div className="hud-bottom">
-        <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
+        <StatusBars
+          hearts={hearts}
+          maxHearts={maxHearts}
+          hunger={hunger}
+          maxHunger={maxHunger}
+          armorPoints={armorPoints}
+          oxygen={oxygen}
+          maxOxygen={maxOxygen}
+        />
         <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
       </div>
 
@@ -131,6 +148,8 @@ export default function MinecraftGame() {
       ) : null}
 
       <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
+
+      <VictoryScreen show={victory} onDismiss={dismissVictory} />
 
       <SleepOverlay sleeping={sleeping} />
 

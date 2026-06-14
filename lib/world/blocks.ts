@@ -32,22 +32,32 @@ export const enum BlockId {
   WheatStage3 = 25,
   Furnace = 26,
   Chest = 27,
-  DoorNorthLower = 28,
-  DoorNorthUpper = 29,
-  DoorEastLower = 30,
-  DoorEastUpper = 31,
-  DoorSouthLower = 32,
-  DoorSouthUpper = 33,
-  DoorWestLower = 34,
-  DoorWestUpper = 35,
-  DoorNorthOpenLower = 36,
-  DoorNorthOpenUpper = 37,
-  DoorEastOpenLower = 38,
-  DoorEastOpenUpper = 39,
-  DoorSouthOpenLower = 40,
-  DoorSouthOpenUpper = 41,
-  DoorWestOpenLower = 42,
-  DoorWestOpenUpper = 43
+  // Dungeon blocks (worldgen-only flavor + the spawner block-entity marker).
+  MossyCobblestone = 28,
+  Spawner = 29,
+  // Wood doors — 16 contiguous ids (4 facings × open/closed × lower/upper).
+  // doors.ts derives state by offset from DoorNorthLower, so keep them in order.
+  DoorNorthLower = 30,
+  DoorNorthUpper = 31,
+  DoorEastLower = 32,
+  DoorEastUpper = 33,
+  DoorSouthLower = 34,
+  DoorSouthUpper = 35,
+  DoorWestLower = 36,
+  DoorWestUpper = 37,
+  DoorNorthOpenLower = 38,
+  DoorNorthOpenUpper = 39,
+  DoorEastOpenLower = 40,
+  DoorEastOpenUpper = 41,
+  DoorSouthOpenLower = 42,
+  DoorSouthOpenUpper = 43,
+  DoorWestOpenLower = 44,
+  DoorWestOpenUpper = 45,
+  // A placeable light source: a solid block that emits block light (see lighting.ts).
+  Torch = 46,
+  // A worldgen-only hazard: a solid, unmineable block that emits max block light
+  // and burns the player on contact (see lighting.ts, playerStats.ts).
+  Lava = 47
 }
 
 export enum BiomeId {
@@ -80,7 +90,9 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Bed]: 0xc0392b,
   [BlockId.Furnace]: 0x63666a,
   [BlockId.Chest]: 0x9c6a3c,
-  [BlockId.DoorNorthLower]: 0xa8753f
+  [BlockId.MossyCobblestone]: 0x6a7a55,
+  [BlockId.DoorNorthLower]: 0xa8753f,
+  [BlockId.Torch]: 0xffab40
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -116,6 +128,9 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.WheatStage3]: [0.82, 0.72, 0.3],
   [BlockId.Furnace]: [0.38, 0.39, 0.41],
   [BlockId.Chest]: [0.58, 0.41, 0.22],
+  // Cobble tinted with patches of moss; the spawner is a near-black iron cage.
+  [BlockId.MossyCobblestone]: [0.34, 0.42, 0.3],
+  [BlockId.Spawner]: [0.18, 0.19, 0.22],
   [BlockId.DoorNorthLower]: [0.62, 0.4, 0.2],
   [BlockId.DoorNorthUpper]: [0.62, 0.4, 0.2],
   [BlockId.DoorEastLower]: [0.62, 0.4, 0.2],
@@ -131,5 +146,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.DoorSouthOpenLower]: [0.62, 0.4, 0.2],
   [BlockId.DoorSouthOpenUpper]: [0.62, 0.4, 0.2],
   [BlockId.DoorWestOpenLower]: [0.62, 0.4, 0.2],
-  [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2]
+  [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.Torch]: [0.9, 0.6, 0.25],
+  [BlockId.Lava]: [0.85, 0.3, 0.08]
 };

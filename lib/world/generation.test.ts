@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld, buildGeometryLayersRegion, buildGeometryRegion, generateWorld } from "@/lib/world";
+import {
+  BiomeId,
+  BlockId,
+  VoxelWorld,
+  buildGeometryLayersRegion,
+  buildGeometryRegion,
+  collectDungeonSites,
+  computeFullLight,
+  generateWorld
+} from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -33,9 +42,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "b5fdbdb52db110be4d963c2eb30ae5678ac46dd8c3ca63baccf98b464059d5c3"],
-    [1, "4ff7cf20eabc45506c83314afa370f8f09107b1f6a9a93865fb10681c8b8456d"],
-    [999999937, "ac9e6f83a447e9194a230ef6f771db8da7173ebd291244b1cd10196ab903b109"]
+    [1337, "2037297fd8b8269fa984f907b84bcf3b185e4c261ae4a93b089de0178cc510d2"],
+    [1, "c55a0b3395d2a95643ded6af66d49bbea4de44d045f5a812f625f397f5b377d7"],
+    [999999937, "4407190a254fdb5fa7f00aff69ba75b6c624bac6bc27096934e713506979384c"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -43,7 +52,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("788cb3a2952929975d18d11a47e789d324f7df76be47912a0b4221b07ad88b58");
+      expect(hashBytes(fullWorld().blocks)).toBe("3675b077d5a0a677aadf7a4b5e781cfb38cec2eef6aa62c676e3a9f0f48a404f");
     },
     { timeout: 60000 }
   );
@@ -76,6 +85,20 @@ describe("worldgen determinism", () => {
     // Sea-level fill: a column whose floor is below sea level holds water at y=43.
     expect(world.highestSolidY(1, 277)).toBe(30);
     expect(world.get(1, 43, 277)).toBe(BlockId.Water);
+
+    // Lava pools in the deepest caves only — present, and never above lavaLevel.
+    let lavaCells = 0;
+    let maxLavaY = -1;
+    const layer = world.sizeX * world.sizeZ;
+    for (let i = 0; i < world.blocks.length; i += 1) {
+      if (world.blocks[i] === BlockId.Lava) {
+        lavaCells += 1;
+        const ly = Math.floor(i / layer);
+        if (ly > maxLavaY) maxLavaY = ly;
+      }
+    }
+    expect(lavaCells).toBeGreaterThan(0);
+    expect(maxLavaY).toBeLessThanOrEqual(9); // GEN.lavaLevel
   });
 });
 
@@ -148,6 +171,51 @@ describe("world content balance", () => {
   );
 });
 
+describe("dungeons", () => {
+  test(
+    "dungeons generate underground with chests, spawners, and mossy cobble, clear of spawn",
+    () => {
+      const world = fullWorld();
+      const sites = collectDungeonSites(world);
+      expect(sites.chestIndices.length).toBeGreaterThan(0);
+      expect(sites.spawnerIndices.length).toBeGreaterThan(0);
+
+      const chestSet = new Set(sites.chestIndices);
+      const spawnerSet = new Set(sites.spawnerIndices);
+      const cx = world.sizeX / 2;
+      const cz = world.sizeZ / 2;
+
+      let chests = 0;
+      let spawners = 0;
+      let mossy = 0;
+      for (let x = 0; x < world.sizeX; x += 1) {
+        for (let z = 0; z < world.sizeZ; z += 1) {
+          for (let y = 0; y < world.sizeY; y += 1) {
+            const block = world.get(x, y, z);
+            if (block === BlockId.Chest) {
+              chests += 1;
+              // Every generated chest must be a known dungeon site — this is what
+              // gates lazy loot fill, so a mismatch would mean re-rollable loot.
+              expect(chestSet.has(world.index(x, y, z))).toBe(true);
+              // No dungeon loot in the immediate spawn area.
+              expect(Math.hypot(x - cx, z - cz)).toBeGreaterThanOrEqual(30);
+            } else if (block === BlockId.Spawner) {
+              spawners += 1;
+              expect(spawnerSet.has(world.index(x, y, z))).toBe(true);
+            } else if (block === BlockId.MossyCobblestone) {
+              mossy += 1;
+            }
+          }
+        }
+      }
+      expect(chests).toBeGreaterThan(0);
+      expect(spawners).toBeGreaterThan(0);
+      expect(mossy).toBeGreaterThan(0);
+    },
+    { timeout: 60000 }
+  );
+});
+
 describe("meshing", () => {
   test(
     "geometry for a generated region is byte-identical",
@@ -155,8 +223,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1342776);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("2e86e767dc462d7770538409b2faab359cfc82e2978205ff94dcf34a4fd187cb");
+      expect(positions.count).toBe(1300860);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("a6683ea1019a1cf105aafbb8e061e6c058fe0931f1c54b73c0c05c1a931a6db1");
     },
     { timeout: 60000 }
   );
@@ -215,5 +283,25 @@ describe("meshing", () => {
     expect(geometry.boundingBox!.min.z).toBeCloseTo(3.40625);
     expect(geometry.boundingBox!.max.z).toBeCloseTo(3.59375);
     expect(geometry.boundingBox!.max.y - geometry.boundingBox!.min.y).toBe(2);
+  });
+
+  test("the mesh carries a per-vertex aLight attribute sampled from the faced voxel", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.Stone);
+    world.light = computeFullLight(world);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
+    const aLight = geometry.getAttribute("aLight");
+    expect(aLight.itemSize).toBe(2);
+    expect(aLight.count).toBe(geometry.getAttribute("position").count);
+    // Every visible face of the lone block opens into open-sky air, so its
+    // skyExposure (aLight.x) is lit, and nothing emits block light (aLight.y = 0).
+    let minSky = 1;
+    let maxBlock = 0;
+    for (let i = 0; i < aLight.count; i += 1) {
+      minSky = Math.min(minSky, aLight.getX(i));
+      maxBlock = Math.max(maxBlock, aLight.getY(i));
+    }
+    expect(minSky).toBeGreaterThan(0.9);
+    expect(maxBlock).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
-import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SavedContainer, SavedSlot, InventorySlot } from "@/lib/game/types";
+import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SavedContainer, SavedSlot, InventorySlot } from "@/lib/game/types";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
@@ -57,8 +57,18 @@ export function migrateSaveV2toV3(save: SaveDataV2): SaveDataV3 {
  * Migrates a v3 save to v4 — a pure version bump. `blockEntities` (chest
  * contents) is optional, so a pre-chest save simply loads with no containers.
  */
-export function migrateSaveV3toV4(save: SaveDataV3): SaveData {
+export function migrateSaveV3toV4(save: SaveDataV3): SaveDataV4 {
   return { ...save, version: 4 };
+}
+
+/**
+ * Migrates a v4 save to v5 — a pure version bump. `lootedChests` is optional,
+ * so a pre-dungeon save simply loads with no dungeon chests yet looted. (In
+ * practice the SAVE_KEY bump to v6 discards pre-dungeon saves, but the
+ * migration keeps the version chain complete and the readers total.)
+ */
+export function migrateSaveV4toV5(save: SaveDataV4): SaveData {
+  return { ...save, version: 5 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -66,12 +76,13 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveData | SaveDataV3 | SaveDataV2 | SaveDataV1;
+    const parsed = JSON.parse(raw) as SaveData | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
-    if (migrated.version !== 4) return null;
+    if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
+    if (migrated.version !== 5) return null;
     return migrated;
   } catch {
     return null;
@@ -115,6 +126,17 @@ export function serializeContainers(containers: Map<number, InventorySlot[]>): S
     out.push({ index, slots: inventorySlotsSnapshot(slots) });
   }
   return out;
+}
+
+/** Snapshots the set of opened/broken dungeon chest voxel indices for persistence. */
+export function serializeLootedChests(looted: Set<number>): number[] {
+  return [...looted];
+}
+
+/** Reads the opened/broken dungeon chest indices from a save (finite numbers only). */
+export function readLootedChests(save: SaveData): number[] {
+  if (!Array.isArray(save.lootedChests)) return [];
+  return save.lootedChests.filter((value) => Number.isFinite(value));
 }
 
 /**

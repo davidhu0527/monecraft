@@ -25,6 +25,7 @@ export const RECIPES: Recipe[] = [
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
+  { id: "torch", label: "1 Wood -> 4 Torch", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "torch", count: 4 } },
   {
     id: "cook_chicken",
     label: "Raw Chicken + Planks -> Cooked Chicken",
@@ -252,6 +253,44 @@ export const RECIPES: Recipe[] = [
       { slotId: "wood", count: 2 }
     ],
     result: { slotId: "diamond_spear", count: 1 }
+  },
+  {
+    id: "bow",
+    label: "3 Wood + 3 String -> Bow",
+    cost: [
+      { slotId: "wood", count: 3 },
+      { slotId: "string", count: 3 }
+    ],
+    result: { slotId: "bow", count: 1 }
+  },
+  {
+    id: "arrow",
+    label: "1 Stone + 1 Wood + 1 Feather -> 4 Arrows",
+    cost: [
+      { slotId: "stone", count: 1 },
+      { slotId: "wood", count: 1 },
+      { slotId: "feather", count: 1 }
+    ],
+    result: { slotId: "arrow", count: 4 }
+  },
+  {
+    id: "boss_summoner",
+    label: "1 Diamond Ore + 2 Bone + 2 Gold Ore -> Cursed Totem",
+    cost: [
+      { slotId: "diamond_ore", count: 1 },
+      { slotId: "bone", count: 2 },
+      { slotId: "gold_ore", count: 2 }
+    ],
+    result: { slotId: "boss_summoner", count: 1 }
+  },
+  {
+    id: "dragon_sword",
+    label: "1 Dragon Heart + 2 Diamond Ore -> Dragon Sword",
+    cost: [
+      { slotId: "dragon_heart", count: 1 },
+      { slotId: "diamond_ore", count: 2 }
+    ],
+    result: { slotId: "dragon_sword", count: 1 }
   },
   {
     id: "helmet",

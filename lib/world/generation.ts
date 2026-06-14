@@ -27,6 +27,9 @@ export const GEN = Object.freeze({
   }),
   mountainStoneAboveY: 65,
   snowAboveY: 68,
+  // Lava pools in the deepest caves: carved air at or below this Y floods with
+  // lava, well under the surface so it stays a deep-cave hazard.
+  lavaLevel: 9,
   // Sand shoreline band around sea level (deeper floors keep their biome top).
   beachMaxAboveSea: 1,
   beachDepthBelowSea: 2,
@@ -36,6 +39,7 @@ export const GEN = Object.freeze({
   // Cacti per dry desert column — keyed on area so drowned deserts get few.
   cactusChance: 0.012,
   houseCount: 120,
+  dungeonCount: 28,
   oreConfigs: Object.freeze([
     { id: BlockId.SliverOre, attempts: 120000, minY: 3, maxYOffset: 10, minSize: 3, maxSize: 10 },
     { id: BlockId.RubyOre, attempts: 52000, minY: 2, maxYOffset: 16, minSize: 3, maxSize: 10 },
@@ -76,9 +80,15 @@ export function generateWorld(world: VoxelWorld): void {
   placeWater(world);
   placeBeaches(world);
   placeOres(world, rand);
+  // After placeOres so it can't shift ore RNG (placeOres gates rand on air
+  // adjacency, which lava would change), and before placeDungeons so dungeon
+  // rooms — whose floors can sit at or below lavaLevel — overwrite any lava
+  // rather than flooding. Trees/cacti/houses only read the surface, far above.
+  placeLava(world);
   placeTrees(world, rand);
   placeCacti(world);
   placeStructures(world, rand);
+  placeDungeons(world);
 }
 
 function generateTerrain(world: VoxelWorld): void {
@@ -184,6 +194,17 @@ function carveCaves(world: VoxelWorld, rand: () => number): void {
     const cy = 5 + rand() * (world.sizeY - 14);
     const cz = 12 + rand() * (world.sizeZ - 24);
     carveSphere(cx, cy, cz, 5.4 + rand() * 6.4);
+  }
+}
+
+function placeLava(world: VoxelWorld): void {
+  const { lavaLevel } = GEN;
+  for (let x = 1; x < world.sizeX - 1; x += 1) {
+    for (let z = 1; z < world.sizeZ - 1; z += 1) {
+      for (let y = 1; y <= lavaLevel; y += 1) {
+        if (world.get(x, y, z) === BlockId.Air) world.set(x, y, z, BlockId.Lava);
+      }
+    }
   }
 }
 
@@ -366,4 +387,117 @@ function placeHouse(world: VoxelWorld, cx: number, cz: number): void {
   for (let x = cx - half - 1; x <= cx + half + 1; x += 1) {
     for (let z = cz - half - 1; z <= cz + half + 1; z += 1) world.set(x, floorY + 4, z, BlockId.Planks);
   }
+}
+
+// ── Dungeons ──────────────────────────────────────────────────────────────
+// Small underground cobblestone rooms with pre-fillable loot chests and a mob
+// spawner. The chest CONTENTS are not generated here (the block-diff save can't
+// carry worldgen-placed entities), only the blocks — the engine fills chests
+// lazily on first open. To support that, the engine re-derives the chest and
+// spawner voxel indices on load via collectDungeonSites(), which replays this
+// exact placement math. Two invariants keep build and derive in lockstep:
+//   1. A dedicated PRNG seeded only from world.seed (independent of the shared
+//      generation stream), and every dungeon draws a fixed number of values up
+//      front so the stream stays aligned whether or not the dungeon is placed.
+//   2. Placement validates against terrainTopY() — a seed-pure surface estimate
+//      — never highestSolidY(), which a cave or a player edit could shift.
+
+type DungeonSink = { chest: (idx: number) => void; spawner: (idx: number) => void };
+
+const NOOP_DUNGEON_SINK: DungeonSink = { chest: () => {}, spawner: () => {} };
+
+/** A PRNG seeded only from the world seed, decoupled from the main gen stream. */
+function dungeonRand(seed: number): () => number {
+  let t = (seed ^ 0x9e3779b9) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * The generation-time terrain surface at (x,z), computed purely from the seed
+ * (mirrors the topY math in generateTerrain). Unlike highestSolidY it reads no
+ * blocks, so it is identical at generation and at load — the property that lets
+ * collectDungeonSites reproduce the exact dungeon layout.
+ */
+function terrainTopY(world: VoxelWorld, x: number, z: number): number {
+  const biome = world.getBiome(x, z);
+  const noise = smoothNoise2D(x, z, world.seed);
+  const { baseHeight, noiseScale } = GEN.biomes[biome];
+  return Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
+}
+
+function buildDungeonRoom(world: VoxelWorld, cx: number, cz: number, floorY: number, secondChest: boolean, write: boolean, sink: DungeonSink): void {
+  const half = 3; // 7x7 outer, 5x5x4 hollow interior
+  if (write) {
+    for (let y = floorY - 1; y <= floorY + 4; y += 1) {
+      for (let x = cx - half; x <= cx + half; x += 1) {
+        for (let z = cz - half; z <= cz + half; z += 1) {
+          if (!world.inBounds(x, y, z)) continue;
+          const interior = x > cx - half && x < cx + half && z > cz - half && z < cz + half && y >= floorY && y <= floorY + 3;
+          if (interior) {
+            world.set(x, y, z, BlockId.Air);
+          } else {
+            const mossy = hash2D(x * 1.7 + y * 0.9, z * 2.3 - y * 0.6) > 0.6;
+            world.set(x, y, z, mossy ? BlockId.MossyCobblestone : BlockId.Cobblestone);
+          }
+        }
+      }
+    }
+    world.set(cx - 2, floorY, cz - 2, BlockId.Chest);
+    if (secondChest) world.set(cx + 2, floorY, cz + 2, BlockId.Chest);
+    world.set(cx, floorY, cz, BlockId.Spawner);
+  }
+  sink.chest(world.index(cx - 2, floorY, cz - 2));
+  if (secondChest) sink.chest(world.index(cx + 2, floorY, cz + 2));
+  sink.spawner(world.index(cx, floorY, cz));
+}
+
+function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): void {
+  const rand = dungeonRand(world.seed);
+  const centerX = world.sizeX / 2;
+  const centerZ = world.sizeZ / 2;
+  for (let i = 0; i < GEN.dungeonCount; i += 1) {
+    // Draw every random up front so the stream advances identically whether or
+    // not this dungeon turns out to be placeable.
+    const cx = 12 + Math.floor(rand() * (world.sizeX - 24));
+    const cz = 12 + Math.floor(rand() * (world.sizeZ - 24));
+    const floorRoll = rand();
+    const secondChest = rand() < 0.6;
+
+    const surface = terrainTopY(world, cx, cz);
+    const minFloor = 7;
+    const maxFloor = surface - 7; // keep the ceiling >=3 below the surface
+    if (maxFloor < minFloor) continue;
+    // Keep dungeons clear of the spawn area so there's no free starter loot.
+    if (Math.hypot(cx - centerX, cz - centerZ) < 40) continue;
+
+    const floorY = minFloor + Math.floor(floorRoll * (maxFloor - minFloor + 1));
+    buildDungeonRoom(world, cx, cz, floorY, secondChest, write, sink);
+  }
+}
+
+function placeDungeons(world: VoxelWorld): void {
+  buildDungeons(world, true, NOOP_DUNGEON_SINK);
+}
+
+export type DungeonSites = { chestIndices: number[]; spawnerIndices: number[] };
+
+/**
+ * Re-derives the voxel indices of every dungeon chest and spawner WITHOUT
+ * writing blocks, by replaying buildDungeons' placement math. The engine calls
+ * this once after regenerating the world on load to rebuild the session-only
+ * dungeon index sets that gate lazy loot fill and spawner activation.
+ */
+export function collectDungeonSites(world: VoxelWorld): DungeonSites {
+  const chestIndices: number[] = [];
+  const spawnerIndices: number[] = [];
+  buildDungeons(world, false, {
+    chest: (idx) => chestIndices.push(idx),
+    spawner: (idx) => spawnerIndices.push(idx)
+  });
+  return { chestIndices, spawnerIndices };
 }

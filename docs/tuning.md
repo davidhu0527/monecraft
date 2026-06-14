@@ -43,10 +43,35 @@ timers. After `WATER_DAMAGE_DELAY_SECONDS` (60), environmental damage bypasses
 armor every `WATER_DAMAGE_INTERVAL_SECONDS` (1) for `WATER_DAMAGE_HP` (3 HP = 1.5
 hearts). These counters are transient and reset on reload/respawn.
 
+## Cave hazards — lava & drowning
+
+`LAVA_DAMAGE_INTERVAL_SECONDS`, `LAVA_DAMAGE_HP`, `LAVA_BURN_SECONDS`,
+`MAX_OXYGEN`, `OXYGEN_HOLD_SECONDS`, `OXYGEN_REFILL_SECONDS`,
+`OXYGEN_DROWN_INTERVAL_SECONDS`, `OXYGEN_DROWN_HP`.
+
+Read by `systems/playerStats.ts` (`tickLavaExposure`, `tickOxygen`), both on the
+armor-bypassing damage path. **Lava** burns the instant you touch it (no grace
+period, unlike water) for `LAVA_DAMAGE_HP` (6 = 3 hearts) every
+`LAVA_DAMAGE_INTERVAL_SECONDS` (0.5) and keeps burning `LAVA_BURN_SECONDS` (3)
+after you escape — the deep-cave death trap. Lava is solid, so contact is checked
+underfoot/at the body, not by immersion. **Drowning** keys on the head: the
+bubble meter drains over `OXYGEN_HOLD_SECONDS` (15) while the eye cell is
+underwater, then deals `OXYGEN_DROWN_HP` (2) every `OXYGEN_DROWN_INTERVAL_SECONDS`
+(1); surfacing refills it over `OXYGEN_REFILL_SECONDS` (1.5). This is separate
+from the body-keyed 60 s water-exposure timer above — wading chest-deep never
+drowns you. All these counters are transient (reset on reload/respawn).
+
+Lighting itself has no `config.ts` tunables: the per-voxel light propagation is
+in [`lib/world/lighting.ts`](../lib/world/lighting.ts) (block opacity/emission and
+the 0–15 levels), and the cave-darkness floor + torch tint are shader constants in
+[`GameRenderer.ts`](../lib/game/render/GameRenderer.ts) (`SKY_LIGHT_FLOOR`,
+`TORCH_TINT`).
+
 ## Danger — day-night & the mob director
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,
-`HOSTILE_BURN_ABOVE_DAYLIGHT`, `HOSTILE_SPAWN_INTERVAL_SECONDS`, `HOSTILE_CAP`.
+`HOSTILE_BURN_ABOVE_DAYLIGHT`, `HOSTILE_SPAWN_INTERVAL_SECONDS`, `HOSTILE_CAP`,
+`SPAWNER_INTERVAL_SECONDS`, `SPAWNER_ACTIVATION_RADIUS`, `SPAWNER_LOCAL_CAP`.
 
 Read by `systems/dayNight.ts`, `systems/spawnDirector.ts`, and `systems/mobAI.ts`.
 `DAY_CYCLE_SECONDS` (240) sets the whole rhythm — a shorter day means more frequent
@@ -57,6 +82,13 @@ them ordered `spawn ≤ spider_aggro` and `burn` well above both, or mobs will s
 into instant sunlight. `HOSTILE_CAP` × `HOSTILE_SPAWN_INTERVAL_SECONDS` bounds how
 crowded a night gets. Tests aim daylight explicitly (a `calmDaytime` helper) to
 avoid first-night aggro.
+
+**Dungeon spawners** are a separate, time-independent danger source: while the
+player is within `SPAWNER_ACTIVATION_RADIUS` (16) of an intact spawner, it drips
+one hostile every `SPAWNER_INTERVAL_SECONDS` (8) up to `SPAWNER_LOCAL_CAP` (6)
+clustered nearby — all still under the shared `HOSTILE_CAP`. Lower the interval or
+raise the local cap to make dungeons nastier. The dungeon count itself is a
+worldgen constant (`GEN.dungeonCount`, see below).
 
 ## Weather (cosmetic)
 
@@ -88,6 +120,27 @@ gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config. Spears
 override only melee reach; their projectile speed, gravity, lifetime, cooldown,
 terrain embed duration, and collision radius are global, while tier
 damage/durability live in `items.ts`.
+
+## Ranged combat & endgame
+
+Arrows: `ARROW_SPEED`, `ARROW_GRAVITY`, `ARROW_TTL`, `ARROW_HIT_RADIUS`,
+`ARROW_MAX_SUBSTEPS`, `ARROW_MAX_SEGMENT`.
+Bow: `BOW_ARROW_DAMAGE`, `BOW_KNOCKBACK`, `BOW_COOLDOWN_SECONDS`, `BOW_DURABILITY_PER_SHOT`.
+Ranged mobs: `SKELETON_STANDOFF_MIN/MAX`, `SKELETON_ARROW_DAMAGE`, `SKELETON_ARROW_SPEED`,
+`SKELETON_FIRE_VGAP`, `SKELETON_LEAD_FACTOR`, `MOB_ARROW_KNOCKBACK`.
+Boss: `BOSS_HP`, `BOSS_MELEE_REACH`, `BOSS_MELEE_DAMAGE`, `BOSS_ARROW_DAMAGE`,
+`BOSS_ARROW_SPEED`, `BOSS_SPREAD`, `BOSS_SUMMON_RADIUS`, `BOSS_MINION_CAP`,
+`BOSS_SUMMON_INTERVAL_SECONDS`.
+
+Read by `systems/projectileAI.ts`, `systems/combat.ts`, and `systems/mobAI.ts`.
+`ARROW_GRAVITY` (14) is below the player's `GRAVITY` (26) so arrows fly flatter and
+read clearly; `ARROW_MAX_SEGMENT`/`ARROW_MAX_SUBSTEPS` bound the per-frame anti-tunnel
+substepping (raise the substep cap only if very fast arrows ever slip past thin mobs).
+`BOW_COOLDOWN_SECONDS` is the fire rate; bow/Dragon-Sword durability and damage live in
+`items.ts`. The skeleton standoff band is the kite distance — widen it to make archers
+harder to corner. `BOSS_HP` (400) is the headline difficulty dial for the fight;
+`BOSS_MINION_CAP` and the shared `HOSTILE_CAP` together bound how crowded it gets (the
+boss summon itself bypasses the spawn-director cap so the fight always starts).
 
 ## Farming & breeding pace
 
@@ -139,10 +192,12 @@ tolerated before the auto-unstuck teleport fires.
 
 Change these only with care:
 
-- **`SAVE_KEY`** (`"minecraft_save_v5"`) is the localStorage key name. Note it's
-  versioned independently of the save **schema** (currently v4, per
+- **`SAVE_KEY`** (`"minecraft_save_v6"`) is the localStorage key name. Note it's
+  versioned independently of the save **schema** (currently v5, per
   [save-format.md](save-format.md)) — renaming `SAVE_KEY` orphans every existing
   player's save. Don't bump it to express a schema change; add a migration instead.
+  It was bumped v5 → v6 for the 0.7.0 dungeon worldgen — a deliberate terrain
+  change that invalidates old block-diffs, which **is** a legitimate reason to bump.
 - **`INVENTORY_SLOTS` / `HOTBAR_SLOTS` / `MAX_STACK_SIZE`** affect the saved
   inventory layout. `save.ts` already migrates the v1 (40-slot) → v2 (36-slot)
   change; altering these again needs a matching migration or old saves break.
@@ -151,4 +206,7 @@ Change these only with care:
 - **Worldgen is not tuned here.** Terrain/ore/structure constants live in the
   frozen `GEN` object in `generation.ts` and are a byte-identical save contract
   pinned by hash tests — changing them requires the re-baseline policy in
-  [testing.md](testing.md).
+  [testing.md](testing.md). This includes **`GEN.dungeonCount`** (28, how many
+  dungeon rooms are attempted) and the dungeon loot tables / tier odds in
+  `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
+  changing the _placement_ count or geometry is).

@@ -10,7 +10,8 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   horse: [8, 18],
   zombie: [4, 9],
   skeleton: [5, 11],
-  spider: [4, 10]
+  spider: [4, 10],
+  boss: [6, 12]
 };
 
 /** Structural subset of the engine's MobState — state.mobs passes directly. */

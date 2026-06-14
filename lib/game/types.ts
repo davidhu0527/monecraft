@@ -49,7 +49,7 @@ export type Recipe = {
   station?: "furnace";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider";
+export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider" | "boss";
 
 export type MobModel = {
   group: THREE.Group;
@@ -94,12 +94,25 @@ export type SaveDataV3 = Omit<SaveDataV2, "version"> & {
 };
 
 /**
- * Current save shape (v4): v3 plus chest contents as block-entities. The new
- * field is optional so the v3→v4 migration is a pure version bump and pre-v4
- * saves load with no containers. `SAVE_KEY` is unchanged — chests are never
- * generated, so worldgen and the block-diff index space are untouched.
+ * v4 save shape: v3 plus chest contents as block-entities. The field is
+ * optional so the v3→v4 migration is a pure version bump and pre-v4 saves load
+ * with no containers.
  */
-export type SaveData = Omit<SaveDataV3, "version"> & {
+export type SaveDataV4 = Omit<SaveDataV3, "version"> & {
   version: 4;
   blockEntities?: SavedContainer[];
+};
+
+/**
+ * Current save shape (v5): v4 plus the set of dungeon loot-chest voxel indices
+ * the player has already opened or broken. Dungeon chests are filled lazily on
+ * first access and this set — not the chest's emptiness — is what prevents a
+ * re-roll on reload (an emptied chest is dropped from `blockEntities`). The
+ * field is optional so the v4→v5 migration is a pure version bump. Note
+ * `SAVE_KEY` is bumped to v6 alongside this because the dungeon worldgen
+ * changed the deterministic block-diff baseline.
+ */
+export type SaveData = Omit<SaveDataV4, "version"> & {
+  version: 5;
+  lootedChests?: number[];
 };

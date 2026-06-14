@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createAudioDirector, DEFAULT_AUDIO_SETTINGS, type AudioDirector, type AudioSettings } from "@/lib/game/audio/audioDirector";
 import { readAudioSettings, writeAudioSettings } from "@/lib/game/audio/settings";
-import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, SAVE_KEY } from "@/lib/game/config";
+import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, MAX_OXYGEN, SAVE_KEY } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
@@ -34,6 +34,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   selectedSlot: 0,
   hearts: MAX_HEARTS,
   hunger: MAX_HUNGER,
+  oxygen: MAX_OXYGEN,
   daylightPercent: 100,
   passiveCount: 0,
   hostileCount: 0,
@@ -47,7 +48,9 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   capsActive: false,
   sleeping: false,
   craftingStation: null,
-  container: null
+  container: null,
+  boss: null,
+  victory: false
 };
 
 const noopSubscribe = () => () => {};
@@ -212,7 +215,9 @@ export function useMinecraftGame() {
       }
 
       for (const event of gameEngine.consumeEvents()) {
-        if (event.type === "died") {
+        if (event.type === "died" || event.type === "bossDefeated") {
+          // Free the cursor so the death/victory button is clickable; the pause
+          // command ignores both states, so the lock-loss won't open the menu too.
           input.clearKeys();
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         }
@@ -232,6 +237,9 @@ export function useMinecraftGame() {
         }
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
+        }
+        if (event.type === "summonFailed") {
+          flashMessage("The totem lies dormant — a beast already walks");
         }
         renderer.handleEvent(event, gameEngine.state);
         audio.handleEvent(event);
@@ -286,6 +294,7 @@ export function useMinecraftGame() {
     armorPoints: snapshot.armorPoints,
     hearts: snapshot.hearts,
     hunger: snapshot.hunger,
+    oxygen: snapshot.oxygen,
     daylightPercent: snapshot.daylightPercent,
     passiveCount: snapshot.passiveCount,
     hostileCount: snapshot.hostileCount,
@@ -294,6 +303,8 @@ export function useMinecraftGame() {
     sleeping: snapshot.sleeping,
     craftingStation: snapshot.craftingStation,
     container: snapshot.container,
+    boss: snapshot.boss,
+    victory: snapshot.victory,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
@@ -305,6 +316,7 @@ export function useMinecraftGame() {
     recipes: RECIPES,
     maxHearts: MAX_HEARTS,
     maxHunger: MAX_HUNGER,
+    maxOxygen: MAX_OXYGEN,
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
@@ -315,6 +327,7 @@ export function useMinecraftGame() {
       requestPointerLock();
     },
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
+    dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
       if (engine) persistGame(engine, flashMessage);
     },

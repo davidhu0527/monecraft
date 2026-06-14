@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ATLAS_COLUMNS, ATLAS_ROWS, tileIndexFor } from "./atlas";
 import { BlockId } from "./blocks";
 import { doorBounds, isDoorBlock } from "./doors";
+import { MAX_LIGHT } from "./lighting";
 import { VoxelWorld } from "./voxelWorld";
 
 export type GeometryLayers = {
@@ -14,6 +15,9 @@ type GeometryBuffers = {
   normals: number[];
   colors: number[];
   uvs: number[];
+  // Per-vertex (skyExposure, blockLight), each 0..1. Consumed by the world
+  // material's shader patch, which combines them with the day/night uniform.
+  lights: number[];
 };
 
 const FACE_DEFS: {
@@ -77,7 +81,7 @@ const FACE_DEFS: {
 ];
 
 function createBuffers(): GeometryBuffers {
-  return { positions: [], normals: [], colors: [], uvs: [] };
+  return { positions: [], normals: [], colors: [], uvs: [], lights: [] };
 }
 
 function createGeometry(buffers: GeometryBuffers): THREE.BufferGeometry {
@@ -86,6 +90,7 @@ function createGeometry(buffers: GeometryBuffers): THREE.BufferGeometry {
   geometry.setAttribute("normal", new THREE.Float32BufferAttribute(buffers.normals, 3));
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(buffers.colors, 3));
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(buffers.uvs, 2));
+  geometry.setAttribute("aLight", new THREE.Float32BufferAttribute(buffers.lights, 2));
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -154,16 +159,25 @@ function buildGeometryBuffers(
     nz: number,
     color: [number, number, number],
     u: number,
-    v: number
+    v: number,
+    light: [number, number]
   ) => {
     buffers.positions.push(x, y, z);
     buffers.normals.push(nx, ny, nz);
     buffers.colors.push(color[0], color[1], color[2]);
     buffers.uvs.push(u, v);
+    buffers.lights.push(light[0], light[1]);
   };
   const materialTint = (ny: number): [number, number, number] => {
     const shade = ny > 0 ? 1 : ny < 0 ? 0.95 : 0.9;
     return [shade, shade, shade];
+  };
+
+  // Light hitting a face comes from the voxel the face opens into (its outward
+  // neighbor), sampled flat across the face like the existing AO. Returns
+  // (skyExposure, blockLight) normalized to 0..1.
+  const sampleFaceLight = (x: number, y: number, z: number): [number, number] => {
+    return [world.getSky(x, y, z) / MAX_LIGHT, world.getBlockLight(x, y, z) / MAX_LIGHT];
   };
 
   const tileUV = (block: number, ny: number): [number, number, number, number] => {
@@ -206,15 +220,16 @@ function buildGeometryBuffers(
       const ny = face.dir[1];
       const nz = face.dir[2];
       const color = materialTint(ny);
+      const light = sampleFaceLight(x + nx, y + ny, z + nz);
       const [u0, v0, u1, v1] = tileUV(block, ny);
       const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + cy, z + (cz ? maxZ : minZ)] as const);
       const [a, b, c, d] = corners;
-      pushVertex(target, ...a, nx, ny, nz, color, u0, v1);
-      pushVertex(target, ...b, nx, ny, nz, color, u0, v0);
-      pushVertex(target, ...c, nx, ny, nz, color, u1, v0);
-      pushVertex(target, ...a, nx, ny, nz, color, u0, v1);
-      pushVertex(target, ...c, nx, ny, nz, color, u1, v0);
-      pushVertex(target, ...d, nx, ny, nz, color, u1, v1);
+      pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
+      pushVertex(target, ...b, nx, ny, nz, color, u0, v0, light);
+      pushVertex(target, ...c, nx, ny, nz, color, u1, v0, light);
+      pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
+      pushVertex(target, ...c, nx, ny, nz, color, u1, v0, light);
+      pushVertex(target, ...d, nx, ny, nz, color, u1, v1, light);
     }
   };
 
@@ -243,6 +258,7 @@ function buildGeometryBuffers(
           const base = materialTint(ny);
           const ao = faceOcclusion(x, y, z, nx, ny, nz);
           const color: [number, number, number] = [base[0] * ao, base[1] * ao, base[2] * ao];
+          const light = sampleFaceLight(x + nx, y + ny, z + nz);
           const [u0, v0, u1, v1] = tileUV(block, ny);
 
           const a = face.corners[0];
@@ -250,12 +266,12 @@ function buildGeometryBuffers(
           const c = face.corners[2];
           const d = face.corners[3];
 
-          pushVertex(target, x + a[0], y + a[1], z + a[2], nx, ny, nz, color, u0, v1);
-          pushVertex(target, x + b[0], y + b[1], z + b[2], nx, ny, nz, color, u0, v0);
-          pushVertex(target, x + c[0], y + c[1], z + c[2], nx, ny, nz, color, u1, v0);
-          pushVertex(target, x + a[0], y + a[1], z + a[2], nx, ny, nz, color, u0, v1);
-          pushVertex(target, x + c[0], y + c[1], z + c[2], nx, ny, nz, color, u1, v0);
-          pushVertex(target, x + d[0], y + d[1], z + d[2], nx, ny, nz, color, u1, v1);
+          pushVertex(target, x + a[0], y + a[1], z + a[2], nx, ny, nz, color, u0, v1, light);
+          pushVertex(target, x + b[0], y + b[1], z + b[2], nx, ny, nz, color, u0, v0, light);
+          pushVertex(target, x + c[0], y + c[1], z + c[2], nx, ny, nz, color, u1, v0, light);
+          pushVertex(target, x + a[0], y + a[1], z + a[2], nx, ny, nz, color, u0, v1, light);
+          pushVertex(target, x + c[0], y + c[1], z + c[2], nx, ny, nz, color, u1, v0, light);
+          pushVertex(target, x + d[0], y + d[1], z + d[2], nx, ny, nz, color, u1, v1, light);
         }
       }
     }
