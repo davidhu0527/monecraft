@@ -1,5 +1,6 @@
 import { BiomeId, BlockId } from "./blocks";
 import { VoxelWorld } from "./voxelWorld";
+import type { WorldType } from "./worldTypes";
 
 /**
  * Deterministic terrain generation.
@@ -49,6 +50,59 @@ export const GEN = Object.freeze({
   ])
 });
 
+/**
+ * The terrain-shaping subset of GEN that a world type can vary: sea level and
+ * per-biome surface height (base + noise amplitude). Everything else (caves,
+ * ores, lava, trees, structures, dungeons) is type-independent and still reads
+ * GEN directly. `terrainConfigFor("default")` returns exactly the GEN values, so
+ * the default world stays byte-identical.
+ */
+export type TerrainConfig = {
+  seaLevel: number;
+  biomes: Record<BiomeId, { baseHeight: number; noiseScale: number }>;
+};
+
+const BIOME_IDS = [BiomeId.Plains, BiomeId.Desert, BiomeId.Ocean, BiomeId.Forest, BiomeId.Mountains] as const;
+
+/** Builds a biome height table from GEN, applying `transform` to each biome's base/scale. */
+function biomeHeights(
+  transform: (b: { baseHeight: number; noiseScale: number }, id: BiomeId) => { baseHeight: number; noiseScale: number }
+): Record<BiomeId, { baseHeight: number; noiseScale: number }> {
+  const out = {} as Record<BiomeId, { baseHeight: number; noiseScale: number }>;
+  for (const id of BIOME_IDS) {
+    const g = GEN.biomes[id];
+    out[id] = transform({ baseHeight: g.baseHeight, noiseScale: g.noiseScale }, id);
+  }
+  return out;
+}
+
+// A raised sea with land biomes lifted so they break the surface as gently
+// sloped islands (gentle enough that findSpawnOnLand still finds a dry spawn),
+// while oceans stay as deep channels between them.
+const ISLANDS_BIOMES: Record<BiomeId, { baseHeight: number; noiseScale: number }> = {
+  [BiomeId.Plains]: { baseHeight: 54, noiseScale: 4 },
+  [BiomeId.Desert]: { baseHeight: 52, noiseScale: 3 },
+  [BiomeId.Ocean]: { baseHeight: 34, noiseScale: 3 },
+  [BiomeId.Forest]: { baseHeight: 56, noiseScale: 5 },
+  [BiomeId.Mountains]: { baseHeight: 64, noiseScale: 16 }
+};
+
+/** The terrain config for a world type. "default" returns the GEN values verbatim. */
+export function terrainConfigFor(worldType: WorldType): TerrainConfig {
+  switch (worldType) {
+    case "flat":
+      // Flat dry ground just above sea level (no water); biome-colored top.
+      return { seaLevel: GEN.seaLevel, biomes: biomeHeights(() => ({ baseHeight: 48, noiseScale: 0 })) };
+    case "amplified":
+      // Exaggerated relief; mountains clamp at the height ceiling as plateaus.
+      return { seaLevel: GEN.seaLevel, biomes: biomeHeights((b) => ({ baseHeight: b.baseHeight, noiseScale: b.noiseScale * 2 })) };
+    case "islands":
+      return { seaLevel: 54, biomes: ISLANDS_BIOMES };
+    default:
+      return { seaLevel: GEN.seaLevel, biomes: biomeHeights((b) => b) };
+  }
+}
+
 function hash2D(x: number, z: number): number {
   const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
   return n - Math.floor(n);
@@ -64,7 +118,11 @@ function smoothNoise2D(x: number, z: number, seed: number): number {
   return val;
 }
 
-export function generateWorld(world: VoxelWorld): void {
+export function generateWorld(world: VoxelWorld, worldType: WorldType = "default"): void {
+  // Fork on the type up front, before any block write: "default" yields the GEN
+  // values so its output is byte-identical to before this feature.
+  const cfg = terrainConfigFor(worldType);
+
   const rand = (() => {
     let t = (world.seed >>> 0) + 0x6d2b79f5;
     return () => {
@@ -75,10 +133,10 @@ export function generateWorld(world: VoxelWorld): void {
     };
   })();
 
-  generateTerrain(world);
+  generateTerrain(world, cfg);
   carveCaves(world, rand);
-  placeWater(world);
-  placeBeaches(world);
+  placeWater(world, cfg);
+  placeBeaches(world, cfg);
   placeOres(world, rand);
   // After placeOres so it can't shift ore RNG (placeOres gates rand on air
   // adjacency, which lava would change), and before placeDungeons so dungeon
@@ -91,7 +149,7 @@ export function generateWorld(world: VoxelWorld): void {
   placeDungeons(world);
 }
 
-function generateTerrain(world: VoxelWorld): void {
+function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
   const maxX = world.sizeX - 1;
   const maxZ = world.sizeZ - 1;
 
@@ -107,7 +165,7 @@ function generateTerrain(world: VoxelWorld): void {
     for (let z = 0; z < world.sizeZ; z += 1) {
       const biome = world.getBiome(x, z);
       const noise = smoothNoise2D(x, z, world.seed);
-      const { baseHeight, noiseScale } = GEN.biomes[biome];
+      const { baseHeight, noiseScale } = cfg.biomes[biome];
 
       const topY = Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
       let topBlock = BlockId.Grass;
@@ -208,8 +266,8 @@ function placeLava(world: VoxelWorld): void {
   }
 }
 
-function placeWater(world: VoxelWorld): void {
-  const { seaLevel } = GEN;
+function placeWater(world: VoxelWorld, cfg: TerrainConfig): void {
+  const { seaLevel } = cfg;
   for (let x = 1; x < world.sizeX - 1; x += 1) {
     for (let z = 1; z < world.sizeZ - 1; z += 1) {
       const topY = world.highestSolidY(x, z);
@@ -268,17 +326,18 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
  * when water actually sits nearby — inland basins at sea level stay grass.
  * Runs after placeWater so adjacency can test real water blocks.
  */
-function placeBeaches(world: VoxelWorld): void {
+function placeBeaches(world: VoxelWorld, cfg: TerrainConfig): void {
+  const { seaLevel } = cfg;
   for (let x = 1; x < world.sizeX - 1; x += 1) {
     for (let z = 1; z < world.sizeZ - 1; z += 1) {
       const topY = world.highestSolidY(x, z);
-      if (topY > GEN.seaLevel + GEN.beachMaxAboveSea || topY < GEN.seaLevel - GEN.beachDepthBelowSea) continue;
+      if (topY > seaLevel + GEN.beachMaxAboveSea || topY < seaLevel - GEN.beachDepthBelowSea) continue;
       if (world.get(x, topY, z) !== BlockId.Grass) continue;
 
       let nearWater = false;
       for (let dx = -2; dx <= 2 && !nearWater; dx += 1) {
         for (let dz = -2; dz <= 2 && !nearWater; dz += 1) {
-          if (world.get(x + dx, GEN.seaLevel, z + dz) === BlockId.Water) nearWater = true;
+          if (world.get(x + dx, seaLevel, z + dz) === BlockId.Water) nearWater = true;
         }
       }
       if (!nearWater) continue;

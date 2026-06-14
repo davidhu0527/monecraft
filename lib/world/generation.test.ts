@@ -7,7 +7,8 @@ import {
   buildGeometryRegion,
   collectDungeonSites,
   computeFullLight,
-  generateWorld
+  generateWorld,
+  type WorldType
 } from "@/lib/world";
 
 /**
@@ -32,6 +33,22 @@ function makeWorld(sizeX: number, sizeY: number, sizeZ: number, seed: number): V
   const world = new VoxelWorld(sizeX, sizeY, sizeZ, seed);
   generateWorld(world);
   return world;
+}
+
+function makeTypedWorld(sizeX: number, sizeY: number, sizeZ: number, seed: number, worldType: WorldType): VoxelWorld {
+  const world = new VoxelWorld(sizeX, sizeY, sizeZ, seed);
+  generateWorld(world, worldType);
+  return world;
+}
+
+const GROUND_BLOCKS = new Set<number>([BlockId.Grass, BlockId.Sand, BlockId.Dirt, BlockId.Stone, BlockId.Cobblestone, BlockId.Snow]);
+
+/** Highest terrain (ground) block in a column, ignoring trees/water/air — the visible surface. */
+function groundHeight(world: VoxelWorld, x: number, z: number): number {
+  for (let y = world.sizeY - 1; y >= 0; y -= 1) {
+    if (GROUND_BLOCKS.has(world.get(x, y, z))) return y;
+  }
+  return 0;
 }
 
 let fullWorldCache: VoxelWorld | null = null;
@@ -99,6 +116,87 @@ describe("worldgen determinism", () => {
     }
     expect(lavaCells).toBeGreaterThan(0);
     expect(maxLavaY).toBeLessThanOrEqual(9); // GEN.lavaLevel
+  });
+});
+
+describe("world types", () => {
+  // Each non-default type is its own save contract — pin its bytes so a future
+  // refactor can't silently corrupt worlds created with it. Re-baseline only on
+  // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
+  test.each([
+    ["flat", "3d2b1fd1b809ea21696652483026df58a5c5e1cf8da65ce122810db2a2d3fce4"],
+    ["amplified", "03c7be22901cf5ab551506728c186b1d4c69d7d89bfefcd54bb9194f8aa6c752"],
+    ["islands", "eb002ec430a3f0611e54a1fec43e03dc5bb4d070eec959d2be81c2eb3241fbad"]
+  ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
+    expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
+  });
+
+  test("flat is nearly level; amplified has more relief than default", () => {
+    const flat = makeTypedWorld(128, 150, 128, 1337, "flat");
+    const def = makeTypedWorld(128, 150, 128, 1337, "default");
+    const amp = makeTypedWorld(128, 150, 128, 1337, "amplified");
+
+    // Fraction of columns whose ground surface sits exactly at the flat height,
+    // and the overall height spread. (Caves nibble the surface — denser in this
+    // small test world than at full size — so flat isn't perfectly uniform, but
+    // it concentrates at y=48 far more than the varied default terrain does.)
+    const flatTarget = 48;
+    const stats = (w: VoxelWorld) => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      let atTarget = 0;
+      let total = 0;
+      for (let x = 8; x < w.sizeX - 8; x += 4) {
+        for (let z = 8; z < w.sizeZ - 8; z += 4) {
+          const h = groundHeight(w, x, z);
+          lo = Math.min(lo, h);
+          hi = Math.max(hi, h);
+          if (h === flatTarget) atTarget += 1;
+          total += 1;
+        }
+      }
+      return { range: hi - lo, fracAtTarget: atTarget / total };
+    };
+
+    const f = stats(flat);
+    const d = stats(def);
+    const a = stats(amp);
+
+    expect(f.fracAtTarget).toBeGreaterThan(0.4); // flat ground concentrates at y=48
+    expect(f.fracAtTarget).toBeGreaterThan(d.fracAtTarget * 3); // far more than default's spread terrain
+    expect(d.range).toBeGreaterThan(30); // default terrain spans a wide height band
+    expect(a.range).toBeGreaterThan(d.range); // amplified is more dramatic still
+  });
+
+  test("islands floods more of the map than default but still leaves dry land above the sea", () => {
+    const islands = makeTypedWorld(128, 150, 128, 1337, "islands");
+    const def = makeTypedWorld(128, 150, 128, 1337, "default");
+    const ISLANDS_SEA = 54;
+
+    const waterColumns = (w: VoxelWorld, sea: number) => {
+      let wet = 0;
+      let total = 0;
+      for (let x = 8; x < w.sizeX - 8; x += 4) {
+        for (let z = 8; z < w.sizeZ - 8; z += 4) {
+          total += 1;
+          if (groundHeight(w, x, z) < sea) wet += 1;
+        }
+      }
+      return wet / total;
+    };
+
+    expect(waterColumns(islands, ISLANDS_SEA)).toBeGreaterThan(waterColumns(def, 43));
+    expect(waterColumns(islands, ISLANDS_SEA)).toBeGreaterThan(0.2);
+
+    // Dry, standable land above the sea exists (so the spawn search has somewhere to land).
+    let dryLand = 0;
+    for (let x = 8; x < islands.sizeX - 8; x += 2) {
+      for (let z = 8; z < islands.sizeZ - 8; z += 2) {
+        const h = groundHeight(islands, x, z);
+        if (h > ISLANDS_SEA && islands.get(x, h + 1, z) === BlockId.Air) dryLand += 1;
+      }
+    }
+    expect(dryLand).toBeGreaterThan(50);
   });
 });
 
