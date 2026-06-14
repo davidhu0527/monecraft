@@ -1,5 +1,6 @@
 import type { MobKind } from "@/lib/game/types";
 import { createMobModel } from "@/lib/game/mobModel";
+import { BOSS_HP, HOSTILE_MOB_HP } from "@/lib/game/config";
 
 export type MobTemplate = {
   speed: number;
@@ -57,7 +58,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   },
   zombie: {
     speed: 1.05,
-    hp: 10,
+    hp: HOSTILE_MOB_HP,
     detectRange: 11,
     attackDamage: 3,
     attackCooldown: 1.35,
@@ -65,7 +66,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   },
   skeleton: {
     speed: 1.08,
-    hp: 9,
+    hp: HOSTILE_MOB_HP,
     detectRange: 12,
     attackDamage: 3,
     attackCooldown: 1.8,
@@ -74,7 +75,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   },
   spider: {
     speed: 1.2,
-    hp: 8,
+    hp: HOSTILE_MOB_HP,
     detectRange: 10,
     attackDamage: 2,
     attackCooldown: 1.1,
@@ -82,7 +83,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   },
   creeper: {
     speed: 1.0,
-    hp: 10,
+    hp: HOSTILE_MOB_HP,
     detectRange: 12,
     // Deals no melee damage — it detonates instead (see the creeper fuse in mobAI).
     attackDamage: 0,
@@ -102,7 +103,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
   },
   boss: {
     speed: 1.1,
-    hp: 400,
+    hp: BOSS_HP,
     detectRange: 28,
     attackDamage: 10,
     attackCooldown: 1.5,

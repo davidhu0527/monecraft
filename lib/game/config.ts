@@ -92,7 +92,8 @@ export const MOB_ARROW_KNOCKBACK = 0.35;
 // Endgame boss — summoned from a Cursed Totem (diamond-gated). It approaches
 // (does not kite), melees up close, looses a 3-arrow spread at range, and
 // periodically summons minions. Its defeat is the win condition.
-export const BOSS_HP = 400; // a real fight even with diamond gear
+export const HOSTILE_MOB_HP = 100;
+export const BOSS_HP = 1000;
 export const BOSS_MELEE_REACH = 3.5;
 export const BOSS_MELEE_DAMAGE = 10;
 export const BOSS_ARROW_DAMAGE = 7;

@@ -270,6 +270,7 @@ Ten creatures roam the world:
   no reason to harm your shopkeeper.
 - **Hostile** — **zombie**, **skeleton**, **spider**, **creeper**. They hunt you at
   night, chase within their detection range, and attack when they have line of sight.
+  Every hostile has **100 HP**, shown on a health bar above its head.
   **Skeletons are archers** — they keep their distance and fire arrows, so close in
   or take cover. **Creepers** sneak up and **explode** — they light a short fuse when
   they get close (you'll hear the hiss and see them swell), then blow a crater and
@@ -307,8 +308,8 @@ open** to summon the **boss** — a towering figure that erupts nearby. (It refu
 if a boss is already alive.)
 
 Come prepared: full **armor**, the best sword you can make, a **bow** and plenty of
-**arrows**, and some food. The boss has a huge health pool (shown on a bar at the
-top of the screen), **charges you and bites hard** up close, **fires a spread of
+**arrows**, and some food. The boss has **1000 HP** (shown above its head and on a
+bar at the top of the screen), **charges you and bites hard** up close, **fires a spread of
 arrows** at range, and **summons skeletons and zombies** to wear you down. It
 ignores daylight, so you can fight it whenever you like — open ground helps you
 kite it with the bow.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { createMobVisuals } from "@/lib/game/render/mobVisuals";
-import { mobHalfHeight } from "@/lib/game/mobs";
+import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import type { MobState } from "@/lib/game/engine/state";
 
 function makeMob(id: number, overrides: Partial<MobState> = {}): MobState {
@@ -70,6 +70,30 @@ describe("mobVisuals", () => {
     const y1 = group.position.y;
     visuals.sync([mob], 100); // quarter of the bob period later
     expect(group.position.y).not.toBe(y1);
+    visuals.dispose();
+  });
+
+  test("shows current health above hostile mobs and omits it for passive mobs", () => {
+    const scene = new THREE.Scene();
+    const visuals = createMobVisuals(scene);
+    const zombie = makeMob(1, {
+      kind: "zombie",
+      hostile: true,
+      hp: 50,
+      halfHeight: mobHalfHeight("zombie")
+    });
+
+    visuals.sync([zombie, makeMob(2)], 0);
+    const hostileGroup = scene.children[0];
+    const passiveGroup = scene.children[1];
+    const bar = hostileGroup.getObjectByName("hostile-health-bar");
+    const fill = hostileGroup.getObjectByName("hostile-health-fill") as THREE.Sprite;
+
+    expect(bar).toBeDefined();
+    expect(bar!.position.y).toBeGreaterThan(MOB_TEMPLATES.zombie.modelArgs[5][1]);
+    expect(fill.scale.x).toBeCloseTo(0.45);
+    expect(fill.position.x).toBeCloseTo(-0.225);
+    expect(passiveGroup.getObjectByName("hostile-health-bar")).toBeUndefined();
     visuals.dispose();
   });
 });

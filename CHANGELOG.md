@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Hostile health visibility and durability**: zombies, skeletons, spiders, and creepers now each have **100 HP**, while the boss has **1000 HP**. Every hostile renders a procedural billboard health bar above its head that tracks damage; the existing boss HUD bar remains. This is transient simulation/render state, so there is **no save-format or worldgen impact**.
+
 ## [0.9.0] - 2026-06-14
 
 ### Added

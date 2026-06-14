@@ -131,7 +131,9 @@ Arrows: `ARROW_SPEED`, `ARROW_GRAVITY`, `ARROW_TTL`, `ARROW_HIT_RADIUS`,
 Bow: `BOW_ARROW_DAMAGE`, `BOW_KNOCKBACK`, `BOW_COOLDOWN_SECONDS`, `BOW_DURABILITY_PER_SHOT`.
 Ranged mobs: `SKELETON_STANDOFF_MIN/MAX`, `SKELETON_ARROW_DAMAGE`, `SKELETON_ARROW_SPEED`,
 `SKELETON_FIRE_VGAP`, `SKELETON_LEAD_FACTOR`, `MOB_ARROW_KNOCKBACK`.
-Boss: `BOSS_HP`, `BOSS_MELEE_REACH`, `BOSS_MELEE_DAMAGE`, `BOSS_ARROW_DAMAGE`,
+Hostile health: `HOSTILE_MOB_HP` (shared by zombie, skeleton, spider, and
+creeper). Boss: `BOSS_HP`, `BOSS_MELEE_REACH`,
+`BOSS_MELEE_DAMAGE`, `BOSS_ARROW_DAMAGE`,
 `BOSS_ARROW_SPEED`, `BOSS_SPREAD`, `BOSS_SUMMON_RADIUS`, `BOSS_MINION_CAP`,
 `BOSS_SUMMON_INTERVAL_SECONDS`.
 
@@ -141,8 +143,9 @@ read clearly; `ARROW_MAX_SEGMENT`/`ARROW_MAX_SUBSTEPS` bound the per-frame anti-
 substepping (raise the substep cap only if very fast arrows ever slip past thin mobs).
 `BOW_COOLDOWN_SECONDS` is the fire rate; bow/Dragon-Sword durability and damage live in
 `items.ts`. The skeleton standoff band is the kite distance — widen it to make archers
-harder to corner. `BOSS_HP` (400) is the headline difficulty dial for the fight;
-`BOSS_MINION_CAP` and the shared `HOSTILE_CAP` together bound how crowded it gets (the
+harder to corner. `HOSTILE_MOB_HP` (100) sets ordinary hostile durability, while
+`BOSS_HP` (1000) makes the boss a sustained fight. `BOSS_MINION_CAP` and the shared
+`HOSTILE_CAP` together bound how crowded it gets (the
 boss summon itself bypasses the spawn-director cap so the fight always starts).
 
 ## Explosions, creepers & TNT
