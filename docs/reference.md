@@ -115,7 +115,7 @@ player who hasn't found coal can still cook.
 
 ## Blocks
 
-**34 block types** (plus air). Hardness is relative break time — higher is slower.
+**32 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 

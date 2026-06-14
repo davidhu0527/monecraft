@@ -235,7 +235,7 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **45 recipes** in the [reference](reference.md#recipes).
+See the full list of **54 recipes** in the [reference](reference.md#recipes).
 
 ## Doors
 
