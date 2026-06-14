@@ -23,7 +23,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**45 recipes.** All use the always-available crafting grid except the two
+**47 recipes.** All use the always-available crafting grid except the four
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
@@ -95,11 +95,13 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ### Food & smelting
 
-| Result         | Ingredients            | Station |
-| -------------- | ---------------------- | ------- |
-| Bread          | 3 Wheat                | —       |
-| Cooked Chicken | Raw Chicken + 1 Planks | Furnace |
-| Cooked Mutton  | Raw Mutton + 1 Planks  | Furnace |
+| Result          | Ingredients             | Station |
+| --------------- | ----------------------- | ------- |
+| Bread           | 3 Wheat                 | —       |
+| Cooked Chicken  | Raw Chicken + 1 Planks  | Furnace |
+| Cooked Mutton   | Raw Mutton + 1 Planks   | Furnace |
+| Cooked Beef     | Raw Beef + 1 Planks     | Furnace |
+| Cooked Porkchop | Raw Porkchop + 1 Planks | Furnace |
 
 ## Blocks
 
@@ -142,14 +144,16 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 
 ## Mobs
 
-**6 mob kinds.** Passive animals flee but never attack and can be bred; hostiles
-hunt at night. Drop counts are inclusive ranges rolled per kill.
+**8 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+can be bred; hostiles hunt at night. Drop counts are inclusive ranges rolled per kill.
 
 | Mob      | Type    | HP  | Speed | Detect range | Attack             | Cooldown | Drops                           |
 | -------- | ------- | --- | ----- | ------------ | ------------------ | -------- | ------------------------------- |
 | Sheep    | passive | 10  | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
 | Chicken  | passive | 7   | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
 | Horse    | passive | 14  | 1.4   | —            | —                  | —        | 1–2 Leather                     |
+| Cow      | passive | 10  | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
+| Pig      | passive | 8   | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
 | Zombie   | hostile | 10  | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
 | Skeleton | hostile | 9   | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
 | Spider   | hostile | 8   | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
@@ -157,9 +161,9 @@ hunt at night. Drop counts are inclusive ranges rolled per kill.
 
 Skeletons are now **ranged** — they kite and fire arrows instead of meleeing.
 Spiders are hostile only in the dark (daylight below 0.42); in twilight and day
-they behave like passives. **Breeding:** feed wheat to a sheep or horse, or seeds
-to a chicken; babies grow up in ~90 s. Passive population is capped at 24, hostiles
-at 16.
+they behave like passives. **Breeding:** feed wheat to a sheep, horse, or cow, or
+seeds to a chicken or pig; babies grow up in ~90 s. Passive population is capped at
+24, hostiles at 16.
 
 The **Boss** is summoned, not spawned (see [Endgame](#endgame)): it bears down on
 you, melees up close, fires a 3-arrow spread at range, summons minions, and is
@@ -234,15 +238,19 @@ always deals at least 1).
 
 `Eat` (`F`) restores the listed hunger.
 
-| Item           | Hunger restored | Source             |
-| -------------- | --------------- | ------------------ |
-| Cooked Chicken | 8               | Smelt raw chicken  |
-| Cooked Mutton  | 8               | Smelt raw mutton   |
-| Food           | 7               | Generic food item  |
-| Bread          | 6               | Craft from 3 wheat |
-| Raw Chicken    | 3               | Chicken drop       |
-| Raw Mutton     | 3               | Sheep drop         |
-| Rotten Flesh   | 2               | Zombie drop        |
+| Item            | Hunger restored | Source             |
+| --------------- | --------------- | ------------------ |
+| Cooked Chicken  | 8               | Smelt raw chicken  |
+| Cooked Mutton   | 8               | Smelt raw mutton   |
+| Cooked Beef     | 8               | Smelt raw beef     |
+| Cooked Porkchop | 8               | Smelt raw porkchop |
+| Food            | 7               | Generic food item  |
+| Bread           | 6               | Craft from 3 wheat |
+| Raw Chicken     | 3               | Chicken drop       |
+| Raw Mutton      | 3               | Sheep drop         |
+| Raw Beef        | 3               | Cow drop           |
+| Raw Porkchop    | 3               | Pig drop           |
+| Rotten Flesh    | 2               | Zombie drop        |
 
 ### Materials
 

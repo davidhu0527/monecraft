@@ -489,6 +489,41 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       filter: -300
     })
   },
+  cow: {
+    params: zz({
+      volume: 0.6,
+      randomness: 0.1,
+      frequency: 130,
+      attack: 0.05,
+      sustain: 0.3,
+      release: 0.35,
+      shape: 2,
+      shapeCurve: 1.4,
+      slide: -0.6,
+      modulation: 12,
+      sustainVolume: 0.8,
+      decay: 0.15,
+      tremolo: 0.3,
+      filter: -250
+    })
+  },
+  pig: {
+    params: zz({
+      volume: 0.5,
+      randomness: 0.2,
+      frequency: 220,
+      attack: 0.02,
+      sustain: 0.06,
+      release: 0.08,
+      shape: 4,
+      shapeCurve: 0.9,
+      repeatTime: 0.09,
+      noise: 0.6,
+      sustainVolume: 0.6,
+      decay: 0.04,
+      filter: 300
+    })
+  },
   zombie: {
     params: zz({
       volume: 0.55,
@@ -595,6 +630,40 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       sustainVolume: 0.8,
       decay: 0.04,
       filter: -600
+    }),
+    minRetriggerMs: 100
+  },
+  // Cows and pigs are passive (attackDamage 0) and never trigger this, but the
+  // Record is exhaustive — a soft thud keeps the table complete.
+  cow: {
+    params: zz({
+      volume: 0.6,
+      randomness: 0.1,
+      frequency: 95,
+      sustain: 0.02,
+      release: 0.09,
+      shape: 4,
+      shapeCurve: 1.3,
+      noise: 0.6,
+      sustainVolume: 0.7,
+      decay: 0.04,
+      filter: -550
+    }),
+    minRetriggerMs: 100
+  },
+  pig: {
+    params: zz({
+      volume: 0.55,
+      randomness: 0.15,
+      frequency: 160,
+      sustain: 0.02,
+      release: 0.07,
+      shape: 4,
+      shapeCurve: 1,
+      noise: 0.7,
+      sustainVolume: 0.7,
+      decay: 0.03,
+      filter: -200
     }),
     minRetriggerMs: 100
   },

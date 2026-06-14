@@ -85,4 +85,15 @@ describe("breeding", () => {
     tickBreeding(state, BREED_CHECK_INTERVAL_SECONDS, rng, surfaceYAt, () => {});
     expect(state.mobs).toHaveLength(2);
   });
+
+  test("new passive kinds (cow) breed through the same generic path", () => {
+    const cow = (id: number, x: number): MobState => ({ ...makeSheep(id, x, 0, BREED_FED_WINDOW_SECONDS), kind: "cow", halfHeight: mobHalfHeight("cow") });
+    const state = makeState([cow(1, 0), cow(2, 1)]);
+    const events: GameEvent[] = [];
+    tickBreeding(state, BREED_CHECK_INTERVAL_SECONDS, rng, surfaceYAt, (e) => events.push(e));
+    expect(state.mobs).toHaveLength(3);
+    expect(state.mobs[2].kind).toBe("cow");
+    expect(state.mobs[2].halfHeight).toBeCloseTo(mobHalfHeight("cow") * BABY_SCALE, 5);
+    expect(events.some((e) => e.type === "mobBred" && e.kind === "cow")).toBe(true);
+  });
 });

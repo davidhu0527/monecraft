@@ -83,6 +83,8 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     ["sheep", false, 6, passiveRadius],
     ["chicken", false, 5, passiveRadius],
     ["horse", false, 3, passiveRadius],
+    ["cow", false, 4, passiveRadius],
+    ["pig", false, 4, passiveRadius],
     ["zombie", true, 8, hostileRadius],
     ["skeleton", true, 6, hostileRadius],
     ["spider", true, 6, hostileRadius]

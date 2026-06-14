@@ -59,3 +59,31 @@ describe("ranged recipes", () => {
     expect(canCraft(slots, recipe("bow"))).toBe(false);
   });
 });
+
+describe("cooking new meats", () => {
+  test("raw beef smelts into cooked beef at a furnace", () => {
+    const r = recipe("cook_beef");
+    expect(r.station).toBe("furnace");
+    const slots = inventory([
+      ["raw_beef", 1],
+      ["planks", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    const next = craft(slots, r);
+    expect(next).not.toBeNull();
+    expect(countsById(next!).get("cooked_beef")).toBe(1);
+  });
+
+  test("raw porkchop smelts into cooked porkchop at a furnace", () => {
+    const r = recipe("cook_porkchop");
+    expect(r.station).toBe("furnace");
+    const slots = inventory([
+      ["raw_porkchop", 1],
+      ["planks", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    const next = craft(slots, r);
+    expect(next).not.toBeNull();
+    expect(countsById(next!).get("cooked_porkchop")).toBe(1);
+  });
+});

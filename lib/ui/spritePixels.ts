@@ -597,6 +597,11 @@ const RAW_MUTTON_PALETTE: PixelPalette = { m: [186, 96, 86], M: [132, 56, 50], r
 const ROTTEN_FLESH_PALETTE: PixelPalette = { m: [122, 132, 82], M: [80, 90, 54], r: [110, 122, 76], w: [152, 152, 112] };
 const COOKED_CHICKEN_PALETTE: PixelPalette = { m: [206, 158, 96], M: [150, 104, 56], r: [196, 146, 86], w: [232, 200, 150] };
 const COOKED_MUTTON_PALETTE: PixelPalette = { m: [150, 92, 56], M: [96, 54, 30], r: [140, 84, 50], w: [186, 132, 86] };
+// Beef: deep red raw, dark brown cooked. Porkchop: pale pink raw, golden-brown cooked.
+const RAW_BEEF_PALETTE: PixelPalette = { m: [164, 60, 56], M: [110, 34, 32], r: [186, 66, 62], w: [212, 158, 150] };
+const COOKED_BEEF_PALETTE: PixelPalette = { m: [120, 70, 44], M: [76, 42, 24], r: [112, 64, 40], w: [160, 110, 72] };
+const RAW_PORKCHOP_PALETTE: PixelPalette = { m: [232, 168, 168], M: [196, 120, 120], r: [240, 150, 154], w: [248, 214, 210] };
+const COOKED_PORKCHOP_PALETTE: PixelPalette = { m: [196, 138, 84], M: [142, 92, 48], r: [188, 128, 78], w: [224, 184, 132] };
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 const WHEAT_PALETTE: PixelPalette = { w: [226, 193, 90], W: [176, 142, 55], g: [110, 150, 60] };
 const BREAD_PALETTE: PixelPalette = { M: [120, 70, 35], b: [170, 110, 55], l: [210, 160, 95], s: [140, 90, 45] };
@@ -649,6 +654,10 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE },
   cooked_chicken: { grid: RAW_MEAT_GRID, palette: COOKED_CHICKEN_PALETTE },
   cooked_mutton: { grid: RAW_MEAT_GRID, palette: COOKED_MUTTON_PALETTE },
+  raw_beef: { grid: RAW_MEAT_GRID, palette: RAW_BEEF_PALETTE },
+  cooked_beef: { grid: RAW_MEAT_GRID, palette: COOKED_BEEF_PALETTE },
+  raw_porkchop: { grid: RAW_MEAT_GRID, palette: RAW_PORKCHOP_PALETTE },
+  cooked_porkchop: { grid: RAW_MEAT_GRID, palette: COOKED_PORKCHOP_PALETTE },
   seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
   wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
   bread: { grid: BREAD_GRID, palette: BREAD_PALETTE },

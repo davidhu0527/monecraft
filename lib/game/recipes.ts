@@ -46,6 +46,26 @@ export const RECIPES: Recipe[] = [
     result: { slotId: "cooked_mutton", count: 1 },
     station: "furnace"
   },
+  {
+    id: "cook_beef",
+    label: "Raw Beef + Planks -> Cooked Beef",
+    cost: [
+      { slotId: "raw_beef", count: 1 },
+      { slotId: "planks", count: 1 }
+    ],
+    result: { slotId: "cooked_beef", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_porkchop",
+    label: "Raw Porkchop + Planks -> Cooked Porkchop",
+    cost: [
+      { slotId: "raw_porkchop", count: 1 },
+      { slotId: "planks", count: 1 }
+    ],
+    result: { slotId: "cooked_porkchop", count: 1 },
+    station: "furnace"
+  },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   {
     id: "brick",

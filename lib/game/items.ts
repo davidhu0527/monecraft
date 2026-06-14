@@ -97,6 +97,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
   { id: "raw_mutton", label: "Raw Mutton", kind: "food", hunger: 3 },
+  { id: "raw_beef", label: "Raw Beef", kind: "food", hunger: 3 },
+  { id: "raw_porkchop", label: "Raw Porkchop", kind: "food", hunger: 3 },
   // Farming
   { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
   { id: "seeds", label: "Wheat Seeds", kind: "material" },
@@ -105,6 +107,8 @@ export const ITEM_DEFS: ItemDef[] = [
   // Cooked meats — smelted in a furnace; restore more than their raw form.
   { id: "cooked_chicken", label: "Cooked Chicken", kind: "food", hunger: 8 },
   { id: "cooked_mutton", label: "Cooked Mutton", kind: "food", hunger: 8 },
+  { id: "cooked_beef", label: "Cooked Beef", kind: "food", hunger: 8 },
+  { id: "cooked_porkchop", label: "Cooked Porkchop", kind: "food", hunger: 8 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },

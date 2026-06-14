@@ -245,10 +245,11 @@ everything, the break is refused and the chest stays put — empty it a bit firs
 
 ## Mobs and breeding
 
-Six creatures roam the world:
+Eight creatures roam the world:
 
-- **Passive** — **sheep**, **chicken**, **horse**. They wander, flee when you get
-  close, and never attack. They drop materials and raw meat when killed.
+- **Passive** — **sheep**, **chicken**, **horse**, **cow**, **pig**. They wander,
+  flee when you get close, and never attack. They drop materials and raw meat when
+  killed — cows give leather and beef, pigs give porkchops.
 - **Hostile** — **zombie**, **skeleton**, **spider**. They hunt you at night,
   chase within their detection range, and attack when they have line of sight.
   **Skeletons are archers** — they keep their distance and fire arrows, so close
@@ -257,8 +258,8 @@ Six creatures roam the world:
 Full stats and drop tables are in the [bestiary](reference.md#mobs). The summoned
 **boss** is covered under [Endgame](#endgame-the-boss).
 
-**Breeding** makes loot renewable. Right-click an adult **sheep or horse with
-wheat**, or a **chicken with seeds**, to put it "in love" for **30 seconds**. Two
+**Breeding** makes loot renewable. Right-click an adult **sheep, horse, or cow with
+wheat**, or a **chicken or pig with seeds**, to put it "in love" for **30 seconds**. Two
 in-love adults of the same kind standing within **3 blocks** produce a **baby**,
 which follows its parents, drops nothing while young, and grows to full size after
 **~90 seconds**. The passive population is capped (and feeding costs crops), so it

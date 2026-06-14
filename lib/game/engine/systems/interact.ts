@@ -106,7 +106,9 @@ function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: numb
 const FEED_ITEMS: Partial<Record<MobKind, string>> = {
   sheep: "wheat",
   horse: "wheat",
-  chicken: "seeds"
+  cow: "wheat",
+  chicken: "seeds",
+  pig: "seeds"
 };
 
 /**

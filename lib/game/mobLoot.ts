@@ -27,6 +27,11 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
     { itemId: "raw_chicken", min: 1, max: 1 }
   ],
   horse: [{ itemId: "leather", min: 1, max: 2 }],
+  cow: [
+    { itemId: "leather", min: 1, max: 2 },
+    { itemId: "raw_beef", min: 1, max: 1 }
+  ],
+  pig: [{ itemId: "raw_porkchop", min: 1, max: 1 }],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
   spider: [{ itemId: "string", min: 0, max: 2 }],
