@@ -157,12 +157,21 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-// Bumped whenever the deterministic world baseline changes, so old block-diffs
-// (which index against terrain) can't be applied to a different world: v6 added
-// dungeons; v7 adds deep-cave lava lakes. The save *schema* (SaveData) is
-// unchanged — lighting is a derived cache and lava is worldgen, neither is
-// persisted — so the payload version stays 5.
+// Legacy single-world save key. Since the multi-world feature, each world owns
+// its own `minecraft_world_save_<id>` blob (see lib/game/worlds.ts); this key
+// is only read once by the legacy migration (lib/game/legacyMigration.ts) and
+// is otherwise unused.
 export const SAVE_KEY = "minecraft_save_v7";
+
+// The deterministic world-generation baseline. Bumped whenever worldgen
+// changes, so old block-diffs (which index against generated terrain) can't be
+// applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
+// lakes. Each world records the WORLDGEN_VERSION it was generated under; a world
+// whose recorded version differs from this constant has its block-diffs
+// discarded and is rebooted from its stored seed (lib/game/worlds.ts). The save
+// *schema* (SaveData) is independent and stays at version 5 — lighting is a
+// derived cache and lava is worldgen, so neither is persisted.
+export const WORLDGEN_VERSION = 7;
 
 // Rendering
 export const RENDER_RADIUS = 90;
