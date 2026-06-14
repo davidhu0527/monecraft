@@ -13,6 +13,7 @@ import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleS
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
+import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
@@ -46,6 +47,7 @@ export class GameRenderer {
   private readonly heldItem: HeldItemView;
   private readonly crackOverlay: CrackOverlayView;
   private readonly mobVisuals: MobVisuals;
+  private readonly spearVisuals: SpearVisuals;
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -110,6 +112,7 @@ export class GameRenderer {
     this.heldItem = createHeldItemView(this.camera);
     this.crackOverlay = createCrackOverlay(this.scene);
     this.mobVisuals = createMobVisuals(this.scene);
+    this.spearVisuals = createSpearVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -144,6 +147,7 @@ export class GameRenderer {
     });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
+    this.spearVisuals.sync(state.thrownSpears);
     this.playerVisuals.sync(state, timeMs);
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
@@ -303,6 +307,7 @@ export class GameRenderer {
     this.sky.dispose();
     this.particles.dispose();
     this.playerVisuals.dispose();
+    this.spearVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();

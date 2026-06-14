@@ -41,6 +41,13 @@ export const BARE_HAND_MINE_POWER = 0.8;
 export const FIST_DAMAGE = 6;
 export const ATTACK_REACH = 4.5;
 export const ATTACK_AIM_DOT = 0.89; // how precisely the camera must face a mob
+export const SPEAR_MELEE_REACH = 7;
+export const SPEAR_THROW_SPEED = 32;
+export const SPEAR_THROW_GRAVITY = 6;
+export const SPEAR_THROW_LIFETIME_SECONDS = 4;
+export const SPEAR_STUCK_SECONDS = 2;
+export const SPEAR_THROW_COOLDOWN_SECONDS = 0.45;
+export const SPEAR_HIT_RADIUS = 0.65;
 
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;

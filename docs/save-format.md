@@ -38,4 +38,7 @@ Every 15s via `setInterval`, plus on `beforeunload`.
 - Saves store **diffs against generated terrain**, so changing world generation or the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) silently corrupts existing saves — bump `SAVE_KEY` when you do.
 - Worldgen output is pinned by SHA-256 characterization tests in `lib/world/generation.test.ts`; they fail on any byte-level change. See [testing.md](testing.md) for the re-baseline policy. Caveat: the noise functions use `Math.sin`, whose exact results are engine-defined — the tests prove refactor purity on the pinned Bun version, not cross-browser save portability.
 - Changing the save shape requires bumping the `version` field and handling (or discarding) old data. Round-trip tests live in `lib/game/save.test.ts` and `lib/game/engine/GameEngine.test.ts`.
+- Durable gear restores at a maximum count of one per slot. The v1→v2 migration
+  splits legacy stacked gear into separate slots until inventory capacity is
+  exhausted; current malformed stacks are clamped to one.
 - Note save-format/worldgen impact in PRs.

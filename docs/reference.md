@@ -10,7 +10,7 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Recipes
 
-**33 recipes.** All use the always-available crafting grid except the two
+**40 recipes.** All use the always-available crafting grid except the two
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
@@ -51,6 +51,13 @@ stats. For how it all fits together, read the [player manual](manual.md).
 | Sapphire Sword | 2 Sapphire Ore + 1 Wood |
 | Gold Sword     | 2 Gold Ore + 1 Wood     |
 | Diamond Sword  | 2 Diamond Ore + 1 Wood  |
+| Wood Spear     | 1 Planks + 2 Wood       |
+| Stone Spear    | 1 Cobble + 2 Wood       |
+| Sliver Spear   | 1 Sliver Ore + 2 Wood   |
+| Ruby Spear     | 1 Ruby Ore + 2 Wood     |
+| Sapphire Spear | 1 Sapphire Ore + 2 Wood |
+| Gold Spear     | 1 Gold Ore + 2 Wood     |
+| Diamond Spear  | 1 Diamond Ore + 2 Wood  |
 
 ### Armor
 
@@ -145,18 +152,30 @@ at 16.
 
 ### Weapons
 
-A bare fist deals 6 damage for comparison.
+A bare fist deals 6 damage for comparison. Spears have 7-block melee reach
+(other attacks: 4.5) and can be thrown with right-click/`E`. Thrown spears fly
+quickly with a shallow arc; misses remain stuck in terrain for 2 seconds.
 
-| Item           | Attack | Durability |
-| -------------- | ------ | ---------- |
-| Knife          | 9      | 50         |
-| Wood Sword     | 13     | 80         |
-| Stone Sword    | 18     | 160        |
-| Sliver Sword   | 24     | 260        |
-| Ruby Sword     | 31     | 360        |
-| Sapphire Sword | 35     | 450        |
-| Gold Sword     | 40     | 540        |
-| Diamond Sword  | 47     | 720        |
+| Item           | Melee | Throw | Durability |
+| -------------- | ----- | ----- | ---------- |
+| Knife          | 9     | —     | 50         |
+| Wood Sword     | 13    | —     | 80         |
+| Stone Sword    | 18    | —     | 160        |
+| Sliver Sword   | 24    | —     | 260        |
+| Ruby Sword     | 31    | —     | 360        |
+| Sapphire Sword | 35    | —     | 450        |
+| Gold Sword     | 40    | —     | 540        |
+| Diamond Sword  | 47    | —     | 720        |
+| Wood Spear     | 11    | 15    | 70         |
+| Stone Spear    | 16    | 21    | 140        |
+| Sliver Spear   | 22    | 28    | 230        |
+| Ruby Spear     | 29    | 36    | 330        |
+| Sapphire Spear | 33    | 41    | 420        |
+| Gold Spear     | 38    | 47    | 500        |
+| Diamond Spear  | 45    | 55    | 680        |
+
+All durable gear is non-stackable: armor, tools, knives, swords, and spears each
+occupy one inventory or chest slot.
 
 ### Armor
 

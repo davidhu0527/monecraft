@@ -54,6 +54,17 @@ export type MiningState = {
   progress: number;
 };
 
+export type ThrownSpearState = {
+  id: number;
+  itemId: string;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  damage: number;
+  age: number;
+  /** Seconds embedded in terrain, or null while still flying. */
+  stuckTimer: number | null;
+};
+
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
 export type DebugInfo = {
   x: number;
@@ -76,6 +87,7 @@ export type GameTimers = {
   debugHudTimer: number;
   randomTickTimer: number;
   breedTimer: number;
+  spearThrowCooldown: number;
 };
 
 export type WeatherKind = "clear" | "rain" | "snow";
@@ -107,6 +119,8 @@ export type GameState = {
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
+  thrownSpears: ThrownSpearState[];
+  nextThrownSpearId: number;
   dayClock: number;
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
@@ -137,7 +151,8 @@ export function createTimers(): GameTimers {
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
-    breedTimer: 0
+    breedTimer: 0,
+    spearThrowCooldown: 0
   };
 }
 

@@ -39,7 +39,8 @@ import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
-import { tryAttackMob, weaponDamage } from "./systems/combat";
+import { tryAttackMob, weaponDamage, weaponReach } from "./systems/combat";
+import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickMobs } from "./systems/mobAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
@@ -113,6 +114,8 @@ export class GameEngine {
       capsActive: false,
       mobs: [],
       nextMobId: 1,
+      thrownSpears: [],
+      nextThrownSpearId: 1,
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
@@ -199,6 +202,7 @@ export class GameEngine {
     tickHealthRegen(state, dt);
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
     tickMining(state, input, dt, this.emit, this.rng);
+    tickThrownSpears(state, dt, this.removeMobAt, this.emit);
     tickDayNight(state, dt);
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
@@ -265,6 +269,8 @@ export class GameEngine {
       }
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        // Spears consume the right-click/E action before all world interaction.
+        if (tryThrowSelectedSpear(state, this.emit)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
@@ -277,7 +283,7 @@ export class GameEngine {
       case "attack": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         this.emit({ type: "attackSwung" });
-        const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt);
+        const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt, weaponReach(state));
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
@@ -474,6 +480,7 @@ export class GameEngine {
     state.player.velocity.set(0, 0, 0);
     state.player.pitch = 0;
     resetMining(state);
+    state.thrownSpears = [];
     state.worldMeshDirty = true;
     this.events.push({ type: "respawned" });
   }

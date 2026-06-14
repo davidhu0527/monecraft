@@ -1,5 +1,5 @@
 import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
-import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
+import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SavedContainer, SavedSlot, InventorySlot } from "@/lib/game/types";
 
 /**
@@ -32,8 +32,10 @@ export function migrateSaveV1toV2(save: SaveDataV1): SaveDataV2 {
           if (remaining === 0) break;
         }
       }
-      if (remaining > 0 && packed.length < INVENTORY_SLOTS) {
-        packed.push({ id: saved.id, count: remaining, durability: saved.durability });
+      while (remaining > 0 && packed.length < INVENTORY_SLOTS) {
+        const moved = Math.min(maxStackSizeForItem(saved.id), remaining);
+        packed.push({ id: saved.id, count: moved, durability: saved.durability });
+        remaining -= moved;
       }
     }
     migrated.inventorySlots = packed;
@@ -92,7 +94,7 @@ export function inventorySlotsSnapshot(inventory: InventorySlot[]): SavedSlot[] 
  */
 function restoreSlot(saved: SavedSlot | undefined): InventorySlot {
   if (!saved?.id || saved.count <= 0 || !ITEM_DEF_BY_ID[saved.id]) return createEmptySlot();
-  const slot = createSlot(saved.id, Math.min(MAX_STACK_SIZE, Math.max(0, Math.floor(saved.count))));
+  const slot = createSlot(saved.id, Math.min(maxStackSizeForItem(saved.id), Math.max(0, Math.floor(saved.count))));
   if ((slot.kind === "tool" || slot.kind === "weapon" || slot.kind === "armor") && slot.maxDurability) {
     if (typeof saved.durability === "number") {
       const loaded = Math.floor(saved.durability);
@@ -153,7 +155,7 @@ export function restoreInventorySlots(save: SaveData): InventorySlot[] | null {
       if (!ITEM_DEF_BY_ID[id]) continue;
       let remaining = Math.max(0, Math.floor(raw));
       while (remaining > 0 && cursor < slots.length) {
-        const add = Math.min(MAX_STACK_SIZE, remaining);
+        const add = Math.min(maxStackSizeForItem(id), remaining);
         slots[cursor] = createSlot(id, add);
         cursor += 1;
         remaining -= add;

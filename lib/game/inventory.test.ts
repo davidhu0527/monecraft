@@ -69,6 +69,12 @@ describe("adjustSlotCount", () => {
     expect(countsById(next).get("dirt")).toBeUndefined();
   });
 
+  test("durable gear occupies one slot per item", () => {
+    const next = adjustSlotCount(makeSlots(), "diamond_sword", 3)!;
+    expect(next.filter((slot) => slot.id === "diamond_sword")).toHaveLength(3);
+    expect(next.filter((slot) => slot.id === "diamond_sword").every((slot) => slot.count === 1)).toBe(true);
+  });
+
   test("unknown items and zero deltas are no-ops", () => {
     const slots = makeSlots(["dirt", 5]);
     expect(adjustSlotCount(slots, "no_such_item", 3)).toBeNull();
@@ -176,6 +182,16 @@ describe("crafting", () => {
     const next = craft(makeSlots(["planks", 4], ["wood", 4]), RECIPES.find((recipe) => recipe.id === "wood_pickaxe")!)!;
     const pick = next.find((slot) => slot.id === "wood_pickaxe")!;
     expect(pick.durability).toBe(pick.maxDurability);
+  });
+
+  test("crafted gear needs an empty slot instead of merging", () => {
+    const recipe = RECIPES.find((entry) => entry.id === "wood_spear")!;
+    const full = Array.from({ length: INVENTORY_SLOTS }, () => createSlot("stone", MAX_STACK_SIZE));
+    full[0] = createSlot("wood", MAX_STACK_SIZE);
+    full[1] = createSlot("planks", MAX_STACK_SIZE);
+    full[2] = createSlot("wood_spear", 1);
+    expect(canCraft(full, recipe)).toBe(false);
+    expect(craft(full, recipe)).toBeNull();
   });
 });
 

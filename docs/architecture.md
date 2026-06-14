@@ -30,7 +30,9 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 ## Game engine (`lib/game/engine/`)
 
 - `GameEngine.ts` — owns `GameState`, processes `dispatch(Command)`, advances `step(dt, input)`, serializes saves, and publishes snapshots (`subscribe`/`getSnapshot`). Randomness is injectable (`rng`) and the world size is overridable for fast headless tests.
-- `state.ts` — `GameState` (player with `yaw`/`pitch`, inventory, mobs as **logical entities with no Three.js objects**, day clock, mining progress, timers) plus `FrameInput`, `GameSnapshot`, `GameEvent`.
+- `state.ts` — `GameState` (player with `yaw`/`pitch`, inventory, mobs and thrown
+  spears as **logical entities with no Three.js objects**, day clock, mining
+  progress, timers) plus `FrameInput`, `GameSnapshot`, `GameEvent`.
 - `commands.ts` — the `Command` union: every UI/input mutation enters the simulation through exactly this door.
 - `blockChanges.ts` — the delta tracker behind the save format: tracked block writes against the worldgen baseline; reverted edits drop out of the save.
 - `systems/` — one module per mechanic, each a function over `GameState`:
@@ -50,7 +52,12 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 10. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
 11. Animal breeding (`systems/breeding.ts` — feed-to-love timers, baby maturity, pairing in-love adults within range; the passive cap bounds the population)
 
-Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. The `placeBlock` command runs a fixed right-click precedence (`systems/interact.ts`) — feed an aimed animal (`tryFeedAimedMob`) → interact with the aimed block (`tryInteractBlock`, e.g. toggle a door, sleep in a bed, open a furnace/chest) → use the held item (`tryUseHeldItem`, e.g. a hoe tills soil, seeds plant a crop) → `placeSelectedBlock` — so each interaction consumes the click instead of getting a block placed against it. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
+Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame.
+`systems/spears.ts` launches selected spears and ticks their gravity, lifetime,
+swept mob collision, and terrain raycasts. The `placeBlock` command runs a fixed
+right-click precedence: throw selected spear → feed aimed animal → interact with
+aimed block → use held item → place selected block. New mechanics get a system
+module and a slot in this sequence — don't grow the engine class with inline logic.
 
 **Block-entities (chest contents).** Blocks are bare `BlockId`s, but a chest needs attached storage, so `state.containers: Map<voxelIndex, InventorySlot[]>` holds each placed chest's slots (keyed by `world.index`, the same space as the block diff). Placing a chest creates an empty entry; opening one (`interactChest`) sets `state.openContainerIndex` and `inventoryOpen` so the panel renders its grid; the `moveStack` command shuttles slots across the inventory/chest boundary (chest indices offset by `CONTAINER_SLOT_BASE`); breaking a chest spills its contents into the inventory via `inventory.tryInsertSlots` (refused if they don't fit). `serialize()` persists non-empty containers as `blockEntities`; see [save-format.md](save-format.md).
 
@@ -61,6 +68,8 @@ Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame.
 - **World mesh**: one mesh covers the visible region (not chunked), rebuilt when the player crosses a `RENDER_GRID` (20-block) boundary or when the engine sets `state.worldMeshDirty` (block edits, respawn, unstuck). Old geometry is disposed on rebuild.
 - `mobVisuals.ts` — mob id → model map; creates/removes models as mobs spawn/die and animates bob + leg gait from mob state (the simulation knows nothing about legs).
 - `heldItem.ts` / `crackOverlay.ts` — first-person item model and the 8-stage mining crack box (stage = progress / hardness). Held blocks stay cubes; everything else is the item's 16×16 inventory sprite extruded into a pixel-thick voxel mesh (`extrudedSprite.ts`, vertex colors, silhouette-only side faces) — the render layer imports `lib/ui/spritePixels` for this, which is legal because spritePixels is pure pixel-buffer code with no DOM. The holder group is posed every frame by `heldItemPose.ts` (pure math): a one-shot swing on the `attackSwung` event (the shell calls `renderer.triggerSwing()` from the event drain), a looping swing while mining, a walk bob scaled by horizontal speed, an equip dip on slot switch, and a faint idle sway.
+- `spearVisuals.ts` mirrors transient thrown spear state into procedural shaft/tip
+  meshes keyed by projectile id.
 - `playerModel.ts` / `playerPose.ts` / `playerVisuals.ts` — the player's own humanoid body, visible only in third person: box meshes with pivot groups at the joints, walk gait + attack/mining chop from pure pose math (mirroring `heldItemPose.ts`), the look pitch applied to the head only, and the held hotbar item in the right hand via the shared `itemModel.ts` builder (also used by `heldItem.ts`).
 - **Atmosphere** (all procedural, zero assets, freed in `dispose()`): `particleSystem.ts` + the pure, unit-tested `particlePool.ts` draw event-driven bursts (block shards from `BLOCK_COLORS`, mob-death puffs, eat crumbs, jump/land/footstep dust) as one `THREE.Points` with a soft-sprite shader, spawned via `GameRenderer.handleEvent(event, state)` (wired into the event drain beside `audio.handleEvent`). `skyView.ts` + the pure `starField.ts` layer camera-following stars, a moon, a sun disc, and drifting canvas-noise clouds over the day-night sky lerp, ramped by `daylight`. `precipitation.ts` is the camera-following rain/snow field driven by `state.weather`, and `syncDayNight` adds the matching overcast sky tint + dimmed light + nearer fog.
 - **Skins**: the body is colored by a `PlayerPalette` from `lib/game/playerSkins.ts` (six presets); `GameRenderer.setPlayerSkin(palette)` recolors the named materials in place. The choice persists under its own localStorage key (`lib/game/skinSettings.ts`, `minecraft_skin_v1`) — a player preference like audio volumes, never part of the world save — and the pause-menu picker's bust portraits (`lib/ui/skinPortrait.ts`) derive from the same palettes.

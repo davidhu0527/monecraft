@@ -15,7 +15,13 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 ## A new item or recipe
 
 - Add to `ITEM_DEFS` in `lib/game/items.ts` — tools take `minePower`/`mineTier`/`maxDurability`, weapons `attack`/`maxDurability`, armor `armorSlot`/`defense`/`maxDurability`. `kind: "food"` items take a `hunger` value (restored on eat); `kind: "material"` items are inert craft ingredients.
-- Give it an inventory sprite in `lib/ui/spritePixels.ts`: tools/swords get one for free if the id is `<material>_pickaxe`/`<material>_sword` and the material exists in `MATERIAL_PALETTES`; food/material items need a 16×16 grid + palette wired into the `ITEM_SPRITE_GRIDS` map (keyed by item id). The `lib/ui/spritePixels.test.ts` integrity test fails on ids that fall back to the placeholder checker — by design.
+- Give it an inventory sprite in `lib/ui/spritePixels.ts`: pickaxes, swords, and
+  spears get one for free when named `<material>_pickaxe`, `<material>_sword`, or
+  `<material>_spear` and the material exists in `MATERIAL_PALETTES`;
+  food/material items need a 16×16 grid + palette in `ITEM_SPRITE_GRIDS`. The
+  sprite integrity test rejects placeholder fallbacks.
+- Any item with `maxDurability` is automatically non-stackable. Spears also set
+  `meleeReach` and `throwDamage`; `systems/spears.ts` handles throwing.
 - `ITEM_DEF_BY_ID` is derived from `ITEM_DEFS`; never edit it directly.
 - Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` (e.g. `"furnace"`) makes a recipe a smelting recipe: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book.
 - Items with durability don't stack; durability is initialized in `createSlot` and persisted in saves.

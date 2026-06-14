@@ -31,6 +31,11 @@ describe("renderSpritePixels", () => {
   test("material tiers produce different sprites for the same shape", () => {
     expect(renderSpritePixels("wood_pickaxe")).not.toEqual(renderSpritePixels("diamond_pickaxe"));
     expect(renderSpritePixels("wood_sword")).not.toEqual(renderSpritePixels("gold_sword"));
+    expect(renderSpritePixels("wood_spear")).not.toEqual(renderSpritePixels("diamond_spear"));
+  });
+
+  test("spears have a distinct silhouette from swords", () => {
+    expect(renderSpritePixels("stone_spear")).not.toEqual(renderSpritePixels("stone_sword"));
   });
 
   test("the knife silhouette is distinct from every sword", () => {

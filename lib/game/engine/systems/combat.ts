@@ -15,12 +15,18 @@ export function weaponDamage(state: GameState): number {
   return FIST_DAMAGE;
 }
 
+export function weaponReach(state: GameState): number {
+  const slot = state.inventory[state.selectedSlot];
+  if (slot?.kind === "weapon" && slot.count > 0) return slot.meleeReach ?? ATTACK_REACH;
+  return ATTACK_REACH;
+}
+
 /**
  * Index of the mob nearest the crosshair within melee reach and aim cone, or
  * -1. Shared by attacking and by feeding animals (Phase 5) so both use the same
  * "what am I pointing at" rule.
  */
-export function findAimedMobIndex(state: GameState): number {
+export function findAimedMobIndex(state: GameState, reach = ATTACK_REACH): number {
   const { position } = state.player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
   lookDirection(state.player.yaw, state.player.pitch, scratchForward);
@@ -32,7 +38,7 @@ export function findAimedMobIndex(state: GameState): number {
     const mob = state.mobs[i];
     scratchToMob.copy(mob.position).sub(scratchOrigin);
     const dist = scratchToMob.length();
-    if (dist > ATTACK_REACH) continue;
+    if (dist > reach) continue;
     scratchToMob.normalize();
     if (scratchForward.dot(scratchToMob) < ATTACK_AIM_DOT) continue;
     if (dist < bestDist) {
@@ -47,9 +53,9 @@ export function findAimedMobIndex(state: GameState): number {
  * Melee attack at the mob nearest the crosshair within reach. Returns the kind
  * of the mob hit (or null); the caller (engine) handles death drops and durability.
  */
-export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void): MobKind | null {
+export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void, reach = ATTACK_REACH): MobKind | null {
   const { position } = state.player;
-  const bestIndex = findAimedMobIndex(state);
+  const bestIndex = findAimedMobIndex(state, reach);
   if (bestIndex < 0) return null;
   const mob = state.mobs[bestIndex];
   mob.hp -= damage;

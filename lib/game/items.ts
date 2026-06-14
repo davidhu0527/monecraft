@@ -1,5 +1,5 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
-import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS } from "@/lib/game/config";
+import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS, MAX_STACK_SIZE, SPEAR_MELEE_REACH } from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
@@ -107,6 +107,69 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35, maxDurability: 450 },
   { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40, maxDurability: 540 },
   { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47, maxDurability: 720 },
+  {
+    id: "wood_spear",
+    label: "Wood Spear",
+    kind: "weapon",
+    attack: 11,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 15,
+    maxDurability: 70
+  },
+  {
+    id: "stone_spear",
+    label: "Stone Spear",
+    kind: "weapon",
+    attack: 16,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 21,
+    maxDurability: 140
+  },
+  {
+    id: "sliver_spear",
+    label: "Sliver Spear",
+    kind: "weapon",
+    attack: 22,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 28,
+    maxDurability: 230
+  },
+  {
+    id: "ruby_spear",
+    label: "Ruby Spear",
+    kind: "weapon",
+    attack: 29,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 36,
+    maxDurability: 330
+  },
+  {
+    id: "sapphire_spear",
+    label: "Sapphire Spear",
+    kind: "weapon",
+    attack: 33,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 41,
+    maxDurability: 420
+  },
+  {
+    id: "gold_spear",
+    label: "Gold Spear",
+    kind: "weapon",
+    attack: 38,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 47,
+    maxDurability: 500
+  },
+  {
+    id: "diamond_spear",
+    label: "Diamond Spear",
+    kind: "weapon",
+    attack: 45,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 55,
+    maxDurability: 680
+  },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
   { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
   { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },
@@ -117,6 +180,10 @@ export const ITEM_DEFS: ItemDef[] = [
 
 export const ITEM_DEF_BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEM_DEFS.map((item) => [item.id, item]));
 
+export function maxStackSizeForItem(itemId: string): number {
+  return ITEM_DEF_BY_ID[itemId]?.maxDurability ? 1 : MAX_STACK_SIZE;
+}
+
 export function createEmptySlot(): InventorySlot {
   return { id: null, label: "Empty", kind: null, count: 0 };
 }
@@ -124,7 +191,7 @@ export function createEmptySlot(): InventorySlot {
 export function createSlot(itemId: string, count: number): InventorySlot {
   const def = ITEM_DEF_BY_ID[itemId];
   if (!def) return createEmptySlot();
-  const slot: InventorySlot = { ...def, count };
+  const slot: InventorySlot = { ...def, count: Math.min(maxStackSizeForItem(itemId), Math.max(0, Math.floor(count))) };
   if ((def.kind === "tool" || def.kind === "weapon" || def.kind === "armor") && def.maxDurability) {
     slot.maxDurability = def.maxDurability;
     slot.durability = def.maxDurability;

@@ -11,6 +11,8 @@ export type ItemDef = {
   kind: ItemKind;
   blockId?: BlockId;
   attack?: number;
+  meleeReach?: number;
+  throwDamage?: number;
   minePower?: number;
   mineTier?: number;
   armorSlot?: ArmorSlot;
@@ -27,6 +29,8 @@ export type InventorySlot = {
   count: number;
   blockId?: BlockId;
   attack?: number;
+  meleeReach?: number;
+  throwDamage?: number;
   minePower?: number;
   mineTier?: number;
   armorSlot?: ArmorSlot;

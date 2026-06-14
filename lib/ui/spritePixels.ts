@@ -101,6 +101,25 @@ const SWORD_GRID = [
   "................"
 ];
 
+const SPEAR_GRID = [
+  ".......ll.......",
+  "......lml.......",
+  "......lmM.......",
+  "......mmm.......",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......H........",
+  "................"
+];
+
 // Vertical like the sword so both share one in-hand pose. Reads as a knife:
 // shorter, wider single-edged blade — bright cutting edge (l) on the left,
 // dark spine (M) on the right, drop-point tip, a dark bolster row, and a
@@ -623,6 +642,7 @@ export function renderSpritePixels(itemId: string): Uint8ClampedArray {
   if (def?.kind === "tool") return paintGrid(PICKAXE_GRID, toolPalette(materialFor(itemId)));
   if (def?.kind === "weapon") {
     if (itemId === "knife") return paintGrid(KNIFE_GRID, toolPalette(STEEL));
+    if (itemId.endsWith("_spear")) return paintGrid(SPEAR_GRID, toolPalette(materialFor(itemId)));
     return paintGrid(SWORD_GRID, toolPalette(materialFor(itemId)));
   }
   if (def?.kind === "armor" && def.armorSlot) {

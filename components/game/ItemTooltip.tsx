@@ -13,7 +13,13 @@ export type TooltipContent = { title: string; lines?: string[] } | null;
  */
 export function itemTooltipFor(slot: InventorySlot): TooltipContent {
   if (!slot.id || slot.count <= 0) return null;
-  if (slot.maxDurability) return { title: slot.label, lines: [`Durability ${slot.durability ?? slot.maxDurability} / ${slot.maxDurability}`] };
+  if (slot.maxDurability) {
+    const lines = [`Durability ${slot.durability ?? slot.maxDurability} / ${slot.maxDurability}`];
+    if (slot.attack) lines.push(`Attack ${slot.attack}`);
+    if (slot.meleeReach) lines.push(`Reach ${slot.meleeReach}`);
+    if (slot.throwDamage) lines.push(`Throw damage ${slot.throwDamage}`);
+    return { title: slot.label, lines };
+  }
   return { title: slot.label };
 }
 

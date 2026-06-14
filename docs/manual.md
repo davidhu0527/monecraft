@@ -34,22 +34,22 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                                |
-| ------------------ | --------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                  |
-| `Space`            | Jump                                                                  |
-| `C`                | Crouch (slower, careful movement)                                     |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                    |
-| Mouse              | Look around (click the game first to lock the pointer)                |
-| Left-click (hold)  | Break the targeted block / attack a mob                               |
-| Right-click or `E` | Place the selected block / interact (bed, furnace, chest, hoe, seeds) |
-| `1`–`9`            | Select a hotbar slot                                                  |
-| `I`                | Open / close inventory & crafting                                     |
-| `F`                | Eat the selected food                                                 |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front   |
-| `U`                | Emergency unstuck (teleport to safe ground if wedged)                 |
-| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)         |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                   |
+| Key / input        | Action                                                              |
+| ------------------ | ------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                |
+| `Space`            | Jump                                                                |
+| `C`                | Crouch (slower, careful movement)                                   |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                  |
+| Mouse              | Look around (click the game first to lock the pointer)              |
+| Left-click (hold)  | Break the targeted block / attack a mob                             |
+| Right-click or `E` | Place/interact, or throw a selected spear                           |
+| `1`–`9`            | Select a hotbar slot                                                |
+| `I`                | Open / close inventory & crafting                                   |
+| `F`                | Eat the selected food                                               |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front |
+| `U`                | Emergency unstuck (teleport to safe ground if wedged)               |
+| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
@@ -93,6 +93,13 @@ Hold **left-click** to swing. You hit a mob if it's within **~4.5 blocks** and
 close to your crosshair (a fairly tight aim cone). Bare fists do **6 damage**;
 weapons do much more and have durability that ticks down with each hit. A landed
 blow knocks the mob back.
+
+Spears trade a little melee damage for **~7-block reach**. With a spear selected,
+press **`E`** or right-click to throw it: the projectile follows an arc, stops on
+the first mob it hits, and costs one durability. A missed spear embeds in terrain
+for two seconds before disappearing. The spear remains in your inventory until
+its durability runs out. Armor, tools, knives, swords, and spears never stack;
+every durable item occupies its own slot.
 
 **Armor** reduces incoming damage. Equip a helmet, face mask, neck protection,
 chestplate, leggings, and boots from the inventory's armor slots. Each piece adds

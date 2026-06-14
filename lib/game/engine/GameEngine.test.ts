@@ -862,6 +862,7 @@ describe("gameplay events", () => {
     calmDaytime(engine);
     run(engine, 1);
     const { state } = engine;
+    state.mobs = [];
     state.player.yaw = 0;
     state.player.pitch = 0;
     spawnTestMob(engine, "zombie", true, { x: 0, y: EYE_HEIGHT, z: -2 });
@@ -933,6 +934,7 @@ describe("gameplay events", () => {
     calmDaytime(engine);
     run(engine, 1);
     const { state } = engine;
+    state.mobs = [];
     state.player.yaw = 0;
     state.player.pitch = 0;
     // Park a sheep dead ahead at eye height so the aim-dot check passes.
@@ -940,6 +942,77 @@ describe("gameplay events", () => {
     engine.consumeEvents();
     engine.dispatch({ type: "attack" });
     expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "sheep")).toBe(true);
+  });
+
+  test("spears hit farther than ordinary melee weapons", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    spawnTestMob(engine, "sheep", false, { x: 0, y: EYE_HEIGHT, z: -6 });
+    const mob = state.mobs[state.mobs.length - 1];
+
+    state.inventory[0] = createSlot("stone_sword", 1);
+    state.selectedSlot = 0;
+    engine.dispatch({ type: "attack" });
+    expect(mob.hp).toBe(50);
+
+    state.inventory[0] = createSlot("stone_spear", 1);
+    engine.dispatch({ type: "attack" });
+    expect(mob.hp).toBe(34);
+  });
+
+  test("right-click throws a spear that damages mobs and wears the weapon", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.player.yaw = 0;
+    state.inventory[0] = createSlot("diamond_spear", 1);
+    state.selectedSlot = 0;
+    const durability = state.inventory[0].durability!;
+    const targetDistance = 2;
+    const targetZ = state.player.position.z - targetDistance;
+    const targetY = state.world.highestSolidY(Math.floor(state.player.position.x), Math.floor(targetZ)) + 1.9;
+    state.player.pitch = Math.atan2(targetY - (state.player.position.y + EYE_HEIGHT), targetDistance) + 0.01;
+    spawnTestMob(engine, "zombie", false, { x: 0, y: targetY - state.player.position.y, z: -targetDistance });
+    const mobId = state.mobs[state.mobs.length - 1].id;
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(state.thrownSpears).toHaveLength(1);
+    expect(state.inventory[0].durability).toBe(durability - 1);
+    engine.dispatch({ type: "placeBlock" }); // cooldown prevents repeat spam
+    expect(state.thrownSpears).toHaveLength(1);
+
+    run(engine, 0.6);
+    expect(state.thrownSpears).toHaveLength(0);
+    expect(state.mobs.some((mob) => mob.id === mobId)).toBe(false);
+    expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "zombie")).toBe(true);
+  });
+
+  test("a spear that hits terrain stays embedded for two seconds", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.inventory[0] = createSlot("wood_spear", 1);
+    state.selectedSlot = 0;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+
+    engine.dispatch({ type: "placeBlock" });
+    run(engine, 0.2);
+    expect(state.thrownSpears).toHaveLength(1);
+    expect(state.thrownSpears[0].stuckTimer).not.toBeNull();
+
+    run(engine, 1.7);
+    expect(state.thrownSpears).toHaveLength(1);
+    run(engine, 0.2);
+    expect(state.thrownSpears).toHaveLength(0);
   });
 
   test("attacking emits attackSwung even when nothing is hit", () => {

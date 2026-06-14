@@ -10,6 +10,15 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Spears and non-stackable gear**: seven craftable spear tiers (wood, stone,
+  sliver, ruby, sapphire, gold, diamond) have 7-block left-click melee reach and
+  can be thrown with right-click/`E`. Throws use procedural projectile meshes,
+  gravity, swept mob collision, terrain collision, a cooldown, tiered damage,
+  and one durability per throw. Missed throws remain visibly embedded in terrain
+  for two seconds, and the faster, flatter trajectory travels farther. All
+  durable armor, tools, knives, swords, and spears now occupy one slot across
+  drops, crafting, saves, and chests; legacy stacked durable gear is split
+  during migration. No save-format or worldgen impact.
 - **Wood doors**: craft one from 6 planks and place it on a solid floor to create a thin, two-block-tall panel. Right-click either half to open or close the whole door; open doors rotate onto their hinge edge, while closed doors block players and mobs. Door facing, open state, and both halves persist through the existing block-diff save, and breaking either half removes the whole door and returns one item. Only the player interaction path toggles doors; mobs stop at closed doors and cannot operate them. No save-format or worldgen impact.
 - **Water building and exposure damage**: block placement may now replace water cells, so underwater structures can be built against submerged terrain. Remaining continuously immersed for more than 60 seconds starts dealing 3 HP (1.5 hearts) of armor-bypassing damage every second; leaving water fully resets both timers. Exposure is session-only and is not serialized. No save-format or worldgen impact.
 
