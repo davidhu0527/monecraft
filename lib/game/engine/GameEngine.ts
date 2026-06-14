@@ -228,7 +228,9 @@ export class GameEngine {
       if (tickRespawnTimer(state, dt)) this.respawn();
       else {
         tickMobs(state, dt, this.mobTickDeps);
-        // Keep ticking so in-flight arrows clear; applyDamage no-ops while dead.
+        // Keep ticking so lit fuses and in-flight arrows resolve instead of
+        // freezing for the respawn countdown; applyDamage no-ops while dead.
+        tickPrimedTnt(state, dt, this.mobTickDeps);
         tickProjectiles(state, dt, this.mobTickDeps);
       }
       this.refreshSnapshot();

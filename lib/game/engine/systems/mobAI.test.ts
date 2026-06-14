@@ -87,6 +87,20 @@ describe("ranged skeletons", () => {
     expect(skeleton.position.z).toBeLessThan(startZ);
   });
 
+  test("a mob already at 0 hp is swept without acting (no final hit)", () => {
+    const zombie = makeMob("zombie", 24, 30, 21.5); // in melee range
+    zombie.hp = 0; // killed earlier this tick (e.g. by a blast), awaiting the sweep
+    const state = makeState([zombie]);
+    const removed: number[] = [];
+    const { deps, getDamage } = makeDeps();
+    deps.removeMobAt = (i: number) => removed.push(i);
+
+    tickMobs(state, 0.05, deps);
+
+    expect(getDamage()).toBe(0); // a corpse deals no damage
+    expect(removed).toContain(0); // but is still removed
+  });
+
   test("a zombie still melees and shoots nothing", () => {
     const zombie = makeMob("zombie", 24, 30, 21.5); // ~2.5 blocks, within melee reach
     const state = makeState([zombie]);

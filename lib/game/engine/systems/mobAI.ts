@@ -130,6 +130,9 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
 
   for (let i = 0; i < mobs.length; i += 1) {
     const mob = mobs[i];
+    // A mob killed earlier this tick (e.g. by an explosion) still awaits the
+    // post-loop sweep — skip its AI so a corpse can't move or land a final hit.
+    if (mob.hp <= 0) continue;
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
     const activeHostile = mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
@@ -190,9 +193,13 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     const meleeVGap = isBoss ? SKELETON_FIRE_VGAP : 1.6;
     const meleeReady = activeHostile && attackDistance < meleeReach && verticalGap < meleeVGap;
     const fireReady = isRanged && activeHostile && attackDistance < mob.detectRange && verticalGap < SKELETON_FIRE_VGAP;
+    // A creeper close enough to light its fuse also needs a line-of-sight check —
+    // it can be in range with a large vertical gap (so not meleeReady), which
+    // would otherwise arm the fuse off the default `hasLineOfSight = true`.
+    const creeperFuseReady = mob.kind === "creeper" && activeHostile && attackDistance < CREEPER_FUSE_RANGE;
 
     let hasLineOfSight = true;
-    if (meleeReady || fireReady) {
+    if (meleeReady || fireReady || creeperFuseReady) {
       scratchMobEye.set(mob.position.x, mob.position.y + mob.halfHeight * 0.35, mob.position.z);
       scratchPlayerAim.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
       scratchRay.copy(scratchPlayerAim).sub(scratchMobEye);
@@ -244,7 +251,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
             mob.hp = 0;
           }
         }
-      } else if (activeHostile && attackDistance < CREEPER_FUSE_RANGE && hasLineOfSight) {
+      } else if (creeperFuseReady && hasLineOfSight) {
         mob.fuseTimer = CREEPER_FUSE_SECONDS;
         deps.emit({ type: "mobAttacked", kind: "creeper" }); // the hiss
       }
