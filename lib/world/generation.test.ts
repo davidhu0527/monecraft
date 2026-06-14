@@ -124,9 +124,9 @@ describe("world types", () => {
   // refactor can't silently corrupt worlds created with it. Re-baseline only on
   // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
   test.each([
-    ["flat", "3d2b1fd1b809ea21696652483026df58a5c5e1cf8da65ce122810db2a2d3fce4"],
-    ["amplified", "03c7be22901cf5ab551506728c186b1d4c69d7d89bfefcd54bb9194f8aa6c752"],
-    ["islands", "eb002ec430a3f0611e54a1fec43e03dc5bb4d070eec959d2be81c2eb3241fbad"]
+    ["flat", "b520ba2b1b47471c9d7b7930c5e7e045b1e76df090a7767ebb79b664fac2ea9c"],
+    ["amplified", "eac66fb572945c40c44aff36e1b832bcdd1b6bcdc1d3e0cdc86b9dd054a7140d"],
+    ["islands", "5cedc6d611d771da2e3488768fa251f5acd5777667ec15062e27ba5eca21ae29"]
   ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
     expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
   });
@@ -197,6 +197,24 @@ describe("world types", () => {
       }
     }
     expect(dryLand).toBeGreaterThan(50);
+  });
+
+  test("dungeons follow the type's terrain (no floating dungeons in a flat world)", () => {
+    // Regression: dungeon depths use terrainTopY, which must read the type's
+    // config — not GEN — or a mountain-biome column's default height would carve
+    // a dungeon high above the flat surface (y=48).
+    const flat = makeTypedWorld(128, 150, 128, 1337, "flat");
+    let spawners = 0;
+    let maxSpawnerY = -1;
+    const layer = flat.sizeX * flat.sizeZ;
+    for (let i = 0; i < flat.blocks.length; i += 1) {
+      if (flat.blocks[i] === BlockId.Spawner) {
+        spawners += 1;
+        maxSpawnerY = Math.max(maxSpawnerY, Math.floor(i / layer));
+      }
+    }
+    expect(spawners).toBeGreaterThan(0); // dungeons still generate
+    expect(maxSpawnerY).toBeLessThan(48); // every spawner sits below the flat surface
   });
 });
 

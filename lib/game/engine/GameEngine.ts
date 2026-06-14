@@ -108,7 +108,7 @@ export class GameEngine {
     generateWorld(world, this.worldType);
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
-    const dungeonSites = collectDungeonSites(world);
+    const dungeonSites = collectDungeonSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);

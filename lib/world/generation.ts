@@ -146,7 +146,7 @@ export function generateWorld(world: VoxelWorld, worldType: WorldType = "default
   placeTrees(world, rand);
   placeCacti(world);
   placeStructures(world, rand);
-  placeDungeons(world);
+  placeDungeons(world, cfg);
 }
 
 function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
@@ -482,10 +482,10 @@ function dungeonRand(seed: number): () => number {
  * blocks, so it is identical at generation and at load — the property that lets
  * collectDungeonSites reproduce the exact dungeon layout.
  */
-function terrainTopY(world: VoxelWorld, x: number, z: number): number {
+function terrainTopY(world: VoxelWorld, x: number, z: number, cfg: TerrainConfig): number {
   const biome = world.getBiome(x, z);
   const noise = smoothNoise2D(x, z, world.seed);
-  const { baseHeight, noiseScale } = GEN.biomes[biome];
+  const { baseHeight, noiseScale } = cfg.biomes[biome];
   return Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
 }
 
@@ -515,7 +515,7 @@ function buildDungeonRoom(world: VoxelWorld, cx: number, cz: number, floorY: num
   sink.spawner(world.index(cx, floorY, cz));
 }
 
-function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): void {
+function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink, cfg: TerrainConfig): void {
   const rand = dungeonRand(world.seed);
   const centerX = world.sizeX / 2;
   const centerZ = world.sizeZ / 2;
@@ -527,7 +527,7 @@ function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): vo
     const floorRoll = rand();
     const secondChest = rand() < 0.6;
 
-    const surface = terrainTopY(world, cx, cz);
+    const surface = terrainTopY(world, cx, cz, cfg);
     const minFloor = 7;
     const maxFloor = surface - 7; // keep the ceiling >=3 below the surface
     if (maxFloor < minFloor) continue;
@@ -539,8 +539,8 @@ function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): vo
   }
 }
 
-function placeDungeons(world: VoxelWorld): void {
-  buildDungeons(world, true, NOOP_DUNGEON_SINK);
+function placeDungeons(world: VoxelWorld, cfg: TerrainConfig): void {
+  buildDungeons(world, true, NOOP_DUNGEON_SINK, cfg);
 }
 
 export type DungeonSites = { chestIndices: number[]; spawnerIndices: number[] };
@@ -549,14 +549,13 @@ export type DungeonSites = { chestIndices: number[]; spawnerIndices: number[] };
  * Re-derives the voxel indices of every dungeon chest and spawner WITHOUT
  * writing blocks, by replaying buildDungeons' placement math. The engine calls
  * this once after regenerating the world on load to rebuild the session-only
- * dungeon index sets that gate lazy loot fill and spawner activation.
+ * dungeon index sets that gate lazy loot fill and spawner activation. It must be
+ * passed the same worldType the world was generated with — dungeon depths follow
+ * the type's terrain, so the derived indices match what placeDungeons wrote.
  */
-export function collectDungeonSites(world: VoxelWorld): DungeonSites {
+export function collectDungeonSites(world: VoxelWorld, worldType: WorldType = "default"): DungeonSites {
   const chestIndices: number[] = [];
   const spawnerIndices: number[] = [];
-  buildDungeons(world, false, {
-    chest: (idx) => chestIndices.push(idx),
-    spawner: (idx) => spawnerIndices.push(idx)
-  });
+  buildDungeons(world, false, { chest: (idx) => chestIndices.push(idx), spawner: (idx) => spawnerIndices.push(idx) }, terrainConfigFor(worldType));
   return { chestIndices, spawnerIndices };
 }

@@ -7,7 +7,7 @@ type CreateWorldFormProps = {
   onCancel: () => void;
 };
 
-/** The new-world form: a name, a generation type, and an optional seed (blank = random). */
+/** The new-world form: a name, a world type, and an optional seed (blank = random). */
 export default function CreateWorldForm({ onCreate, onCancel }: CreateWorldFormProps) {
   const [name, setName] = useState("");
   const [seed, setSeed] = useState("");
