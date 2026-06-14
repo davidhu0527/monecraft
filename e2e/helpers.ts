@@ -52,15 +52,15 @@ export async function playerPosition(page: Page): Promise<{ x: number; y: number
 }
 
 /**
- * Clicks the canvas to request pointer lock; if the browser refuses (headless
- * Chromium cannot engage pointer lock at all), forces the input controller's
- * lock flag so everything downstream — keys → engine, held mouse → mining —
- * is still exercised for real. The acquisition UX itself stays in the manual
- * gameplay pass.
+ * Double-clicks the canvas to request pointer lock; if the browser refuses
+ * (headless Chromium cannot engage pointer lock at all), forces the input
+ * controller's lock flag so everything downstream — keys → engine, held mouse
+ * → mining — is still exercised for real. The acquisition UX itself stays in
+ * the manual gameplay pass.
  */
 export async function acquirePointerLock(page: Page): Promise<void> {
   const canvas = page.locator(".game-canvas-wrap canvas");
-  await canvas.click(); // first click only acquires the lock
+  await canvas.dblclick();
   try {
     await page.waitForFunction(() => document.pointerLockElement !== null, undefined, { timeout: 2000 });
   } catch {

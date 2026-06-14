@@ -89,7 +89,7 @@ export default function MinecraftGame() {
 
       {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
-      {showClickHint ? <div className="click-hint">Click to play</div> : null}
+      {showClickHint ? <div className="click-hint">Double-click to play</div> : null}
 
       <BossHealthBar boss={boss} />
 

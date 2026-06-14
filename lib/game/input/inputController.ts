@@ -115,19 +115,22 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
 
   const onMouseDown = (evt: MouseEvent) => {
     if (uiBlocked()) return;
-    if (!input.pointerLocked) {
-      // The first click only acquires pointer lock — no mining or placing.
-      // The request can legitimately reject (recent Esc, unfocused document,
-      // headless browsers); the game just stays unlocked.
-      Promise.resolve(canvas.requestPointerLock()).catch(() => {});
-      return;
-    }
+    if (!input.pointerLocked) return;
 
     if (evt.button === 0) {
       input.leftMouseHeld = true;
       engine.dispatch({ type: "attack" });
     }
     if (evt.button === 2) engine.dispatch({ type: "placeBlock" });
+  };
+
+  const onDoubleClick = () => {
+    if (uiBlocked() || input.pointerLocked) return;
+    // Starting play is deliberate: a single click remains inert, while the
+    // double-click gesture acquires pointer lock without also mining.
+    // The request can legitimately reject (recent Esc, unfocused document,
+    // headless browsers); the game just stays unlocked.
+    Promise.resolve(canvas.requestPointerLock()).catch(() => {});
   };
 
   const onMouseUp = (evt: MouseEvent) => {
@@ -152,6 +155,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
   document.addEventListener("mousedown", onMouseDown);
+  document.addEventListener("dblclick", onDoubleClick);
   document.addEventListener("mouseup", onMouseUp);
   document.addEventListener("contextmenu", onContextMenu);
   document.addEventListener("pointerlockchange", onPointerLockChange);
@@ -170,6 +174,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("keyup", onKeyUp);
       document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("dblclick", onDoubleClick);
       document.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("contextmenu", onContextMenu);
       document.removeEventListener("pointerlockchange", onPointerLockChange);

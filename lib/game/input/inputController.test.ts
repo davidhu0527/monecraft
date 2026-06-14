@@ -51,3 +51,24 @@ describe("inputController emergency unstuck", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "unstuck" });
   });
 });
+
+describe("inputController pointer lock", () => {
+  test("requires a double-click to start play", () => {
+    const { engine } = makeStubEngine();
+    const canvas = document.createElement("canvas");
+    const requestPointerLock = mock(() => Promise.resolve());
+    canvas.requestPointerLock = requestPointerLock;
+    controller = createInputController({
+      canvas,
+      engine,
+      onResize: () => {},
+      onLockChange: () => {}
+    });
+
+    document.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true }));
+    expect(requestPointerLock).not.toHaveBeenCalled();
+
+    document.dispatchEvent(new MouseEvent("dblclick", { button: 0, bubbles: true }));
+    expect(requestPointerLock).toHaveBeenCalledTimes(1);
+  });
+});

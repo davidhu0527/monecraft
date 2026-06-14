@@ -18,8 +18,8 @@ stone, wood, planks, cobble, and sand, plus a **wood pickaxe** and a **knife**.
 The day-night cycle is short — **four minutes per full day** — so the first night
 comes fast. A good opening:
 
-1. **Look around.** Click the game once to lock the mouse (the first click only
-   grabs the pointer; it doesn't mine). Move with `W A S D`, look with the mouse.
+1. **Look around.** Double-click the game to lock the mouse (the starting gesture
+   doesn't mine). Move with `W A S D`, look with the mouse.
 2. **Gear up from your kit.** Open the inventory with **`I`**. You already have
    cobble and wood, so craft a **stone pickaxe** (2 cobble + 1 wood) and a **stone
    sword** (2 cobble + 1 wood) — both upgrades over your starting wood pickaxe and
@@ -40,7 +40,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `Space`            | Jump                                                                |
 | `C`                | Crouch (slower, careful movement)                                   |
 | `W` + `CapsLock`   | Sprint — faster, but drains hunger                                  |
-| Mouse              | Look around (click the game first to lock the pointer)              |
+| Mouse              | Look around (double-click the game first to lock the pointer)       |
 | Left-click (hold)  | Break the targeted block / attack a mob                             |
 | Right-click or `E` | Place/interact, or throw a selected spear                           |
 | `1`–`9`            | Select a hotbar slot                                                |
