@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-14
+
 ### Changed
 
 - Starting play now requires a double-click to acquire pointer lock, preventing an accidental single click from immediately capturing the mouse. No save-format or worldgen impact.
