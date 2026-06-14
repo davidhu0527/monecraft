@@ -41,11 +41,35 @@ function slotButtons() {
   return screen.getAllByRole("button").filter((button) => button.className.includes("inv-slot") && !button.className.includes("armor-slot"));
 }
 
+function recipeOrder() {
+  // The recipe entries in DOM order, identified by their aria-label (the recipe label).
+  return screen
+    .getAllByRole("button")
+    .filter((button) => button.className.includes("recipe-entry"))
+    .map((button) => button.getAttribute("aria-label"));
+}
+
 describe("InventoryPanel", () => {
   test("renders all inventory slots plus recipe buttons", () => {
     renderPanel();
     expect(slotButtons()).toHaveLength(INVENTORY_SLOTS);
     expect(screen.getByRole("button", { name: "2 Wood -> 4 Planks" })).toBeTruthy();
+  });
+
+  test("recipes are grouped under category headers in the fixed display order", () => {
+    renderPanel();
+    const headers = screen.getAllByText(/^(Tools|Weapons|Armor|Building|Food|Materials|Smelting|Trades)$/).map((el) => el.textContent);
+    // Every group is present (each category has at least one recipe) and ordered.
+    expect(headers).toEqual(["Tools", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Trades"]);
+  });
+
+  test("craftable-now recipes sort above locked ones within a group", () => {
+    const stone = RECIPES.find((recipe) => recipe.id === "stone_pickaxe")!;
+    const wood = RECIPES.find((recipe) => recipe.id === "wood_pickaxe")!;
+    renderPanel({ canCraft: (recipe) => recipe.id === "stone_pickaxe" });
+    const order = recipeOrder();
+    // Both are Tools; only the stone pickaxe is craftable, so it floats above the wood one.
+    expect(order.indexOf(stone.label)).toBeLessThan(order.indexOf(wood.label));
   });
 
   test("slots are ordered storage first, hotbar row last, with icons and counts", () => {

@@ -27,6 +27,10 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 All use the always-available crafting grid except the nine **furnace** smelting
 recipes, which need an open furnace.
 
+In-game, the recipe book groups recipes into the sections below (Tools, Weapons,
+Armor, Building, Food, Materials, then Smelting and Trades), listing the recipes you
+can currently afford first within each section.
+
 ### Building & materials
 
 | Result      | Ingredients          |

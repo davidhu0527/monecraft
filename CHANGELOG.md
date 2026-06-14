@@ -29,6 +29,10 @@ All notable changes to this project are documented in this file.
   - **Per-world worldgen versioning**: each world records the `WORLDGEN_VERSION` it was generated under (`lib/game/config.ts`). A future worldgen change bumps that constant and discards only the affected worlds' stale block-diffs (rebooting them from their seed) — replacing the old whole-store `SAVE_KEY` rename, which reset every world. The save _schema_ is unchanged (still version 5)
   - **First run & migration** (`lib/game/legacyMigration.ts`): a brand-new player is greeted by the create-profile form (name + skin) — their first act is making a profile. An existing single-world save is instead folded into a default "Player" profile (carrying the old skin) plus one "My World"; the legacy blob is copied before the old key is removed, so a failure can't lose data
 
+### Changed
+
+- **Recipe book grouped by category**: the crafting panel's recipe list is no longer one long flat scroll. Recipes are now organized into labeled sections — **Tools, Weapons, Armor, Building, Food, Materials**, then the station-gated **Smelting** and **Trades** — and within each section the recipes you can make right now are listed first, so what's craftable rises to the top. Categories are **derived** from each result item's existing `kind` (station recipes group by station), so adding a recipe needs no extra metadata. Pure presentation: no save-format, worldgen, or recipe-data change (`recipeCategory`/`groupRecipes` in `lib/game/recipes.ts`)
+
 ## [0.8.0] - 2026-06-14
 
 ### Changed

@@ -1,5 +1,6 @@
-import type { Recipe } from "@/lib/game/types";
+import { ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { TRADES } from "@/lib/game/trades";
+import type { ItemKind, Recipe } from "@/lib/game/types";
 
 const CRAFTING_RECIPES: Recipe[] = [
   { id: "planks", label: "2 Wood -> 4 Planks", cost: [{ slotId: "wood", count: 2 }], result: { slotId: "planks", count: 4 } },
@@ -443,3 +444,64 @@ const CRAFTING_RECIPES: Recipe[] = [
 // Villager trades are station-gated recipes, so they share the recipe book + the
 // `craft` command. They live in their own module (the trade analog of recipes).
 export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];
+
+// --- Recipe categories (recipe-book grouping) ---
+
+/**
+ * The section a recipe falls under in the recipe book. Station recipes get their
+ * own group (a furnace smelts, a villager trades); everything else is grouped by
+ * the kind of item it produces.
+ */
+export type RecipeCategory = "Tools" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Trades";
+
+/** Fixed display order; `groupRecipes` emits sections in this sequence. */
+export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Trades"];
+
+const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
+  tool: "Tools",
+  weapon: "Weapons",
+  armor: "Armor",
+  block: "Building",
+  food: "Food",
+  material: "Materials"
+};
+
+/**
+ * The recipe book section for a recipe. Station recipes take precedence so
+ * smelting and trades stay together; otherwise the category is derived from the
+ * result item's `kind` (falling back to "Materials" for an unknown result).
+ */
+export function recipeCategory(recipe: Recipe): RecipeCategory {
+  if (recipe.station === "villager") return "Trades";
+  if (recipe.station === "furnace") return "Smelting";
+  const kind = ITEM_DEF_BY_ID[recipe.result.slotId]?.kind;
+  return kind ? KIND_TO_CATEGORY[kind] : "Materials";
+}
+
+export type RecipeGroup = { category: RecipeCategory; recipes: Recipe[] };
+
+/**
+ * Buckets recipes into the fixed category order, dropping empty categories.
+ * Within each group, recipes the player can make right now (`canMakeNow`) are
+ * listed first; both partitions preserve the original source order.
+ */
+export function groupRecipes(recipes: Recipe[], canMakeNow: (recipe: Recipe) => boolean): RecipeGroup[] {
+  const buckets = new Map<RecipeCategory, Recipe[]>();
+  for (const recipe of recipes) {
+    const category = recipeCategory(recipe);
+    const bucket = buckets.get(category);
+    if (bucket) bucket.push(recipe);
+    else buckets.set(category, [recipe]);
+  }
+
+  const groups: RecipeGroup[] = [];
+  for (const category of RECIPE_CATEGORY_ORDER) {
+    const bucket = buckets.get(category);
+    if (!bucket) continue;
+    const ready: Recipe[] = [];
+    const rest: Recipe[] = [];
+    for (const recipe of bucket) (canMakeNow(recipe) ? ready : rest).push(recipe);
+    groups.push({ category, recipes: [...ready, ...rest] });
+  }
+  return groups;
+}
