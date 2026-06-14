@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-14
+
 ### Added
 
 - **Villagers & trading**: a passive NPC you can barter with gives gathering an economy, all on **zero new assets** (procedural model + a recolored gem sprite)
