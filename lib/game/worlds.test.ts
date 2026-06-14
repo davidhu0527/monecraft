@@ -140,4 +140,17 @@ describe("worlds manifest", () => {
   test("creating a world for an unknown profile is refused", () => {
     expect(() => createWorld("ghost", "Orphan", "1", { storage: fakeStorage() })).toThrow();
   });
+
+  test("stores the chosen world type, defaulting and sanitizing", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "Flat", "1", { storage, uid: () => "wf", worldType: "flat" }).worldType).toBe("flat");
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wd" }).worldType).toBe("default"); // omitted -> default
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, worldType: "bogus", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].worldType).toBe("default"); // unknown -> default
+  });
 });

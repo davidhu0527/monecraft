@@ -70,6 +70,26 @@ function calmDaytime(engine: GameEngine): void {
   engine.state.dayClock = 60;
 }
 
+describe("world types", () => {
+  test("an islands world spawns the player on dry land above the sea", () => {
+    const engine = new GameEngine({ seed: 1337, worldType: "islands", rng: mulberry32(42), worldSize: { x: 96, y: 150, z: 96 } });
+    const { position, world } = { position: engine.state.player.position, world: engine.state.world };
+    const x = Math.floor(position.x);
+    const y = Math.floor(position.y);
+    const z = Math.floor(position.z);
+    expect(world.isSolid(x, y - 1, z)).toBe(true); // solid floor underfoot
+    expect(world.get(x, y, z)).not.toBe(BlockId.Water); // body not submerged
+    expect(world.get(x, y + 1, z)).not.toBe(BlockId.Water); // head not submerged
+  });
+
+  test("the world type round-trips through serialize/restore", () => {
+    const engine = new GameEngine({ seed: 1337, worldType: "amplified", rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(engine.serialize().worldType).toBe("amplified");
+    const restored = new GameEngine({ save: engine.serialize(), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(restored.serialize().worldType).toBe("amplified");
+  });
+});
+
 describe("boot", () => {
   test("fresh engine spawns the player on safe ground with starter gear and mobs", () => {
     const engine = makeEngine();
