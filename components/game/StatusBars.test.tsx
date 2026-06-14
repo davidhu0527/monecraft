@@ -58,4 +58,10 @@ describe("StatusBars", () => {
     renderBars({ oxygen: 4 });
     expect(screen.getByLabelText(`Air: 4/${MAX_OXYGEN}`)).toBeTruthy();
   });
+
+  test("the air meter appears as soon as a fraction of breath is lost", () => {
+    // 9.1/10 must not round up to full and hide the row.
+    renderBars({ oxygen: 9.1 });
+    expect(screen.getByLabelText(`Air: 10/${MAX_OXYGEN}`)).toBeTruthy();
+  });
 });

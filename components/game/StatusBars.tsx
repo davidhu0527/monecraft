@@ -53,7 +53,7 @@ function IconRow({ kind, value, max, label, reversed }: { kind: IconKind; value:
  */
 export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armorPoints, oxygen, maxOxygen }: StatusBarsProps) {
   // Round up so the last sliver of air still shows a bubble until truly empty.
-  const oxygenIcons = Math.ceil(oxygen);
+  const oxygenIcons = Math.ceil(Math.max(0, Math.min(oxygen, maxOxygen)));
   return (
     <div className="status-bars">
       <div className="status-bars-left">
@@ -61,7 +61,7 @@ export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armor
         <IconRow kind="heart" value={Math.max(0, Math.round(hearts))} max={maxHearts} label="Health" />
       </div>
       <div className="status-bars-right">
-        {oxygenIcons < maxOxygen && <IconRow kind="bubble" value={oxygenIcons} max={maxOxygen} label="Air" reversed />}
+        {oxygen < maxOxygen && <IconRow kind="bubble" value={oxygenIcons} max={maxOxygen} label="Air" reversed />}
         <IconRow kind="hunger" value={Math.max(0, Math.round(hunger))} max={maxHunger} label="Hunger" reversed />
       </div>
     </div>
