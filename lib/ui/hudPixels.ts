@@ -63,6 +63,25 @@ const ARMOR_GRID = [
   "................"
 ];
 
+const BUBBLE_GRID = [
+  "................",
+  "................",
+  "......oooo......",
+  "....oommmmoo....",
+  "...ommllmmmo....",
+  "..ommlmmmmmo....",
+  "..ommmmmmmmo....",
+  ".ommmmmmmmmmo...",
+  ".ommmmmmmmmmo...",
+  "..ommmmmmmmo....",
+  "..ommmmmmmmo....",
+  "...ommmmmmo.....",
+  "....oommoo......",
+  "......oo........",
+  "................",
+  "................"
+];
+
 const HEART_PALETTE: PixelPalette = {
   o: [56, 10, 10],
   m: [228, 38, 38],
@@ -83,10 +102,17 @@ const ARMOR_PALETTE: PixelPalette = {
   l: [240, 243, 248]
 };
 
+const BUBBLE_PALETTE: PixelPalette = {
+  o: [20, 60, 80],
+  m: [90, 200, 235],
+  l: [220, 250, 255]
+};
+
 // Containers reuse the same shapes as dark sunken outlines.
 const HEART_CONTAINER_PALETTE: PixelPalette = { o: [30, 6, 6], m: [62, 26, 26], l: [80, 38, 38] };
 const DRUMSTICK_CONTAINER_PALETTE: PixelPalette = { o: [34, 20, 8], m: [66, 44, 24], l: [80, 56, 32], b: [70, 58, 40], w: [78, 66, 48] };
 const ARMOR_CONTAINER_PALETTE: PixelPalette = { o: [22, 23, 26], m: [58, 61, 68], l: [74, 78, 86] };
+const BUBBLE_CONTAINER_PALETTE: PixelPalette = { o: [16, 30, 38], m: [40, 70, 84], l: [60, 96, 110] };
 
 /** Left half of `full` over `container` — the classic half-heart/half-drumstick. */
 function halfIcon(full: Uint8ClampedArray, container: Uint8ClampedArray): Uint8ClampedArray {
@@ -113,7 +139,10 @@ export type HudIconName =
   | "hunger_container"
   | "armor_full"
   | "armor_half"
-  | "armor_container";
+  | "armor_container"
+  | "bubble_full"
+  | "bubble_half"
+  | "bubble_container";
 
 export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
   switch (name) {
@@ -135,5 +164,11 @@ export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
       return paintGrid(ARMOR_GRID, ARMOR_CONTAINER_PALETTE);
     case "armor_half":
       return halfIcon(paintGrid(ARMOR_GRID, ARMOR_PALETTE), paintGrid(ARMOR_GRID, ARMOR_CONTAINER_PALETTE));
+    case "bubble_full":
+      return paintGrid(BUBBLE_GRID, BUBBLE_PALETTE);
+    case "bubble_container":
+      return paintGrid(BUBBLE_GRID, BUBBLE_CONTAINER_PALETTE);
+    case "bubble_half":
+      return halfIcon(paintGrid(BUBBLE_GRID, BUBBLE_PALETTE), paintGrid(BUBBLE_GRID, BUBBLE_CONTAINER_PALETTE));
   }
 }

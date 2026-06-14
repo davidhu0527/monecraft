@@ -8,11 +8,13 @@ type StatusBarsProps = {
   hunger: number;
   maxHunger: number;
   armorPoints: number;
+  oxygen: number;
+  maxOxygen: number;
 };
 
 const ICON_SIZE = 18;
 
-type IconKind = "heart" | "hunger" | "armor";
+type IconKind = "heart" | "hunger" | "armor" | "bubble";
 
 /** Icon states for a 10-icon Minecraft bar: each icon covers 2 points. */
 export function iconStates(value: number, max: number): Array<"full" | "half" | "container"> {
@@ -49,7 +51,9 @@ function IconRow({ kind, value, max, label, reversed }: { kind: IconKind; value:
  * the right (filling right-to-left), and an armor row over the hearts that
  * only appears once something is equipped.
  */
-export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armorPoints }: StatusBarsProps) {
+export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armorPoints, oxygen, maxOxygen }: StatusBarsProps) {
+  // Round up so the last sliver of air still shows a bubble until truly empty.
+  const oxygenIcons = Math.ceil(oxygen);
   return (
     <div className="status-bars">
       <div className="status-bars-left">
@@ -57,6 +61,7 @@ export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armor
         <IconRow kind="heart" value={Math.max(0, Math.round(hearts))} max={maxHearts} label="Health" />
       </div>
       <div className="status-bars-right">
+        {oxygenIcons < maxOxygen && <IconRow kind="bubble" value={oxygenIcons} max={maxOxygen} label="Air" reversed />}
         <IconRow kind="hunger" value={Math.max(0, Math.round(hunger))} max={maxHunger} label="Hunger" reversed />
       </div>
     </div>

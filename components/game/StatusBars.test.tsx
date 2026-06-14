@@ -1,10 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import StatusBars, { iconStates } from "@/components/game/StatusBars";
-import { MAX_HEARTS, MAX_HUNGER } from "@/lib/game/config";
+import { MAX_HEARTS, MAX_HUNGER, MAX_OXYGEN } from "@/lib/game/config";
 
 function renderBars(overrides: Partial<Parameters<typeof StatusBars>[0]> = {}) {
-  render(<StatusBars hearts={MAX_HEARTS} maxHearts={MAX_HEARTS} hunger={MAX_HUNGER} maxHunger={MAX_HUNGER} armorPoints={0} {...overrides} />);
+  render(
+    <StatusBars
+      hearts={MAX_HEARTS}
+      maxHearts={MAX_HEARTS}
+      hunger={MAX_HUNGER}
+      maxHunger={MAX_HUNGER}
+      armorPoints={0}
+      oxygen={MAX_OXYGEN}
+      maxOxygen={MAX_OXYGEN}
+      {...overrides}
+    />
+  );
 }
 
 describe("StatusBars", () => {
@@ -39,5 +50,12 @@ describe("StatusBars", () => {
   test("shows the armor meter when points are present", () => {
     renderBars({ armorPoints: 7 });
     expect(screen.getByLabelText("Armor: 7/20")).toBeTruthy();
+  });
+
+  test("the air meter is hidden at full breath and appears once it drops", () => {
+    renderBars({ oxygen: MAX_OXYGEN });
+    expect(screen.queryByLabelText(/Air:/)).toBeNull();
+    renderBars({ oxygen: 4 });
+    expect(screen.getByLabelText(`Air: 4/${MAX_OXYGEN}`)).toBeTruthy();
   });
 });
