@@ -1402,8 +1402,15 @@ describe("endgame boss", () => {
     expect(snap.victory).toBe(true);
     expect(snap.boss).toBeNull();
 
+    // The victory screen owns its lock-loss, so a lock-loss pause is ignored
+    // until it's dismissed (otherwise the pause menu would stack over it).
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+
     engine.dispatch({ type: "dismissVictory" });
     expect(engine.getSnapshot().victory).toBe(false);
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(true); // pausing works again once dismissed
   });
 
   test("the boss does not burn in daylight", () => {

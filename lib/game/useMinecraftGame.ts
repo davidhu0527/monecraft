@@ -214,7 +214,9 @@ export function useMinecraftGame() {
       }
 
       for (const event of gameEngine.consumeEvents()) {
-        if (event.type === "died") {
+        if (event.type === "died" || event.type === "bossDefeated") {
+          // Free the cursor so the death/victory button is clickable; the pause
+          // command ignores both states, so the lock-loss won't open the menu too.
           input.clearKeys();
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         }

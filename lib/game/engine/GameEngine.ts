@@ -323,11 +323,11 @@ export class GameEngine {
         break;
       }
       case "pause": {
-        // The inventory panel and the death screen own their lock-loss; only
-        // plain gameplay lock-loss (or an explicit Escape) opens the pause menu.
-        // Sleeping is a brief, atomic freeze — pausing mid-fade would stall the
-        // sleep timer (step early-returns on paused before the sleep branch).
-        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0) break;
+        // The inventory panel, death screen, and victory screen own their
+        // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
+        // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
+        // would stall the sleep timer (step early-returns on paused before sleep).
+        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory) break;
         state.paused = true;
         state.craftingStation = null;
         state.openContainerIndex = null;
