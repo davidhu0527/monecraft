@@ -125,6 +125,7 @@ export function computeFullLight(world: VoxelWorld): Uint8Array {
  * bounded by the shaft depth when a column is capped or opened.
  */
 export function applyEdit(world: VoxelWorld, light: Uint8Array, x: number, y: number, z: number): void {
+  if (!world.inBounds(x, y, z)) return;
   const idx = world.index(x, y, z);
   const block = world.blocks[idx] as BlockId;
 
@@ -145,6 +146,17 @@ export function applyEdit(world: VoxelWorld, light: Uint8Array, x: number, y: nu
   const oldSky = light[idx] >> SKY_SHIFT;
   setChannel(light, idx, 0, true);
   const skyRefill = removeChannel(world, light, idx, oldSky, true);
+  // The open sky above the world is an implicit sunlight source the in-bounds
+  // remove/refill can't discover. When the edited cell is in the top layer and
+  // now transmits, reseed its direct sunlight (matching the bake's column pass)
+  // so reopening a ceiling block re-floods the column instead of underlighting.
+  if (y === world.sizeY - 1 && !isLightBlocker(block)) {
+    const seed = MAX_LIGHT - opacity(block);
+    if (seed > skyLightAt(light, idx)) {
+      setChannel(light, idx, seed, true);
+      skyRefill.push(idx);
+    }
+  }
   flood(world, light, skyRefill, true);
 }
 

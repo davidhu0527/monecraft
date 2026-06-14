@@ -231,7 +231,9 @@ describe("incremental relight (applyEdit)", () => {
     const palette = [BlockId.Air, BlockId.Stone, BlockId.Glass, BlockId.Water, BlockId.Leaves];
     for (let i = 0; i < 60; i += 1) {
       const x = 8 + Math.floor(rand() * 9);
-      const y = 4 + Math.floor(rand() * 32);
+      // y spans up to the very top layer (sizeY-1) so edits at the world ceiling,
+      // where direct sunlight has no in-bounds source above, are covered too.
+      const y = 4 + Math.floor(rand() * 36);
       const z = 8 + Math.floor(rand() * 9);
       world.set(x, y, z, palette[Math.floor(rand() * palette.length)]);
       applyEdit(world, light, x, y, z);
