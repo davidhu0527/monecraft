@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { canCraft, countsById, craft } from "@/lib/game/inventory";
-import { RECIPES } from "@/lib/game/recipes";
+import { groupRecipes, recipeCategory, RECIPE_CATEGORY_ORDER, RECIPES } from "@/lib/game/recipes";
 import type { InventorySlot } from "@/lib/game/types";
 
 function inventory(items: Array<[string, number]>): InventorySlot[] {
@@ -24,6 +24,44 @@ describe("recipe integrity", () => {
       for (const cost of r.cost) expect(ITEM_DEF_BY_ID[cost.slotId], `${r.id} cost ${cost.slotId}`).toBeDefined();
       expect(ITEM_DEF_BY_ID[r.result.slotId], `${r.id} result ${r.result.slotId}`).toBeDefined();
     }
+  });
+});
+
+describe("recipe categories", () => {
+  test("recipeCategory assigns each recipe to the right section", () => {
+    expect(recipeCategory(recipe("stone_pickaxe"))).toBe("Tools");
+    expect(recipeCategory(recipe("diamond_sword"))).toBe("Weapons");
+    expect(recipeCategory(recipe("helmet"))).toBe("Armor");
+    expect(recipeCategory(recipe("door"))).toBe("Building");
+    expect(recipeCategory(recipe("bread"))).toBe("Food");
+    expect(recipeCategory(recipe("wool_from_string"))).toBe("Materials");
+    // Station takes precedence: a cooked-meat recipe produces food but smelts at a furnace.
+    expect(recipeCategory(recipe("cook_chicken"))).toBe("Smelting");
+    expect(recipeCategory(recipe("charcoal"))).toBe("Smelting");
+    const trade = RECIPES.find((r) => r.station === "villager")!;
+    expect(recipeCategory(trade)).toBe("Trades");
+  });
+
+  test("groupRecipes returns non-empty categories in the fixed display order", () => {
+    const groups = groupRecipes(RECIPES, () => false);
+    const positions = groups.map((g) => RECIPE_CATEGORY_ORDER.indexOf(g.category));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(groups.every((g) => g.recipes.length > 0)).toBe(true);
+  });
+
+  test("groupRecipes partitions every recipe exactly once", () => {
+    const groups = groupRecipes(RECIPES, () => true);
+    const ids = groups.flatMap((g) => g.recipes.map((r) => r.id));
+    expect(ids).toHaveLength(RECIPES.length);
+    expect(new Set(ids).size).toBe(RECIPES.length);
+  });
+
+  test("groupRecipes floats craftable-now recipes to the front, preserving source order", () => {
+    const ready = new Set(["stone_pickaxe", "diamond_pickaxe"]);
+    const tools = groupRecipes(RECIPES, (r) => ready.has(r.id)).find((g) => g.category === "Tools")!;
+    const ids = tools.recipes.map((r) => r.id);
+    expect(ids.slice(0, 2)).toEqual(["stone_pickaxe", "diamond_pickaxe"]);
+    expect(ids.slice(2).some((id) => ready.has(id))).toBe(false);
   });
 });
 
