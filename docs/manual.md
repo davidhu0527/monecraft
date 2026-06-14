@@ -47,7 +47,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `I`                | Open / close inventory & crafting                                   |
 | `F`                | Eat the selected food                                               |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front |
-| `U`                | Emergency unstuck (teleport to safe ground if wedged)               |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)               |
 | `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
 | `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
 
@@ -63,7 +63,7 @@ into the void, and starvation-adjacent danger chip it away. At zero health you d
 freeze for **3 seconds**, then respawn — at your bed if you've slept in one,
 otherwise at a random land point. Death doesn't wipe your world or inventory.
 
-If you ever get wedged inside terrain, press **`U`** to teleport free. (Standing in
+If you ever get wedged inside terrain, press **`Shift`+`U`** to teleport free. (Standing in
 water is _not_ "stuck" — you're allowed to swim.) You can place blocks into water
 to replace water cells when building underwater. Do not remain continuously
 immersed for more than **60 seconds**: after that grace period you take **1.5

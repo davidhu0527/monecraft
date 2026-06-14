@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- Emergency unstuck now requires **`Shift` + `U`** instead of a bare `U`, so a stray keypress can no longer teleport the player mid-play. The automatic unstuck safeguard (which fires when wedged in terrain or falling below the world) is unchanged. No save-format or worldgen impact.
 - Placed glass now renders as a clear, low-reflection transparent layer. Internal faces between adjacent glass blocks are culled, while neighboring opaque block faces remain visible through it. No save-format or worldgen impact.
 
 ### Added
