@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld, buildGeometryLayersRegion, buildGeometryRegion, collectDungeonSites, generateWorld } from "@/lib/world";
+import {
+  BiomeId,
+  BlockId,
+  VoxelWorld,
+  buildGeometryLayersRegion,
+  buildGeometryRegion,
+  collectDungeonSites,
+  computeFullLight,
+  generateWorld
+} from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -260,5 +269,25 @@ describe("meshing", () => {
     expect(geometry.boundingBox!.min.z).toBeCloseTo(3.40625);
     expect(geometry.boundingBox!.max.z).toBeCloseTo(3.59375);
     expect(geometry.boundingBox!.max.y - geometry.boundingBox!.min.y).toBe(2);
+  });
+
+  test("the mesh carries a per-vertex aLight attribute sampled from the faced voxel", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.Stone);
+    world.light = computeFullLight(world);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
+    const aLight = geometry.getAttribute("aLight");
+    expect(aLight.itemSize).toBe(2);
+    expect(aLight.count).toBe(geometry.getAttribute("position").count);
+    // Every visible face of the lone block opens into open-sky air, so its
+    // skyExposure (aLight.x) is lit, and nothing emits block light (aLight.y = 0).
+    let minSky = 1;
+    let maxBlock = 0;
+    for (let i = 0; i < aLight.count; i += 1) {
+      minSky = Math.min(minSky, aLight.getX(i));
+      maxBlock = Math.max(maxBlock, aLight.getY(i));
+    }
+    expect(minSky).toBeGreaterThan(0.9);
+    expect(maxBlock).toBe(0);
   });
 });
