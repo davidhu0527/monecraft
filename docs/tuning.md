@@ -43,6 +43,30 @@ timers. After `WATER_DAMAGE_DELAY_SECONDS` (60), environmental damage bypasses
 armor every `WATER_DAMAGE_INTERVAL_SECONDS` (1) for `WATER_DAMAGE_HP` (3 HP = 1.5
 hearts). These counters are transient and reset on reload/respawn.
 
+## Cave hazards — lava & drowning
+
+`LAVA_DAMAGE_INTERVAL_SECONDS`, `LAVA_DAMAGE_HP`, `LAVA_BURN_SECONDS`,
+`MAX_OXYGEN`, `OXYGEN_HOLD_SECONDS`, `OXYGEN_REFILL_SECONDS`,
+`OXYGEN_DROWN_INTERVAL_SECONDS`, `OXYGEN_DROWN_HP`.
+
+Read by `systems/playerStats.ts` (`tickLavaExposure`, `tickOxygen`), both on the
+armor-bypassing damage path. **Lava** burns the instant you touch it (no grace
+period, unlike water) for `LAVA_DAMAGE_HP` (6 = 3 hearts) every
+`LAVA_DAMAGE_INTERVAL_SECONDS` (0.5) and keeps burning `LAVA_BURN_SECONDS` (3)
+after you escape — the deep-cave death trap. Lava is solid, so contact is checked
+underfoot/at the body, not by immersion. **Drowning** keys on the head: the
+bubble meter drains over `OXYGEN_HOLD_SECONDS` (15) while the eye cell is
+underwater, then deals `OXYGEN_DROWN_HP` (2) every `OXYGEN_DROWN_INTERVAL_SECONDS`
+(1); surfacing refills it over `OXYGEN_REFILL_SECONDS` (1.5). This is separate
+from the body-keyed 60 s water-exposure timer above — wading chest-deep never
+drowns you. All these counters are transient (reset on reload/respawn).
+
+Lighting itself has no `config.ts` tunables: the per-voxel light propagation is
+in [`lib/world/lighting.ts`](../lib/world/lighting.ts) (block opacity/emission and
+the 0–15 levels), and the cave-darkness floor + torch tint are shader constants in
+[`GameRenderer.ts`](../lib/game/render/GameRenderer.ts) (`SKY_LIGHT_FLOOR`,
+`TORCH_TINT`).
+
 ## Danger — day-night & the mob director
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,

@@ -10,7 +10,7 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Recipes
 
-**44 recipes.** All use the always-available crafting grid except the two
+**45 recipes.** All use the always-available crafting grid except the two
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
@@ -23,6 +23,7 @@ stats. For how it all fits together, read the [player manual](manual.md).
 | 1 Furnace   | 8 Cobble          |
 | 1 Chest     | 8 Planks          |
 | 1 Wood Door | 6 Planks          |
+| 4 Torch     | 1 Wood            |
 | 1 Bed       | 3 Wool + 3 Planks |
 | 1 Wool      | 4 String          |
 
@@ -89,9 +90,9 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Blocks
 
-**30 block types** (plus air). Hardness is relative break time — higher is slower.
+**32 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
-hands or any tool. Bedrock and water cannot be broken.
+hands or any tool. Bedrock, water, and lava cannot be broken.
 
 | Block             | Hardness | Mine with       | Notes                                                                                                         |
 | ----------------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -110,6 +111,8 @@ hands or any tool. Bedrock and water cannot be broken.
 | Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                      |
 | Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
 | Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                           |
+| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 wood                             |
+| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item  |
 | Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                    |
 | Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it      |
 | Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                             |
