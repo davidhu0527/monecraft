@@ -10,6 +10,24 @@ the [README](../README.md#controls).
 > Everything you see and hear is generated from code at runtime — there are no
 > image or audio files anywhere in the game.
 
+## Worlds & profiles
+
+The game opens to a menu rather than dropping you straight into a world:
+
+1. **Pick a profile.** A profile is a player — a name and an appearance (skin). On a
+   shared browser everyone can have their own. Create one with **New Profile**, choose
+   a skin, and you're in; rename or delete profiles from the same screen.
+2. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
+   you name it and, optionally, enter a **seed** — type a number or a word to get the
+   same world every time, or leave it blank for a random one. Worlds you've played show
+   most-recent first; rename or delete them here too.
+3. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
+   Quit to Worlds** takes you back to the list, and reloading the page resumes the
+   world you were in.
+
+Everything is saved in your browser (localStorage). Deleting a world removes its save;
+deleting a profile removes all of its worlds.
+
 ## Getting started: your first day
 
 You spawn at dawn on solid ground with a small starter kit: stacks of grass, dirt,

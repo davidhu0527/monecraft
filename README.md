@@ -5,7 +5,7 @@
 
 A playable, Minecraft-inspired voxel game that runs entirely in your browser. Explore procedural terrain across five biomes and dig into **dark caves** — lit only by the torches you craft and place, where lava pools and mobs lurk. Mine ores, raid **underground dungeons** for loot, build and farm, breed animals, craft through seven gear tiers up to a **bow** and throwable **spears**, and take on an **endgame boss** for a true win condition — all across a day-night cycle with hunger, drowning, and lava hazards.
 
-The twist: **everything is procedural — zero binary assets.** Block textures and item sprites are painted from pixel code, all sound and music is synthesized at runtime, and lighting is computed per voxel. Single-player, client-only, with localStorage saves.
+The twist: **everything is procedural — zero binary assets.** Block textures and item sprites are painted from pixel code, all sound and music is synthesized at runtime, and lighting is computed per voxel. Single-player and client-only: keep **multiple worlds** under **multiple player profiles**, all saved to localStorage.
 
 ## Run
 
@@ -15,6 +15,8 @@ bun run dev
 ```
 
 Then open `http://localhost:3000`.
+
+The game opens to a menu: pick or create a **profile** (your name and look), then create or choose a **world** to play. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
 
 ## Controls
 
@@ -26,7 +28,7 @@ Then open `http://localhost:3000`.
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `Shift+U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)
-- `Esc`: Pause menu (save / load / reset, sound/music volume sliders, and the Appearance skin picker live there) · `F3`: Debug overlay
+- `Esc`: Pause menu (save / load / reset, **Save & Quit to Worlds**, sound/music volume sliders, and the Appearance skin picker live there) · `F3`: Debug overlay
 
 New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more.
 
