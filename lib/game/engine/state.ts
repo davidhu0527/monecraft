@@ -99,6 +99,9 @@ export type GameTimers = {
   regenTimer: number;
   waterExposureTimer: number;
   waterDamageTimer: number;
+  /** Seconds of lava burn left; refreshed to LAVA_BURN_SECONDS on contact. */
+  lavaBurnTimer: number;
+  lavaDamageTimer: number;
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
@@ -178,6 +181,8 @@ export function createTimers(): GameTimers {
     regenTimer: 0,
     waterExposureTimer: 0,
     waterDamageTimer: 0,
+    lavaBurnTimer: 0,
+    lavaDamageTimer: 0,
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,

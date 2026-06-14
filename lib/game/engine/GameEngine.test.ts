@@ -12,7 +12,8 @@ import {
   SPRINT_BLOCKS_PER_HUNGER,
   SPRINT_MIN_HUNGER,
   WATER_DAMAGE_DELAY_SECONDS,
-  WATER_DAMAGE_HP
+  WATER_DAMAGE_HP,
+  LAVA_DAMAGE_HP
 } from "@/lib/game/config";
 import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
@@ -247,6 +248,30 @@ describe("movement and stats", () => {
     engine.step(0.1, input());
     expect(state.timers.waterExposureTimer).toBe(0);
     expect(state.timers.waterDamageTimer).toBe(0);
+  });
+
+  test("standing on lava burns immediately and the burn lingers after leaving", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1); // settle onto the ground
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const underfoot = Math.floor(state.player.position.y - 0.1);
+    state.blockChanges.set(x, underfoot, z, BlockId.Lava);
+
+    const start = state.hearts;
+    engine.step(1 / 60, input());
+    expect(state.hearts).toBe(start - LAVA_DAMAGE_HP); // no grace period, unlike water
+    expect(state.timers.lavaBurnTimer).toBeGreaterThan(0);
+
+    // Step off the lava: the burn keeps dealing damage for a few seconds.
+    state.blockChanges.set(x, underfoot, z, BlockId.Stone);
+    const afterTouch = state.hearts;
+    run(engine, 0.6); // within LAVA_BURN_SECONDS
+    expect(state.hearts).toBeLessThan(afterTouch);
+    expect(state.hearts).toBeGreaterThan(0);
   });
 });
 

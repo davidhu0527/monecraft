@@ -1,6 +1,9 @@
 import {
   HEALTH_REGEN_INTERVAL_SECONDS,
   JUMPS_PER_HUNGER,
+  LAVA_BURN_SECONDS,
+  LAVA_DAMAGE_HP,
+  LAVA_DAMAGE_INTERVAL_SECONDS,
   MAX_HUNGER,
   MAX_HEARTS,
   PLAYER_HEIGHT,
@@ -82,6 +85,40 @@ export function tickWaterExposure(state: GameState, dt: number, applyDamage: (am
   while (timers.waterDamageTimer >= WATER_DAMAGE_INTERVAL_SECONDS && !state.isDead) {
     timers.waterDamageTimer -= WATER_DAMAGE_INTERVAL_SECONDS;
     applyDamage(WATER_DAMAGE_HP);
+  }
+}
+
+/**
+ * Burns the player on lava contact. Unlike water there is no grace period —
+ * touching lava (standing on it or wading into it) deals armor-bypassing damage
+ * at once and keeps burning for LAVA_BURN_SECONDS after escaping. Lava is solid,
+ * so "contact" means the block at the feet, just under them, or at body height.
+ */
+export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+  const { player, timers, world } = state;
+  const x = Math.floor(player.position.x);
+  const z = Math.floor(player.position.z);
+  const py = player.position.y;
+  const touching =
+    world.get(x, Math.floor(py - 0.1), z) === BlockId.Lava || // the block underfoot (standing on lava)
+    world.get(x, Math.floor(py), z) === BlockId.Lava || // the feet cell (wading in)
+    world.get(x, Math.floor(py + PLAYER_HEIGHT * 0.5), z) === BlockId.Lava; // body height
+
+  if (touching) {
+    // First touch fires a hit immediately (no half-second of free standing).
+    if (timers.lavaBurnTimer <= 0) timers.lavaDamageTimer = LAVA_DAMAGE_INTERVAL_SECONDS;
+    timers.lavaBurnTimer = LAVA_BURN_SECONDS;
+  }
+
+  if (timers.lavaBurnTimer <= 0) {
+    timers.lavaDamageTimer = 0;
+    return;
+  }
+  timers.lavaBurnTimer = Math.max(0, timers.lavaBurnTimer - dt);
+  timers.lavaDamageTimer += dt;
+  while (timers.lavaDamageTimer >= LAVA_DAMAGE_INTERVAL_SECONDS && !state.isDead) {
+    timers.lavaDamageTimer -= LAVA_DAMAGE_INTERVAL_SECONDS;
+    applyDamage(LAVA_DAMAGE_HP);
   }
 }
 

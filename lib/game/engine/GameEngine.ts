@@ -40,7 +40,7 @@ import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
-import { restoreHunger, tickHungerDrain, tickHealthRegen, tickWaterExposure } from "./systems/playerStats";
+import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -228,6 +228,7 @@ export class GameEngine {
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
+    tickLavaExposure(state, dt, this.applyEnvironmentalDamage);
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
