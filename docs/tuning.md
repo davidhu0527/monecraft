@@ -214,3 +214,12 @@ Change these only with care:
   dungeon rooms are attempted) and the dungeon loot tables / tier odds in
   `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
   changing the _placement_ count or geometry is).
+- **World types** (Default / Superflat / Amplified / Islands) are terrain-config
+  variations of `GEN` in **`terrainConfigFor`** (`generation.ts`) — they change
+  only sea level and per-biome surface height (base + noise amplitude). `"default"`
+  returns the GEN values verbatim, so it stays byte-identical; each non-default
+  type has its own pinned hash. Tuning a type's numbers (e.g. the Islands sea level,
+  or Amplified's amplitude multiplier) is a deliberate re-baseline for that type
+  and bumps `WORLDGEN_VERSION` (which discards stale worlds of every type). Islands
+  values are constrained by spawn: keep land biomes gently sloped so
+  `findSpawnOnLand` still lands the player on dry ground.

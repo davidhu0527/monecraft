@@ -18,9 +18,10 @@ The game opens to a menu rather than dropping you straight into a world:
    shared browser everyone can have their own. Create one with **New Profile**, choose
    a skin, and you're in; rename or delete profiles from the same screen.
 2. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
-   you name it and, optionally, enter a **seed** — type a number or a word to get the
-   same world every time, or leave it blank for a random one. Worlds you've played show
-   most-recent first; rename or delete them here too.
+   you name it, choose a **world type** (Default, Superflat, Amplified, or Islands —
+   see [the reference](reference.md#world-types)), and optionally enter a **seed** —
+   type a number or a word to get the same world every time, or leave it blank for a
+   random one. Worlds you've played show most-recent first; rename or delete them here too.
 3. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
    Quit to Worlds** takes you back to the list, and reloading the page resumes the
    world you were in.

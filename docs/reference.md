@@ -8,6 +8,19 @@ stats. For how it all fits together, read the [player manual](manual.md).
 > `lib/game/mobs.ts`, and `lib/game/mobLoot.ts`. If a number here disagrees with
 > the game, the code wins — and this page needs an update.
 
+## World types
+
+Chosen when you create a world (alongside the name and seed) and fixed for its
+life. All four share the same five biomes — they reshape terrain, not the biome
+mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/generation.ts`.
+
+| Type      | Terrain                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------- |
+| Default   | Balanced terrain with every biome — the original generator                                  |
+| Superflat | Level ground at a fixed height; a builder's canvas (caves and ores still generate below)    |
+| Amplified | Exaggerated relief — towering peaks and deep valleys                                        |
+| Islands   | A raised sea breaks the land into scattered, gently sloped islands with deep ocean channels |
+
 ## Recipes
 
 **45 recipes.** All use the always-available crafting grid except the two
