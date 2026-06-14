@@ -106,6 +106,19 @@ describe("boot", () => {
     // Phase 1 has no emitters, so block light is entirely unlit.
     expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(false);
   });
+
+  test("block edits relight locally: placing darkens the cell, mining restores sky", () => {
+    const { state } = makeEngine();
+    const { world } = state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    const y = world.sizeY - 5; // open air near the top of the world
+    expect(world.getSky(cx, y, cz)).toBe(15);
+    state.blockChanges.set(cx, y, cz, BlockId.Stone);
+    expect(world.getSky(cx, y, cz)).toBe(0); // a solid block is opaque to sky
+    state.blockChanges.set(cx, y, cz, BlockId.Air);
+    expect(world.getSky(cx, y, cz)).toBe(15); // reopened to the sky
+  });
 });
 
 describe("movement and stats", () => {

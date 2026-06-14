@@ -155,16 +155,40 @@ describe("incremental relight (applyEdit)", () => {
     expect(sky(world, light, 13, 10, 12)).toBe(14);
   });
 
-  test("a bounded edit matches a full rebake (correctness of the box rebake)", () => {
-    world.set(12, 20, 12, BlockId.Stone);
-    applyEdit(world, light, 12, 20, 12);
+  test("a bounded edit matches a full rebake everywhere (box-rebake correctness)", () => {
+    // Capping the shaft is the worst case: it darkens a tall column far beyond
+    // the box's vertical radius, which the full-height column recompute must
+    // handle. Compare the ENTIRE light field against a fresh bake — any cell the
+    // box missed would diverge.
+    world.set(12, 30, 12, BlockId.Stone);
+    applyEdit(world, light, 12, 30, 12);
     const fresh = computeFullLight(world);
-    for (let y = 0; y < 40; y += 1) {
-      for (let x = 6; x <= 18; x += 1) {
-        for (let z = 6; z <= 18; z += 1) {
-          expect(light[world.index(x, y, z)]).toBe(fresh[world.index(x, y, z)]);
-        }
-      }
+    expect(light).toEqual(fresh);
+  });
+
+  test("a deep side edit also matches a full rebake everywhere", () => {
+    world.set(13, 8, 12, BlockId.Air); // open a side pocket off the shaft
+    applyEdit(world, light, 13, 8, 12);
+    expect(light).toEqual(computeFullLight(world));
+  });
+
+  test("a long sequence of varied edits stays byte-identical to a full rebake", () => {
+    // Deterministic PRNG so the sequence is fixed; each edit places or mines a
+    // block somewhere in/around the shaft, and the incremental field must match
+    // a from-scratch bake after every single edit.
+    let seed = 0x9e3779b9;
+    const rand = () => {
+      seed = (Math.imul(seed ^ (seed >>> 15), 0x2c1b3c6d) + 1) >>> 0;
+      return seed / 0x100000000;
+    };
+    const palette = [BlockId.Air, BlockId.Stone, BlockId.Glass, BlockId.Water, BlockId.Leaves];
+    for (let i = 0; i < 60; i += 1) {
+      const x = 8 + Math.floor(rand() * 9);
+      const y = 4 + Math.floor(rand() * 32);
+      const z = 8 + Math.floor(rand() * 9);
+      world.set(x, y, z, palette[Math.floor(rand() * palette.length)]);
+      applyEdit(world, light, x, y, z);
+      expect(light).toEqual(computeFullLight(world));
     }
   });
 });

@@ -8,8 +8,8 @@ import { VoxelWorld } from "./voxelWorld";
  *
  * - **Sky light** falls straight down from the open sky at full strength and
  *   bleeds sideways into shadow, so caves are dark and the surface is lit. The
- *   renderer modulates it by the day/night factor at draw time (a uniform), so
- *   the same baked value dims at night without re-meshing.
+ *   renderer modulates it by the day/night factor at draw time (the scene sun +
+ *   hemisphere), so the same baked value dims at night without re-meshing.
  * - **Block light** radiates from emitters (torches, lava) and is independent of
  *   the day/night cycle — a torch lights a cave at midnight.
  *
@@ -28,11 +28,8 @@ const SKY_SHIFT = 4;
 const BLOCK_MASK = 0x0f;
 const SKY_MASK = 0xf0;
 
-// Edits can only change light within MAX_LIGHT steps of the changed voxel, so a
-// box of this radius (with the ring just outside it held fixed) fully contains
-// every cell an edit can affect. See applyEdit.
-const EDIT_RADIUS = MAX_LIGHT;
-
+// Neighbor offsets; index 3 ([0,-1,0]) is straight down, used for the sunlight
+// rule (sky light falls down a clear column at full strength).
 const NEIGHBORS: readonly [number, number, number][] = [
   [1, 0, 0],
   [-1, 0, 0],
@@ -41,6 +38,7 @@ const NEIGHBORS: readonly [number, number, number][] = [
   [0, 0, 1],
   [0, 0, -1]
 ];
+const DOWN = 3;
 
 /**
  * Extra light absorbed when light enters this block, on top of the 1-per-step
@@ -78,6 +76,16 @@ export function emission(block: BlockId): number {
   }
 }
 
+/**
+ * Light level reaching a (non-blocking) neighbor from a source at `level`.
+ * Sky light falling straight DOWN costs only the neighbor's opacity (sunlight is
+ * free vertically at any level, matching the bake's column pass); every other
+ * direction, and all block light, also pays the 1-per-step spread cost.
+ */
+function propagated(level: number, down: boolean, nb: BlockId, sky: boolean): number {
+  return sky && down ? level - opacity(nb) : level - 1 - opacity(nb);
+}
+
 export function skyLightAt(light: Uint8Array, idx: number): number {
   return light[idx] >> SKY_SHIFT;
 }
@@ -86,12 +94,12 @@ export function blockLightAt(light: Uint8Array, idx: number): number {
   return light[idx] & BLOCK_MASK;
 }
 
-function setSky(light: Uint8Array, idx: number, value: number): void {
-  light[idx] = (value << SKY_SHIFT) | (light[idx] & BLOCK_MASK);
+function getChannel(light: Uint8Array, idx: number, sky: boolean): number {
+  return sky ? light[idx] >> SKY_SHIFT : light[idx] & BLOCK_MASK;
 }
 
-function setBlock(light: Uint8Array, idx: number, value: number): void {
-  light[idx] = (light[idx] & SKY_MASK) | value;
+function setChannel(light: Uint8Array, idx: number, value: number, sky: boolean): void {
+  light[idx] = sky ? (value << SKY_SHIFT) | (light[idx] & BLOCK_MASK) : (light[idx] & SKY_MASK) | value;
 }
 
 /**
@@ -107,64 +115,33 @@ export function computeFullLight(world: VoxelWorld): Uint8Array {
 }
 
 /**
- * Recompute light in a bounded box around an edited voxel. world.blocks must
- * already reflect the edit. Correctness: a single block change can only alter
- * light within MAX_LIGHT steps of it, so the ±EDIT_RADIUS box contains every
- * affected cell and the ring just outside is an unchanged, fixed light boundary
- * the flood pulls from. Bounded to ~31×31×height cells — sub-millisecond.
+ * Patch both light channels after a single block edit. world.blocks must already
+ * reflect the edit. Uses the standard remove-then-refill flood, which visits
+ * only the cells the edit actually changed — cheap for a normal edit, and
+ * bounded by the shaft depth when a column is capped or opened.
  */
 export function applyEdit(world: VoxelWorld, light: Uint8Array, x: number, y: number, z: number): void {
-  const { sizeX, sizeY, sizeZ } = world;
-  const x0 = Math.max(0, x - EDIT_RADIUS);
-  const x1 = Math.min(sizeX - 1, x + EDIT_RADIUS);
-  const z0 = Math.max(0, z - EDIT_RADIUS);
-  const z1 = Math.min(sizeZ - 1, z + EDIT_RADIUS);
+  const idx = world.index(x, y, z);
+  const block = world.blocks[idx] as BlockId;
 
-  // Clear the interior (both channels) and recompute direct top-down sky light
-  // per column. Full height keeps each column self-contained.
-  for (let zz = z0; zz <= z1; zz += 1) {
-    for (let xx = x0; xx <= x1; xx += 1) {
-      let sky = MAX_LIGHT;
-      for (let yy = sizeY - 1; yy >= 0; yy -= 1) {
-        const idx = world.index(xx, yy, zz);
-        const op = opacity(world.blocks[idx] as BlockId);
-        sky = op >= OPAQUE ? 0 : Math.max(0, sky - op);
-        light[idx] = sky << SKY_SHIFT; // also clears the block nibble
-      }
-    }
+  // Block light: drop the cell, remove what it had lit, then refill from any
+  // surviving sources plus the new block's own emission.
+  const oldBlock = light[idx] & BLOCK_MASK;
+  setChannel(light, idx, 0, false);
+  const blockRefill = removeChannel(world, light, idx, oldBlock, false);
+  const emit = emission(block);
+  if (emit > 0) {
+    setChannel(light, idx, emit, false);
+    blockRefill.push(idx);
   }
+  flood(world, light, blockRefill, false);
 
-  // Seed both floods from the interior plus the fixed boundary ring. The flood
-  // only ever raises light, so ring cells (already correct) stay put while they
-  // push their light inward; interior emitters and direct sky fill the rest.
-  const skyQueue: number[] = [];
-  const blockQueue: number[] = [];
-  const rx0 = Math.max(0, x0 - 1);
-  const rx1 = Math.min(sizeX - 1, x1 + 1);
-  const rz0 = Math.max(0, z0 - 1);
-  const rz1 = Math.min(sizeZ - 1, z1 + 1);
-  for (let zz = rz0; zz <= rz1; zz += 1) {
-    for (let xx = rx0; xx <= rx1; xx += 1) {
-      const onRing = xx < x0 || xx > x1 || zz < z0 || zz > z1;
-      for (let yy = 0; yy < sizeY; yy += 1) {
-        const idx = world.index(xx, yy, zz);
-        if (onRing) {
-          // Fixed boundary: re-derive nothing, just let it push inward.
-          if (skyLightAt(light, idx) > 1) skyQueue.push(idx);
-          if (blockLightAt(light, idx) > 1) blockQueue.push(idx);
-          continue;
-        }
-        const emit = emission(world.blocks[idx] as BlockId);
-        if (emit > 0) {
-          setBlock(light, idx, emit);
-          blockQueue.push(idx);
-        }
-        if (skyLightAt(light, idx) > 1) skyQueue.push(idx);
-      }
-    }
-  }
-  flood(world, light, skyQueue, skyLightAt, setSky);
-  flood(world, light, blockQueue, blockLightAt, setBlock);
+  // Sky light: same dance. The removal honors the sunlight rule, so capping a
+  // clear column cascades the shadow straight down it.
+  const oldSky = light[idx] >> SKY_SHIFT;
+  setChannel(light, idx, 0, true);
+  const skyRefill = removeChannel(world, light, idx, oldSky, true);
+  flood(world, light, skyRefill, true);
 }
 
 function bakeSkyLight(world: VoxelWorld, light: Uint8Array): void {
@@ -196,9 +173,9 @@ function bakeSkyLight(world: VoxelWorld, light: Uint8Array): void {
     const rem = idx - y * layer;
     const z = Math.floor(rem / sizeX);
     const x = rem - z * sizeX;
-    if (canLightNeighbor(world, light, x, y, z, cl, skyLightAt)) queue.push(idx);
+    if (canLightNeighbor(world, light, x, y, z, cl, true)) queue.push(idx);
   }
-  flood(world, light, queue, skyLightAt, setSky);
+  flood(world, light, queue, true);
 }
 
 function bakeBlockLight(world: VoxelWorld, light: Uint8Array): void {
@@ -206,70 +183,110 @@ function bakeBlockLight(world: VoxelWorld, light: Uint8Array): void {
   for (let idx = 0; idx < world.blocks.length; idx += 1) {
     const emit = emission(world.blocks[idx] as BlockId);
     if (emit > 0) {
-      setBlock(light, idx, emit);
+      setChannel(light, idx, emit, false);
       queue.push(idx);
     }
   }
-  flood(world, light, queue, blockLightAt, setBlock);
+  flood(world, light, queue, false);
 }
 
-function canLightNeighbor(
-  world: VoxelWorld,
-  light: Uint8Array,
-  x: number,
-  y: number,
-  z: number,
-  level: number,
-  read: (light: Uint8Array, idx: number) => number
-): boolean {
-  for (const [dx, dy, dz] of NEIGHBORS) {
-    const nx = x + dx;
-    const ny = y + dy;
-    const nz = z + dz;
+function canLightNeighbor(world: VoxelWorld, light: Uint8Array, x: number, y: number, z: number, level: number, sky: boolean): boolean {
+  for (let d = 0; d < NEIGHBORS.length; d += 1) {
+    const nx = x + NEIGHBORS[d][0];
+    const ny = y + NEIGHBORS[d][1];
+    const nz = z + NEIGHBORS[d][2];
     if (!world.inBounds(nx, ny, nz)) continue;
     const nidx = world.index(nx, ny, nz);
     const nb = world.blocks[nidx] as BlockId;
     if (isLightBlocker(nb)) continue;
-    if (level - 1 - opacity(nb) > read(light, nidx)) return true;
+    const target = propagated(level, d === DOWN, nb, sky);
+    if (target > getChannel(light, nidx, sky)) return true;
   }
   return false;
 }
 
 /**
- * Breadth-first light spread shared by both channels. Reads/writes go through
- * the channel accessors so the same flood serves sky and block light. Uses a
- * head pointer rather than Array.shift for O(1) dequeue on large frontiers.
+ * Remove the light a cell used to cast, starting from (sx,sy,sz) which has
+ * already been zeroed in `light`. Returns the indices of surviving independent
+ * sources (and adjacent emitters) to refill from. The sky channel honors the
+ * sunlight rule: a downward neighbor still at full strength was lit by the
+ * column above, so it is torn down too.
  */
-function flood(
-  world: VoxelWorld,
-  light: Uint8Array,
-  queue: number[],
-  read: (light: Uint8Array, idx: number) => number,
-  write: (light: Uint8Array, idx: number, value: number) => void
-): void {
+function removeChannel(world: VoxelWorld, light: Uint8Array, startIdx: number, startLevel: number, sky: boolean): number[] {
+  const { sizeX, sizeZ } = world;
+  const layer = sizeX * sizeZ;
+  const refill: number[] = [];
+  const idxQueue: number[] = [startIdx];
+  const levelQueue: number[] = [startLevel];
+  let head = 0;
+  while (head < idxQueue.length) {
+    const idx = idxQueue[head];
+    const level = levelQueue[head];
+    head += 1;
+    const y = Math.floor(idx / layer);
+    const rem = idx - y * layer;
+    const z = Math.floor(rem / sizeX);
+    const x = rem - z * sizeX;
+    for (let d = 0; d < NEIGHBORS.length; d += 1) {
+      const nx = x + NEIGHBORS[d][0];
+      const ny = y + NEIGHBORS[d][1];
+      const nz = z + NEIGHBORS[d][2];
+      if (!world.inBounds(nx, ny, nz)) continue;
+      const nidx = world.index(nx, ny, nz);
+      const nb = world.blocks[nidx] as BlockId;
+      if (isLightBlocker(nb)) {
+        // A blocker holds no flooded light, but a lit emitter (lava) is a fixed
+        // source the refill must spread from.
+        if (!sky && emission(nb) > 0) refill.push(nidx);
+        continue;
+      }
+      const nl = getChannel(light, nidx, sky);
+      // What this cell, at `level`, would have given the neighbor. If the
+      // neighbor is no brighter than that, it was lit by us — tear it down and
+      // cascade; otherwise it has an independent source the refill spreads from.
+      const wouldGive = propagated(level, d === DOWN, nb, sky);
+      if (nl !== 0 && nl <= wouldGive) {
+        setChannel(light, nidx, 0, sky);
+        idxQueue.push(nidx);
+        levelQueue.push(nl);
+      } else if (nl > wouldGive && nl > 0) {
+        refill.push(nidx);
+      }
+    }
+  }
+  return refill;
+}
+
+/**
+ * Breadth-first light spread shared by both channels and by the bake and the
+ * incremental refill. Uses a head pointer rather than Array.shift for O(1)
+ * dequeue on large frontiers. For the sky channel, light at full strength
+ * propagating straight down stays at full strength (sunlight).
+ */
+function flood(world: VoxelWorld, light: Uint8Array, queue: number[], sky: boolean): void {
   const { sizeX, sizeZ } = world;
   const layer = sizeX * sizeZ;
   let head = 0;
   while (head < queue.length) {
     const idx = queue[head];
     head += 1;
-    const cl = read(light, idx);
+    const cl = getChannel(light, idx, sky);
     if (cl <= 1) continue;
     const y = Math.floor(idx / layer);
     const rem = idx - y * layer;
     const z = Math.floor(rem / sizeX);
     const x = rem - z * sizeX;
-    for (const [dx, dy, dz] of NEIGHBORS) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const nz = z + dz;
+    for (let d = 0; d < NEIGHBORS.length; d += 1) {
+      const nx = x + NEIGHBORS[d][0];
+      const ny = y + NEIGHBORS[d][1];
+      const nz = z + NEIGHBORS[d][2];
       if (!world.inBounds(nx, ny, nz)) continue;
       const nidx = world.index(nx, ny, nz);
       const nb = world.blocks[nidx] as BlockId;
       if (isLightBlocker(nb)) continue;
-      const target = cl - 1 - opacity(nb);
-      if (target > read(light, nidx)) {
-        write(light, nidx, target);
+      const target = propagated(cl, d === DOWN, nb, sky);
+      if (target > getChannel(light, nidx, sky)) {
+        setChannel(light, nidx, target, sky);
         queue.push(nidx);
       }
     }
