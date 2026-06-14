@@ -58,7 +58,9 @@ function withRepairedActive(profiles: Profile[], activeProfileId: unknown): Prof
 /** Reads the profiles manifest, dropping malformed entries and repairing the active id. Never throws. */
 export function readProfiles(storage: Storage = localStorage): ProfilesManifest {
   const raw = readManifestRaw(PROFILES_KEY, storage) as Partial<ProfilesManifest> | null;
-  if (!raw || !Array.isArray(raw.profiles)) return { ...DEFAULT_PROFILES_MANIFEST };
+  // Only the current manifest version is understood; an unknown version falls
+  // back to the default rather than risk misreading an incompatible payload.
+  if (!raw || raw.version !== 1 || !Array.isArray(raw.profiles)) return { ...DEFAULT_PROFILES_MANIFEST };
   const profiles = raw.profiles.map(sanitizeProfile).filter((p): p is Profile => p !== null);
   return withRepairedActive(profiles, raw.activeProfileId);
 }

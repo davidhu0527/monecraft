@@ -42,10 +42,12 @@ describe("profiles manifest", () => {
     expect(a.skinId).toBe("alex");
   });
 
-  test("missing or corrupt manifest falls back to the default", () => {
+  test("missing, corrupt, or unknown-version manifest falls back to the default", () => {
     expect(readProfiles(fakeStorage())).toEqual(DEFAULT_PROFILES_MANIFEST);
     expect(readProfiles(fakeStorage({ [PROFILES_KEY]: "not json{" }))).toEqual(DEFAULT_PROFILES_MANIFEST);
     expect(readProfiles(fakeStorage({ [PROFILES_KEY]: "null" }))).toEqual(DEFAULT_PROFILES_MANIFEST);
+    const future = JSON.stringify({ version: 2, profiles: [{ id: "p1", name: "X", skinId: "default", createdAt: 1 }], activeProfileId: "p1" });
+    expect(readProfiles(fakeStorage({ [PROFILES_KEY]: future }))).toEqual(DEFAULT_PROFILES_MANIFEST);
   });
 
   test("malformed entries are dropped and skin ids sanitized", () => {

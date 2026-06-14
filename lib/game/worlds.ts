@@ -13,6 +13,7 @@
 
 import { WORLDGEN_VERSION } from "./config";
 import { readManifestRaw, resolveDeps, sanitizeName, writeManifest, type ManifestDeps } from "./manifest";
+import { getProfile } from "./profiles";
 
 export type WorldMeta = {
   id: string;
@@ -87,7 +88,9 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
 /** Reads the worlds manifest, dropping malformed entries. Never throws. */
 export function readWorlds(storage: Storage = localStorage): WorldsManifest {
   const raw = readManifestRaw(WORLDS_KEY, storage) as Partial<WorldsManifest> | null;
-  if (!raw || !Array.isArray(raw.worlds)) return { ...DEFAULT_WORLDS_MANIFEST };
+  // Only the current manifest version is understood; an unknown version falls
+  // back to the default rather than risk misreading an incompatible payload.
+  if (!raw || raw.version !== 1 || !Array.isArray(raw.worlds)) return { ...DEFAULT_WORLDS_MANIFEST };
   return { version: 1, worlds: raw.worlds.map(sanitizeWorld).filter((w): w is WorldMeta => w !== null) };
 }
 
@@ -102,9 +105,11 @@ export function worldsForProfile(profileId: string, storage: Storage = localStor
     .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt || b.createdAt - a.createdAt);
 }
 
-/** Creates a world for a profile, persists it, and returns it. `deps.rng` seeds blank-input worlds. */
+/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds. */
 export function createWorld(profileId: string, name: string, seedInput: string | null, deps: ManifestDeps & { rng?: () => number } = {}): WorldMeta {
   const { storage, now, uid } = resolveDeps(deps);
+  // Worlds must belong to a real profile — refuse to persist an orphan record.
+  if (!getProfile(profileId, storage)) throw new Error(`createWorld: unknown profile "${profileId}"`);
   const createdAt = now();
   const world: WorldMeta = {
     id: uid(),

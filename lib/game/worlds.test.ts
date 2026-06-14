@@ -15,6 +15,7 @@ import {
   worldsForProfile,
   WORLDS_KEY
 } from "./worlds";
+import { createProfile } from "./profiles";
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
   const map = new Map(Object.entries(initial));
@@ -28,6 +29,11 @@ function fakeStorage(initial: Record<string, string> = {}): Storage {
     removeItem: (key: string) => void map.delete(key),
     setItem: (key: string, value: string) => void map.set(key, value)
   };
+}
+
+/** A world must belong to a real profile, so tests seed one with a known id first. */
+function seedProfile(storage: Storage, id: string): void {
+  createProfile(`name-${id}`, "default", { storage, uid: () => id });
 }
 
 describe("seed resolution", () => {
@@ -60,6 +66,7 @@ describe("worlds manifest", () => {
 
   test("create stores a world with the current worldgen version", () => {
     const storage = fakeStorage();
+    seedProfile(storage, "prof1");
     const world = createWorld("prof1", "Survival", "42", { storage, now: () => 5, uid: () => "w1", rng: () => 0 });
     expect(world).toMatchObject({ profileId: "prof1", name: "Survival", seed: 42, worldgenVersion: WORLDGEN_VERSION });
     expect(world.createdAt).toBe(world.lastPlayedAt);
@@ -68,6 +75,8 @@ describe("worlds manifest", () => {
 
   test("worldsForProfile filters by owner and sorts most-recently-played first", () => {
     const storage = fakeStorage();
+    seedProfile(storage, "A");
+    seedProfile(storage, "B");
     let t = 0;
     const mk = (profileId: string, id: string) => createWorld(profileId, id, "1", { storage, now: () => (t += 10), uid: () => id });
     mk("A", "a1");
@@ -80,6 +89,7 @@ describe("worlds manifest", () => {
 
   test("rename mutates only the named world", () => {
     const storage = fakeStorage();
+    seedProfile(storage, "A");
     createWorld("A", "Old", "1", { storage, uid: () => "w1" });
     renameWorld("w1", "Brand New", storage);
     expect(readWorlds(storage).worlds[0].name).toBe("Brand New");
@@ -87,6 +97,7 @@ describe("worlds manifest", () => {
 
   test("delete removes the index entry and its save blob", () => {
     const storage = fakeStorage();
+    seedProfile(storage, "A");
     createWorld("A", "Doomed", "1", { storage, uid: () => "w1" });
     storage.setItem(worldSaveKey("w1"), "{}");
     deleteWorld("w1", storage);
@@ -96,6 +107,8 @@ describe("worlds manifest", () => {
 
   test("deleteWorldsForProfile cascades worlds and blobs for one profile only", () => {
     const storage = fakeStorage();
+    seedProfile(storage, "A");
+    seedProfile(storage, "B");
     createWorld("A", "a1", "1", { storage, uid: () => "a1" });
     createWorld("A", "a2", "1", { storage, uid: () => "a2" });
     createWorld("B", "b1", "1", { storage, uid: () => "b1" });
@@ -114,5 +127,17 @@ describe("worlds manifest", () => {
       worlds: [{ id: "w1", profileId: "A", name: "Ok", seed: 5, worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }, { id: "w2" }, { profileId: "A", seed: 1 }]
     });
     expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds.map((w) => w.id)).toEqual(["w1"]);
+  });
+
+  test("an unknown manifest version falls back to the default", () => {
+    const future = JSON.stringify({
+      version: 2,
+      worlds: [{ id: "w1", profileId: "A", name: "Ok", seed: 5, worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: future })).worlds).toEqual([]);
+  });
+
+  test("creating a world for an unknown profile is refused", () => {
+    expect(() => createWorld("ghost", "Orphan", "1", { storage: fakeStorage() })).toThrow();
   });
 });
