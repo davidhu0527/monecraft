@@ -29,7 +29,11 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
   horse: [{ itemId: "leather", min: 1, max: 2 }],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
-  spider: [{ itemId: "string", min: 0, max: 2 }]
+  spider: [{ itemId: "string", min: 0, max: 2 }],
+  boss: [
+    { itemId: "dragon_heart", min: 1, max: 1 },
+    { itemId: "diamond_ore", min: 2, max: 4 }
+  ]
 };
 
 /** Clamps an rng sample into [0, 1) so a pathological injected rng can't over-roll. */

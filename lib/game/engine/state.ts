@@ -46,6 +46,8 @@ export type MobState = {
   fedTimer: number;
   /** Seconds left as a baby; > 0 means a scaled-down, no-drop juvenile. */
   ageTimer: number;
+  /** Boss-only: seconds until the next minion summon (session-only, never saved). */
+  summonTimer?: number;
 };
 
 /**
@@ -150,6 +152,8 @@ export type GameState = {
   timers: GameTimers;
   /** Set when world geometry changed; the renderer rebuilds the mesh and clears it. */
   worldMeshDirty: boolean;
+  /** True once the boss has been defeated — drives the one-shot victory screen (session-only). */
+  victory: boolean;
 };
 
 export function createTimers(): GameTimers {
@@ -218,6 +222,10 @@ export type GameSnapshot = {
   craftingStation: "furnace" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
+  /** Live boss health (0..1), or null when no boss is alive — drives the boss bar. */
+  boss: { hpPercent: number } | null;
+  /** True after the boss is defeated — drives the victory screen. */
+  victory: boolean;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
@@ -236,6 +244,9 @@ export type GameEvent =
   | { type: "mobSpawned"; kind: MobKind; x: number; y: number; z: number }
   | { type: "arrowHit"; x: number; y: number; z: number; target: "block" | "mob" | "player" }
   | { type: "bowFired" }
+  | { type: "bossSummoned"; x: number; y: number; z: number }
+  | { type: "bossDefeated"; x: number; y: number; z: number }
+  | { type: "summonFailed" }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

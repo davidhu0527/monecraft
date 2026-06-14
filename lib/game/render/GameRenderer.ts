@@ -233,6 +233,41 @@ export class GameRenderer {
           size: 0.1
         });
         break;
+      case "bossSummoned":
+        // A large, dark conjuring column where the boss appears.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 1.2,
+          z: event.z,
+          count: 40,
+          color: [0.32, 0.12, 0.42],
+          speed: 3.0,
+          spread: 2.0,
+          gravity: -1,
+          drag: 1.4,
+          life: [0.6, 1.3],
+          size: 0.3,
+          upBias: 0.6,
+          colorJitter: 0.08
+        });
+        break;
+      case "bossDefeated":
+        // A bright triumphant burst on the kill.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 1.4,
+          z: event.z,
+          count: 48,
+          color: [0.95, 0.82, 0.45],
+          speed: 4.2,
+          spread: 2.2,
+          gravity: 6,
+          drag: 1.2,
+          life: [0.6, 1.4],
+          size: 0.26,
+          colorJitter: 0.12
+        });
+        break;
       case "ateFood":
         this.particles.emitBurst({
           x: state.player.position.x,

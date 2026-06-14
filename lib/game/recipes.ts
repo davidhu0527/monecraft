@@ -209,6 +209,25 @@ export const RECIPES: Recipe[] = [
     result: { slotId: "arrow", count: 4 }
   },
   {
+    id: "boss_summoner",
+    label: "1 Diamond Ore + 2 Bone + 2 Gold Ore -> Cursed Totem",
+    cost: [
+      { slotId: "diamond_ore", count: 1 },
+      { slotId: "bone", count: 2 },
+      { slotId: "gold_ore", count: 2 }
+    ],
+    result: { slotId: "boss_summoner", count: 1 }
+  },
+  {
+    id: "dragon_sword",
+    label: "1 Dragon Heart + 2 Diamond Ore -> Dragon Sword",
+    cost: [
+      { slotId: "dragon_heart", count: 1 },
+      { slotId: "diamond_ore", count: 2 }
+    ],
+    result: { slotId: "dragon_sword", count: 1 }
+  },
+  {
     id: "helmet",
     label: "4 Sapphire Ore + 1 Ruby Ore -> Helmet",
     cost: [

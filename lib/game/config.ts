@@ -66,6 +66,19 @@ export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
 export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
 export const MOB_ARROW_KNOCKBACK = 0.35;
 
+// Endgame boss — summoned from a Cursed Totem (diamond-gated). It approaches
+// (does not kite), melees up close, looses a 3-arrow spread at range, and
+// periodically summons minions. Its defeat is the win condition.
+export const BOSS_HP = 400; // a real fight even with diamond gear
+export const BOSS_MELEE_REACH = 3.5;
+export const BOSS_MELEE_DAMAGE = 10;
+export const BOSS_ARROW_DAMAGE = 7;
+export const BOSS_ARROW_SPEED = 30;
+export const BOSS_SPREAD = 0.18; // radians between the three spread arrows
+export const BOSS_SUMMON_RADIUS = 10; // where the boss appears, around the player
+export const BOSS_MINION_CAP = 4; // boss-summoned minions alive at once
+export const BOSS_SUMMON_INTERVAL_SECONDS = 12;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;

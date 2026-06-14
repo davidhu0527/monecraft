@@ -538,6 +538,25 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       decay: 0.1,
       filter: 600
     })
+  },
+  boss: {
+    params: zz({
+      volume: 0.7,
+      randomness: 0.1,
+      frequency: 50,
+      attack: 0.08,
+      sustain: 0.4,
+      release: 0.4,
+      shape: 2,
+      shapeCurve: 1.3,
+      slide: -0.5,
+      noise: 0.3,
+      modulation: 6,
+      sustainVolume: 0.8,
+      decay: 0.25,
+      tremolo: 0.3,
+      filter: -180
+    })
   }
 };
 
@@ -626,6 +645,24 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       sustainVolume: 0.7,
       decay: 0.04,
       filter: 500
+    }),
+    minRetriggerMs: 100
+  },
+  boss: {
+    params: zz({
+      volume: 0.85,
+      randomness: 0.1,
+      frequency: 70,
+      attack: 0.02,
+      sustain: 0.06,
+      release: 0.2,
+      shape: 4,
+      shapeCurve: 1.2,
+      slide: -3,
+      noise: 0.5,
+      sustainVolume: 0.8,
+      decay: 0.08,
+      filter: -300
     }),
     minRetriggerMs: 100
   }
@@ -958,6 +995,50 @@ export const ARROW_HIT_SOUND: SoundDef = {
     filter: -500
   }),
   minRetriggerMs: 60
+};
+
+/** Deep, long growl when the boss is summoned. */
+export const BOSS_ROAR_SOUND: SoundDef = {
+  params: zz({
+    volume: 1,
+    randomness: 0.1,
+    frequency: 55,
+    attack: 0.05,
+    sustain: 0.4,
+    release: 0.6,
+    shape: 2,
+    shapeCurve: 1.4,
+    slide: -1,
+    deltaSlide: -0.3,
+    pitchJump: -20,
+    pitchJumpTime: 0.2,
+    noise: 0.4,
+    modulation: 5,
+    sustainVolume: 0.85,
+    decay: 0.3,
+    tremolo: 0.4,
+    filter: -160
+  }),
+  minRetriggerMs: 800
+};
+
+/** Rising triumphant fanfare when the boss is defeated (the win stinger). */
+export const VICTORY_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.9,
+    frequency: 330,
+    attack: 0.02,
+    sustain: 0.3,
+    release: 0.6,
+    shape: 1,
+    shapeCurve: 1.5,
+    pitchJump: 280,
+    pitchJumpTime: 0.18,
+    repeatTime: 0.16,
+    sustainVolume: 0.85,
+    decay: 0.2
+  }),
+  minRetriggerMs: 1000
 };
 
 /** Low ominous whoosh when a dungeon spawner conjures a hostile. */

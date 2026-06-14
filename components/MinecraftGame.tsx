@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import BossHealthBar from "@/components/game/BossHealthBar";
 import DeathScreen from "@/components/game/DeathScreen";
 import DebugOverlay from "@/components/game/DebugOverlay";
 import Hotbar from "@/components/game/Hotbar";
@@ -8,6 +9,7 @@ import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
+import VictoryScreen from "@/components/game/VictoryScreen";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
@@ -34,6 +36,8 @@ export default function MinecraftGame() {
     sleeping,
     craftingStation,
     container,
+    boss,
+    victory,
     debugOpen,
     debug,
     saveMessage,
@@ -52,6 +56,7 @@ export default function MinecraftGame() {
     toggleEquipArmor,
     resumeNow,
     respawnNow,
+    dismissVictory,
     saveNow,
     loadNow,
     resetNow
@@ -83,6 +88,8 @@ export default function MinecraftGame() {
       {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
 
       {showClickHint ? <div className="click-hint">Click to play</div> : null}
+
+      <BossHealthBar boss={boss} />
 
       {saveMessage && !paused ? (
         <div className="hud-toast" role="status">
@@ -131,6 +138,8 @@ export default function MinecraftGame() {
       ) : null}
 
       <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
+
+      <VictoryScreen show={victory} onDismiss={dismissVictory} />
 
       <SleepOverlay sleeping={sleeping} />
 

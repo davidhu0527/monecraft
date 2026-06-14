@@ -113,6 +113,11 @@ export const ITEM_DEFS: ItemDef[] = [
   // to firing when a bow is held. Arrows are the consumable ammo.
   { id: "bow", label: "Bow", kind: "weapon", attack: 0, maxDurability: 200 },
   { id: "arrow", label: "Arrow", kind: "material" },
+  // Endgame: a diamond-gated totem summons the boss; its Dragon Heart drop
+  // crafts the best-in-game Dragon Sword.
+  { id: "boss_summoner", label: "Cursed Totem", kind: "material" },
+  { id: "dragon_heart", label: "Dragon Heart", kind: "material" },
+  { id: "dragon_sword", label: "Dragon Sword", kind: "weapon", attack: 60, maxDurability: 1200 },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
   { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
   { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },

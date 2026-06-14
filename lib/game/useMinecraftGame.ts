@@ -47,7 +47,9 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   capsActive: false,
   sleeping: false,
   craftingStation: null,
-  container: null
+  container: null,
+  boss: null,
+  victory: false
 };
 
 const noopSubscribe = () => () => {};
@@ -233,6 +235,9 @@ export function useMinecraftGame() {
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
         }
+        if (event.type === "summonFailed") {
+          flashMessage("The totem lies dormant — a beast already walks");
+        }
         renderer.handleEvent(event, gameEngine.state);
         audio.handleEvent(event);
       }
@@ -294,6 +299,8 @@ export function useMinecraftGame() {
     sleeping: snapshot.sleeping,
     craftingStation: snapshot.craftingStation,
     container: snapshot.container,
+    boss: snapshot.boss,
+    victory: snapshot.victory,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
@@ -315,6 +322,7 @@ export function useMinecraftGame() {
       requestPointerLock();
     },
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
+    dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
       if (engine) persistGame(engine, flashMessage);
     },

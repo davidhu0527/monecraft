@@ -45,7 +45,7 @@ export type Recipe = {
   station?: "furnace";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider";
+export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider" | "boss";
 
 export type MobModel = {
   group: THREE.Group;

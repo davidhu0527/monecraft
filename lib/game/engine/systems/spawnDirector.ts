@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BlockId } from "@/lib/world";
 import {
+  BOSS_SUMMON_INTERVAL_SECONDS,
   HOSTILE_CAP,
   HOSTILE_SPAWN_BELOW_DAYLIGHT,
   HOSTILE_SPAWN_INTERVAL_SECONDS,
@@ -24,7 +25,7 @@ export type SpawnGroupArgs = {
 };
 
 /** Adds one mob standing with its feet at (x, y, z) (y is the ground, not the body center). */
-function pushMob(state: GameState, kind: MobKind, hostile: boolean, x: number, y: number, z: number, rng: () => number): void {
+export function pushMob(state: GameState, kind: MobKind, hostile: boolean, x: number, y: number, z: number, rng: () => number): void {
   const template = MOB_TEMPLATES[kind];
   const halfHeight = mobHalfHeight(kind);
   const mob: MobState = {
@@ -49,6 +50,16 @@ function pushMob(state: GameState, kind: MobKind, hostile: boolean, x: number, y
   };
   state.nextMobId += 1;
   state.mobs.push(mob);
+}
+
+/**
+ * Spawns the single endgame boss with its feet at (x, y, z), bypassing the
+ * hostile-cap directors (the totem summon is always allowed). Seeds its minion
+ * timer so the first summon waits a full interval.
+ */
+export function spawnBoss(state: GameState, x: number, y: number, z: number, rng: () => number): void {
+  pushMob(state, "boss", true, x, y, z, rng);
+  state.mobs[state.mobs.length - 1].summonTimer = BOSS_SUMMON_INTERVAL_SECONDS;
 }
 
 export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () => number, surfaceYAt: SurfaceYAtFn): void {

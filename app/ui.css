@@ -442,6 +442,77 @@
   min-width: 220px;
 }
 
+/* --- Boss health bar --- */
+
+.boss-bar {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  pointer-events: none;
+  width: min(60vw, 520px);
+}
+
+.boss-bar-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f3dcdc;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.boss-bar-track {
+  width: 100%;
+  height: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid rgba(0, 0, 0, 0.7);
+}
+
+.boss-bar-fill {
+  height: 100%;
+  background: linear-gradient(#d24a4a, #7c0a0a);
+  transition: width 0.2s linear;
+}
+
+/* --- Victory screen --- */
+
+.victory-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(120, 92, 12, 0.5);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.victory-content {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+
+.victory-title {
+  font-size: 44px;
+  font-weight: 700;
+  color: #fff3c4;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
+}
+
+.victory-sub {
+  font-size: 15px;
+  color: #f6eccf;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.victory-content .mc-button {
+  min-width: 220px;
+}
+
 /* --- Sleep fade-to-black --- */
 
 .sleep-overlay {
