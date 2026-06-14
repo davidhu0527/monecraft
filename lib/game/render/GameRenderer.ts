@@ -22,6 +22,35 @@ const scratchPose = new THREE.Vector3();
 
 export type CreateRendererResult = { ok: true; renderer: GameRenderer } | { ok: false; error: string };
 
+// Caves keep this faint floor of visibility instead of going pure black, and
+// block light is emitted with this warm tint.
+const SKY_LIGHT_FLOOR = 0.05;
+const TORCH_TINT = "vec3(1.35, 1.06, 0.62)";
+
+/**
+ * Add per-voxel darkness to a lit world material via the baked aLight attribute
+ * (skyExposure, blockLight). The scene's sun + hemisphere already scale with
+ * daylight, so day/night needs no extra uniform and no re-mesh: this patch gates
+ * the scene-lit color by sky exposure — caves go dark while the surface stays
+ * lit and dims at night with the scene lights — then adds block light back as an
+ * albedo-tinted glow that survives the gate, so a torch lights a pitch-black
+ * cave. Anchored on stable ShaderChunk includes; the e2e triangle check guards
+ * against a future Three.js bump breaking the string replace.
+ */
+function patchVoxelLighting(material: THREE.MeshStandardMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = "attribute vec2 aLight;\nvarying vec2 vLight;\n" + shader.vertexShader.replace("void main() {", "void main() {\n  vLight = aLight;");
+    shader.fragmentShader =
+      "varying vec2 vLight;\n" +
+      shader.fragmentShader
+        .replace("#include <color_fragment>", "#include <color_fragment>\n  vec3 mcAlbedo = diffuseColor.rgb;")
+        .replace(
+          "#include <opaque_fragment>",
+          `#include <opaque_fragment>\n  gl_FragColor.rgb = gl_FragColor.rgb * max(vLight.x, ${SKY_LIGHT_FLOOR.toFixed(3)}) + mcAlbedo * vLight.y * ${TORCH_TINT};`
+        );
+  };
+}
+
 /**
  * Maps simulation state to Three.js every frame in sync(): camera from
  * yaw/pitch, world mesh from the voxel data (region-windowed, rebuilt when the
@@ -105,6 +134,10 @@ export class GameRenderer {
       opacity: 0.24,
       depthWrite: false
     });
+    // Per-voxel lighting: gate scene-lit terrain by baked sky exposure and add
+    // torch/lava block light back as a glow (see patchVoxelLighting).
+    patchVoxelLighting(this.worldMaterial);
+    patchVoxelLighting(this.glassMaterial);
     this.worldMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.worldMaterial);
     this.glassMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.glassMaterial);
     this.scene.add(this.worldMesh);
