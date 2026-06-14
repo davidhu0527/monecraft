@@ -3,19 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createAudioDirector, DEFAULT_AUDIO_SETTINGS, type AudioDirector, type AudioSettings } from "@/lib/game/audio/audioDirector";
 import { readAudioSettings, writeAudioSettings } from "@/lib/game/audio/settings";
-import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, MAX_OXYGEN, SAVE_KEY } from "@/lib/game/config";
+import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, MAX_OXYGEN } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
 import * as inv from "@/lib/game/inventory";
-import { DEFAULT_SKIN_ID, getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
-import { readSkinSettings, writeSkinSettings } from "@/lib/game/skinSettings";
+import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
+import { type Profile, setProfileSkin } from "@/lib/game/profiles";
 import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
 import type { Recipe } from "@/lib/game/types";
+import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
 
 /**
  * Thin React shell around the headless GameEngine and the GameRenderer.
@@ -65,16 +66,35 @@ declare global {
   }
 }
 
-function persistGame(api: GameApi, onMessage: (text: string) => void): void {
+function persistGame(api: GameApi, saveKey: string, onMessage: (text: string) => void): void {
   try {
-    writeSave(SAVE_KEY, api.serialize());
+    writeSave(saveKey, api.serialize());
     onMessage("Saved");
   } catch {
     onMessage("Save failed");
   }
 }
 
-export function useMinecraftGame() {
+/**
+ * One mounted game = one world played by one profile. The owning shell remounts
+ * this hook (via a React `key` on the world id) to switch worlds, so the
+ * per-world save key and the profile are fixed for the hook's lifetime.
+ */
+export type UseMinecraftGameOptions = {
+  world: WorldMeta;
+  profile: Profile;
+  /** Leave this world and return to the world list (the shell unmounts us). */
+  onQuitToWorlds: () => void;
+  /** Re-read this world from disk by forcing a fresh mount (used by Load/Reset). */
+  onReloadWorld: () => void;
+};
+
+export function useMinecraftGame(opts: UseMinecraftGameOptions) {
+  // The owning shell keys this hook by world id, so the world is fixed for the
+  // mount's life; capturing it once in refs lets the long-lived rAF/autosave
+  // effect read the save key and seed without re-subscribing.
+  const saveKeyRef = useRef(worldSaveKey(opts.world.id));
+  const worldSeedRef = useRef(opts.world.seed);
   const [ctx, setCtx] = useState<GameContext | null>(null);
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -85,24 +105,20 @@ export function useMinecraftGame() {
   const audioRef = useRef<AudioDirector | null>(null);
   // The rAF effect must not re-run on volume tweaks — it reads through a ref.
   const audioSettingsRef = useRef(audioSettings);
-  const [skinId, setSkinId] = useState<SkinId>(DEFAULT_SKIN_ID);
+  const [skinId, setSkinId] = useState<SkinId>(opts.profile.skinId);
   const skinIdRef = useRef(skinId);
   const rendererRef = useRef<GameRenderer | null>(null);
 
-  // Persisted preferences load after mount: render never touches localStorage
-  // (SSR), and the setState hops a microtask like the renderer-error report.
-  // This effect runs before the renderer effect (ctx is set by a callback ref
-  // in a later commit), so the refs are populated by the time either exists.
+  // Audio is a global preference loaded after mount: render never touches
+  // localStorage (SSR), and the setState hops a microtask like the
+  // renderer-error report. This effect runs before the renderer effect (ctx is
+  // set by a callback ref in a later commit), so the ref is populated by the
+  // time either exists. The skin is per-profile and comes in via opts, not here.
   useEffect(() => {
     const stored = readAudioSettings();
     audioSettingsRef.current = stored;
     audioRef.current?.setSettings(stored);
-    const { skinId: storedSkin } = readSkinSettings();
-    skinIdRef.current = storedSkin;
-    queueMicrotask(() => {
-      setAudioSettings(stored);
-      setSkinId(storedSkin);
-    });
+    queueMicrotask(() => setAudioSettings(stored));
   }, []);
 
   const updateAudioSettings = useCallback((partial: Partial<AudioSettings>) => {
@@ -113,12 +129,15 @@ export function useMinecraftGame() {
     audioRef.current?.setSettings(next);
   }, []);
 
-  const updateSkin = useCallback((id: SkinId) => {
-    skinIdRef.current = id;
-    setSkinId(id);
-    writeSkinSettings({ skinId: id });
-    rendererRef.current?.setPlayerSkin(getSkinPreset(id).palette);
-  }, []);
+  const updateSkin = useCallback(
+    (id: SkinId) => {
+      skinIdRef.current = id;
+      setSkinId(id);
+      setProfileSkin(opts.profile.id, id);
+      rendererRef.current?.setPlayerSkin(getSkinPreset(id).palette);
+    },
+    [opts.profile.id]
+  );
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -127,7 +146,9 @@ export function useMinecraftGame() {
       setCtx(null);
       return;
     }
-    setCtx({ engine: new GameEngine({ save: readSave(SAVE_KEY) }), node });
+    // A saved blob carries its own seed (engine prefers it); a fresh world (no
+    // blob yet) boots from the world's stored seed.
+    setCtx({ engine: new GameEngine({ save: readSave(saveKeyRef.current), seed: worldSeedRef.current }), node });
   }, []);
 
   // The minimap container mounts independently of the canvas; the rAF loop
@@ -184,7 +205,7 @@ export function useMinecraftGame() {
     document.addEventListener("mousedown", unlockAudio);
     document.addEventListener("keydown", unlockAudio);
 
-    const autoSave = () => persistGame(gameEngine, flashMessage);
+    const autoSave = () => persistGame(gameEngine, saveKeyRef.current, flashMessage);
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
@@ -329,24 +350,32 @@ export function useMinecraftGame() {
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
     dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
-      if (engine) persistGame(engine, flashMessage);
+      if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
     },
     loadNow: () => {
-      if (!readSave(SAVE_KEY)) {
+      if (!readSave(saveKeyRef.current)) {
         flashMessage("No save found", 1400);
         return;
       }
       flashMessage("Loaded");
-      window.setTimeout(() => window.location.reload(), 120);
+      // Remount this world (no page reload) so the engine re-reads the saved blob.
+      window.setTimeout(() => opts.onReloadWorld(), 120);
     },
     resetNow: () => {
       try {
-        localStorage.removeItem(SAVE_KEY);
+        localStorage.removeItem(saveKeyRef.current);
         setSaveMessage("Resetting...");
-        window.setTimeout(() => window.location.reload(), 500);
+        // Remount with no blob: the fresh engine regenerates from the stored seed.
+        window.setTimeout(() => opts.onReloadWorld(), 500);
       } catch {
         flashMessage("Reset failed");
       }
+    },
+    quitToWorlds: () => {
+      // The autosave interval is cleared on unmount and beforeunload won't fire
+      // on an in-app navigation, so persist synchronously before leaving.
+      if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
+      opts.onQuitToWorlds();
     }
   };
 }

@@ -1,5 +1,5 @@
-import MinecraftGame from "@/components/MinecraftGame";
+import GameShell from "@/components/GameShell";
 
 export default function HomePage() {
-  return <MinecraftGame />;
+  return <GameShell />;
 }

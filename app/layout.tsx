@@ -1,6 +1,7 @@
 import "./base.css";
 import "./hud.css";
 import "./ui.css";
+import "./menu.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { pixelFont } from "./fonts";

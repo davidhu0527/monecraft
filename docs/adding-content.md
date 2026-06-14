@@ -84,7 +84,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 ## A worldgen structure (houses, dungeons, …)
 
 - Structures are placed in `lib/world/generation.ts` at the end of the `generateWorld` pipeline. Mirror `placeHouse`/`placeDungeons`: loop a `GEN.<thing>Count`, sample positions, validate, and write blocks with `world.set`. Append your pass **last** so later passes don't overwrite it, and add the count to the frozen `GEN` object.
-- **Any block write changes the deterministic output**, so this breaks the worldgen hash. Re-baseline the `generation.test.ts` digests and bump `SAVE_KEY` per the [testing.md](testing.md) policy; add a structural probe test (count your blocks, assert they generate) that survives the re-baseline.
+- **Any block write changes the deterministic output**, so this breaks the worldgen hash. Re-baseline the `generation.test.ts` digests and bump `WORLDGEN_VERSION` per the [testing.md](testing.md) policy (each world then discards its stale block-diffs and reboots from its seed); add a structural probe test (count your blocks, assert they generate) that survives the re-baseline.
 - If the structure needs its positions known at runtime (dungeons re-derive chest/spawner indices on load), expose a **derive pass** like `collectDungeonSites`: factor placement into a shared routine that either writes blocks or records indices, drawing from a **dedicated PRNG seeded only from `world.seed`** (not the shared gen stream) with a fixed number of draws per structure, and validate against **seed-pure** terrain (`terrainTopY`, `getBiome`) — never `highestSolidY`, which a cave or player edit can shift out from under the derive pass.
 
 ## A loot table / lazy block-entity fill

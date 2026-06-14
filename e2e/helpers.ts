@@ -1,4 +1,5 @@
 import { test as base, expect, type Page } from "@playwright/test";
+import { WORLDGEN_VERSION } from "@/lib/game/config";
 
 /**
  * Shared E2E plumbing. Tests assert against the live simulation through the
@@ -19,7 +20,31 @@ export const test = base.extend<{ gamePage: Page }>({
     });
     page.on("pageerror", (error) => errors.push(String(error)));
 
+    // Seed a known profile + world so the menu has something to enter. Runs on
+    // every navigation (including reloads), but only fills the manifests when
+    // absent so a test's own writes survive a reload.
+    await page.addInitScript((worldgenVersion) => {
+      if (!localStorage.getItem("minecraft_profiles_v1")) {
+        localStorage.setItem(
+          "minecraft_profiles_v1",
+          JSON.stringify({ version: 1, profiles: [{ id: "e2e-profile", name: "Tester", skinId: "default", createdAt: 1 }], activeProfileId: "e2e-profile" })
+        );
+      }
+      if (!localStorage.getItem("minecraft_worlds_v1")) {
+        localStorage.setItem(
+          "minecraft_worlds_v1",
+          JSON.stringify({
+            version: 1,
+            worlds: [{ id: "e2e-world", profileId: "e2e-profile", name: "Test World", seed: 1337, worldgenVersion, createdAt: 1, lastPlayedAt: 1 }]
+          })
+        );
+      }
+    }, WORLDGEN_VERSION);
+
     await page.goto("/");
+    // Enter the world through the menu (first load only; reloads auto-resume the tab's world).
+    await page.getByTestId("profile-e2e-profile").click();
+    await page.getByTestId("world-e2e-world").click();
     await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
     // Wait for the first frames so the engine has stepped and the scene drew.
     await page.waitForFunction(() => window.__monecraft!.renderer.renderedTriangles() > 0, undefined, { timeout: 30000 });

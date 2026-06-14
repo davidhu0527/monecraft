@@ -179,8 +179,8 @@ those overflow slots on load (`readContainers` rebuilds a `CHEST_SLOTS`-length a
 
 ## Persistence & rendering
 
-`AUTOSAVE_INTERVAL_MS`, `SAVE_KEY`, `STUCK_RESET_SECONDS`, `RENDER_RADIUS`,
-`RENDER_GRID`, `THIRD_PERSON_DISTANCE`, `THIRD_PERSON_MARGIN`.
+`AUTOSAVE_INTERVAL_MS`, `WORLDGEN_VERSION`, `SAVE_KEY` (legacy), `STUCK_RESET_SECONDS`,
+`RENDER_RADIUS`, `RENDER_GRID`, `THIRD_PERSON_DISTANCE`, `THIRD_PERSON_MARGIN`.
 
 `RENDER_RADIUS` is the biggest **performance** lever: the renderer meshes one region
 of this radius around the player, so larger values draw more terrain at higher cost;
@@ -192,12 +192,16 @@ tolerated before the auto-unstuck teleport fires.
 
 Change these only with care:
 
-- **`SAVE_KEY`** (`"minecraft_save_v6"`) is the localStorage key name. Note it's
-  versioned independently of the save **schema** (currently v5, per
-  [save-format.md](save-format.md)) — renaming `SAVE_KEY` orphans every existing
-  player's save. Don't bump it to express a schema change; add a migration instead.
-  It was bumped v5 → v6 for the 0.7.0 dungeon worldgen — a deliberate terrain
-  change that invalidates old block-diffs, which **is** a legitimate reason to bump.
+- **`WORLDGEN_VERSION`** (`7`) is the worldgen baseline each world records at
+  creation. When a deliberate terrain change invalidates old block-diffs, bump this:
+  every world whose recorded version differs discards its stale diffs and reboots from
+  its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
+  This replaced the old whole-store `SAVE_KEY` bump, which reset _every_ world at once.
+  It's versioned independently of the save **schema** (currently v5); don't bump it to
+  express a schema change — add a migration instead.
+- **`SAVE_KEY`** (`"minecraft_save_v7"`) is now **legacy**: each world has its own
+  `minecraft_world_save_<id>` key, and `SAVE_KEY` is read only once by the one-time
+  migration. Leave it alone.
 - **`INVENTORY_SLOTS` / `HOTBAR_SLOTS` / `MAX_STACK_SIZE`** affect the saved
   inventory layout. `save.ts` already migrates the v1 (40-slot) → v2 (36-slot)
   change; altering these again needs a matching migration or old saves break.
