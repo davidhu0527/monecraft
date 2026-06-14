@@ -56,6 +56,16 @@ export const BOW_KNOCKBACK = 0.6;
 export const BOW_COOLDOWN_SECONDS = 0.4;
 export const BOW_DURABILITY_PER_SHOT = 1;
 
+// Ranged mobs (skeletons, boss) — kite within a standoff band and loose arrows
+// instead of meleeing. Lead aims slightly ahead of a moving target.
+export const SKELETON_STANDOFF_MIN = 5; // back away when the player is closer than this
+export const SKELETON_STANDOFF_MAX = 9; // approach when farther; hold in the band
+export const SKELETON_ARROW_DAMAGE = 4;
+export const SKELETON_ARROW_SPEED = 27; // a touch slower than the player's bow (34)
+export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
+export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
+export const MOB_ARROW_KNOCKBACK = 0.35;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;

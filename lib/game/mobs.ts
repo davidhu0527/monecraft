@@ -7,6 +7,8 @@ export type MobTemplate = {
   detectRange: number;
   attackDamage: number;
   attackCooldown: number;
+  /** Fires arrows and kites instead of meleeing (skeletons, boss). */
+  ranged?: boolean;
   modelArgs: Parameters<typeof createMobModel>;
 };
 
@@ -48,7 +50,8 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     hp: 9,
     detectRange: 12,
     attackDamage: 3,
-    attackCooldown: 1.4,
+    attackCooldown: 1.8,
+    ranged: true,
     modelArgs: [0xe4e4e2, 0xcfcfcb, 0xb4b4b1, 0xff3333, 0x8f8f8f, [0.75, 1.08, 0.48], [0.48, 0.48, 0.48]]
   },
   spider: {
