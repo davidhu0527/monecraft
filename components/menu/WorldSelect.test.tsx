@@ -52,6 +52,18 @@ describe("WorldSelect", () => {
     expect(onPlay).toHaveBeenCalledWith(worlds[0].id);
   });
 
+  test("creating a world of a chosen type persists that type", async () => {
+    const user = userEvent.setup();
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onBack={mock()} />);
+
+    await user.click(screen.getByTestId("new-world"));
+    await user.type(screen.getByLabelText("World name"), "Sky");
+    await user.click(screen.getByRole("button", { name: "Islands world type" }));
+    await user.click(screen.getByRole("button", { name: "Create World" }));
+
+    expect(readWorlds().worlds[0].worldType).toBe("islands");
+  });
+
   test("deleting a world removes it after confirmation", async () => {
     const user = userEvent.setup();
     createWorld("p1", "Doomed", "1", { uid: () => "wd" });

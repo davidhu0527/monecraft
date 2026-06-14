@@ -16,7 +16,7 @@ bun run dev
 
 Then open `http://localhost:3000`.
 
-The game opens to a menu: pick or create a **profile** (your name and look), then create or choose a **world** to play. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
+The game opens to a menu: pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
 
 ## Controls
 

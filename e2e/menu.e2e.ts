@@ -46,6 +46,35 @@ test("create worlds, play them, and switch between them without a reload", async
   expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true);
 });
 
+test("a Superflat world generates level terrain near spawn", async ({ page }) => {
+  await page.goto("/");
+  await createProfile(page, "Builder");
+
+  await page.getByTestId("new-world").click();
+  await page.getByLabel("World name").fill("Flats");
+  await page.getByRole("button", { name: "Superflat world type" }).click();
+  await page.getByLabel("World seed").fill("1337");
+  await page.getByRole("button", { name: "Create World" }).click();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  // Sample surface heights around spawn; on flat terrain they cluster tightly
+  // (occasional trees/caves are the only outliers).
+  const within = await page.evaluate(() => {
+    const world = window.__monecraft!.engine.state.world;
+    const p = window.__monecraft!.engine.state.player.position;
+    const cx = Math.floor(p.x);
+    const cz = Math.floor(p.z);
+    const heights: number[] = [];
+    for (let dx = -15; dx <= 15; dx += 3) {
+      for (let dz = -15; dz <= 15; dz += 3) heights.push(world.highestSolidY(cx + dx, cz + dz));
+    }
+    heights.sort((a, b) => a - b);
+    const median = heights[Math.floor(heights.length / 2)];
+    return heights.filter((h) => Math.abs(h - median) <= 1).length / heights.length;
+  });
+  expect(within).toBeGreaterThan(0.6);
+});
+
 test("reloading resumes the world being played", async ({ page }) => {
   await page.goto("/");
   await createProfile(page, "Tester");

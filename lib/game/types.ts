@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId } from "@/lib/world";
+import { BlockId, type WorldType } from "@/lib/world";
 
 export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
@@ -115,4 +115,6 @@ export type SaveDataV4 = Omit<SaveDataV3, "version"> & {
 export type SaveData = Omit<SaveDataV4, "version"> & {
   version: 5;
   lootedChests?: number[];
+  /** Generation preset; absent ⇒ "default" (pre-feature and legacy saves). Like `seed`, fixed for the world's life. */
+  worldType?: WorldType;
 };

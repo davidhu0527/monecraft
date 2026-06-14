@@ -95,6 +95,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // effect read the save key and seed without re-subscribing.
   const saveKeyRef = useRef(worldSaveKey(opts.world.id));
   const worldSeedRef = useRef(opts.world.seed);
+  const worldTypeRef = useRef(opts.world.worldType);
   const [ctx, setCtx] = useState<GameContext | null>(null);
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -146,9 +147,12 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setCtx(null);
       return;
     }
-    // A saved blob carries its own seed (engine prefers it); a fresh world (no
-    // blob yet) boots from the world's stored seed.
-    setCtx({ engine: new GameEngine({ save: readSave(saveKeyRef.current), seed: worldSeedRef.current }), node });
+    // A saved blob carries its own seed + type (engine prefers them); a fresh
+    // world (no blob yet) boots from the world's stored seed and type.
+    setCtx({
+      engine: new GameEngine({ save: readSave(saveKeyRef.current), seed: worldSeedRef.current, worldType: worldTypeRef.current }),
+      node
+    });
   }, []);
 
   // The minimap container mounts independently of the canvas; the rAF loop

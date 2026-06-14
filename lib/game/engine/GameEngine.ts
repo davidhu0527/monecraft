@@ -1,5 +1,16 @@
 import * as THREE from "three";
-import { BlockId, collectDungeonSites, collidesAt, computeFullLight, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import {
+  BlockId,
+  collectDungeonSites,
+  collidesAt,
+  computeFullLight,
+  generateWorld,
+  VoxelWorld,
+  WORLD_SIZE_X,
+  WORLD_SIZE_Y,
+  WORLD_SIZE_Z,
+  type WorldType
+} from "@/lib/world";
 import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
@@ -57,6 +68,8 @@ export type GameEngineOptions = {
   save?: SaveData | null;
   /** Seed for a fresh world; ignored when a save is provided. */
   seed?: number;
+  /** Generation preset; the save's own worldType wins when restoring. Defaults to "default". */
+  worldType?: WorldType;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -72,6 +85,7 @@ export type GameEngineOptions = {
 export class GameEngine {
   readonly state: GameState;
   private readonly rng: () => number;
+  private readonly worldType: WorldType;
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
   private events: GameEvent[] = [];
@@ -86,12 +100,15 @@ export class GameEngine {
     this.rng = options.rng ?? Math.random;
 
     const seed = save?.seed ?? options.seed ?? Math.floor(Math.random() * 2147483647);
+    // A restored save's own type wins (the block-diffs were recorded against it);
+    // a fresh world takes the requested type, defaulting to "default".
+    this.worldType = save?.worldType ?? options.worldType ?? "default";
     const size = options.worldSize ?? { x: WORLD_SIZE_X, y: WORLD_SIZE_Y, z: WORLD_SIZE_Z };
     const world = new VoxelWorld(size.x, size.y, size.z, seed);
-    generateWorld(world);
+    generateWorld(world, this.worldType);
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
-    const dungeonSites = collectDungeonSites(world);
+    const dungeonSites = collectDungeonSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
@@ -389,6 +406,7 @@ export class GameEngine {
     return {
       version: 5,
       seed: state.world.seed,
+      worldType: this.worldType,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
       equippedArmor: { ...state.equippedArmor },

@@ -11,6 +11,7 @@
  * under so a future baseline bump can discard its stale block-diffs.
  */
 
+import { isWorldType, type WorldType } from "@/lib/world";
 import { WORLDGEN_VERSION } from "./config";
 import { readManifestRaw, resolveDeps, sanitizeName, writeManifest, type ManifestDeps } from "./manifest";
 import { getProfile } from "./profiles";
@@ -20,10 +21,19 @@ export type WorldMeta = {
   profileId: string;
   name: string;
   seed: number;
+  worldType: WorldType;
   worldgenVersion: number;
   createdAt: number;
   lastPlayedAt: number;
 };
+
+/** UI metadata for the world-type picker (the engine side lives in lib/world/worldTypes.ts). */
+export const WORLD_TYPE_PRESETS: ReadonlyArray<{ id: WorldType; label: string; blurb: string }> = [
+  { id: "default", label: "Default", blurb: "Balanced terrain, every biome" },
+  { id: "flat", label: "Superflat", blurb: "Level ground — a builder's canvas" },
+  { id: "amplified", label: "Amplified", blurb: "Towering, dramatic relief" },
+  { id: "islands", label: "Islands", blurb: "Scattered land in a wide sea" }
+];
 
 export type WorldsManifest = {
   version: 1;
@@ -79,6 +89,7 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
     profileId: entry.profileId,
     name: sanitizeName(entry.name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: Math.floor(entry.seed),
+    worldType: isWorldType(entry.worldType) ? entry.worldType : "default",
     worldgenVersion: num(entry.worldgenVersion, WORLDGEN_VERSION),
     createdAt: num(entry.createdAt, 0),
     lastPlayedAt: num(entry.lastPlayedAt, 0)
@@ -105,8 +116,13 @@ export function worldsForProfile(profileId: string, storage: Storage = localStor
     .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt || b.createdAt - a.createdAt);
 }
 
-/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds. */
-export function createWorld(profileId: string, name: string, seedInput: string | null, deps: ManifestDeps & { rng?: () => number } = {}): WorldMeta {
+/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds; `deps.worldType` picks the generation preset. */
+export function createWorld(
+  profileId: string,
+  name: string,
+  seedInput: string | null,
+  deps: ManifestDeps & { rng?: () => number; worldType?: WorldType } = {}
+): WorldMeta {
   const { storage, now, uid } = resolveDeps(deps);
   // Worlds must belong to a real profile — refuse to persist an orphan record.
   if (!getProfile(profileId, storage)) throw new Error(`createWorld: unknown profile "${profileId}"`);
@@ -116,6 +132,7 @@ export function createWorld(profileId: string, name: string, seedInput: string |
     profileId,
     name: sanitizeName(name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: resolveSeed(seedInput, deps.rng ?? Math.random),
+    worldType: isWorldType(deps.worldType) ? deps.worldType : "default",
     worldgenVersion: WORLDGEN_VERSION,
     createdAt,
     lastPlayedAt: createdAt

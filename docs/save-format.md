@@ -5,6 +5,7 @@
 `SaveData` (version 5) in `lib/game/types.ts`:
 
 - world `seed`
+- `worldType` (optional) — the generation preset (`"default"` | `"flat"` | `"amplified"` | `"islands"`); absent ⇒ `"default"`. Like `seed`, it is fixed for the world's life and the world must always regenerate with it, since the block-diffs were recorded against that terrain
 - a block **diff** list — `changes: [blockIndex, blockId][]`; edits that revert to the generated baseline are pruned (player-placed crops, beds, furnaces, chests, and both halves/states of doors ride this list — they are ordinary block edits)
 - inventory slots with durability (36 slots; the first 9 are the hotbar)
 - equipped armor
@@ -41,10 +42,12 @@ in transient `GameTimers`/state. Saving, reloading, or respawning resets them
 Saves are organized two levels deep — a **profile** owns a list of **worlds**, and each world holds one `SaveData` blob — across three localStorage keys. All three are versioned `{ version: 1, ... }` envelopes and their readers are **total** (malformed entries are dropped, never thrown):
 
 - **`minecraft_profiles_v1`** (`lib/game/profiles.ts`) — the profile list plus `activeProfileId`. A profile is `{ id, name, skinId, createdAt }`: player identity only (name + skin). The skin moved here from the old global `minecraft_skin_v1` key; a dangling `activeProfileId` is repaired on read.
-- **`minecraft_worlds_v1`** (`lib/game/worlds.ts`) — the world index. Each `WorldMeta` is `{ id, profileId, name, seed, worldgenVersion, createdAt, lastPlayedAt }`; `profileId` is the 1:N owner link and `lastPlayedAt` drives the most-recent-first ordering. The `seed` is resolved once at creation (blank → random, numeric text → clamped int, other text → stable FNV hash via `resolveSeed`) and is the source of truth for regeneration.
+- **`minecraft_worlds_v1`** (`lib/game/worlds.ts`) — the world index. Each `WorldMeta` is `{ id, profileId, name, seed, worldType, worldgenVersion, createdAt, lastPlayedAt }`; `profileId` is the 1:N owner link and `lastPlayedAt` drives the most-recent-first ordering. The `seed` is resolved once at creation (blank → random, numeric text → clamped int, other text → stable FNV hash via `resolveSeed`); `worldType` is the chosen generation preset (sanitized to `"default"` on read for unknown/legacy entries). Both are the source of truth for regeneration and are also written into the per-world `SaveData` blob.
 - **`minecraft_world_save_<worldId>`** — one `SaveData` blob per world (the schema above), read/written through `readSave`/`writeSave`.
 
 `worldgenVersion` records the `WORLDGEN_VERSION` (`lib/game/config.ts`, currently 7) the world was generated under. This **replaces the old whole-store `SAVE_KEY` bump**: when the worldgen baseline changes, bump `WORLDGEN_VERSION`, and a world whose recorded version differs has its stale block-diffs discarded and reboots from its stored seed — per-world, with no key rename and without touching unaffected worlds.
+
+**World types.** A world's `worldType` selects a generation preset (`lib/world/worldTypes.ts`). `generateWorld(world, worldType)` forks on it before any block write (`terrainConfigFor`, `lib/world/generation.ts`), varying only sea level and per-biome surface height; everything else reads `GEN`. The `"default"` branch returns the GEN values verbatim, so default worlds stay **byte-identical** to the pre-feature generator — the existing determinism hashes are unchanged. Each non-default type is its own deterministic save contract with its own SHA-256 baseline in `generation.test.ts`; `worldgenVersion` still guards all types (a deliberate change to any type's config bumps `WORLDGEN_VERSION`, discarding stale worlds of that vintage).
 
 The game shell (`components/GameShell.tsx`) drives a profile-select → world-select → play state machine and remembers the tab's active world in `sessionStorage` so a reload resumes it (a fresh tab cold-starts at profile-select). Deleting a profile cascades its worlds and their save blobs (`deleteWorldsForProfile`).
 
