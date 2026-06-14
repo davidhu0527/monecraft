@@ -41,10 +41,43 @@ describe("light classification", () => {
     expect(isLightBlocker(BlockId.Bedrock)).toBe(true);
   });
 
-  test("no block emits light yet (emitters arrive with torches and lava)", () => {
+  test("torches emit block light; ordinary blocks do not", () => {
+    expect(emission(BlockId.Torch)).toBe(14);
     expect(emission(BlockId.Air)).toBe(0);
     expect(emission(BlockId.Stone)).toBe(0);
     expect(emission(BlockId.Glass)).toBe(0);
+  });
+});
+
+describe("block light", () => {
+  test("a torch emits block light that decays one level per step", () => {
+    const world = airWorld(40);
+    world.set(12, 12, 12, BlockId.Torch);
+    const light = computeFullLight(world);
+    expect(block(world, light, 12, 12, 12)).toBe(14); // the emitter cell
+    expect(block(world, light, 13, 12, 12)).toBe(13); // one step out
+    expect(block(world, light, 15, 12, 12)).toBe(11); // three steps out
+    expect(block(world, light, 26, 12, 12)).toBe(0); // beyond range
+  });
+
+  test("placing a torch lights a dark pocket, mining it lets the dark return", () => {
+    const world = solidWorld(24);
+    for (let dx = -2; dx <= 2; dx += 1) {
+      for (let dy = -2; dy <= 2; dy += 1) {
+        for (let dz = -2; dz <= 2; dz += 1) world.set(12 + dx, 12 + dy, 12 + dz, BlockId.Air);
+      }
+    }
+    const light = computeFullLight(world);
+    expect(block(world, light, 13, 12, 12)).toBe(0); // sealed pocket, no light
+
+    world.set(12, 12, 12, BlockId.Torch);
+    applyEdit(world, light, 12, 12, 12);
+    expect(block(world, light, 12, 12, 12)).toBe(14);
+    expect(block(world, light, 13, 12, 12)).toBe(13);
+
+    world.set(12, 12, 12, BlockId.Air);
+    applyEdit(world, light, 12, 12, 12);
+    expect(block(world, light, 13, 12, 12)).toBe(0); // torch gone, dark again
   });
 });
 

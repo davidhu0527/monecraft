@@ -119,6 +119,18 @@ describe("boot", () => {
     state.blockChanges.set(cx, y, cz, BlockId.Air);
     expect(world.getSky(cx, y, cz)).toBe(15); // reopened to the sky
   });
+
+  test("placing a torch emits block light into the neighborhood", () => {
+    const { state } = makeEngine();
+    const { world } = state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    const y = world.sizeY - 5; // open air; block light is independent of the sky
+    expect(world.getBlockLight(cx, y, cz)).toBe(0);
+    state.blockChanges.set(cx, y, cz, BlockId.Torch);
+    expect(world.getBlockLight(cx, y, cz)).toBe(14);
+    expect(world.getBlockLight(cx + 1, y, cz)).toBe(13);
+  });
 });
 
 describe("movement and stats", () => {

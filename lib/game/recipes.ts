@@ -25,6 +25,7 @@ export const RECIPES: Recipe[] = [
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
+  { id: "torch", label: "1 Wood -> 4 Torch", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "torch", count: 4 } },
   {
     id: "cook_chicken",
     label: "Raw Chicken + Planks -> Cooked Chicken",

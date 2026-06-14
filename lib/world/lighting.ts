@@ -71,6 +71,8 @@ export function isLightBlocker(block: BlockId): boolean {
  */
 export function emission(block: BlockId): number {
   switch (block) {
+    case BlockId.Torch:
+      return 14;
     default:
       return 0;
   }
