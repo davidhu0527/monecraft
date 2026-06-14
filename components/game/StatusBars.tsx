@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/no-array-index-key -- each status bar is a fixed-length, positional row of icons that never reorders, so the icon index is its stable identity */
 import PixelImg from "@/components/game/PixelImg";
 import { hudIconUrl } from "@/lib/ui/sprites";
 
