@@ -18,101 +18,100 @@ export default function ProfileSelect({ onPlay }: ProfileSelectProps) {
   const [editName, setEditName] = useState("");
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
-  if (creating) {
+  const { profiles } = readProfiles();
+  // With no profiles (first run, or the last one was just deleted) there is
+  // nothing to select, so open straight into the create form with no Cancel.
+  const firstRun = profiles.length === 0;
+
+  if (creating || firstRun) {
     return (
-      <MenuScreen title="New Profile">
+      <MenuScreen title={firstRun ? "Create Your Profile" : "New Profile"}>
         <CreateProfileForm
           onCreate={(name, skinId) => {
             const profile = createProfile(name, skinId);
             setCreating(false);
             onPlay(profile.id); // straight into the new profile's (empty) world list
           }}
-          onCancel={() => setCreating(false)}
+          onCancel={firstRun ? undefined : () => setCreating(false)}
         />
       </MenuScreen>
     );
   }
 
-  const { profiles } = readProfiles();
-
   return (
     <MenuScreen title="Select Profile">
-      {profiles.length === 0 ? (
-        <p className="menu-empty">No profiles yet. Create one to start playing.</p>
-      ) : (
-        <ul className="menu-list">
-          {profiles.map((profile) => (
-            <li key={profile.id} className="menu-card">
-              {editingId === profile.id ? (
-                <form
-                  className="menu-rename"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    renameProfile(profile.id, editName);
-                    setEditingId(null); // re-render re-reads the manifest
-                  }}
-                >
-                  <input
-                    className="menu-input"
-                    value={editName}
-                    maxLength={MAX_PROFILE_NAME}
-                    autoFocus
-                    aria-label="Rename profile"
-                    onChange={(event) => setEditName(event.target.value)}
-                  />
-                  <button type="submit" className="mc-button">
-                    Save
+      <ul className="menu-list">
+        {profiles.map((profile) => (
+          <li key={profile.id} className="menu-card">
+            {editingId === profile.id ? (
+              <form
+                className="menu-rename"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  renameProfile(profile.id, editName);
+                  setEditingId(null); // re-render re-reads the manifest
+                }}
+              >
+                <input
+                  className="menu-input"
+                  value={editName}
+                  maxLength={MAX_PROFILE_NAME}
+                  autoFocus
+                  aria-label="Rename profile"
+                  onChange={(event) => setEditName(event.target.value)}
+                />
+                <button type="submit" className="mc-button">
+                  Save
+                </button>
+                <button type="button" className="mc-button" onClick={() => setEditingId(null)}>
+                  Cancel
+                </button>
+              </form>
+            ) : confirmingDeleteId === profile.id ? (
+              <div className="menu-confirm">
+                <span>Delete “{profile.name}” and all its worlds?</span>
+                <div className="menu-confirm-actions">
+                  <button
+                    className="mc-button danger"
+                    onClick={() => {
+                      deleteWorldsForProfile(profile.id);
+                      deleteProfile(profile.id);
+                      setConfirmingDeleteId(null); // re-render re-reads the manifest
+                    }}
+                  >
+                    Delete
                   </button>
-                  <button type="button" className="mc-button" onClick={() => setEditingId(null)}>
+                  <button className="mc-button" onClick={() => setConfirmingDeleteId(null)}>
                     Cancel
                   </button>
-                </form>
-              ) : confirmingDeleteId === profile.id ? (
-                <div className="menu-confirm">
-                  <span>Delete “{profile.name}” and all its worlds?</span>
-                  <div className="menu-confirm-actions">
-                    <button
-                      className="mc-button danger"
-                      onClick={() => {
-                        deleteWorldsForProfile(profile.id);
-                        deleteProfile(profile.id);
-                        setConfirmingDeleteId(null); // re-render re-reads the manifest
-                      }}
-                    >
-                      Delete
-                    </button>
-                    <button className="mc-button" onClick={() => setConfirmingDeleteId(null)}>
-                      Cancel
-                    </button>
-                  </div>
                 </div>
-              ) : (
-                <>
-                  <button className="menu-card-play" data-testid={`profile-${profile.id}`} onClick={() => onPlay(profile.id)}>
-                    <PixelImg src={skinPortraitUrl(profile.skinId)} alt="" size={40} aria-hidden />
-                    <span className="menu-card-name">{profile.name}</span>
-                    <span className="menu-card-sub">{worldsForProfile(profile.id).length} worlds</span>
+              </div>
+            ) : (
+              <>
+                <button className="menu-card-play" data-testid={`profile-${profile.id}`} onClick={() => onPlay(profile.id)}>
+                  <PixelImg src={skinPortraitUrl(profile.skinId)} alt="" size={40} aria-hidden />
+                  <span className="menu-card-name">{profile.name}</span>
+                  <span className="menu-card-sub">{worldsForProfile(profile.id).length} worlds</span>
+                </button>
+                <div className="menu-card-actions">
+                  <button
+                    className="mc-button"
+                    onClick={() => {
+                      setEditName(profile.name);
+                      setEditingId(profile.id);
+                    }}
+                  >
+                    Rename
                   </button>
-                  <div className="menu-card-actions">
-                    <button
-                      className="mc-button"
-                      onClick={() => {
-                        setEditName(profile.name);
-                        setEditingId(profile.id);
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button className="mc-button" onClick={() => setConfirmingDeleteId(profile.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+                  <button className="mc-button" onClick={() => setConfirmingDeleteId(profile.id)}>
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
       <button className="mc-button menu-primary" data-testid="new-profile" onClick={() => setCreating(true)}>
         New Profile
       </button>

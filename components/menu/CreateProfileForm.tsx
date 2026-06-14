@@ -6,7 +6,8 @@ import { skinPortraitUrl } from "@/lib/ui/sprites";
 
 type CreateProfileFormProps = {
   onCreate: (name: string, skinId: SkinId) => void;
-  onCancel: () => void;
+  /** Omitted for the first-run create (there is nothing to cancel back to). */
+  onCancel?: () => void;
 };
 
 /** The new-profile form: a name and a skin picker, reusing the pause-menu swatch grid. */
@@ -57,9 +58,11 @@ export default function CreateProfileForm({ onCreate, onCancel }: CreateProfileF
         <button type="submit" className="mc-button">
           Create
         </button>
-        <button type="button" className="mc-button" onClick={onCancel}>
-          Cancel
-        </button>
+        {onCancel ? (
+          <button type="button" className="mc-button" onClick={onCancel}>
+            Cancel
+          </button>
+        ) : null}
       </div>
     </form>
   );

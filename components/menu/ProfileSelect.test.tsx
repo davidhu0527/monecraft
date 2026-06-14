@@ -21,13 +21,26 @@ describe("ProfileSelect", () => {
     expect(onPlay).toHaveBeenCalledWith(alice.id);
   });
 
-  test("empty state invites creating the first profile", () => {
+  test("with no profiles it opens straight into the create form (no cancel)", () => {
     render(<ProfileSelect onPlay={mock()} />);
-    expect(screen.getByText(/No profiles yet/i)).toBeTruthy();
+    expect(screen.getByText("Create Your Profile")).toBeTruthy();
+    expect(screen.getByLabelText("Profile name")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 
-  test("creating a profile persists it and enters it", async () => {
+  test("first-run create enters the new profile", async () => {
     const user = userEvent.setup();
+    const onPlay = mock();
+    render(<ProfileSelect onPlay={onPlay} />);
+    await user.type(screen.getByLabelText("Profile name"), "Solo");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    const created = readProfiles().profiles.find((p) => p.name === "Solo")!;
+    expect(onPlay).toHaveBeenCalledWith(created.id);
+  });
+
+  test("adding another profile from the list persists it and enters it", async () => {
+    const user = userEvent.setup();
+    createProfile("Existing", "default"); // so the list (not the first-run form) renders
     const onPlay = mock();
     render(<ProfileSelect onPlay={onPlay} />);
 

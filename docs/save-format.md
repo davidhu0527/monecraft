@@ -50,7 +50,7 @@ The game shell (`components/GameShell.tsx`) drives a profile-select → world-se
 
 ### Legacy migration
 
-`migrateLegacySave` (`lib/game/legacyMigration.ts`) runs once on first boot, gated on the **absence** of `minecraft_profiles_v1` (its presence is the already-migrated flag, which survives a rollback that re-creates the legacy key). It creates a default "Player" profile carrying the old global skin, and — if a legacy `minecraft_save_v7` exists — **copies** it into one "My World" blob, then removes the legacy key. The copy precedes the delete so a mid-migration failure can never lose the original.
+`migrateLegacySave` (`lib/game/legacyMigration.ts`) runs once on first boot, gated on the **absence** of `minecraft_profiles_v1` (its presence is the already-migrated flag, which survives a rollback that re-creates the legacy key). When a legacy `minecraft_save_v7` exists it creates a default "Player" profile (carrying the old global skin) and **copies** the save into one "My World" blob, then removes the legacy key — the copy precedes the delete so a mid-migration failure can never lose the original. A brand-new player with **no** legacy save gets nothing here; the menu opens straight into the create-profile form (`ProfileSelect` renders it whenever there are zero profiles), so their first act is naming and skinning a profile.
 
 ## Autosave
 

@@ -3,15 +3,20 @@ import { expect, test } from "@playwright/test";
 /**
  * Profile/world menu flow. Unlike the gameplay smoke suite (which seeds a world
  * and enters it via a fixture), these start from empty storage and drive the
- * real menus. A fresh install runs the legacy migration, which seeds a default
- * "Player" profile with no worlds.
+ * real menus. A fresh install has no profiles, so the shell opens straight into
+ * the create-profile form.
  */
+
+/** Fresh install → create a profile through the first-run form, landing on its world list. */
+async function createProfile(page: import("@playwright/test").Page, name: string): Promise<void> {
+  await page.getByLabel("Profile name").fill(name);
+  await page.getByRole("button", { name: "Create" }).click();
+}
 
 test("create worlds, play them, and switch between them without a reload", async ({ page }) => {
   await page.goto("/");
 
-  // Enter the migration-created default profile.
-  await page.getByText("Player", { exact: true }).click();
+  await createProfile(page, "Tester");
   await expect(page.getByText(/No worlds yet/i)).toBeVisible();
 
   // Create the first world with a fixed seed and play it.
@@ -43,7 +48,7 @@ test("create worlds, play them, and switch between them without a reload", async
 
 test("reloading resumes the world being played", async ({ page }) => {
   await page.goto("/");
-  await page.getByText("Player", { exact: true }).click();
+  await createProfile(page, "Tester");
   await page.getByTestId("new-world").click();
   await page.getByLabel("World name").fill("Persistent");
   await page.getByLabel("World seed").fill("777");
@@ -58,14 +63,18 @@ test("reloading resumes the world being played", async ({ page }) => {
 test("profiles own separate world lists", async ({ page }) => {
   await page.goto("/");
 
-  // Create a second profile; it lands in its own empty world list.
+  // The first profile is created through the forced first-run form.
+  await createProfile(page, "Bob");
+  await expect(page.getByText(/No worlds yet/i)).toBeVisible();
+  await page.getByTestId("back-to-profiles").click();
+
+  // A second profile is added from the list and lands in its own empty world list.
   await page.getByTestId("new-profile").click();
-  await page.getByLabel("Profile name").fill("Alice");
-  await page.getByRole("button", { name: "Create" }).click();
+  await createProfile(page, "Alice");
   await expect(page.getByText(/No worlds yet/i)).toBeVisible();
 
-  // Back at the profile list, both the default and the new profile are present.
+  // Back at the profile list, both profiles are present.
   await page.getByTestId("back-to-profiles").click();
-  await expect(page.getByText("Player", { exact: true })).toBeVisible();
+  await expect(page.getByText("Bob", { exact: true })).toBeVisible();
   await expect(page.getByText("Alice", { exact: true })).toBeVisible();
 });

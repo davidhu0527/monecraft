@@ -27,12 +27,13 @@ export function migrateLegacySave(deps: ManifestDeps = {}): void {
   if (storage.getItem(PROFILES_KEY) !== null) return;
 
   const legacy = readSave(SAVE_KEY, storage); // runs the v1->v5 migration chain
+
+  // Brand-new player (no legacy save): create nothing. The menu greets them with
+  // the create-profile form so their first act is naming + skinning a profile.
+  if (!legacy) return;
+
   const { skinId } = readSkinSettings(storage); // old global skin seeds the default profile
-
   const profile = createProfile("Player", skinId, deps); // writes the manifest, becomes active
-
-  if (!legacy) return; // brand-new player: just the default profile, no worlds yet
-
   const world = createWorld(profile.id, LEGACY_WORLD_NAME, String(legacy.seed), deps);
   try {
     // Copy (not move) so a mid-migration failure can never lose the original.

@@ -55,11 +55,11 @@ describe("legacy save migration", () => {
     expect(storage.getItem(AUDIO_SETTINGS_KEY)).toBe(JSON.stringify({ master: 0.4, music: 0.2, muted: true }));
   });
 
-  test("brand-new player gets only a default profile, no worlds", () => {
+  test("brand-new player (no legacy save) creates nothing — the menu prompts them", () => {
     const storage = fakeStorage();
     migrateLegacySave(seqDeps(storage));
-    const profile = getActiveProfile(storage);
-    expect(profile).toMatchObject({ name: "Player", skinId: "default" });
+    expect(storage.getItem(PROFILES_KEY)).toBeNull();
+    expect(getActiveProfile(storage)).toBeNull();
     expect(readWorlds(storage).worlds).toHaveLength(0);
   });
 
