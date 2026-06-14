@@ -11,6 +11,7 @@ import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 
@@ -44,6 +45,7 @@ export class GameRenderer {
   private readonly heldItem: HeldItemView;
   private readonly crackOverlay: CrackOverlayView;
   private readonly mobVisuals: MobVisuals;
+  private readonly projectileVisuals: ProjectileVisuals;
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -96,6 +98,7 @@ export class GameRenderer {
     this.heldItem = createHeldItemView(this.camera);
     this.crackOverlay = createCrackOverlay(this.scene);
     this.mobVisuals = createMobVisuals(this.scene);
+    this.projectileVisuals = createProjectileVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -130,6 +133,7 @@ export class GameRenderer {
     });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
+    this.projectileVisuals.sync(state.projectiles);
     this.playerVisuals.sync(state, timeMs);
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
@@ -211,6 +215,22 @@ export class GameRenderer {
           size: 0.2,
           upBias: 0.5,
           colorJitter: 0.05
+        });
+        break;
+      case "arrowHit":
+        // Steel sparks on a block/mob; a redder spray when it bites the player.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: event.target === "player" ? 8 : 6,
+          color: event.target === "player" ? [0.82, 0.22, 0.22] : [0.72, 0.74, 0.78],
+          speed: 2.2,
+          spread: 1.0,
+          gravity: 12,
+          drag: 1.8,
+          life: [0.18, 0.4],
+          size: 0.1
         });
         break;
       case "ateFood":
@@ -307,6 +327,7 @@ export class GameRenderer {
     this.sky.dispose();
     this.particles.dispose();
     this.playerVisuals.dispose();
+    this.projectileVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();

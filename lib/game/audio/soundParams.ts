@@ -920,6 +920,46 @@ export const CHEST_OPEN_SOUND: SoundDef = {
   minRetriggerMs: 180
 };
 
+/** Bowstring twang when an arrow is loosed (player or mob). */
+export const BOW_FIRE_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.1,
+    frequency: 320,
+    attack: 0.01,
+    sustain: 0.02,
+    release: 0.08,
+    shape: 1,
+    shapeCurve: 1.4,
+    slide: -6,
+    pitchJump: -40,
+    pitchJumpTime: 0.03,
+    sustainVolume: 0.6,
+    decay: 0.03,
+    filter: -700
+  }),
+  minRetriggerMs: 60
+};
+
+/** Sharp tick when an arrow strikes a block, mob, or the player. */
+export const ARROW_HIT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.2,
+    frequency: 240,
+    sustain: 0.01,
+    release: 0.05,
+    shape: 4,
+    shapeCurve: 1.3,
+    slide: -2,
+    noise: 0.6,
+    sustainVolume: 0.6,
+    decay: 0.02,
+    filter: -500
+  }),
+  minRetriggerMs: 60
+};
+
 /** Low ominous whoosh when a dungeon spawner conjures a hostile. */
 export const MOB_SPAWN_SOUND: SoundDef = {
   params: zz({

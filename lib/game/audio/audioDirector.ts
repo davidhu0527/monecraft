@@ -3,6 +3,8 @@ import { BREAK_HARDNESS } from "@/lib/game/items";
 import type { GameEvent, GameState } from "@/lib/game/engine/state";
 import { materialGroupFor } from "./materials";
 import {
+  ARROW_HIT_SOUND,
+  BOW_FIRE_SOUND,
   BREAK_SOUNDS,
   DEATH_SOUND,
   EAT_SOUND,
@@ -210,6 +212,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "mobSpawned":
           backend.play(MOB_SPAWN_SOUND);
+          break;
+        case "bowFired":
+          backend.play(BOW_FIRE_SOUND);
+          break;
+        case "arrowHit":
+          backend.play(ARROW_HIT_SOUND);
           break;
         case "died":
           backend.play(DEATH_SOUND);
