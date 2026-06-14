@@ -24,7 +24,8 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Any item with `maxDurability` is automatically non-stackable. Spears also set
   `meleeReach` and `throwDamage`; `systems/spears.ts` handles throwing.
 - `ITEM_DEF_BY_ID` is derived from `ITEM_DEFS`; never edit it directly.
-- Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` (e.g. `"furnace"`) makes a recipe a smelting recipe: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book.
+- Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` makes a recipe station-gated: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book. The stations are `"furnace"` (smelting) and `"villager"` (a **trade** — see below).
+- **Villager trades** (`lib/game/trades.ts`) ARE just `station: "villager"` recipes spread into `RECIPES`, so they reuse the whole crafting pipeline and recipe-book UI for free. To open them, an interaction sets `state.craftingStation = "villager"` (right-clicking a villager via `tryTradeAimedVillager` in `interact.ts`); the panel then shows the trades as a **Trading** book and the `craft` command runs them. Emerald is the currency — add sell offers (material → emerald) and buy offers (emerald → goods) to keep the economy two-sided. There's no persisted trade state, so this needs no save-format change.
 - Items with durability don't stack; durability is initialized in `createSlot` and persisted in saves.
 
 ## A new mob drop
@@ -48,6 +49,13 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - A **player ranged weapon** branches the `attack` command: gate on the held item (see `isBow`/`tryFireBow` in `combat.ts`) and fire instead of meleeing. Use a `config.ts` cooldown timer (`GameTimers`, decremented in `GameEngine.step`) for fire rate, and spend ammo + durability via `adjustSlotCount` / `consumeToolDurability`.
 - A **ranged mob** sets `ranged: true` on its `MobTemplate`; `mobAI.ts` then makes it kite (a standoff band) and fire toward the player's chest (with simple lead) instead of meleeing. The boss is the special case there: it approaches, melees up close, fires a spread, and summons minions — see `fireBossSpread` / `tickBossSummon`.
 - The renderer auto-renders any arrow via `projectileVisuals.ts` (a pooled extruded `arrow` sprite); add an impact event (e.g. `arrowHit`) for particles/sound if you want feedback.
+
+## An explosion (creeper, TNT, or anything that blows up)
+
+- The blast itself is one reusable primitive: `explode(state, cx, cy, cz, power, deps)` in `lib/game/engine/systems/explosion.ts`. It destroys blocks in a `power`-radius sphere (distance falloff vs each block's `blastResistance`, skipping the unbreakable set), then damages the player and mobs out to **twice** that radius with the same falloff, applies knockback, and emits one `explosion` event. `deps` is `{ applyDamage, rng, emit }` — a subset of `MobTickDeps`, so a mob can pass its own `deps` straight in.
+- It is **not** a new subsystem: it batches over the existing `blockChanges.set` chokepoint (each removed cell relights locally and records the save delta) and sets `worldMeshDirty` **once**, so a whole crater costs a single remesh — the same one a single mined block pays. It only lowers mob hp (never splices), so it is safe to call mid `tickMobs`; the caller sweeps any mob at 0 hp.
+- To give a new thing a blast, just call `explode(...)`. The **creeper** lights a fuse near the player then detonates (`mobAI.ts`, `MobState.fuseTimer`); **TNT** is a placeable block lit by right-clicking it with a torch (`primeTnt` in `interact.tryUseHeldItem`), counted down and detonated by `tickPrimedTnt` (a `state.primedTnt` map, session-only). Both are transient — nothing here is serialized.
+- Tunables (power, fuses, peak damage, chain delay) live in `config.ts`; the per-block `blastResistance` and unbreakable set live in `explosion.ts`. Cover new blasts in `explosion.test.ts` (headless: assert the crater, spared unbreakables, falloff, one remesh/event).
 
 ## A new player skin preset
 
@@ -84,7 +92,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 ## A worldgen structure (houses, dungeons, …)
 
 - Structures are placed in `lib/world/generation.ts` at the end of the `generateWorld` pipeline. Mirror `placeHouse`/`placeDungeons`: loop a `GEN.<thing>Count`, sample positions, validate, and write blocks with `world.set`. Append your pass **last** so later passes don't overwrite it, and add the count to the frozen `GEN` object.
-- **Any block write changes the deterministic output**, so this breaks the worldgen hash. Re-baseline the `generation.test.ts` digests and bump `SAVE_KEY` per the [testing.md](testing.md) policy; add a structural probe test (count your blocks, assert they generate) that survives the re-baseline.
+- **Any block write changes the deterministic output**, so this breaks the worldgen hash. Re-baseline the `generation.test.ts` digests and bump `WORLDGEN_VERSION` per the [testing.md](testing.md) policy (each world then discards its stale block-diffs and reboots from its seed); add a structural probe test (count your blocks, assert they generate) that survives the re-baseline.
 - If the structure needs its positions known at runtime (dungeons re-derive chest/spawner indices on load), expose a **derive pass** like `collectDungeonSites`: factor placement into a shared routine that either writes blocks or records indices, drawing from a **dedicated PRNG seeded only from `world.seed`** (not the shared gen stream) with a fixed number of draws per structure, and validate against **seed-pure** terrain (`terrainTopY`, `getBiome`) — never `highestSolidY`, which a cave or player edit can shift out from under the derive pass.
 
 ## A loot table / lazy block-entity fill

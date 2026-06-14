@@ -57,7 +57,11 @@ export const enum BlockId {
   Torch = 46,
   // A worldgen-only hazard: a solid, unmineable block that emits max block light
   // and burns the player on contact (see lighting.ts, playerStats.ts).
-  Lava = 47
+  Lava = 47,
+  // A shallow, common ore: mineable with a wood pickaxe, drops coal (furnace fuel).
+  CoalOre = 48,
+  // A placeable explosive: right-click with a torch to ignite a fuse, then it blows.
+  Tnt = 49
 }
 
 export enum BiomeId {
@@ -80,6 +84,7 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Sand]: 0xd8ca84,
   [BlockId.Brick]: 0xb65448,
   [BlockId.Glass]: 0xaed4dc,
+  [BlockId.CoalOre]: 0x4a4a52,
   [BlockId.SliverOre]: 0x9fa3aa,
   [BlockId.RubyOre]: 0xa26464,
   [BlockId.GoldOre]: 0xd9b33b,
@@ -92,7 +97,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Chest]: 0x9c6a3c,
   [BlockId.MossyCobblestone]: 0x6a7a55,
   [BlockId.DoorNorthLower]: 0xa8753f,
-  [BlockId.Torch]: 0xffab40
+  [BlockId.Torch]: 0xffab40,
+  [BlockId.Tnt]: 0xc0392b
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -111,6 +117,8 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.Sand]: [0.86, 0.8, 0.5],
   [BlockId.Brick]: [0.68, 0.28, 0.2],
   [BlockId.Glass]: [0.73, 0.9, 0.95],
+  // Ores share the stone-gray base; their sparkle is painted in the atlas (atlas.ts).
+  [BlockId.CoalOre]: [0.54, 0.56, 0.58],
   [BlockId.SliverOre]: [0.54, 0.56, 0.58],
   [BlockId.RubyOre]: [0.54, 0.56, 0.58],
   [BlockId.GoldOre]: [0.54, 0.56, 0.58],
@@ -148,5 +156,6 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.DoorWestOpenLower]: [0.62, 0.4, 0.2],
   [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2],
   [BlockId.Torch]: [0.9, 0.6, 0.25],
-  [BlockId.Lava]: [0.85, 0.3, 0.08]
+  [BlockId.Lava]: [0.85, 0.3, 0.08],
+  [BlockId.Tnt]: [0.8, 0.22, 0.16]
 };

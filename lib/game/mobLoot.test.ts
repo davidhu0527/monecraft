@@ -40,7 +40,13 @@ describe("mob drop tables", () => {
     expect(drops.some((d) => d.itemId === "raw_chicken")).toBe(true);
   });
 
-  test("every kind has at least one drop entry", () => {
-    for (const kind of ALL_KINDS) expect(MOB_DROPS[kind].length).toBeGreaterThan(0);
+  test("every combat mob has at least one drop entry (villagers are NPCs and drop nothing)", () => {
+    for (const kind of ALL_KINDS) {
+      if (kind === "villager") {
+        expect(MOB_DROPS[kind]).toHaveLength(0); // intentional: don't reward killing a trader
+        continue;
+      }
+      expect(MOB_DROPS[kind].length).toBeGreaterThan(0);
+    }
   });
 });

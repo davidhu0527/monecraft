@@ -70,17 +70,37 @@ function calmDaytime(engine: GameEngine): void {
   engine.state.dayClock = 60;
 }
 
+describe("world types", () => {
+  test("an islands world spawns the player on dry land above the sea", () => {
+    const engine = new GameEngine({ seed: 1337, worldType: "islands", rng: mulberry32(42), worldSize: { x: 96, y: 150, z: 96 } });
+    const { position, world } = { position: engine.state.player.position, world: engine.state.world };
+    const x = Math.floor(position.x);
+    const y = Math.floor(position.y);
+    const z = Math.floor(position.z);
+    expect(world.isSolid(x, y - 1, z)).toBe(true); // solid floor underfoot
+    expect(world.get(x, y, z)).not.toBe(BlockId.Water); // body not submerged
+    expect(world.get(x, y + 1, z)).not.toBe(BlockId.Water); // head not submerged
+  });
+
+  test("the world type round-trips through serialize/restore", () => {
+    const engine = new GameEngine({ seed: 1337, worldType: "amplified", rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(engine.serialize().worldType).toBe("amplified");
+    const restored = new GameEngine({ save: engine.serialize(), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(restored.serialize().worldType).toBe("amplified");
+  });
+});
+
 describe("boot", () => {
   test("fresh engine spawns the player on safe ground with starter gear and mobs", () => {
     const engine = makeEngine();
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 8 + 6 + 6);
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 3 + 8 + 6 + 6 + 4); // sheep/chicken/horse/cow/pig/villager + zombie/skeleton/spider/creeper
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(14);
-    expect(engine.getSnapshot().hostileCount).toBe(20);
+    expect(engine.getSnapshot().passiveCount).toBe(25);
+    expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
   test("the player settles onto the ground under gravity and stays put", () => {
@@ -1451,6 +1471,7 @@ describe("beds and sleep", () => {
   test("a destroyed bed falls back to a random respawn", () => {
     const engine = makeEngine();
     const { state } = engine;
+    state.mobs = []; // this checks respawn *location*, not surviving a random hostile nest
     state.spawnPoint = { x: 5, y: 40, z: 5 }; // block here is NOT a bed (never placed)
     const bedSpotY = 40 + 1.05;
     state.hearts = 1;
@@ -1602,7 +1623,8 @@ describe("furnace and cooking", () => {
   test("a furnace recipe only crafts with the furnace open, and emits smelted", () => {
     const engine = makeEngine();
     const { state } = engine;
-    giveItem(engine, "raw_chicken", 1); // planks are in the starter loadout
+    giveItem(engine, "raw_chicken", 1);
+    giveItem(engine, "coal", 1); // coal is the smelting fuel
 
     engine.dispatch({ type: "craft", recipeId: "cook_chicken" }); // no station open
     expect(countsById(state.inventory).get("cooked_chicken")).toBeUndefined();
@@ -1790,5 +1812,95 @@ describe("endgame boss", () => {
     run(engine, 2);
     expect(engine.state.daylight).toBeGreaterThan(0.72);
     expect(boss.hp).toBe(hpBefore); // immune to the daylight burn
+  });
+});
+
+describe("TNT", () => {
+  test("igniting placed TNT with a torch blows it up after its fuse", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+
+    // Aim at a TNT block one cell ahead at eye height.
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(x, y, z, BlockId.Tnt);
+
+    // Hold a torch and right-click the TNT to light it (the torch is not consumed).
+    state.inventory = [...state.inventory];
+    state.inventory[0] = createSlot("torch", 1);
+    state.selectedSlot = 0;
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(engine.consumeEvents().some((e) => e.type === "tntPrimed")).toBe(true);
+    expect(state.primedTnt.size).toBe(1);
+    expect(countsById(state.inventory).get("torch")).toBe(1); // torch survives
+
+    // Run past the fuse; the TNT detonates, clearing itself and firing an explosion.
+    run(engine, 3);
+    expect(state.world.get(x, y, z)).toBe(BlockId.Air);
+    expect(state.primedTnt.size).toBe(0);
+  });
+});
+
+describe("villager trading", () => {
+  test("right-clicking a villager opens its trades, which only craft while open", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+
+    // A villager standing in the crosshair, two blocks ahead at eye height.
+    const p = state.player.position;
+    state.mobs.push({
+      id: state.nextMobId++,
+      kind: "villager",
+      hostile: false,
+      hp: 20,
+      position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    });
+
+    // A villager trade is refused while no villager is open.
+    const slot = state.inventory.findIndex((s) => !s.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("wheat", 6);
+    engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
+    expect(countsById(state.inventory).get("emerald")).toBeUndefined();
+
+    // Right-click the villager → opens the trade station.
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((e) => e.type === "openedStation" && e.station === "villager")).toBe(true);
+    expect(state.craftingStation).toBe("villager");
+    expect(state.inventoryOpen).toBe(true);
+
+    // Now the trade goes through: wheat → emerald.
+    engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
+    expect(countsById(state.inventory).get("emerald")).toBe(1);
+    expect(countsById(state.inventory).get("wheat")).toBeUndefined();
   });
 });

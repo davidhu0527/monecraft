@@ -142,8 +142,11 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   });
   expect(storedId).toBe("grass");
 
-  // Persist and reload: the chest block-entity survives in the v4 save.
-  await page.evaluate(() => localStorage.setItem("minecraft_save_v7", JSON.stringify(window.__monecraft!.engine.serialize())));
+  // Persist and reload: the chest block-entity survives in the per-world save.
+  await page.evaluate(() => {
+    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
+    localStorage.setItem(`minecraft_world_save_${session.worldId}`, JSON.stringify(window.__monecraft!.engine.serialize()));
+  });
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
 
@@ -195,8 +198,12 @@ test("picking a skin persists across a reload", async ({ gamePage: page }) => {
   await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
   await page.getByRole("button", { name: "Robot skin" }).click();
 
-  const stored = await page.evaluate(() => localStorage.getItem("minecraft_skin_v1"));
-  expect(JSON.parse(stored!)).toEqual({ skinId: "robot" });
+  // The skin now lives on the active profile, not a global key.
+  const storedSkin = await page.evaluate(() => {
+    const manifest = JSON.parse(localStorage.getItem("minecraft_profiles_v1")!);
+    return manifest.profiles.find((p: { id: string }) => p.id === manifest.activeProfileId).skinId as string;
+  });
+  expect(storedSkin).toBe("robot");
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
@@ -212,7 +219,10 @@ test("saving from the pause menu persists the world across a reload", async ({ g
 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Save Game" }).click();
-  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v7"));
+  const saved = await page.evaluate(() => {
+    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
+    return localStorage.getItem(`minecraft_world_save_${session.worldId}`);
+  });
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
   expect(JSON.parse(saved!).version).toBe(5);

@@ -1,5 +1,6 @@
 import { BiomeId, BlockId } from "./blocks";
 import { VoxelWorld } from "./voxelWorld";
+import type { WorldType } from "./worldTypes";
 
 /**
  * Deterministic terrain generation.
@@ -46,8 +47,66 @@ export const GEN = Object.freeze({
     { id: BlockId.GoldOre, attempts: 36000, minY: 2, maxYOffset: 22, minSize: 3, maxSize: 10 },
     { id: BlockId.SapphireOre, attempts: 28000, minY: 2, maxYOffset: 28, minSize: 2, maxSize: 7 },
     { id: BlockId.DiamondOre, attempts: 18000, minY: 2, maxYOffset: 36, minSize: 2, maxSize: 6 }
-  ])
+  ]),
+  // Coal is placed in its own pass on a dedicated PRNG (see placeCoal) so it never
+  // shifts the shared `rand` stream — existing ores, trees, and structures stay
+  // byte-identical to before coal, exactly as deep-cave lava did. It is the
+  // shallowest, most common ore: large veins reaching near the surface.
+  coalConfig: Object.freeze({ attempts: 160000, minY: 4, maxYOffset: 8, minSize: 4, maxSize: 12 })
 });
+
+/**
+ * The terrain-shaping subset of GEN that a world type can vary: sea level and
+ * per-biome surface height (base + noise amplitude). Everything else (caves,
+ * ores, lava, trees, structures, dungeons) is type-independent and still reads
+ * GEN directly. `terrainConfigFor("default")` returns exactly the GEN values, so
+ * the default world stays byte-identical.
+ */
+export type TerrainConfig = {
+  seaLevel: number;
+  biomes: Record<BiomeId, { baseHeight: number; noiseScale: number }>;
+};
+
+const BIOME_IDS = [BiomeId.Plains, BiomeId.Desert, BiomeId.Ocean, BiomeId.Forest, BiomeId.Mountains] as const;
+
+/** Builds a biome height table from GEN, applying `transform` to each biome's base/scale. */
+function biomeHeights(
+  transform: (b: { baseHeight: number; noiseScale: number }, id: BiomeId) => { baseHeight: number; noiseScale: number }
+): Record<BiomeId, { baseHeight: number; noiseScale: number }> {
+  const out = {} as Record<BiomeId, { baseHeight: number; noiseScale: number }>;
+  for (const id of BIOME_IDS) {
+    const g = GEN.biomes[id];
+    out[id] = transform({ baseHeight: g.baseHeight, noiseScale: g.noiseScale }, id);
+  }
+  return out;
+}
+
+// A raised sea with land biomes lifted so they break the surface as gently
+// sloped islands (gentle enough that findSpawnOnLand still finds a dry spawn),
+// while oceans stay as deep channels between them.
+const ISLANDS_BIOMES: Record<BiomeId, { baseHeight: number; noiseScale: number }> = {
+  [BiomeId.Plains]: { baseHeight: 54, noiseScale: 4 },
+  [BiomeId.Desert]: { baseHeight: 52, noiseScale: 3 },
+  [BiomeId.Ocean]: { baseHeight: 34, noiseScale: 3 },
+  [BiomeId.Forest]: { baseHeight: 56, noiseScale: 5 },
+  [BiomeId.Mountains]: { baseHeight: 64, noiseScale: 16 }
+};
+
+/** The terrain config for a world type. "default" returns the GEN values verbatim. */
+export function terrainConfigFor(worldType: WorldType): TerrainConfig {
+  switch (worldType) {
+    case "flat":
+      // Flat dry ground just above sea level (no water); biome-colored top.
+      return { seaLevel: GEN.seaLevel, biomes: biomeHeights(() => ({ baseHeight: 48, noiseScale: 0 })) };
+    case "amplified":
+      // Exaggerated relief; mountains clamp at the height ceiling as plateaus.
+      return { seaLevel: GEN.seaLevel, biomes: biomeHeights((b) => ({ baseHeight: b.baseHeight, noiseScale: b.noiseScale * 2 })) };
+    case "islands":
+      return { seaLevel: 54, biomes: ISLANDS_BIOMES };
+    default:
+      return { seaLevel: GEN.seaLevel, biomes: biomeHeights((b) => b) };
+  }
+}
 
 function hash2D(x: number, z: number): number {
   const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
@@ -64,7 +123,11 @@ function smoothNoise2D(x: number, z: number, seed: number): number {
   return val;
 }
 
-export function generateWorld(world: VoxelWorld): void {
+export function generateWorld(world: VoxelWorld, worldType: WorldType = "default"): void {
+  // Fork on the type up front, before any block write: "default" yields the GEN
+  // values so its output is byte-identical to before this feature.
+  const cfg = terrainConfigFor(worldType);
+
   const rand = (() => {
     let t = (world.seed >>> 0) + 0x6d2b79f5;
     return () => {
@@ -75,11 +138,14 @@ export function generateWorld(world: VoxelWorld): void {
     };
   })();
 
-  generateTerrain(world);
+  generateTerrain(world, cfg);
   carveCaves(world, rand);
-  placeWater(world);
-  placeBeaches(world);
+  placeWater(world, cfg);
+  placeBeaches(world, cfg);
   placeOres(world, rand);
+  // Coal runs on its own PRNG (placeCoal), so it adds ore underground without
+  // shifting the shared `rand` — trees/structures/dungeons stay byte-identical.
+  placeCoal(world);
   // After placeOres so it can't shift ore RNG (placeOres gates rand on air
   // adjacency, which lava would change), and before placeDungeons so dungeon
   // rooms — whose floors can sit at or below lavaLevel — overwrite any lava
@@ -88,10 +154,10 @@ export function generateWorld(world: VoxelWorld): void {
   placeTrees(world, rand);
   placeCacti(world);
   placeStructures(world, rand);
-  placeDungeons(world);
+  placeDungeons(world, cfg);
 }
 
-function generateTerrain(world: VoxelWorld): void {
+function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
   const maxX = world.sizeX - 1;
   const maxZ = world.sizeZ - 1;
 
@@ -107,7 +173,7 @@ function generateTerrain(world: VoxelWorld): void {
     for (let z = 0; z < world.sizeZ; z += 1) {
       const biome = world.getBiome(x, z);
       const noise = smoothNoise2D(x, z, world.seed);
-      const { baseHeight, noiseScale } = GEN.biomes[biome];
+      const { baseHeight, noiseScale } = cfg.biomes[biome];
 
       const topY = Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
       let topBlock = BlockId.Grass;
@@ -208,8 +274,8 @@ function placeLava(world: VoxelWorld): void {
   }
 }
 
-function placeWater(world: VoxelWorld): void {
-  const { seaLevel } = GEN;
+function placeWater(world: VoxelWorld, cfg: TerrainConfig): void {
+  const { seaLevel } = cfg;
   for (let x = 1; x < world.sizeX - 1; x += 1) {
     for (let z = 1; z < world.sizeZ - 1; z += 1) {
       const topY = world.highestSolidY(x, z);
@@ -263,22 +329,63 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
   }
 }
 
+/** A coal-only PRNG seeded from the world seed, decoupled from the main gen stream. */
+function coalRand(seed: number): () => number {
+  let t = (seed ^ 0x85ebca6b) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Coal veins, placed on their own PRNG so the pass never consumes from the shared
+ * `rand` stream — every other ore, tree, and structure stays byte-identical to a
+ * coal-free world. Like the other ores, coal only replaces stone/cobblestone.
+ */
+function placeCoal(world: VoxelWorld): void {
+  const rand = coalRand(world.seed);
+  const cfg = GEN.coalConfig;
+  const placeVein = (x: number, y: number, z: number) => {
+    const size = cfg.minSize + Math.floor(rand() * Math.max(1, cfg.maxSize - cfg.minSize + 1));
+    for (let i = 0; i < size; i += 1) {
+      const vx = x + Math.floor((rand() - 0.5) * 4);
+      const vy = y + Math.floor((rand() - 0.5) * 3);
+      const vz = z + Math.floor((rand() - 0.5) * 4);
+      if (!world.inBounds(vx, vy, vz) || vy <= 1) continue;
+      const b = world.get(vx, vy, vz);
+      if (b === BlockId.Stone || b === BlockId.Cobblestone) world.set(vx, vy, vz, BlockId.CoalOre);
+    }
+  };
+  for (let i = 0; i < cfg.attempts; i += 1) {
+    const x = 8 + Math.floor(rand() * (world.sizeX - 16));
+    const y = cfg.minY + Math.floor(rand() * Math.max(2, world.sizeY - cfg.maxYOffset));
+    const z = 8 + Math.floor(rand() * (world.sizeZ - 16));
+    const block = world.get(x, y, z);
+    if (block !== BlockId.Stone && block !== BlockId.Cobblestone) continue;
+    placeVein(x, y, z);
+  }
+}
+
 /**
  * Sand shorelines: grass columns in the sea-level band turn to beach only
  * when water actually sits nearby — inland basins at sea level stay grass.
  * Runs after placeWater so adjacency can test real water blocks.
  */
-function placeBeaches(world: VoxelWorld): void {
+function placeBeaches(world: VoxelWorld, cfg: TerrainConfig): void {
+  const { seaLevel } = cfg;
   for (let x = 1; x < world.sizeX - 1; x += 1) {
     for (let z = 1; z < world.sizeZ - 1; z += 1) {
       const topY = world.highestSolidY(x, z);
-      if (topY > GEN.seaLevel + GEN.beachMaxAboveSea || topY < GEN.seaLevel - GEN.beachDepthBelowSea) continue;
+      if (topY > seaLevel + GEN.beachMaxAboveSea || topY < seaLevel - GEN.beachDepthBelowSea) continue;
       if (world.get(x, topY, z) !== BlockId.Grass) continue;
 
       let nearWater = false;
       for (let dx = -2; dx <= 2 && !nearWater; dx += 1) {
         for (let dz = -2; dz <= 2 && !nearWater; dz += 1) {
-          if (world.get(x + dx, GEN.seaLevel, z + dz) === BlockId.Water) nearWater = true;
+          if (world.get(x + dx, seaLevel, z + dz) === BlockId.Water) nearWater = true;
         }
       }
       if (!nearWater) continue;
@@ -423,10 +530,10 @@ function dungeonRand(seed: number): () => number {
  * blocks, so it is identical at generation and at load — the property that lets
  * collectDungeonSites reproduce the exact dungeon layout.
  */
-function terrainTopY(world: VoxelWorld, x: number, z: number): number {
+function terrainTopY(world: VoxelWorld, x: number, z: number, cfg: TerrainConfig): number {
   const biome = world.getBiome(x, z);
   const noise = smoothNoise2D(x, z, world.seed);
-  const { baseHeight, noiseScale } = GEN.biomes[biome];
+  const { baseHeight, noiseScale } = cfg.biomes[biome];
   return Math.max(5, Math.min(world.sizeY - 5, Math.floor(baseHeight + noise * noiseScale)));
 }
 
@@ -456,7 +563,7 @@ function buildDungeonRoom(world: VoxelWorld, cx: number, cz: number, floorY: num
   sink.spawner(world.index(cx, floorY, cz));
 }
 
-function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): void {
+function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink, cfg: TerrainConfig): void {
   const rand = dungeonRand(world.seed);
   const centerX = world.sizeX / 2;
   const centerZ = world.sizeZ / 2;
@@ -468,7 +575,7 @@ function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): vo
     const floorRoll = rand();
     const secondChest = rand() < 0.6;
 
-    const surface = terrainTopY(world, cx, cz);
+    const surface = terrainTopY(world, cx, cz, cfg);
     const minFloor = 7;
     const maxFloor = surface - 7; // keep the ceiling >=3 below the surface
     if (maxFloor < minFloor) continue;
@@ -480,8 +587,8 @@ function buildDungeons(world: VoxelWorld, write: boolean, sink: DungeonSink): vo
   }
 }
 
-function placeDungeons(world: VoxelWorld): void {
-  buildDungeons(world, true, NOOP_DUNGEON_SINK);
+function placeDungeons(world: VoxelWorld, cfg: TerrainConfig): void {
+  buildDungeons(world, true, NOOP_DUNGEON_SINK, cfg);
 }
 
 export type DungeonSites = { chestIndices: number[]; spawnerIndices: number[] };
@@ -490,14 +597,13 @@ export type DungeonSites = { chestIndices: number[]; spawnerIndices: number[] };
  * Re-derives the voxel indices of every dungeon chest and spawner WITHOUT
  * writing blocks, by replaying buildDungeons' placement math. The engine calls
  * this once after regenerating the world on load to rebuild the session-only
- * dungeon index sets that gate lazy loot fill and spawner activation.
+ * dungeon index sets that gate lazy loot fill and spawner activation. It must be
+ * passed the same worldType the world was generated with — dungeon depths follow
+ * the type's terrain, so the derived indices match what placeDungeons wrote.
  */
-export function collectDungeonSites(world: VoxelWorld): DungeonSites {
+export function collectDungeonSites(world: VoxelWorld, worldType: WorldType = "default"): DungeonSites {
   const chestIndices: number[] = [];
   const spawnerIndices: number[] = [];
-  buildDungeons(world, false, {
-    chest: (idx) => chestIndices.push(idx),
-    spawner: (idx) => spawnerIndices.push(idx)
-  });
+  buildDungeons(world, false, { chest: (idx) => chestIndices.push(idx), spawner: (idx) => spawnerIndices.push(idx) }, terrainConfigFor(worldType));
   return { chestIndices, spawnerIndices };
 }

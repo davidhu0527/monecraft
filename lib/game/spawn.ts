@@ -74,13 +74,16 @@ export function randomLandPointNear(
   centerX: number,
   centerZ: number,
   radius: number,
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  minRadius = 0
 ): THREE.Vector3 {
   for (let i = 0; i < 50; i += 1) {
     const x = centerX + (rng() * 2 - 1) * radius;
     const z = centerZ + (rng() * 2 - 1) * radius;
     const clampedX = Math.max(10, Math.min(world.sizeX - 10, x));
     const clampedZ = Math.max(10, Math.min(world.sizeZ - 10, z));
+    // Keep a minimum standoff so a mob can't spawn on top of the player.
+    if (minRadius > 0 && Math.hypot(clampedX - centerX, clampedZ - centerZ) < minRadius) continue;
     const y = surfaceYAt(clampedX, clampedZ);
     if (y > 2 && isDrySurface(world, clampedX, y, clampedZ)) return new THREE.Vector3(clampedX, y, clampedZ);
   }

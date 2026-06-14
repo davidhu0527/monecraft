@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { VoxelWorld } from "@/lib/world";
+import { CREEPER_FUSE_SECONDS } from "@/lib/game/config";
 import { mobHalfHeight } from "@/lib/game/mobs";
+import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
 import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
 import { tickMobs, type MobTickDeps } from "@/lib/game/engine/systems/mobAI";
 import type { MobKind } from "@/lib/game/types";
@@ -30,8 +32,12 @@ function makeMob(kind: MobKind, x: number, y: number, z: number, attackTimer = 0
 }
 
 function makeState(mobs: MobState[]): GameState {
+  const world = new VoxelWorld(48, 48, 48, 1);
   return {
-    world: new VoxelWorld(48, 48, 48, 1),
+    world,
+    blockChanges: createBlockChangeTracker(world),
+    primedTnt: new Map<number, number>(),
+    worldMeshDirty: false,
     mobs,
     projectiles: [],
     nextProjectileId: 1,
@@ -81,6 +87,20 @@ describe("ranged skeletons", () => {
     expect(skeleton.position.z).toBeLessThan(startZ);
   });
 
+  test("a mob already at 0 hp is swept without acting (no final hit)", () => {
+    const zombie = makeMob("zombie", 24, 30, 21.5); // in melee range
+    zombie.hp = 0; // killed earlier this tick (e.g. by a blast), awaiting the sweep
+    const state = makeState([zombie]);
+    const removed: number[] = [];
+    const { deps, getDamage } = makeDeps();
+    deps.removeMobAt = (i: number) => removed.push(i);
+
+    tickMobs(state, 0.05, deps);
+
+    expect(getDamage()).toBe(0); // a corpse deals no damage
+    expect(removed).toContain(0); // but is still removed
+  });
+
   test("a zombie still melees and shoots nothing", () => {
     const zombie = makeMob("zombie", 24, 30, 21.5); // ~2.5 blocks, within melee reach
     const state = makeState([zombie]);
@@ -91,5 +111,94 @@ describe("ranged skeletons", () => {
     expect(state.projectiles).toHaveLength(0);
     expect(getDamage()).toBe(3); // melee damage applied
     expect(events.some((e) => e.type === "mobAttacked" && e.kind === "zombie")).toBe(true);
+  });
+});
+
+describe("creepers", () => {
+  function makeCreeper(z: number): MobState {
+    const c = makeMob("creeper", 24, 30, z);
+    c.hp = 10;
+    c.attackDamage = 0;
+    c.detectRange = 12;
+    return c;
+  }
+
+  test("lights its fuse (hissing, no melee) when the player gets close", () => {
+    const creeper = makeCreeper(22.5); // ~1.5 blocks, inside fuse range
+    const state = makeState([creeper]);
+    const { deps, events, getDamage } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(creeper.fuseTimer).toBeGreaterThan(0);
+    expect(getDamage()).toBe(0); // it never bites
+    expect(events.some((e) => e.type === "mobAttacked" && e.kind === "creeper")).toBe(true);
+  });
+
+  test("detonates when the fuse runs out — exploding, dealing damage, and dying", () => {
+    const creeper = makeCreeper(22.5);
+    const state = makeState([creeper]);
+    const { deps, events, getDamage } = makeDeps();
+
+    tickMobs(state, 0.05, deps); // light the fuse
+    for (let t = 0; t < CREEPER_FUSE_SECONDS + 0.2; t += 0.1) tickMobs(state, 0.1, deps);
+
+    expect(events.some((e) => e.type === "explosion")).toBe(true);
+    expect(getDamage()).toBeGreaterThan(0); // the blast hurt the player
+    expect(creeper.hp).toBeLessThanOrEqual(0); // it dies in its own blast (sweep drops gunpowder)
+  });
+
+  test("aborts the fuse when the player backs out of range", () => {
+    const creeper = makeCreeper(22.5);
+    const state = makeState([creeper]);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+    expect(creeper.fuseTimer).toBeGreaterThan(0);
+
+    state.player.position.set(24, 30, 8); // walk far away (> abort range)
+    tickMobs(state, 0.05, deps);
+    expect(creeper.fuseTimer).toBe(0);
+  });
+
+  test("removes a creeper killed before its fuse finishes (no explosion)", () => {
+    const creeper = makeCreeper(22.5);
+    const state = makeState([creeper]);
+    const removed: number[] = [];
+    const { deps, events } = makeDeps();
+    deps.removeMobAt = (i: number) => removed.push(i);
+
+    tickMobs(state, 0.05, deps); // primes the fuse
+    creeper.hp = 0; // killed by a sword/arrow before it detonates
+    tickMobs(state, 0.05, deps);
+
+    expect(removed).toContain(0); // swept (drops gunpowder via the engine's removeMobAt)
+    expect(events.some((e) => e.type === "explosion")).toBe(false);
+  });
+});
+
+describe("villagers", () => {
+  function makePassive(kind: MobKind, z: number): MobState {
+    const m = makeMob(kind, 24, 30, z);
+    m.hostile = false;
+    m.detectRange = 0;
+    m.speed = 0.6;
+    m.moveSpeed = 0.6;
+    return m;
+  }
+
+  test("a villager does not take the flee path the player triggers in a sheep", () => {
+    // Both start two blocks from the player (well inside the 4.2 flee range). A
+    // sheep enters the flee branch (which boosts moveSpeed ×1.15 and turns away);
+    // a villager skips it and keeps its base speed, so you can walk up to trade.
+    const sheep = makePassive("sheep", 22);
+    const villager = makePassive("villager", 22);
+    const state = makeState([sheep, villager]);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(sheep.moveSpeed).toBeCloseTo(sheep.speed * 1.15, 5); // fled
+    expect(villager.moveSpeed).toBeCloseTo(villager.speed, 5); // did not flee
   });
 });

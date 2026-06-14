@@ -10,6 +10,25 @@ the [README](../README.md#controls).
 > Everything you see and hear is generated from code at runtime — there are no
 > image or audio files anywhere in the game.
 
+## Worlds & profiles
+
+The game opens to a menu rather than dropping you straight into a world:
+
+1. **Pick a profile.** A profile is a player — a name and an appearance (skin). On a
+   shared browser everyone can have their own. Create one with **New Profile**, choose
+   a skin, and you're in; rename or delete profiles from the same screen.
+2. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
+   you name it, choose a **world type** (Default, Superflat, Amplified, or Islands —
+   see [the reference](reference.md#world-types)), and optionally enter a **seed** —
+   type a number or a word to get the same world every time, or leave it blank for a
+   random one. Worlds you've played show most-recent first; rename or delete them here too.
+3. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
+   Quit to Worlds** takes you back to the list, and reloading the page resumes the
+   world you were in.
+
+Everything is saved in your browser (localStorage). Deleting a world removes its save;
+deleting a profile removes all of its worlds.
+
 ## Getting started: your first day
 
 You spawn at dawn on solid ground with a small starter kit: stacks of grass, dirt,
@@ -73,9 +92,11 @@ hearts every second**, ignoring armor. Leaving the water resets the timer.
 
 Underground is now genuinely **dark**: sunlight reaches down open shafts and
 spills a little way into cave mouths, but the deep tunnels are pitch black. Craft
-**torches** (1 wood → 4 torches) and place them as you explore — each casts a warm
-pool of light that won't fade at night. Without a light source you're mining blind,
-and the dark is where monsters lurk.
+**torches** (1 coal + 1 wood → 4 torches) and place them as you explore — each casts
+a warm pool of light that won't fade at night. Without a light source you're mining
+blind, and the dark is where monsters lurk. **Coal** is the shallow, common ore you
+mine for torch and furnace fuel — if you're out, smelt a log into **charcoal**, which
+works the same.
 
 ### Drowning and lava
 
@@ -166,6 +187,7 @@ harvest at all — mining with too weak a tool yields nothing:
 | To mine…                  | You need at least… |
 | ------------------------- | ------------------ |
 | Stone, cobblestone, brick | Wood pickaxe       |
+| Coal ore                  | Wood pickaxe       |
 | Sliver ore                | Stone pickaxe      |
 | Ruby & gold ore           | Sliver pickaxe     |
 | Sapphire & diamond ore    | Ruby pickaxe       |
@@ -173,6 +195,13 @@ harvest at all — mining with too weak a tool yields nothing:
 Higher-tier pickaxes (sapphire, gold, diamond) also mine **faster**. Dirt, sand,
 wood, leaves, and crops need no special tool. Ores hide underground and in caves;
 the rarer the ore, the deeper it tends to sit.
+
+**Blasting with TNT.** Collect **gunpowder** from creepers and craft **TNT** (4
+gunpowder + 1 sand). Place it like any block, then **right-click it with a torch**
+to light the fuse — stand well back, because after a couple of seconds it blows a
+crater and hurts anything close. TNT next to more TNT chains. It won't touch
+bedrock, and it mostly destroys rather than drops blocks, so it's for digging and
+demolition, not free resources.
 
 ## Dungeons and loot
 
@@ -196,12 +225,17 @@ ingredients you have and craft it — the result drops into your inventory (craf
 is refused if there's no room rather than destroying the overflow). Stacks hold up
 to **99** items; tools, weapons, and armor take one slot each and show durability.
 
+The recipe book is **grouped into labeled sections** — Tools, Weapons, Armor,
+Building, Food, Materials, then the station-gated Smelting and Trades — and within
+each section the recipes you can make **right now** float to the top, so what's
+craftable is easy to spot among the dimmed entries.
+
 The basic recipe grid is always available. **Smelting** recipes (cooking raw meat)
 require a **furnace**: craft one from 8 cobble, place it, and right-click it to open
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **45 recipes** in the [reference](reference.md#recipes).
+See the full list of **54 recipes** in the [reference](reference.md#recipes).
 
 ## Doors
 
@@ -226,24 +260,44 @@ everything, the break is refused and the chest stays put — empty it a bit firs
 
 ## Mobs and breeding
 
-Six creatures roam the world:
+Ten creatures roam the world:
 
-- **Passive** — **sheep**, **chicken**, **horse**. They wander, flee when you get
-  close, and never attack. They drop materials and raw meat when killed.
-- **Hostile** — **zombie**, **skeleton**, **spider**. They hunt you at night,
-  chase within their detection range, and attack when they have line of sight.
-  **Skeletons are archers** — they keep their distance and fire arrows, so close
-  in or take cover. Spiders are only hostile in the dark.
+- **Passive** — **sheep**, **chicken**, **horse**, **cow**, **pig**. They wander,
+  flee when you get close, and never attack. They drop materials and raw meat when
+  killed — cows give leather and beef, pigs give porkchops.
+- **Villager** — passive but **doesn't flee**, so you can walk right up and
+  **right-click to trade** (see [Trading](#trading)). It drops nothing if killed —
+  no reason to harm your shopkeeper.
+- **Hostile** — **zombie**, **skeleton**, **spider**, **creeper**. They hunt you at
+  night, chase within their detection range, and attack when they have line of sight.
+  **Skeletons are archers** — they keep their distance and fire arrows, so close in
+  or take cover. **Creepers** sneak up and **explode** — they light a short fuse when
+  they get close (you'll hear the hiss and see them swell), then blow a crater and
+  hurt you badly. Back away to defuse one, or kill it first for its gunpowder.
+  Spiders are only hostile in the dark. Nothing spawns within 16 blocks of you.
 
 Full stats and drop tables are in the [bestiary](reference.md#mobs). The summoned
 **boss** is covered under [Endgame](#endgame-the-boss).
 
-**Breeding** makes loot renewable. Right-click an adult **sheep or horse with
-wheat**, or a **chicken with seeds**, to put it "in love" for **30 seconds**. Two
+**Breeding** makes loot renewable. Right-click an adult **sheep, horse, or cow with
+wheat**, or a **chicken or pig with seeds**, to put it "in love" for **30 seconds**. Two
 in-love adults of the same kind standing within **3 blocks** produce a **baby**,
 which follows its parents, drops nothing while young, and grows to full size after
 **~90 seconds**. The passive population is capped (and feeding costs crops), so it
 stays under control.
+
+## Trading
+
+**Villagers** wander the world like the animals, but they won't run from you —
+walk up and **right-click one** to open its **trades**. The inventory's recipe book
+switches to a **Trading** panel showing what the villager offers.
+
+The currency is the **emerald**. Trading is two-sided: **sell** what you gather
+(wheat, coal, leather, gold ore) for emeralds, then **spend** those emeralds on
+goods you'd rather buy than make — bread, a stack of torches, arrows, a stone
+pickaxe, even sliver or ruby ore to skip some mining. There's no limit beyond what
+you can carry and gather, so a good farm or mine turns into steady emeralds, and
+emeralds into whatever you're short on.
 
 ## Endgame: the boss
 

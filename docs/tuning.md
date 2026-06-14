@@ -71,7 +71,8 @@ the 0–15 levels), and the cave-darkness floor + torch tint are shader constant
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,
 `HOSTILE_BURN_ABOVE_DAYLIGHT`, `HOSTILE_SPAWN_INTERVAL_SECONDS`, `HOSTILE_CAP`,
-`SPAWNER_INTERVAL_SECONDS`, `SPAWNER_ACTIVATION_RADIUS`, `SPAWNER_LOCAL_CAP`.
+`HOSTILE_SPAWN_MIN_RADIUS`, `SPAWNER_INTERVAL_SECONDS`, `SPAWNER_ACTIVATION_RADIUS`,
+`SPAWNER_LOCAL_CAP`.
 
 Read by `systems/dayNight.ts`, `systems/spawnDirector.ts`, and `systems/mobAI.ts`.
 `DAY_CYCLE_SECONDS` (240) sets the whole rhythm — a shorter day means more frequent
@@ -80,8 +81,10 @@ invariant** (daylight ranges 0.04–1.0; see architecture.md): hostiles spawn be
 0.28, spiders turn hostile below 0.42, and exposed hostiles burn above 0.72. Keep
 them ordered `spawn ≤ spider_aggro` and `burn` well above both, or mobs will spawn
 into instant sunlight. `HOSTILE_CAP` × `HOSTILE_SPAWN_INTERVAL_SECONDS` bounds how
-crowded a night gets. Tests aim daylight explicitly (a `calmDaytime` helper) to
-avoid first-night aggro.
+crowded a night gets. `HOSTILE_SPAWN_MIN_RADIUS` (16) is the standoff every hostile
+spawn (initial + night trickle) keeps from the player, so nothing — least of all a
+creeper — can appear point-blank. Tests aim daylight explicitly (a `calmDaytime`
+helper) to avoid first-night aggro.
 
 **Dungeon spawners** are a separate, time-independent danger source: while the
 player is within `SPAWNER_ACTIVATION_RADIUS` (16) of an intact spawner, it drips
@@ -142,6 +145,24 @@ harder to corner. `BOSS_HP` (400) is the headline difficulty dial for the fight;
 `BOSS_MINION_CAP` and the shared `HOSTILE_CAP` together bound how crowded it gets (the
 boss summon itself bypasses the spawn-director cap so the fight always starts).
 
+## Explosions, creepers & TNT
+
+Explosion: `EXPLOSION_DAMAGE_PER_POWER`.
+Creeper: `CREEPER_EXPLOSION_POWER`, `CREEPER_FUSE_SECONDS`, `CREEPER_FUSE_RANGE`,
+`CREEPER_ABORT_RANGE`.
+TNT: `TNT_EXPLOSION_POWER`, `TNT_FUSE_SECONDS`, `TNT_CHAIN_FUSE_MIN_SECONDS`,
+`TNT_CHAIN_FUSE_MAX_SECONDS`.
+
+Read by `systems/explosion.ts` and `systems/mobAI.ts`. A blast's **power** is its
+block-destruction radius; it also damages out to **twice** that radius. Peak
+(point-blank) damage is `power × EXPLOSION_DAMAGE_PER_POWER` (6), tapering linearly
+to the edge — so raising a power both widens the crater and hits harder. Per-block
+`blastResistance` (which blocks survive a given strength) and the unbreakable set
+(bedrock/spawner/lava) live in `explosion.ts`, not config. `CREEPER_FUSE_RANGE`
+arms the fuse; `CREEPER_ABORT_RANGE` (larger) defuses it when you flee. `TNT_*`
+fuses gate the lit delay and the randomized chain delay that ripples one blast into
+the next. Damage uses the armor-aware path, so armor still mitigates a blast.
+
 ## Farming & breeding pace
 
 Farming: `RANDOM_TICK_INTERVAL_SECONDS`, `RANDOM_TICK_SAMPLES`, `RANDOM_TICK_RADIUS`,
@@ -179,8 +200,8 @@ those overflow slots on load (`readContainers` rebuilds a `CHEST_SLOTS`-length a
 
 ## Persistence & rendering
 
-`AUTOSAVE_INTERVAL_MS`, `SAVE_KEY`, `STUCK_RESET_SECONDS`, `RENDER_RADIUS`,
-`RENDER_GRID`, `THIRD_PERSON_DISTANCE`, `THIRD_PERSON_MARGIN`.
+`AUTOSAVE_INTERVAL_MS`, `WORLDGEN_VERSION`, `SAVE_KEY` (legacy), `STUCK_RESET_SECONDS`,
+`RENDER_RADIUS`, `RENDER_GRID`, `THIRD_PERSON_DISTANCE`, `THIRD_PERSON_MARGIN`.
 
 `RENDER_RADIUS` is the biggest **performance** lever: the renderer meshes one region
 of this radius around the player, so larger values draw more terrain at higher cost;
@@ -192,12 +213,16 @@ tolerated before the auto-unstuck teleport fires.
 
 Change these only with care:
 
-- **`SAVE_KEY`** (`"minecraft_save_v6"`) is the localStorage key name. Note it's
-  versioned independently of the save **schema** (currently v5, per
-  [save-format.md](save-format.md)) — renaming `SAVE_KEY` orphans every existing
-  player's save. Don't bump it to express a schema change; add a migration instead.
-  It was bumped v5 → v6 for the 0.7.0 dungeon worldgen — a deliberate terrain
-  change that invalidates old block-diffs, which **is** a legitimate reason to bump.
+- **`WORLDGEN_VERSION`** (`8`) is the worldgen baseline each world records at
+  creation. When a deliberate terrain change invalidates old block-diffs, bump this:
+  every world whose recorded version differs discards its stale diffs and reboots from
+  its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
+  This replaced the old whole-store `SAVE_KEY` bump, which reset _every_ world at once.
+  It's versioned independently of the save **schema** (currently v5); don't bump it to
+  express a schema change — add a migration instead.
+- **`SAVE_KEY`** (`"minecraft_save_v7"`) is now **legacy**: each world has its own
+  `minecraft_world_save_<id>` key, and `SAVE_KEY` is read only once by the one-time
+  migration. Leave it alone.
 - **`INVENTORY_SLOTS` / `HOTBAR_SLOTS` / `MAX_STACK_SIZE`** affect the saved
   inventory layout. `save.ts` already migrates the v1 (40-slot) → v2 (36-slot)
   change; altering these again needs a matching migration or old saves break.
@@ -207,6 +232,17 @@ Change these only with care:
   frozen `GEN` object in `generation.ts` and are a byte-identical save contract
   pinned by hash tests — changing them requires the re-baseline policy in
   [testing.md](testing.md). This includes **`GEN.dungeonCount`** (28, how many
-  dungeon rooms are attempted) and the dungeon loot tables / tier odds in
+  dungeon rooms are attempted), **`GEN.coalConfig`** (coal vein attempts/depth/size —
+  coal is placed on its own PRNG in `placeCoal`, so retuning it shifts only coal,
+  not the rest of the terrain), and the dungeon loot tables / tier odds in
   `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
   changing the _placement_ count or geometry is).
+- **World types** (Default / Superflat / Amplified / Islands) are terrain-config
+  variations of `GEN` in **`terrainConfigFor`** (`generation.ts`) — they change
+  only sea level and per-biome surface height (base + noise amplitude). `"default"`
+  returns the GEN values verbatim, so it stays byte-identical; each non-default
+  type has its own pinned hash. Tuning a type's numbers (e.g. the Islands sea level,
+  or Amplified's amplitude multiplier) is a deliberate re-baseline for that type
+  and bumps `WORLDGEN_VERSION` (which discards stale worlds of every type). Islands
+  values are constrained by spawn: keep land biomes gently sloped so
+  `findSpawnOnLand` still lands the player on dry ground.

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId } from "@/lib/world";
+import { BlockId, type WorldType } from "@/lib/world";
 
 export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
@@ -45,11 +45,14 @@ export type Recipe = {
   label: string;
   cost: Array<{ slotId: string; count: number }>;
   result: { slotId: string; count: number };
-  /** Crafting station required; omitted means the basic crafting grid. */
-  station?: "furnace";
+  /**
+   * Station required for this recipe; omitted means the basic crafting grid.
+   * "furnace" smelts; "villager" is a trade offer, unlocked while trading with a villager.
+   */
+  station?: "furnace" | "villager";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider" | "boss";
+export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
 
 export type MobModel = {
   group: THREE.Group;
@@ -115,4 +118,6 @@ export type SaveDataV4 = Omit<SaveDataV3, "version"> & {
 export type SaveData = Omit<SaveDataV4, "version"> & {
   version: 5;
   lootedChests?: number[];
+  /** Generation preset; absent ⇒ "default" (pre-feature and legacy saves). Like `seed`, fixed for the world's life. */
+  worldType?: WorldType;
 };

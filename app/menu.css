@@ -1,0 +1,258 @@
+/* Profile- and world-selection menus (the GameShell screens before play).
+   Reuses the .mc-button bevel and the .pause-skins swatch grid from hud.css. */
+
+.menu-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: linear-gradient(180deg, #2a2d3a 0%, #15171f 100%);
+  animation: mc-fade-in 140ms ease-out;
+}
+
+.menu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(94vw, 420px);
+  max-height: 88vh;
+}
+
+.menu-logo {
+  text-align: center;
+  color: var(--mc-text-light);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.menu-title {
+  text-align: center;
+  color: var(--mc-text-light);
+  font-size: 15px;
+  font-weight: 700;
+  opacity: 0.85;
+  text-shadow: var(--mc-text-shadow);
+  margin-bottom: 6px;
+}
+
+.menu-empty {
+  text-align: center;
+  color: var(--mc-text-light);
+  font-size: 13px;
+  opacity: 0.85;
+  text-shadow: var(--mc-text-shadow);
+  padding: 18px 8px;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 52vh;
+  padding-right: 2px;
+}
+
+.menu-card {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.menu-card-play {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 12px;
+  font-family: inherit;
+  color: var(--mc-text-light);
+  text-shadow: var(--mc-text-shadow);
+  background: var(--mc-tile-button), var(--mc-button);
+  border-style: solid;
+  border-width: 2px;
+  border-color: #a8a8a8 #2c2c2c #2c2c2c #a8a8a8;
+  outline: 2px solid rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 80ms ease;
+}
+
+.menu-card-play:hover,
+.menu-card-play:focus-visible {
+  background: var(--mc-button-hover);
+  border-color: #c3cbe5 #34394d #34394d #c3cbe5;
+}
+
+.menu-card-play:active {
+  border-color: #2c2c2c #a8a8a8 #a8a8a8 #2c2c2c;
+  transform: translateY(1px);
+}
+
+.menu-card-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.menu-card-sub {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.menu-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-card-actions .mc-button {
+  padding: 4px 8px;
+  font-size: 11px;
+  outline-width: 1px;
+}
+
+.menu-primary {
+  width: 100%;
+}
+
+.menu-bottom-row {
+  display: flex;
+  gap: 8px;
+}
+
+.menu-bottom-row .mc-button {
+  flex: 1;
+}
+
+.menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--mc-text-light);
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.menu-input {
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--mc-text-light);
+  background: var(--mc-tile-well), #1f1f27;
+  border-style: solid;
+  border-width: 2px;
+  border-color: #2c2c2c #a8a8a8 #a8a8a8 #2c2c2c;
+  outline: none;
+}
+
+.menu-input:focus-visible {
+  border-color: #f0be3c #5a4a18 #5a4a18 #f0be3c;
+}
+
+.world-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.world-type-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  font-family: inherit;
+  color: var(--mc-text-light);
+  text-shadow: var(--mc-text-shadow);
+  background: var(--mc-tile-button), var(--mc-button);
+  border-style: solid;
+  border-width: 2px;
+  border-color: #a8a8a8 #2c2c2c #2c2c2c #a8a8a8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.world-type-option:hover,
+.world-type-option:focus-visible {
+  background: var(--mc-button-hover);
+  border-color: #c3cbe5 #34394d #34394d #c3cbe5;
+}
+
+.world-type-option[aria-pressed="true"] {
+  background: var(--mc-button-hover);
+  border-color: #f0be3c;
+  outline: 1px solid rgba(240, 190, 60, 0.6);
+}
+
+.world-type-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.world-type-blurb {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.menu-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.menu-form-actions .mc-button {
+  flex: 1;
+}
+
+.menu-rename {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+}
+
+.menu-rename .menu-input {
+  flex: 1;
+}
+
+.menu-rename .mc-button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.menu-confirm {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  color: var(--mc-text-light);
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.menu-confirm-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.menu-confirm-actions .mc-button {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 12px;
+}

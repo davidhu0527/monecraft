@@ -66,6 +66,7 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
         if ((block === BlockId.Stone || block === BlockId.Cobblestone || block === BlockId.Bedrock) && n > 0.8) c = tone(base, 1.18);
         if ((block === BlockId.Wood || block === BlockId.Planks) && (x + y) % 4 === 0) c = tone(base, 0.82);
+        if (block === BlockId.CoalOre && n > 0.82) c = tone([0.09, 0.09, 0.11], 1);
         if (block === BlockId.SliverOre && n > 0.86) c = tone([0.93, 0.93, 0.95], 1);
         if (block === BlockId.RubyOre && n > 0.88) c = tone([0.86, 0.24, 0.24], 1);
         if (block === BlockId.GoldOre && n > 0.84) c = tone([0.96, 0.8, 0.25], 1);
@@ -99,6 +100,16 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           const crack = n > 0.78;
           const crust = n < 0.2;
           c = crack ? tone([1, 0.78, 0.2], 1) : crust ? tone([0.35, 0.1, 0.04], 1) : tone([0.92, 0.34, 0.08], 0.85 + n * 0.4);
+        }
+        if (block === BlockId.Tnt) {
+          // Classic TNT: a red block of "dynamite" with a white label band around
+          // the sides and a darker cap on the top/bottom (the bundled fuse ends).
+          if (face === "side") {
+            c = y >= 6 && y <= 9 ? tone([0.92, 0.9, 0.86], 0.95 + n * 0.1) : tone([0.78, 0.2, 0.15], 0.88 + n * 0.2);
+          } else {
+            c = tone([0.5, 0.16, 0.12], 0.9 + n * 0.18);
+            if ((x + y) % 5 === 0) c = tone([0.2, 0.18, 0.16], 1); // fuse-end flecks
+          }
         }
         if (block === BlockId.Torch) {
           // A wooden stick on a dark ground with a bright flame near the top —

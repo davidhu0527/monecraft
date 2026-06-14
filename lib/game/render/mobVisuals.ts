@@ -38,7 +38,17 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         const bob = Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
         model.group.position.set(mob.position.x, mob.position.y + bob, mob.position.z);
         model.group.rotation.y = mob.yaw;
-        model.group.scale.setScalar(mob.ageTimer > 0 ? BABY_SCALE : 1);
+
+        // A primed creeper swells and flashes white as its fuse burns down.
+        let scale = mob.ageTimer > 0 ? BABY_SCALE : 1;
+        if (mob.kind === "creeper") {
+          const primed = (mob.fuseTimer ?? 0) > 0;
+          const wave = 0.5 + 0.5 * Math.sin(timeMs * 0.025);
+          if (primed) scale *= 1 + 0.18 * wave;
+          const flash = primed ? 0.35 + 0.55 * wave : 0;
+          for (const material of model.materials) (material as THREE.MeshStandardMaterial).emissive.setScalar(flash);
+        }
+        model.group.scale.setScalar(scale);
 
         const gait = Math.sin(timeMs * 0.015 * mob.moveSpeed + mob.bobSeed) * 0.3;
         if (model.legs.length === 4) {

@@ -48,6 +48,8 @@ export type MobState = {
   ageTimer: number;
   /** Boss-only: seconds until the next minion summon (session-only, never saved). */
   summonTimer?: number;
+  /** Creeper-only: seconds left on a lit fuse (>0 means primed); detonates at 0. Session-only. */
+  fuseTimer?: number;
 };
 
 /**
@@ -137,9 +139,11 @@ export type GameState = {
   respawnTimer: number;
   inventoryOpen: boolean;
   /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
-  craftingStation: "furnace" | null;
+  craftingStation: "furnace" | "villager" | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
+  /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
+  primedTnt: Map<number, number>;
   /** Voxel index of the chest open in the inventory panel, or null. */
   openContainerIndex: number | null;
   /** Worldgen dungeon chest voxel indices (session; re-derived from the seed each load). */
@@ -250,7 +254,7 @@ export type GameSnapshot = {
   /** True during the sleep fade — drives the fade-to-black overlay. */
   sleeping: boolean;
   /** Open crafting station (gates smelting recipes in the inventory panel). */
-  craftingStation: "furnace" | null;
+  craftingStation: "furnace" | "villager" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health (0..1), or null when no boss is alive — drives the boss bar. */
@@ -278,13 +282,15 @@ export type GameEvent =
   | { type: "bossSummoned"; x: number; y: number; z: number }
   | { type: "bossDefeated"; x: number; y: number; z: number }
   | { type: "summonFailed" }
+  | { type: "explosion"; x: number; y: number; z: number; power: number }
+  | { type: "tntPrimed"; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
   | { type: "wokeUp" }
   | { type: "tilledSoil" }
   | { type: "plantedSeed" }
-  | { type: "openedStation"; station: "furnace" }
+  | { type: "openedStation"; station: "furnace" | "villager" }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }

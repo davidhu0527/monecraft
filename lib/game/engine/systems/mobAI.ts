@@ -9,6 +9,10 @@ import {
   BOSS_MINION_CAP,
   BOSS_SPREAD,
   BOSS_SUMMON_INTERVAL_SECONDS,
+  CREEPER_ABORT_RANGE,
+  CREEPER_EXPLOSION_POWER,
+  CREEPER_FUSE_RANGE,
+  CREEPER_FUSE_SECONDS,
   HOSTILE_BURN_ABOVE_DAYLIGHT,
   HOSTILE_CAP,
   MOB_ARROW_KNOCKBACK,
@@ -23,6 +27,7 @@ import {
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { EmitGameEvent, GameState, MobState } from "../state";
 import { spawnArrow } from "../projectiles";
+import { explode } from "./explosion";
 import { pushMob } from "./spawnDirector";
 import type { SurfaceYAtFn } from "@/lib/game/spawn";
 
@@ -122,10 +127,12 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
   const { world, daylight, mobs, isDead } = state;
   const playerPosition = state.player.position;
   const playerVelocity = state.player.velocity;
-  const deadIndices: number[] = [];
 
   for (let i = 0; i < mobs.length; i += 1) {
     const mob = mobs[i];
+    // A mob killed earlier this tick (e.g. by an explosion) still awaits the
+    // post-loop sweep — skip its AI so a corpse can't move or land a final hit.
+    if (mob.hp <= 0) continue;
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
     const activeHostile = mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
@@ -148,7 +155,8 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
         if (distanceToPlayer < SKELETON_STANDOFF_MIN) moveSign = -1;
         else if (distanceToPlayer <= SKELETON_STANDOFF_MAX) moveSign = 0;
       }
-    } else if (!mob.hostile && distanceToPlayer < 4.2) {
+    } else if (!mob.hostile && mob.kind !== "villager" && distanceToPlayer < 4.2) {
+      // Animals flee when you get close; villagers don't, so you can walk up to trade.
       if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize().multiplyScalar(-1), 0.2).normalize();
       moveSpeed *= 1.15;
     } else if (mob.turnTimer <= 0) {
@@ -185,9 +193,13 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     const meleeVGap = isBoss ? SKELETON_FIRE_VGAP : 1.6;
     const meleeReady = activeHostile && attackDistance < meleeReach && verticalGap < meleeVGap;
     const fireReady = isRanged && activeHostile && attackDistance < mob.detectRange && verticalGap < SKELETON_FIRE_VGAP;
+    // A creeper close enough to light its fuse also needs a line-of-sight check —
+    // it can be in range with a large vertical gap (so not meleeReady), which
+    // would otherwise arm the fuse off the default `hasLineOfSight = true`.
+    const creeperFuseReady = mob.kind === "creeper" && activeHostile && attackDistance < CREEPER_FUSE_RANGE;
 
     let hasLineOfSight = true;
-    if (meleeReady || fireReady) {
+    if (meleeReady || fireReady || creeperFuseReady) {
       scratchMobEye.set(mob.position.x, mob.position.y + mob.halfHeight * 0.35, mob.position.z);
       scratchPlayerAim.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
       scratchRay.copy(scratchPlayerAim).sub(scratchMobEye);
@@ -201,8 +213,8 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     // corpse should neither sound nor re-arm the attack cooldown.
     if (!isDead && (meleeReady || fireReady) && hasLineOfSight && mob.attackTimer <= 0) {
       // The boss bites when adjacent, otherwise looses a spread; skeletons only
-      // ever shoot; melee mobs only ever bite.
-      const doMelee = meleeReady && (!isRanged || isBoss);
+      // ever shoot; melee mobs only ever bite. Creepers never bite — they detonate.
+      const doMelee = meleeReady && (!isRanged || isBoss) && mob.kind !== "creeper";
       if (doMelee) {
         deps.emit({ type: "mobAttacked", kind: mob.kind });
         deps.applyDamage(isBoss ? BOSS_MELEE_DAMAGE : mob.attackDamage);
@@ -224,13 +236,37 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       tickBossSummon(state, mob, dt, deps);
     }
 
-    // Zombies and skeletons burn in broad daylight; the boss is immune.
+    // A creeper lights its fuse when it gets close, then detonates — destroying
+    // terrain and hurting the player and nearby mobs. Walk out of range while it
+    // is primed and the fuse aborts. It dies in its own blast (dropping gunpowder
+    // via the post-loop sweep); killing it before the fuse runs out cancels it.
+    if (!isDead && mob.kind === "creeper") {
+      if ((mob.fuseTimer ?? 0) > 0) {
+        if (!activeHostile || distanceToPlayer > CREEPER_ABORT_RANGE) {
+          mob.fuseTimer = 0;
+        } else {
+          mob.fuseTimer = (mob.fuseTimer ?? 0) - dt;
+          if (mob.fuseTimer <= 0) {
+            explode(state, mob.position.x, mob.position.y, mob.position.z, CREEPER_EXPLOSION_POWER, deps);
+            mob.hp = 0;
+          }
+        }
+      } else if (creeperFuseReady && hasLineOfSight) {
+        mob.fuseTimer = CREEPER_FUSE_SECONDS;
+        deps.emit({ type: "mobAttacked", kind: "creeper" }); // the hiss
+      }
+    }
+
+    // Zombies, skeletons, and creepers burn in broad daylight; the boss is immune.
     if (mob.hostile && mob.kind !== "spider" && mob.kind !== "boss" && daylight > HOSTILE_BURN_ABOVE_DAYLIGHT) {
       mob.hp -= dt * 0.8;
     }
-
-    if (mob.hp <= 0) deadIndices.push(i);
   }
 
-  for (let i = deadIndices.length - 1; i >= 0; i -= 1) deps.removeMobAt(deadIndices[i]);
+  // Sweep the dead after the loop (descending, so splices don't shift live
+  // indices). A post-loop sweep — not per-iteration — also catches mobs killed by
+  // an explosion earlier in the same pass, including the creeper that just blew up.
+  for (let i = mobs.length - 1; i >= 0; i -= 1) {
+    if (mobs[i].hp <= 0) deps.removeMobAt(i);
+  }
 }

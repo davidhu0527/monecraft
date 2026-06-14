@@ -7,7 +7,8 @@ import {
   buildGeometryRegion,
   collectDungeonSites,
   computeFullLight,
-  generateWorld
+  generateWorld,
+  type WorldType
 } from "@/lib/world";
 
 /**
@@ -34,6 +35,22 @@ function makeWorld(sizeX: number, sizeY: number, sizeZ: number, seed: number): V
   return world;
 }
 
+function makeTypedWorld(sizeX: number, sizeY: number, sizeZ: number, seed: number, worldType: WorldType): VoxelWorld {
+  const world = new VoxelWorld(sizeX, sizeY, sizeZ, seed);
+  generateWorld(world, worldType);
+  return world;
+}
+
+const GROUND_BLOCKS = new Set<number>([BlockId.Grass, BlockId.Sand, BlockId.Dirt, BlockId.Stone, BlockId.Cobblestone, BlockId.Snow]);
+
+/** Highest terrain (ground) block in a column, ignoring trees/water/air — the visible surface. */
+function groundHeight(world: VoxelWorld, x: number, z: number): number {
+  for (let y = world.sizeY - 1; y >= 0; y -= 1) {
+    if (GROUND_BLOCKS.has(world.get(x, y, z))) return y;
+  }
+  return 0;
+}
+
 let fullWorldCache: VoxelWorld | null = null;
 function fullWorld(): VoxelWorld {
   fullWorldCache ??= makeWorld(512, 150, 512, 1337);
@@ -42,9 +59,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "2037297fd8b8269fa984f907b84bcf3b185e4c261ae4a93b089de0178cc510d2"],
-    [1, "c55a0b3395d2a95643ded6af66d49bbea4de44d045f5a812f625f397f5b377d7"],
-    [999999937, "4407190a254fdb5fa7f00aff69ba75b6c624bac6bc27096934e713506979384c"]
+    [1337, "b4e2ca0894d0ab7c1f6cadf2579e333364f05080d7311dc1c2b073a531e1a679"],
+    [1, "5e4e21ad716a2d4745f1896ee663543ac74c4eedf2776819548e8bb99cc66b79"],
+    [999999937, "acf5681013bcc13bc7d6a241c1f99df57f9096b0d16e438adcab7ad3dfd64a10"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -52,7 +69,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("3675b077d5a0a677aadf7a4b5e781cfb38cec2eef6aa62c676e3a9f0f48a404f");
+      expect(hashBytes(fullWorld().blocks)).toBe("afcd535bf83f487ca54a71c0adee745fcb6e782744bea3575efa947d7382efef");
     },
     { timeout: 60000 }
   );
@@ -99,6 +116,105 @@ describe("worldgen determinism", () => {
     }
     expect(lavaCells).toBeGreaterThan(0);
     expect(maxLavaY).toBeLessThanOrEqual(9); // GEN.lavaLevel
+  });
+});
+
+describe("world types", () => {
+  // Each non-default type is its own save contract — pin its bytes so a future
+  // refactor can't silently corrupt worlds created with it. Re-baseline only on
+  // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
+  test.each([
+    ["flat", "e613623bff9436cabda91dbf289ab93f8c7678184206f8f7a5dfda0d6c8f0229"],
+    ["amplified", "634544124b5e72743b4ea09ad92acf00d7184526ac5ddc077c55b3a5f2cca4c6"],
+    ["islands", "e9937c0d947a0952130c79c46c26fc37c9492c7d164e2dc61a626ea9d7d8a662"]
+  ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
+    expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
+  });
+
+  test("flat is nearly level; amplified has more relief than default", () => {
+    const flat = makeTypedWorld(128, 150, 128, 1337, "flat");
+    const def = makeTypedWorld(128, 150, 128, 1337, "default");
+    const amp = makeTypedWorld(128, 150, 128, 1337, "amplified");
+
+    // Fraction of columns whose ground surface sits exactly at the flat height,
+    // and the overall height spread. (Caves nibble the surface — denser in this
+    // small test world than at full size — so flat isn't perfectly uniform, but
+    // it concentrates at y=48 far more than the varied default terrain does.)
+    const flatTarget = 48;
+    const stats = (w: VoxelWorld) => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      let atTarget = 0;
+      let total = 0;
+      for (let x = 8; x < w.sizeX - 8; x += 4) {
+        for (let z = 8; z < w.sizeZ - 8; z += 4) {
+          const h = groundHeight(w, x, z);
+          lo = Math.min(lo, h);
+          hi = Math.max(hi, h);
+          if (h === flatTarget) atTarget += 1;
+          total += 1;
+        }
+      }
+      return { range: hi - lo, fracAtTarget: atTarget / total };
+    };
+
+    const f = stats(flat);
+    const d = stats(def);
+    const a = stats(amp);
+
+    expect(f.fracAtTarget).toBeGreaterThan(0.4); // flat ground concentrates at y=48
+    expect(f.fracAtTarget).toBeGreaterThan(d.fracAtTarget * 3); // far more than default's spread terrain
+    expect(d.range).toBeGreaterThan(30); // default terrain spans a wide height band
+    expect(a.range).toBeGreaterThan(d.range); // amplified is more dramatic still
+  });
+
+  test("islands floods more of the map than default but still leaves dry land above the sea", () => {
+    const islands = makeTypedWorld(128, 150, 128, 1337, "islands");
+    const def = makeTypedWorld(128, 150, 128, 1337, "default");
+    const ISLANDS_SEA = 54;
+
+    const waterColumns = (w: VoxelWorld, sea: number) => {
+      let wet = 0;
+      let total = 0;
+      for (let x = 8; x < w.sizeX - 8; x += 4) {
+        for (let z = 8; z < w.sizeZ - 8; z += 4) {
+          total += 1;
+          if (groundHeight(w, x, z) < sea) wet += 1;
+        }
+      }
+      return wet / total;
+    };
+
+    expect(waterColumns(islands, ISLANDS_SEA)).toBeGreaterThan(waterColumns(def, 43));
+    expect(waterColumns(islands, ISLANDS_SEA)).toBeGreaterThan(0.2);
+
+    // Dry, standable land above the sea exists (so the spawn search has somewhere to land).
+    let dryLand = 0;
+    for (let x = 8; x < islands.sizeX - 8; x += 2) {
+      for (let z = 8; z < islands.sizeZ - 8; z += 2) {
+        const h = groundHeight(islands, x, z);
+        if (h > ISLANDS_SEA && islands.get(x, h + 1, z) === BlockId.Air) dryLand += 1;
+      }
+    }
+    expect(dryLand).toBeGreaterThan(50);
+  });
+
+  test("dungeons follow the type's terrain (no floating dungeons in a flat world)", () => {
+    // Regression: dungeon depths use terrainTopY, which must read the type's
+    // config — not GEN — or a mountain-biome column's default height would carve
+    // a dungeon high above the flat surface (y=48).
+    const flat = makeTypedWorld(128, 150, 128, 1337, "flat");
+    let spawners = 0;
+    let maxSpawnerY = -1;
+    const layer = flat.sizeX * flat.sizeZ;
+    for (let i = 0; i < flat.blocks.length; i += 1) {
+      if (flat.blocks[i] === BlockId.Spawner) {
+        spawners += 1;
+        maxSpawnerY = Math.max(maxSpawnerY, Math.floor(i / layer));
+      }
+    }
+    expect(spawners).toBeGreaterThan(0); // dungeons still generate
+    expect(maxSpawnerY).toBeLessThan(48); // every spawner sits below the flat surface
   });
 });
 
@@ -166,6 +282,38 @@ describe("world content balance", () => {
         }
       }
       expect(beachFound).toBe(true);
+    },
+    { timeout: 60000 }
+  );
+
+  test(
+    "coal is the most common ore and reaches shallower than the rare ores",
+    () => {
+      const world = fullWorld();
+      const layer = world.sizeX * world.sizeZ;
+      let coal = 0;
+      let sliver = 0;
+      let diamond = 0;
+      let maxCoalY = -1;
+      let maxDiamondY = -1;
+      for (let i = 0; i < world.blocks.length; i += 1) {
+        const b = world.blocks[i];
+        if (b === BlockId.CoalOre) {
+          coal += 1;
+          const y = Math.floor(i / layer);
+          if (y > maxCoalY) maxCoalY = y;
+        } else if (b === BlockId.SliverOre) {
+          sliver += 1;
+        } else if (b === BlockId.DiamondOre) {
+          diamond += 1;
+          const y = Math.floor(i / layer);
+          if (y > maxDiamondY) maxDiamondY = y;
+        }
+      }
+      expect(coal).toBeGreaterThan(sliver); // coal is the staple early-game ore
+      expect(coal).toBeGreaterThan(diamond * 4);
+      // Coal veins can sit higher (closer to the surface) than the deep ores.
+      expect(maxCoalY).toBeGreaterThan(maxDiamondY);
     },
     { timeout: 60000 }
   );

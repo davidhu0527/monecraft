@@ -1,5 +1,16 @@
 import * as THREE from "three";
-import { BlockId, collectDungeonSites, collidesAt, computeFullLight, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import {
+  BlockId,
+  collectDungeonSites,
+  collidesAt,
+  computeFullLight,
+  generateWorld,
+  VoxelWorld,
+  WORLD_SIZE_X,
+  WORLD_SIZE_Y,
+  WORLD_SIZE_Z,
+  type WorldType
+} from "@/lib/world";
 import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
@@ -43,10 +54,11 @@ import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickMobs } from "./systems/mobAI";
+import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
@@ -57,6 +69,8 @@ export type GameEngineOptions = {
   save?: SaveData | null;
   /** Seed for a fresh world; ignored when a save is provided. */
   seed?: number;
+  /** Generation preset; the save's own worldType wins when restoring. Defaults to "default". */
+  worldType?: WorldType;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -72,6 +86,7 @@ export type GameEngineOptions = {
 export class GameEngine {
   readonly state: GameState;
   private readonly rng: () => number;
+  private readonly worldType: WorldType;
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
   private events: GameEvent[] = [];
@@ -86,12 +101,15 @@ export class GameEngine {
     this.rng = options.rng ?? Math.random;
 
     const seed = save?.seed ?? options.seed ?? Math.floor(Math.random() * 2147483647);
+    // A restored save's own type wins (the block-diffs were recorded against it);
+    // a fresh world takes the requested type, defaulting to "default".
+    this.worldType = save?.worldType ?? options.worldType ?? "default";
     const size = options.worldSize ?? { x: WORLD_SIZE_X, y: WORLD_SIZE_Y, z: WORLD_SIZE_Z };
     const world = new VoxelWorld(size.x, size.y, size.z, seed);
-    generateWorld(world);
+    generateWorld(world, this.worldType);
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
-    const dungeonSites = collectDungeonSites(world);
+    const dungeonSites = collectDungeonSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
@@ -124,6 +142,7 @@ export class GameEngine {
       inventoryOpen: false,
       craftingStation: null,
       containers: new Map(),
+      primedTnt: new Map(),
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
@@ -209,7 +228,9 @@ export class GameEngine {
       if (tickRespawnTimer(state, dt)) this.respawn();
       else {
         tickMobs(state, dt, this.mobTickDeps);
-        // Keep ticking so in-flight arrows clear; applyDamage no-ops while dead.
+        // Keep ticking so lit fuses and in-flight arrows resolve instead of
+        // freezing for the respawn countdown; applyDamage no-ops while dead.
+        tickPrimedTnt(state, dt, this.mobTickDeps);
         tickProjectiles(state, dt, this.mobTickDeps);
       }
       this.refreshSnapshot();
@@ -241,6 +262,7 @@ export class GameEngine {
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);
@@ -309,6 +331,7 @@ export class GameEngine {
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
         if (tryFeedAimedMob(state, this.emit)) break;
+        if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
@@ -389,6 +412,7 @@ export class GameEngine {
     return {
       version: 5,
       seed: state.world.seed,
+      worldType: this.worldType,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
       equippedArmor: { ...state.equippedArmor },
