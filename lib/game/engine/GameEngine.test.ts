@@ -1622,7 +1622,8 @@ describe("furnace and cooking", () => {
   test("a furnace recipe only crafts with the furnace open, and emits smelted", () => {
     const engine = makeEngine();
     const { state } = engine;
-    giveItem(engine, "raw_chicken", 1); // planks are in the starter loadout
+    giveItem(engine, "raw_chicken", 1);
+    giveItem(engine, "coal", 1); // coal is the smelting fuel
 
     engine.dispatch({ type: "craft", recipeId: "cook_chicken" }); // no station open
     expect(countsById(state.inventory).get("cooked_chicken")).toBeUndefined();

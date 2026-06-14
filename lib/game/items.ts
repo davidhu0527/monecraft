@@ -35,6 +35,7 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Cobblestone]: 5,
   [BlockId.Brick]: 5,
   [BlockId.Glass]: 2,
+  [BlockId.CoalOre]: 6,
   [BlockId.SliverOre]: 7,
   [BlockId.RubyOre]: 9,
   [BlockId.GoldOre]: 11,
@@ -93,6 +94,10 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "bone", label: "Bone", kind: "material" },
   { id: "leather", label: "Leather", kind: "material" },
   { id: "string", label: "String", kind: "material" },
+  // Furnace fuels: coal is mined from coal ore, charcoal is smelted from wood.
+  // Both are interchangeable as the smelting/torch "fuel" ingredient.
+  { id: "coal", label: "Coal", kind: "material" },
+  { id: "charcoal", label: "Charcoal", kind: "material" },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
@@ -246,6 +251,8 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Sand]: "sand",
   [BlockId.Brick]: "brick",
   [BlockId.Glass]: "glass",
+  // Coal ore drops the usable coal item directly (not a placeable ore block).
+  [BlockId.CoalOre]: "coal",
   [BlockId.SliverOre]: "sliver_ore",
   [BlockId.RubyOre]: "ruby_ore",
   [BlockId.GoldOre]: "gold_ore",

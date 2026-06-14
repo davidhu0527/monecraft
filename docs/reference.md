@@ -23,7 +23,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**47 recipes.** All use the always-available crafting grid except the four
+**53 recipes.** All use the always-available crafting grid except the nine
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
@@ -36,7 +36,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 | 1 Furnace   | 8 Cobble          |
 | 1 Chest     | 8 Planks          |
 | 1 Wood Door | 6 Planks          |
-| 4 Torch     | 1 Wood            |
+| 4 Torch     | 1 Coal + 1 Wood   |
 | 1 Bed       | 3 Wool + 3 Planks |
 | 1 Wool      | 4 String          |
 
@@ -95,17 +95,21 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ### Food & smelting
 
-| Result          | Ingredients             | Station |
-| --------------- | ----------------------- | ------- |
-| Bread           | 3 Wheat                 | —       |
-| Cooked Chicken  | Raw Chicken + 1 Planks  | Furnace |
-| Cooked Mutton   | Raw Mutton + 1 Planks   | Furnace |
-| Cooked Beef     | Raw Beef + 1 Planks     | Furnace |
-| Cooked Porkchop | Raw Porkchop + 1 Planks | Furnace |
+"Fuel" is coal or charcoal (interchangeable). Charcoal is smelted from wood, so a
+player who hasn't found coal can still cook.
+
+| Result          | Ingredients         | Station |
+| --------------- | ------------------- | ------- |
+| Bread           | 3 Wheat             | —       |
+| Charcoal        | 1 Wood              | Furnace |
+| Cooked Chicken  | Raw Chicken + Fuel  | Furnace |
+| Cooked Mutton   | Raw Mutton + Fuel   | Furnace |
+| Cooked Beef     | Raw Beef + Fuel     | Furnace |
+| Cooked Porkchop | Raw Porkchop + Fuel | Furnace |
 
 ## Blocks
 
-**32 block types** (plus air). Hardness is relative break time — higher is slower.
+**33 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
@@ -126,10 +130,11 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                      |
 | Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
 | Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                           |
-| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 wood                             |
+| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                    |
 | Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item  |
 | Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                    |
 | Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it      |
+| Coal Ore          | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                        |
 | Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                             |
 | Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                             |
 | Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                             |
@@ -256,7 +261,9 @@ always deals at least 1).
 
 Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
-(from farming and grass). Ranged/endgame materials: **Arrow** (bow ammo),
+(from farming and grass). Fuels: **Coal** (mined from coal ore) and **Charcoal**
+(smelted from wood) — interchangeable for smelting and torches.
+Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
 boss drop that crafts the Dragon Sword).
 

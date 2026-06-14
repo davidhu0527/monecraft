@@ -192,7 +192,7 @@ tolerated before the auto-unstuck teleport fires.
 
 Change these only with care:
 
-- **`WORLDGEN_VERSION`** (`7`) is the worldgen baseline each world records at
+- **`WORLDGEN_VERSION`** (`8`) is the worldgen baseline each world records at
   creation. When a deliberate terrain change invalidates old block-diffs, bump this:
   every world whose recorded version differs discards its stale diffs and reboots from
   its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
@@ -211,7 +211,9 @@ Change these only with care:
   frozen `GEN` object in `generation.ts` and are a byte-identical save contract
   pinned by hash tests — changing them requires the re-baseline policy in
   [testing.md](testing.md). This includes **`GEN.dungeonCount`** (28, how many
-  dungeon rooms are attempted) and the dungeon loot tables / tier odds in
+  dungeon rooms are attempted), **`GEN.coalConfig`** (coal vein attempts/depth/size —
+  coal is placed on its own PRNG in `placeCoal`, so retuning it shifts only coal,
+  not the rest of the terrain), and the dungeon loot tables / tier odds in
   `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
   changing the _placement_ count or geometry is).
 - **World types** (Default / Superflat / Amplified / Islands) are terrain-config

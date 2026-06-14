@@ -19,6 +19,7 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.Sand]: "sand",
   [BlockId.Brick]: "stone",
   [BlockId.Glass]: "glass",
+  [BlockId.CoalOre]: "stone",
   [BlockId.SliverOre]: "stone",
   [BlockId.RubyOre]: "stone",
   [BlockId.GoldOre]: "stone",

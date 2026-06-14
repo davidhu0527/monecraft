@@ -92,9 +92,11 @@ hearts every second**, ignoring armor. Leaving the water resets the timer.
 
 Underground is now genuinely **dark**: sunlight reaches down open shafts and
 spills a little way into cave mouths, but the deep tunnels are pitch black. Craft
-**torches** (1 wood → 4 torches) and place them as you explore — each casts a warm
-pool of light that won't fade at night. Without a light source you're mining blind,
-and the dark is where monsters lurk.
+**torches** (1 coal + 1 wood → 4 torches) and place them as you explore — each casts
+a warm pool of light that won't fade at night. Without a light source you're mining
+blind, and the dark is where monsters lurk. **Coal** is the shallow, common ore you
+mine for torch and furnace fuel — if you're out, smelt a log into **charcoal**, which
+works the same.
 
 ### Drowning and lava
 
@@ -185,6 +187,7 @@ harvest at all — mining with too weak a tool yields nothing:
 | To mine…                  | You need at least… |
 | ------------------------- | ------------------ |
 | Stone, cobblestone, brick | Wood pickaxe       |
+| Coal ore                  | Wood pickaxe       |
 | Sliver ore                | Stone pickaxe      |
 | Ruby & gold ore           | Sliver pickaxe     |
 | Sapphire & diamond ore    | Ruby pickaxe       |

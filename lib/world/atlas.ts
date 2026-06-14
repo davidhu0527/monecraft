@@ -66,6 +66,7 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
         if ((block === BlockId.Stone || block === BlockId.Cobblestone || block === BlockId.Bedrock) && n > 0.8) c = tone(base, 1.18);
         if ((block === BlockId.Wood || block === BlockId.Planks) && (x + y) % 4 === 0) c = tone(base, 0.82);
+        if (block === BlockId.CoalOre && n > 0.82) c = tone([0.09, 0.09, 0.11], 1);
         if (block === BlockId.SliverOre && n > 0.86) c = tone([0.93, 0.93, 0.95], 1);
         if (block === BlockId.RubyOre && n > 0.88) c = tone([0.86, 0.24, 0.24], 1);
         if (block === BlockId.GoldOre && n > 0.84) c = tone([0.96, 0.8, 0.25], 1);
