@@ -225,6 +225,11 @@ ingredients you have and craft it — the result drops into your inventory (craf
 is refused if there's no room rather than destroying the overflow). Stacks hold up
 to **99** items; tools, weapons, and armor take one slot each and show durability.
 
+The recipe book is **grouped into labeled sections** — Tools, Weapons, Armor,
+Building, Food, Materials, then the station-gated Smelting and Trades — and within
+each section the recipes you can make **right now** float to the top, so what's
+craftable is easy to spot among the dimmed entries.
+
 The basic recipe grid is always available. **Smelting** recipes (cooking raw meat)
 require a **furnace**: craft one from 8 cobble, place it, and right-click it to open
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
