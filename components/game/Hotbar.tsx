@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/no-array-index-key -- the hotbar is a fixed-length, positional array of slots that never reorders, so the slot index is its stable identity */
 import ItemIcon from "@/components/game/ItemIcon";
 import { itemTooltipFor, useItemTooltip } from "@/components/game/ItemTooltip";
 import type { InventorySlot } from "@/lib/game/types";
