@@ -69,6 +69,27 @@ to replace water cells when building underwater. Do not remain continuously
 immersed for more than **60 seconds**: after that grace period you take **1.5
 hearts every second**, ignoring armor. Leaving the water resets the timer.
 
+### Caves are dark — carry a torch
+
+Underground is now genuinely **dark**: sunlight reaches down open shafts and
+spills a little way into cave mouths, but the deep tunnels are pitch black. Craft
+**torches** (1 wood → 4 torches) and place them as you explore — each casts a warm
+pool of light that won't fade at night. Without a light source you're mining blind,
+and the dark is where monsters lurk.
+
+### Drowning and lava
+
+When your **head** goes underwater a row of **air bubbles** appears above the
+hunger bar and drains over about 15 seconds; once it's empty you start **drowning**
+(1 heart/second until you surface). Bubbles refill almost instantly when your head
+comes up. (This is separate from the slow 60-second immersion damage above — wading
+chest-deep never drowns you.)
+
+**Lava** pools in the deepest caves and glows in the dark. It is a death trap:
+touching it burns you **immediately** for 3 hearts every half-second — no grace
+period — and you keep burning for a few seconds even after you scramble off. Armor
+doesn't help. Bridge over it carefully.
+
 ### Hunger
 
 You have **20 hunger**, shown as **10 drumsticks**. Activity burns it:
@@ -180,7 +201,7 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **44 recipes** in the [reference](reference.md#recipes).
+See the full list of **45 recipes** in the [reference](reference.md#recipes).
 
 ## Doors
 

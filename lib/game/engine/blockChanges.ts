@@ -1,4 +1,4 @@
-import { BlockId, VoxelWorld } from "@/lib/world";
+import { applyEdit, BlockId, VoxelWorld } from "@/lib/world";
 
 /**
  * Tracks player edits to the generated world as deltas against the worldgen
@@ -24,6 +24,11 @@ export function createBlockChangeTracker(world: VoxelWorld): BlockChangeTracker 
       const idx = world.index(x, y, z);
       if (!baselineByIndex.has(idx)) baselineByIndex.set(idx, world.get(x, y, z));
       world.set(x, y, z, block);
+      // Patch lighting locally now the block changed. This is the single
+      // chokepoint for every gameplay edit (mining, doors, farming, crop
+      // growth), so each one relights without the renderer doing anything; the
+      // load path (applySavedChanges) bypasses this and the full bake covers it.
+      applyEdit(world, world.light, x, y, z);
       const baseline = baselineByIndex.get(idx) ?? BlockId.Air;
       if (block === baseline) changedBlocks.delete(idx);
       else changedBlocks.set(idx, block);

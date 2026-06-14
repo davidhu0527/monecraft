@@ -1,8 +1,17 @@
 import {
   HEALTH_REGEN_INTERVAL_SECONDS,
   JUMPS_PER_HUNGER,
+  EYE_HEIGHT,
+  LAVA_BURN_SECONDS,
+  LAVA_DAMAGE_HP,
+  LAVA_DAMAGE_INTERVAL_SECONDS,
   MAX_HUNGER,
   MAX_HEARTS,
+  MAX_OXYGEN,
+  OXYGEN_DROWN_HP,
+  OXYGEN_DROWN_INTERVAL_SECONDS,
+  OXYGEN_HOLD_SECONDS,
+  OXYGEN_REFILL_SECONDS,
   PLAYER_HEIGHT,
   REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
@@ -83,6 +92,71 @@ export function tickWaterExposure(state: GameState, dt: number, applyDamage: (am
     timers.waterDamageTimer -= WATER_DAMAGE_INTERVAL_SECONDS;
     applyDamage(WATER_DAMAGE_HP);
   }
+}
+
+/**
+ * Burns the player on lava contact. Unlike water there is no grace period —
+ * touching lava (standing on it or wading into it) deals armor-bypassing damage
+ * at once and keeps burning for LAVA_BURN_SECONDS after escaping. Lava is solid,
+ * so "contact" means the block at the feet, just under them, or at body height.
+ */
+export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+  const { player, timers, world } = state;
+  const x = Math.floor(player.position.x);
+  const z = Math.floor(player.position.z);
+  const py = player.position.y;
+  const touching =
+    world.get(x, Math.floor(py - 0.1), z) === BlockId.Lava || // the block underfoot (standing on lava)
+    world.get(x, Math.floor(py), z) === BlockId.Lava || // the feet cell (wading in)
+    world.get(x, Math.floor(py + PLAYER_HEIGHT * 0.5), z) === BlockId.Lava; // body height
+
+  if (touching) {
+    // First touch fires a hit immediately (no half-second of free standing).
+    if (timers.lavaBurnTimer <= 0) timers.lavaDamageTimer = LAVA_DAMAGE_INTERVAL_SECONDS;
+    timers.lavaBurnTimer = LAVA_BURN_SECONDS;
+  }
+
+  if (timers.lavaBurnTimer <= 0) {
+    timers.lavaDamageTimer = 0;
+    return;
+  }
+  timers.lavaBurnTimer = Math.max(0, timers.lavaBurnTimer - dt);
+  timers.lavaDamageTimer += dt;
+  while (timers.lavaDamageTimer >= LAVA_DAMAGE_INTERVAL_SECONDS && !state.isDead) {
+    timers.lavaDamageTimer -= LAVA_DAMAGE_INTERVAL_SECONDS;
+    applyDamage(LAVA_DAMAGE_HP);
+  }
+}
+
+/**
+ * Drowning. While the head (eye-height cell) is underwater the breath meter
+ * drains over OXYGEN_HOLD_SECONDS; once empty, drowning deals armor-bypassing
+ * damage every interval. Surfacing refills the meter quickly. Keyed on the head,
+ * so wading chest-deep never drowns you — distinct from the body-keyed 60s
+ * water-exposure timer, which still runs in parallel.
+ */
+export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+  const { player, timers, world } = state;
+  const x = Math.floor(player.position.x);
+  const headY = Math.floor(player.position.y + EYE_HEIGHT);
+  const z = Math.floor(player.position.z);
+
+  if (world.get(x, headY, z) === BlockId.Water) {
+    state.oxygen = Math.max(0, state.oxygen - (MAX_OXYGEN / OXYGEN_HOLD_SECONDS) * dt);
+    if (state.oxygen > 0) {
+      timers.drownTimer = 0;
+      return;
+    }
+    timers.drownTimer += dt;
+    while (timers.drownTimer >= OXYGEN_DROWN_INTERVAL_SECONDS && !state.isDead) {
+      timers.drownTimer -= OXYGEN_DROWN_INTERVAL_SECONDS;
+      applyDamage(OXYGEN_DROWN_HP);
+    }
+    return;
+  }
+
+  state.oxygen = Math.min(MAX_OXYGEN, state.oxygen + (MAX_OXYGEN / OXYGEN_REFILL_SECONDS) * dt);
+  timers.drownTimer = 0;
 }
 
 /** Restores hunger by a food's value when it is eaten, clamped to the max. */

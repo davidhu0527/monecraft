@@ -4,5 +4,6 @@ export { VoxelWorld } from "./voxelWorld";
 export { DOOR_BLOCK_IDS, doorBlock, doorBounds, doorFacingFromYaw, doorState, isDoorBlock, type DoorFacing, type DoorState } from "./doors";
 export { generateWorld, collectDungeonSites, type DungeonSites } from "./generation";
 export { buildGeometryLayersRegion, buildGeometryRegion, type GeometryLayers } from "./meshing";
+export { applyEdit, blockLightAt, computeFullLight, emission, isLightBlocker, MAX_LIGHT, opacity, skyLightAt } from "./lighting";
 export { createBlockAtlasTexture } from "./atlas";
 export { collidesAt, hasSupportUnderPlayer, voxelRaycast, type RaycastResult } from "./queries";

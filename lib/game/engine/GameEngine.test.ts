@@ -12,7 +12,9 @@ import {
   SPRINT_BLOCKS_PER_HUNGER,
   SPRINT_MIN_HUNGER,
   WATER_DAMAGE_DELAY_SECONDS,
-  WATER_DAMAGE_HP
+  WATER_DAMAGE_HP,
+  LAVA_DAMAGE_HP,
+  MAX_OXYGEN
 } from "@/lib/game/config";
 import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
@@ -91,6 +93,45 @@ describe("boot", () => {
     run(engine, 1);
     expect(engine.state.player.position.y).toBeCloseTo(y1, 5);
     expect(engine.state.player.onGround).toBe(true);
+  });
+
+  test("light is baked at load: open sky is lit, solid ground is dark", () => {
+    const { world } = makeEngine().state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    // The top of the world is open air, fully sky-lit.
+    expect(world.getSky(cx, world.sizeY - 1, cz)).toBe(15);
+    // Any solid block is sealed off from the sky and reads dark.
+    const surfaceY = world.highestSolidY(cx, cz);
+    expect(world.isSolid(cx, surfaceY, cz)).toBe(true);
+    expect(world.getSky(cx, surfaceY, cz)).toBe(0);
+    // Generated lava emits block light, so the deep caves carry some.
+    expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(true);
+  });
+
+  test("block edits relight locally: placing darkens the cell, mining restores sky", () => {
+    const { state } = makeEngine();
+    const { world } = state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    const y = world.sizeY - 5; // open air near the top of the world
+    expect(world.getSky(cx, y, cz)).toBe(15);
+    state.blockChanges.set(cx, y, cz, BlockId.Stone);
+    expect(world.getSky(cx, y, cz)).toBe(0); // a solid block is opaque to sky
+    state.blockChanges.set(cx, y, cz, BlockId.Air);
+    expect(world.getSky(cx, y, cz)).toBe(15); // reopened to the sky
+  });
+
+  test("placing a torch emits block light into the neighborhood", () => {
+    const { state } = makeEngine();
+    const { world } = state;
+    const cx = Math.floor(world.sizeX / 2);
+    const cz = Math.floor(world.sizeZ / 2);
+    const y = world.sizeY - 5; // open air; block light is independent of the sky
+    expect(world.getBlockLight(cx, y, cz)).toBe(0);
+    state.blockChanges.set(cx, y, cz, BlockId.Torch);
+    expect(world.getBlockLight(cx, y, cz)).toBe(14);
+    expect(world.getBlockLight(cx + 1, y, cz)).toBe(13);
   });
 });
 
@@ -208,6 +249,58 @@ describe("movement and stats", () => {
     engine.step(0.1, input());
     expect(state.timers.waterExposureTimer).toBe(0);
     expect(state.timers.waterDamageTimer).toBe(0);
+  });
+
+  test("standing on lava burns immediately and the burn lingers after leaving", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1); // settle onto the ground
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const underfoot = Math.floor(state.player.position.y - 0.1);
+    state.blockChanges.set(x, underfoot, z, BlockId.Lava);
+
+    const start = state.hearts;
+    engine.step(1 / 60, input());
+    expect(state.hearts).toBe(start - LAVA_DAMAGE_HP); // no grace period, unlike water
+    expect(state.timers.lavaBurnTimer).toBeGreaterThan(0);
+
+    // Step off the lava: the burn keeps dealing damage for a few seconds.
+    state.blockChanges.set(x, underfoot, z, BlockId.Stone);
+    const afterTouch = state.hearts;
+    run(engine, 0.6); // within LAVA_BURN_SECONDS
+    expect(state.hearts).toBeLessThan(afterTouch);
+    expect(state.hearts).toBeGreaterThan(0);
+  });
+
+  test("a submerged head drains oxygen then drowns; surfacing refills it", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1); // settle
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const headY = Math.floor(state.player.position.y + EYE_HEIGHT);
+
+    expect(state.oxygen).toBe(MAX_OXYGEN);
+    state.blockChanges.set(x, headY, z, BlockId.Water); // submerge the head
+    run(engine, 5);
+    expect(state.oxygen).toBeLessThan(MAX_OXYGEN); // breath draining
+    expect(state.oxygen).toBeGreaterThan(0); // not yet empty at 5s of 15
+
+    // Exhaust the air: drowning damage begins (armor-bypassing).
+    state.oxygen = 0;
+    const hp = state.hearts;
+    run(engine, 1.2);
+    expect(state.hearts).toBeLessThan(hp);
+
+    // Surface: oxygen refills back to full.
+    state.blockChanges.set(x, headY, z, BlockId.Air);
+    run(engine, 2);
+    expect(state.oxygen).toBe(MAX_OXYGEN);
   });
 });
 

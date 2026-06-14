@@ -11,6 +11,12 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Caves & lighting**: caves are no longer lit like the surface — a real per-voxel light system makes underground dark, with torches, deep-cave lava, and drowning as new hazards. All procedural, **zero new assets**
+  - **Per-voxel light propagation** (`lib/world/lighting.ts`): each voxel carries packed sky + block light (0–15 each), baked from the blocks at load (top-down sunlight column pass + flood) and patched locally on every edit with a Minecraft-style remove/refill flood. It is a **derived cache, never serialized** (a pure function of `world.blocks`). The mesher emits a per-vertex `aLight` attribute and the world material's shader gates scene-lit terrain by sky exposure (caves go dark) while adding block light back as a glow — so **day/night needs no re-mesh** (the scene sun/hemisphere already scale with daylight)
+  - **Torches**: craft four from one wood and place them to light the dark; a torch is a solid block emitting block light 14, so its warm glow floods the surrounding air and survives the night
+  - **Lava**: pools in the deepest caves (carved air at or below `lavaLevel`), glowing and emitting max block light. Touching it burns **immediately** for 3 hearts every half-second with no grace period, bypassing armor, and keeps burning briefly after you escape. Worldgen-only — no item, can't be mined
+  - **Drowning**: a bubble meter (above the hunger bar) drains over ~15 s while your head is underwater, then deals 1 heart/second until you surface; it refills quickly. Distinct from the existing 60 s body-immersion damage — wading chest-deep never drowns you
+  - **Worldgen re-baseline**: the deep-cave lava changes the deterministic terrain baseline, so the worldgen/meshing hashes were re-rolled and **`SAVE_KEY` bumped `minecraft_save_v6` → `minecraft_save_v7`** — existing worlds reset. The save _schema_ is unchanged (lighting is derived, lava is worldgen; neither is persisted), so the payload version stays 5. `placeLava` runs after `placeOres` and before `placeDungeons`, keeping the surface byte-identical (structural probes stay green)
 - **Spears and non-stackable gear**: seven craftable spear tiers (wood, stone,
   sliver, ruby, sapphire, gold, diamond) have 7-block left-click melee reach and
   can be thrown with right-click/`E`. Throws use procedural projectile meshes,

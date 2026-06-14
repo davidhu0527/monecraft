@@ -93,6 +93,24 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           const bar = x % 5 === 0 || y % 5 === 0;
           c = bar ? tone([0.32, 0.34, 0.4], 0.85 + n * 0.25) : tone([0.5, 0.16, 0.12], 0.5 + n * 0.6);
         }
+        if (block === BlockId.Lava) {
+          // Molten rock: a hot orange bed with brighter cracks and dark crust
+          // flecks. The block emits max light, so it reads as glowing.
+          const crack = n > 0.78;
+          const crust = n < 0.2;
+          c = crack ? tone([1, 0.78, 0.2], 1) : crust ? tone([0.35, 0.1, 0.04], 1) : tone([0.92, 0.34, 0.08], 0.85 + n * 0.4);
+        }
+        if (block === BlockId.Torch) {
+          // A wooden stick on a dark ground with a bright flame near the top —
+          // the block self-illuminates, so the flame reads as the light source.
+          const onStick = x >= 7 && x <= 8 && y >= 6;
+          const flame = x >= 6 && x <= 9 && y <= 6 && Math.abs(x - 7.5) + y * 0.5 < 4;
+          if (face === "top")
+            c = tone([1, 0.86, 0.32], 0.8 + n * 0.5); // looking down at the flame
+          else if (flame) c = tone([1, 0.83, 0.3], 0.78 + n * 0.55);
+          else if (onStick) c = tone([0.55, 0.38, 0.2], 0.85 + n * 0.2);
+          else c = tone([0.05, 0.05, 0.07], 1);
+        }
         if (isDoorBlock(block)) {
           const state = doorState(block)!;
           const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;

@@ -52,7 +52,12 @@ export const enum BlockId {
   DoorSouthOpenLower = 42,
   DoorSouthOpenUpper = 43,
   DoorWestOpenLower = 44,
-  DoorWestOpenUpper = 45
+  DoorWestOpenUpper = 45,
+  // A placeable light source: a solid block that emits block light (see lighting.ts).
+  Torch = 46,
+  // A worldgen-only hazard: a solid, unmineable block that emits max block light
+  // and burns the player on contact (see lighting.ts, playerStats.ts).
+  Lava = 47
 }
 
 export enum BiomeId {
@@ -86,7 +91,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Furnace]: 0x63666a,
   [BlockId.Chest]: 0x9c6a3c,
   [BlockId.MossyCobblestone]: 0x6a7a55,
-  [BlockId.DoorNorthLower]: 0xa8753f
+  [BlockId.DoorNorthLower]: 0xa8753f,
+  [BlockId.Torch]: 0xffab40
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -140,5 +146,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.DoorSouthOpenLower]: [0.62, 0.4, 0.2],
   [BlockId.DoorSouthOpenUpper]: [0.62, 0.4, 0.2],
   [BlockId.DoorWestOpenLower]: [0.62, 0.4, 0.2],
-  [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2]
+  [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.Torch]: [0.9, 0.6, 0.25],
+  [BlockId.Lava]: [0.85, 0.3, 0.08]
 };

@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld, buildGeometryLayersRegion, buildGeometryRegion, collectDungeonSites, generateWorld } from "@/lib/world";
+import {
+  BiomeId,
+  BlockId,
+  VoxelWorld,
+  buildGeometryLayersRegion,
+  buildGeometryRegion,
+  collectDungeonSites,
+  computeFullLight,
+  generateWorld
+} from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -33,9 +42,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "8621d825353b26bb455811a79c49a662b26263a04dc88bab2c23521cf72716da"],
-    [1, "04b9288619397c4beba76ae2037b11b2b73394df1f20ee125cdbe0ac82f4a5e8"],
-    [999999937, "6cc58e8a8cfb6978937da3b181e3d1f00b94245b7a8025947a0c4ca10879d065"]
+    [1337, "2037297fd8b8269fa984f907b84bcf3b185e4c261ae4a93b089de0178cc510d2"],
+    [1, "c55a0b3395d2a95643ded6af66d49bbea4de44d045f5a812f625f397f5b377d7"],
+    [999999937, "4407190a254fdb5fa7f00aff69ba75b6c624bac6bc27096934e713506979384c"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -43,7 +52,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("0f6b871af063a53744f4e3bb561f6ece8183374b8347e88f1a71184679503ce9");
+      expect(hashBytes(fullWorld().blocks)).toBe("3675b077d5a0a677aadf7a4b5e781cfb38cec2eef6aa62c676e3a9f0f48a404f");
     },
     { timeout: 60000 }
   );
@@ -76,6 +85,20 @@ describe("worldgen determinism", () => {
     // Sea-level fill: a column whose floor is below sea level holds water at y=43.
     expect(world.highestSolidY(1, 277)).toBe(30);
     expect(world.get(1, 43, 277)).toBe(BlockId.Water);
+
+    // Lava pools in the deepest caves only — present, and never above lavaLevel.
+    let lavaCells = 0;
+    let maxLavaY = -1;
+    const layer = world.sizeX * world.sizeZ;
+    for (let i = 0; i < world.blocks.length; i += 1) {
+      if (world.blocks[i] === BlockId.Lava) {
+        lavaCells += 1;
+        const ly = Math.floor(i / layer);
+        if (ly > maxLavaY) maxLavaY = ly;
+      }
+    }
+    expect(lavaCells).toBeGreaterThan(0);
+    expect(maxLavaY).toBeLessThanOrEqual(9); // GEN.lavaLevel
   });
 });
 
@@ -200,8 +223,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1357176);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("aee5f8b3be9fe85fe0e3598a4c215bc78d2b51fd58b921e335d65476c835275e");
+      expect(positions.count).toBe(1300860);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("a6683ea1019a1cf105aafbb8e061e6c058fe0931f1c54b73c0c05c1a931a6db1");
     },
     { timeout: 60000 }
   );
@@ -260,5 +283,25 @@ describe("meshing", () => {
     expect(geometry.boundingBox!.min.z).toBeCloseTo(3.40625);
     expect(geometry.boundingBox!.max.z).toBeCloseTo(3.59375);
     expect(geometry.boundingBox!.max.y - geometry.boundingBox!.min.y).toBe(2);
+  });
+
+  test("the mesh carries a per-vertex aLight attribute sampled from the faced voxel", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.Stone);
+    world.light = computeFullLight(world);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
+    const aLight = geometry.getAttribute("aLight");
+    expect(aLight.itemSize).toBe(2);
+    expect(aLight.count).toBe(geometry.getAttribute("position").count);
+    // Every visible face of the lone block opens into open-sky air, so its
+    // skyExposure (aLight.x) is lit, and nothing emits block light (aLight.y = 0).
+    let minSky = 1;
+    let maxBlock = 0;
+    for (let i = 0; i < aLight.count; i += 1) {
+      minSky = Math.min(minSky, aLight.getX(i));
+      maxBlock = Math.max(maxBlock, aLight.getY(i));
+    }
+    expect(minSky).toBeGreaterThan(0.9);
+    expect(maxBlock).toBe(0);
   });
 });

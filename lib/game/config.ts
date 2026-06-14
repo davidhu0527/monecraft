@@ -19,6 +19,19 @@ export const HEALTH_REGEN_INTERVAL_SECONDS = 3;
 export const WATER_DAMAGE_DELAY_SECONDS = 60;
 export const WATER_DAMAGE_INTERVAL_SECONDS = 1;
 export const WATER_DAMAGE_HP = 3; // 1.5 hearts
+// Lava burns on contact (no delay), keeps burning briefly after you escape, and
+// bypasses armor — a deep-cave death trap, far deadlier than water.
+export const LAVA_DAMAGE_INTERVAL_SECONDS = 0.5;
+export const LAVA_DAMAGE_HP = 6; // 3 hearts per tick
+export const LAVA_BURN_SECONDS = 3; // damage lingers this long after leaving lava
+// Drowning: the bubble bar empties over OXYGEN_HOLD_SECONDS with the head
+// underwater, then drowning damage starts; it refills quickly on surfacing.
+// Separate from the slow 60s water-exposure timer (which keys on the body).
+export const MAX_OXYGEN = 10;
+export const OXYGEN_HOLD_SECONDS = 15; // full breath -> empty while submerged
+export const OXYGEN_REFILL_SECONDS = 1.5; // empty -> full after surfacing
+export const OXYGEN_DROWN_INTERVAL_SECONDS = 1;
+export const OXYGEN_DROWN_HP = 2; // 1 heart per tick once out of air
 // Health regen only runs at or above this hunger level; sprint needs more than SPRINT_MIN_HUNGER.
 export const REGEN_MIN_HUNGER = 12;
 export const SPRINT_MIN_HUNGER = 6;
@@ -144,9 +157,12 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-// Bumped to v6 with the dungeon worldgen: dungeons change the deterministic
-// world baseline, so old block-diffs would index against the wrong terrain.
-export const SAVE_KEY = "minecraft_save_v6";
+// Bumped whenever the deterministic world baseline changes, so old block-diffs
+// (which index against terrain) can't be applied to a different world: v6 added
+// dungeons; v7 adds deep-cave lava lakes. The save *schema* (SaveData) is
+// unchanged — lighting is a derived cache and lava is worldgen, neither is
+// persisted — so the payload version stays 5.
+export const SAVE_KEY = "minecraft_save_v7";
 
 // Rendering
 export const RENDER_RADIUS = 90;

@@ -143,7 +143,7 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   expect(storedId).toBe("grass");
 
   // Persist and reload: the chest block-entity survives in the v4 save.
-  await page.evaluate(() => localStorage.setItem("minecraft_save_v6", JSON.stringify(window.__monecraft!.engine.serialize())));
+  await page.evaluate(() => localStorage.setItem("minecraft_save_v7", JSON.stringify(window.__monecraft!.engine.serialize())));
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
 
@@ -212,7 +212,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Save Game" }).click();
-  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v6"));
+  const saved = await page.evaluate(() => localStorage.getItem("minecraft_save_v7"));
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
   expect(JSON.parse(saved!).version).toBe(5);

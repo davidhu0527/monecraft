@@ -28,6 +28,7 @@ export default function MinecraftGame() {
     armorPoints,
     hearts,
     hunger,
+    oxygen,
     daylightPercent,
     passiveCount,
     hostileCount,
@@ -49,6 +50,7 @@ export default function MinecraftGame() {
     recipes,
     maxHearts,
     maxHunger,
+    maxOxygen,
     canCraft,
     craft,
     swapInventorySlots,
@@ -100,7 +102,15 @@ export default function MinecraftGame() {
       <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
       <div className="hud-bottom">
-        <StatusBars hearts={hearts} maxHearts={maxHearts} hunger={hunger} maxHunger={maxHunger} armorPoints={armorPoints} />
+        <StatusBars
+          hearts={hearts}
+          maxHearts={maxHearts}
+          hunger={hunger}
+          maxHunger={maxHunger}
+          armorPoints={armorPoints}
+          oxygen={oxygen}
+          maxOxygen={maxOxygen}
+        />
         <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
       </div>
 
