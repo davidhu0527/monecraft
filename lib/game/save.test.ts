@@ -145,6 +145,19 @@ describe("v1 to v2 migration", () => {
     expect(migrated.inventorySlots).toHaveLength(2);
   });
 
+  test("splits legacy stacked durable gear into one item per slot", () => {
+    const migrated = migrateSaveV1toV2(
+      v1Save({
+        inventorySlots: [{ id: "diamond_sword", count: 3, durability: 200 }]
+      })
+    );
+    expect(migrated.inventorySlots).toEqual([
+      { id: "diamond_sword", count: 1, durability: 200 },
+      { id: "diamond_sword", count: 1, durability: 200 },
+      { id: "diamond_sword", count: 1, durability: 200 }
+    ]);
+  });
+
   test("items overflowing the smaller inventory are dropped", () => {
     const slots = Array.from({ length: 40 }, (_, i) => ({ id: i % 2 === 0 ? "dirt" : "wood_pickaxe", count: 1 }));
     const migrated = migrateSaveV1toV2(v1Save({ inventorySlots: slots }));

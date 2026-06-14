@@ -101,6 +101,25 @@ const SWORD_GRID = [
   "................"
 ];
 
+const SPEAR_GRID = [
+  ".......ll.......",
+  "......lml.......",
+  "......lmM.......",
+  "......mmm.......",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......H........",
+  "................"
+];
+
 // Vertical like the sword so both share one in-hand pose. Reads as a knife:
 // shorter, wider single-edged blade — bright cutting edge (l) on the left,
 // dark spine (M) on the right, drop-point tip, a dark bolster row, and a
@@ -499,6 +518,25 @@ const COOKED_MUTTON_PALETTE: PixelPalette = { m: [150, 92, 56], M: [96, 54, 30],
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 const WHEAT_PALETTE: PixelPalette = { w: [226, 193, 90], W: [176, 142, 55], g: [110, 150, 60] };
 const BREAD_PALETTE: PixelPalette = { M: [120, 70, 35], b: [170, 110, 55], l: [210, 160, 95], s: [140, 90, 45] };
+const DOOR_PALETTE: PixelPalette = { d: [92, 55, 26], m: [156, 101, 50], l: [192, 137, 76], k: [220, 188, 86] };
+const DOOR_GRID = [
+  "...dddddddddd...",
+  "...dllllllllld...",
+  "...dlmmmmmmmd...",
+  "...dlmddddmmd...",
+  "...dlmdmmdmmd...",
+  "...dlmddddmmd...",
+  "...dlmmmmmmmd...",
+  "...dllllllllld...",
+  "...dllllllllld...",
+  "...dlmmmmmmmd...",
+  "...dlmddddmmd...",
+  "...dlmdmmdmkd...",
+  "...dlmddddmmd...",
+  "...dlmmmmmmmd...",
+  "...dddddddddd...",
+  "................"
+];
 
 /**
  * Pixel grids for non-block, non-gear items (materials, food). Keyed by item id
@@ -519,7 +557,8 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   cooked_mutton: { grid: RAW_MEAT_GRID, palette: COOKED_MUTTON_PALETTE },
   seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
   wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
-  bread: { grid: BREAD_GRID, palette: BREAD_PALETTE }
+  bread: { grid: BREAD_GRID, palette: BREAD_PALETTE },
+  door: { grid: DOOR_GRID, palette: DOOR_PALETTE }
 };
 
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).
@@ -603,6 +642,7 @@ export function renderSpritePixels(itemId: string): Uint8ClampedArray {
   if (def?.kind === "tool") return paintGrid(PICKAXE_GRID, toolPalette(materialFor(itemId)));
   if (def?.kind === "weapon") {
     if (itemId === "knife") return paintGrid(KNIFE_GRID, toolPalette(STEEL));
+    if (itemId.endsWith("_spear")) return paintGrid(SPEAR_GRID, toolPalette(materialFor(itemId)));
     return paintGrid(SWORD_GRID, toolPalette(materialFor(itemId)));
   }
   if (def?.kind === "armor" && def.armorSlot) {

@@ -24,6 +24,7 @@ export const RECIPES: Recipe[] = [
   { id: "bread", label: "3 Wheat -> Bread", cost: [{ slotId: "wheat", count: 3 }], result: { slotId: "bread", count: 1 } },
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
+  { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
   {
     id: "cook_chicken",
     label: "Raw Chicken + Planks -> Cooked Chicken",
@@ -188,6 +189,69 @@ export const RECIPES: Recipe[] = [
       { slotId: "wood", count: 1 }
     ],
     result: { slotId: "diamond_sword", count: 1 }
+  },
+  {
+    id: "wood_spear",
+    label: "1 Planks + 2 Wood -> Wood Spear",
+    cost: [
+      { slotId: "planks", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "wood_spear", count: 1 }
+  },
+  {
+    id: "stone_spear",
+    label: "1 Cobble + 2 Wood -> Stone Spear",
+    cost: [
+      { slotId: "cobble", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "stone_spear", count: 1 }
+  },
+  {
+    id: "sliver_spear",
+    label: "1 Sliver Ore + 2 Wood -> Sliver Spear",
+    cost: [
+      { slotId: "sliver_ore", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "sliver_spear", count: 1 }
+  },
+  {
+    id: "ruby_spear",
+    label: "1 Ruby Ore + 2 Wood -> Ruby Spear",
+    cost: [
+      { slotId: "ruby_ore", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "ruby_spear", count: 1 }
+  },
+  {
+    id: "sapphire_spear",
+    label: "1 Sapphire Ore + 2 Wood -> Sapphire Spear",
+    cost: [
+      { slotId: "sapphire_ore", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "sapphire_spear", count: 1 }
+  },
+  {
+    id: "gold_spear",
+    label: "1 Gold Ore + 2 Wood -> Gold Spear",
+    cost: [
+      { slotId: "gold_ore", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "gold_spear", count: 1 }
+  },
+  {
+    id: "diamond_spear",
+    label: "1 Diamond Ore + 2 Wood -> Diamond Spear",
+    cost: [
+      { slotId: "diamond_ore", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "diamond_spear", count: 1 }
   },
   {
     id: "helmet",

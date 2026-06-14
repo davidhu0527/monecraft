@@ -29,6 +29,15 @@ describe("item definitions", () => {
     }
   });
 
+  test("every spear has long melee reach and throw damage", () => {
+    const spears = ITEM_DEFS.filter((item) => item.id.endsWith("_spear"));
+    expect(spears).toHaveLength(7);
+    for (const spear of spears) {
+      expect(spear.meleeReach).toBeGreaterThan(4.5);
+      expect(spear.throwDamage).toBeGreaterThan(spear.attack ?? 0);
+    }
+  });
+
   test("armor items reference valid armor slots, and every slot has a label", () => {
     for (const item of ITEM_DEFS) {
       if (item.kind === "armor") {
@@ -62,6 +71,12 @@ describe("recipes", () => {
   test("station recipes name a known station", () => {
     for (const recipe of RECIPES) {
       if (recipe.station) expect(recipe.station).toBe("furnace");
+    }
+  });
+
+  test("every spear tier has a recipe", () => {
+    for (const item of ITEM_DEFS.filter((entry) => entry.id.endsWith("_spear"))) {
+      expect(RECIPES.some((recipe) => recipe.result.slotId === item.id)).toBe(true);
     }
   });
 });

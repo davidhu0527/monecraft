@@ -8,14 +8,20 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 2. Add a `BREAK_HARDNESS` entry in `lib/game/items.ts` (omitted blocks default to hardness 2).
 3. Make it placeable/droppable: an `ITEM_DEFS` entry (`kind: "block"`, `blockId`) plus a `BLOCK_TO_SLOT` mapping — without the mapping, mining it drops nothing. The inventory icon (isometric cube) auto-generates from `BLOCK_COLORS`; ore-style blocks can add an accent color in `lib/ui/spritePixels.ts` (`ORE_ACCENTS`).
 4. Optionally add `RECIPES` entries in `lib/game/recipes.ts`.
-5. Non-solid or transparent blocks need engine work: `isSolid()` in `lib/world/voxelWorld.ts` for collisions, and face-visibility logic in `lib/world/meshing.ts` (see the water gotcha in [architecture.md](architecture.md)).
+5. Non-cube, non-solid, or transparent blocks need engine work: collision in `lib/world/queries.ts` / `voxelWorld.ts` and geometry/face visibility in `lib/world/meshing.ts`. Doors are the reference for shared custom bounds; glass is the reference for a separate render layer.
 6. Map it to a sound family in `lib/game/audio/materials.ts` — the `BlockId → MaterialGroup` record is exhaustive, so typecheck fails until the entry exists.
 7. The item/recipe integrity tests (`lib/game/config.test.ts`) will fail if a mapping is missing or inconsistent — run `bun test`.
 
 ## A new item or recipe
 
 - Add to `ITEM_DEFS` in `lib/game/items.ts` — tools take `minePower`/`mineTier`/`maxDurability`, weapons `attack`/`maxDurability`, armor `armorSlot`/`defense`/`maxDurability`. `kind: "food"` items take a `hunger` value (restored on eat); `kind: "material"` items are inert craft ingredients.
-- Give it an inventory sprite in `lib/ui/spritePixels.ts`: tools/swords get one for free if the id is `<material>_pickaxe`/`<material>_sword` and the material exists in `MATERIAL_PALETTES`; food/material items need a 16×16 grid + palette wired into the `ITEM_SPRITE_GRIDS` map (keyed by item id). The `lib/ui/spritePixels.test.ts` integrity test fails on ids that fall back to the placeholder checker — by design.
+- Give it an inventory sprite in `lib/ui/spritePixels.ts`: pickaxes, swords, and
+  spears get one for free when named `<material>_pickaxe`, `<material>_sword`, or
+  `<material>_spear` and the material exists in `MATERIAL_PALETTES`;
+  food/material items need a 16×16 grid + palette in `ITEM_SPRITE_GRIDS`. The
+  sprite integrity test rejects placeholder fallbacks.
+- Any item with `maxDurability` is automatically non-stackable. Spears also set
+  `meleeReach` and `throwDamage`; `systems/spears.ts` handles throwing.
 - `ITEM_DEF_BY_ID` is derived from `ITEM_DEFS`; never edit it directly.
 - Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` (e.g. `"furnace"`) makes a recipe a smelting recipe: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book.
 - Items with durability don't stack; durability is initialized in `createSlot` and persisted in saves.
@@ -50,7 +56,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 - Right-click (and KeyE) dispatch `placeBlock`, which runs a fixed precedence in `GameEngine.dispatch` before falling through to placement: feed an aimed mob → `tryInteractBlock` → use the held item → place. To make a block do something on right-click, register it in `INTERACTIVE_BLOCKS` and add a branch in `tryInteractBlock` (`lib/game/engine/systems/interact.ts`).
 - The handler returns `true` to consume the click (no block is placed) — return `true` even when the action is refused (e.g. a bed during the day) so the player doesn't place a block into the bed by accident.
-- Three reference implementations: the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"); the **chest** opens the inventory and sets `state.openContainerIndex` (see below). A block that opens the inventory from a mouse click also needs an `openedStation`/`openedContainer` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
+- Four reference implementations: the **door** atomically toggles matching upper/lower state IDs; the **bed** sets `state.spawnPoint` and starts the sleep fade (`state.sleepTimer`); the **furnace** opens the inventory and sets `state.craftingStation`, which unlocks its `station` recipes (see "A new item or recipe"); the **chest** opens the inventory and sets `state.openContainerIndex` (see below). A block that opens the inventory from a mouse click also needs an `openedStation`/`openedContainer` handler in `useMinecraftGame` to release pointer lock. See [architecture.md](architecture.md) for the step order.
 
 ## A container block (block-entity storage)
 

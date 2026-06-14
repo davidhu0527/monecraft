@@ -30,7 +30,9 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 ## Game engine (`lib/game/engine/`)
 
 - `GameEngine.ts` — owns `GameState`, processes `dispatch(Command)`, advances `step(dt, input)`, serializes saves, and publishes snapshots (`subscribe`/`getSnapshot`). Randomness is injectable (`rng`) and the world size is overridable for fast headless tests.
-- `state.ts` — `GameState` (player with `yaw`/`pitch`, inventory, mobs as **logical entities with no Three.js objects**, day clock, mining progress, timers) plus `FrameInput`, `GameSnapshot`, `GameEvent`.
+- `state.ts` — `GameState` (player with `yaw`/`pitch`, inventory, mobs and thrown
+  spears as **logical entities with no Three.js objects**, day clock, mining
+  progress, timers) plus `FrameInput`, `GameSnapshot`, `GameEvent`.
 - `commands.ts` — the `Command` union: every UI/input mutation enters the simulation through exactly this door.
 - `blockChanges.ts` — the delta tracker behind the save format: tracked block writes against the worldgen baseline; reverted edits drop out of the save.
 - `systems/` — one module per mechanic, each a function over `GameState`:
@@ -42,7 +44,7 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 2. Death check + respawn countdown (while dead, only mobs tick)
 3. Sleep gate: while `state.sleepTimer > 0`, `step` decrements the fade and returns (full freeze, like pause); at zero it skips the clock to the next morning
 4. Player movement & physics (`systems/playerMotion.ts` — derives direction from `yaw`, scratch vectors, no per-frame allocations)
-5. Hunger drain from sprint/walk/jump budgets + health regen (`systems/playerStats.ts`)
+5. Hunger drain, health regen, and continuous-water exposure damage (`systems/playerStats.ts`)
 6. Mining progress and block breaking (`systems/mining.ts`; placement also lives here)
 7. Day-night clock (`systems/dayNight.ts` — `daylightAt()` is the single daylight formula); immediately after, `systems/weather.ts` sets the **transient** `state.weather` (rain/snow/clear) as a pure function of `dayClock` + seed — cosmetic only: never serialized, never touches spawn/daylight balance
 8. Random block ticks (`systems/randomTicks.ts` — each interval samples columns near the player and runs per-block handlers; drives crop growth and is the extension point for future saplings / grass spread)
@@ -51,7 +53,12 @@ The engine has **no React, no DOM, no rendering** — it runs (and is tested) he
 11. Mob AI: wander/aggro/flee, attacks with line-of-sight, daylight burn (`systems/mobAI.ts`)
 12. Animal breeding (`systems/breeding.ts` — feed-to-love timers, baby maturity, pairing in-love adults within range; the passive cap bounds the population)
 
-Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame. The `placeBlock` command runs a fixed right-click precedence (`systems/interact.ts`) — feed an aimed animal (`tryFeedAimedMob`) → interact with the aimed block (`tryInteractBlock`, e.g. sleep in a bed, open a furnace, open a chest) → use the held item (`tryUseHeldItem`, e.g. a hoe tills soil, seeds plant a crop) → `placeSelectedBlock` — so each interaction consumes the click instead of getting a block placed against it. New mechanics get a new system module and a slot in this sequence — don't grow the engine class with inline logic.
+Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame.
+`systems/spears.ts` launches selected spears and ticks their gravity, lifetime,
+swept mob collision, and terrain raycasts. The `placeBlock` command runs a fixed
+right-click precedence: throw selected spear → feed aimed animal → interact with
+aimed block → use held item → place selected block. New mechanics get a system
+module and a slot in this sequence — don't grow the engine class with inline logic.
 
 **Block-entities (chest contents).** Blocks are bare `BlockId`s, but a chest needs attached storage, so `state.containers: Map<voxelIndex, InventorySlot[]>` holds each placed chest's slots (keyed by `world.index`, the same space as the block diff). Placing a chest creates an empty entry; opening one (`interactChest`) sets `state.openContainerIndex` and `inventoryOpen` so the panel renders its grid; the `moveStack` command shuttles slots across the inventory/chest boundary (chest indices offset by `CONTAINER_SLOT_BASE`); breaking a chest spills its contents into the inventory via `inventory.tryInsertSlots` (refused if they don't fit). `serialize()` persists non-empty containers as `blockEntities`; see [save-format.md](save-format.md).
 
@@ -64,6 +71,8 @@ Combat (`systems/combat.ts`) runs on the `attack` command rather than per frame.
 - **World mesh**: one mesh covers the visible region (not chunked), rebuilt when the player crosses a `RENDER_GRID` (20-block) boundary or when the engine sets `state.worldMeshDirty` (block edits, respawn, unstuck). Old geometry is disposed on rebuild.
 - `mobVisuals.ts` — mob id → model map; creates/removes models as mobs spawn/die and animates bob + leg gait from mob state (the simulation knows nothing about legs).
 - `heldItem.ts` / `crackOverlay.ts` — first-person item model and the 8-stage mining crack box (stage = progress / hardness). Held blocks stay cubes; everything else is the item's 16×16 inventory sprite extruded into a pixel-thick voxel mesh (`extrudedSprite.ts`, vertex colors, silhouette-only side faces) — the render layer imports `lib/ui/spritePixels` for this, which is legal because spritePixels is pure pixel-buffer code with no DOM. The holder group is posed every frame by `heldItemPose.ts` (pure math): a one-shot swing on the `attackSwung` event (the shell calls `renderer.triggerSwing()` from the event drain), a looping swing while mining, a walk bob scaled by horizontal speed, an equip dip on slot switch, and a faint idle sway.
+- `spearVisuals.ts` mirrors transient thrown spear state into procedural shaft/tip
+  meshes keyed by projectile id.
 - `playerModel.ts` / `playerPose.ts` / `playerVisuals.ts` — the player's own humanoid body, visible only in third person: box meshes with pivot groups at the joints, walk gait + attack/mining chop from pure pose math (mirroring `heldItemPose.ts`), the look pitch applied to the head only, and the held hotbar item in the right hand via the shared `itemModel.ts` builder (also used by `heldItem.ts`).
 - **Atmosphere** (all procedural, zero assets, freed in `dispose()`): `particleSystem.ts` + the pure, unit-tested `particlePool.ts` draw event-driven bursts (block shards from `BLOCK_COLORS`, mob-death puffs, eat crumbs, jump/land/footstep dust) as one `THREE.Points` with a soft-sprite shader, spawned via `GameRenderer.handleEvent(event, state)` (wired into the event drain beside `audio.handleEvent`). `skyView.ts` + the pure `starField.ts` layer camera-following stars, a moon, a sun disc, and drifting canvas-noise clouds over the day-night sky lerp, ramped by `daylight`. `precipitation.ts` is the camera-following rain/snow field driven by `state.weather`, and `syncDayNight` adds the matching overcast sky tint + dimmed light + nearer fog.
 - **Skins**: the body is colored by a `PlayerPalette` from `lib/game/playerSkins.ts` (six presets); `GameRenderer.setPlayerSkin(palette)` recolors the named materials in place. The choice persists under its own localStorage key (`lib/game/skinSettings.ts`, `minecraft_skin_v1`) — a player preference like audio volumes, never part of the world save — and the pause-menu picker's bust portraits (`lib/ui/skinPortrait.ts`) derive from the same palettes.
@@ -98,10 +107,11 @@ Owns every DOM listener. Continuous input (movement keys, mouse button, pointer 
 
 One module per concern, behind an `index.ts` barrel — consumers always import from `@/lib/world`:
 
-- `blocks.ts` — `BlockId`, `BiomeId`, `WORLD_SIZE_*`, and both block palettes (`BLOCK_COLORS` paints the atlas; `HELD_BLOCK_COLORS` tints the held-item model — intentionally different values).
+- `blocks.ts` — `BlockId`, `BiomeId`, `WORLD_SIZE_*`, and both block palettes (`BLOCK_COLORS` paints the atlas; `HELD_BLOCK_COLORS` tints the held-item model — intentionally different values). Door facing/open/half states are ordinary IDs so they persist in the existing block diff.
+- `doors.ts` — door-state encoding helpers and the thin panel bounds shared by meshing and collision.
 - `voxelWorld.ts` — `VoxelWorld` stores voxels in a flat `Uint8Array` (index = `x + z*sizeX + y*sizeX*sizeZ`) plus cheap queries (`get`/`set`/`isSolid`/`highestSolidY`/`getBiome`).
 - `generation.ts` — `generateWorld(world)`: deterministic terrain, caves, water, ores, trees, houses, and underground dungeons (`placeDungeons`, last in the pipeline). `collectDungeonSites(world)` re-derives dungeon chest/spawner indices from the seed for the engine. Constants live in the frozen `GEN` object. **Byte-identical output per seed is a save-format contract**, pinned by `generation.test.ts` hash tests — fix code, never hashes.
-- `meshing.ts` — `buildGeometryRegion(world, …)` with face culling, baked ambient occlusion, and atlas UVs.
+- `meshing.ts` — `buildGeometryRegion(world, …)` with face culling, baked ambient occlusion, and atlas UVs; `buildGeometryLayersRegion` splits opaque terrain from clear glass for the renderer.
 - `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
 - `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.
 
@@ -109,8 +119,10 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 
 Hard-won invariants — easy to silently break:
 
-- **Water is special in meshing**: it's the only block whose faces render even against a same-type neighbor in `buildGeometryRegion`, and the single world material is `THREE.DoubleSide` so water is visible from inside. There is one material for all blocks — per-block render settings require restructuring. New transparent blocks must extend this face logic.
-- **Being in water is not "stuck"**: the unstuck teleport fires only on solid-block overlap or falling below the world (y < 2). Don't make water count as a collision in `collidesAt` — players are allowed to stay submerged.
+- **Transparent blocks are explicit render layers**: `buildGeometryLayersRegion` sends glass to a blended, non-depth-writing material while opaque terrain keeps normal depth writes. Glass-to-glass and water-to-water internal faces are culled; opaque faces touching glass remain visible through it. Water still uses the opaque layer and all world materials are `THREE.DoubleSide` so water is visible from inside. New transparent blocks must extend both the layer routing and face-visibility rules.
+- **Doors are multi-cell state machines encoded as blocks**: four facings × open/closed × upper/lower produce 16 internal `BlockId`s. Placement and breaking update both cells atomically; interaction validates the matching pair before toggling. `doorBounds` drives both thin mesh geometry and AABB collision. `highestSolidY` ignores doors so mob surface-following cannot climb over them; mob movement still checks their panel collision and never calls the player-only interaction handler.
+- **Being in water is not "stuck"**: the unstuck teleport fires only on solid-block overlap or falling below the world (y < 2). Don't make water count as a collision in `collidesAt` — players may stay submerged, though `tickWaterExposure` starts armor-bypassing damage after 60 continuous seconds. Its transient timers reset on exit and are never serialized.
+- **Water is replaceable during placement**: the normal raycast still ignores water and targets the solid surface behind it; `placeSelectedBlock` accepts the resulting destination when it contains air or water. Failed self-overlap placement must restore the original cell (including water), not blindly write air.
 - **Daylight thresholds** (daylight ranges 0.04–1.0, named in `config.ts`): hostiles night-spawn below 0.28; spiders are hostile only below 0.42 (passive in twilight); zombies/skeletons burn above 0.72. The game boots at dawn (~0.05), so initial hostiles aggro immediately — headless tests use a `calmDaytime` helper.
 - **DDA boundary ambiguity**: a raycast origin exactly on a cell boundary (integer coordinate) may target a diagonal neighbor — relevant for tests that aim at specific blocks.
 - **Pointer lock**: the first left-click only acquires pointer lock (no mining); `KeyI` explicitly exits lock; right-click places without requiring lock.

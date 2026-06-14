@@ -10,20 +10,21 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Recipes
 
-**32 recipes.** All use the always-available crafting grid except the two
+**40 recipes.** All use the always-available crafting grid except the two
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
 
-| Result    | Ingredients       |
-| --------- | ----------------- |
-| 4 Planks  | 2 Wood            |
-| 2 Glass   | 4 Sand            |
-| 2 Brick   | 2 Dirt + 2 Stone  |
-| 1 Furnace | 8 Cobble          |
-| 1 Chest   | 8 Planks          |
-| 1 Bed     | 3 Wool + 3 Planks |
-| 1 Wool    | 4 String          |
+| Result      | Ingredients       |
+| ----------- | ----------------- |
+| 4 Planks    | 2 Wood            |
+| 2 Glass     | 4 Sand            |
+| 2 Brick     | 2 Dirt + 2 Stone  |
+| 1 Furnace   | 8 Cobble          |
+| 1 Chest     | 8 Planks          |
+| 1 Wood Door | 6 Planks          |
+| 1 Bed       | 3 Wool + 3 Planks |
+| 1 Wool      | 4 String          |
 
 ### Tools
 
@@ -50,6 +51,13 @@ stats. For how it all fits together, read the [player manual](manual.md).
 | Sapphire Sword | 2 Sapphire Ore + 1 Wood |
 | Gold Sword     | 2 Gold Ore + 1 Wood     |
 | Diamond Sword  | 2 Diamond Ore + 1 Wood  |
+| Wood Spear     | 1 Planks + 2 Wood       |
+| Stone Spear    | 1 Cobble + 2 Wood       |
+| Sliver Spear   | 1 Sliver Ore + 2 Wood   |
+| Ruby Spear     | 1 Ruby Ore + 2 Wood     |
+| Sapphire Spear | 1 Sapphire Ore + 2 Wood |
+| Gold Spear     | 1 Gold Ore + 2 Wood     |
+| Diamond Spear  | 1 Diamond Ore + 2 Wood  |
 
 ### Armor
 
@@ -72,7 +80,7 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Blocks
 
-**29 block types** (plus air). Hardness is relative break time — higher is slower.
+**30 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock and water cannot be broken.
 
@@ -84,7 +92,7 @@ hands or any tool. Bedrock and water cannot be broken.
 | Snow              | 2        | any             | Mountain peaks                                                                                                |
 | Leaves            | 2        | any             | From trees; drops dirt                                                                                        |
 | Cactus            | 2        | any             | Desert decoration                                                                                             |
-| Glass             | 2        | any             | Crafted from sand                                                                                             |
+| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                          |
 | Wood              | 3        | any             | Tree trunks                                                                                                   |
 | Planks            | 3        | any             | Crafted from wood                                                                                             |
 | Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                          |
@@ -92,6 +100,7 @@ hands or any tool. Bedrock and water cannot be broken.
 | Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                 |
 | Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                      |
 | Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
+| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                           |
 | Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                    |
 | Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it      |
 | Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                             |
@@ -104,7 +113,7 @@ hands or any tool. Bedrock and water cannot be broken.
 | Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                 |
 | Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                          |
 | Bedrock           | —        | unbreakable     | World floor and border                                                                                        |
-| Water             | —        | —               | Liquid; sea level fills below y≈43                                                                            |
+| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second  |
 
 ## Mobs
 
@@ -145,18 +154,30 @@ at 16.
 
 ### Weapons
 
-A bare fist deals 6 damage for comparison.
+A bare fist deals 6 damage for comparison. Spears have 7-block melee reach
+(other attacks: 4.5) and can be thrown with right-click/`E`. Thrown spears fly
+quickly with a shallow arc; misses remain stuck in terrain for 2 seconds.
 
-| Item           | Attack | Durability |
-| -------------- | ------ | ---------- |
-| Knife          | 9      | 50         |
-| Wood Sword     | 13     | 80         |
-| Stone Sword    | 18     | 160        |
-| Sliver Sword   | 24     | 260        |
-| Ruby Sword     | 31     | 360        |
-| Sapphire Sword | 35     | 450        |
-| Gold Sword     | 40     | 540        |
-| Diamond Sword  | 47     | 720        |
+| Item           | Melee | Throw | Durability |
+| -------------- | ----- | ----- | ---------- |
+| Knife          | 9     | —     | 50         |
+| Wood Sword     | 13    | —     | 80         |
+| Stone Sword    | 18    | —     | 160        |
+| Sliver Sword   | 24    | —     | 260        |
+| Ruby Sword     | 31    | —     | 360        |
+| Sapphire Sword | 35    | —     | 450        |
+| Gold Sword     | 40    | —     | 540        |
+| Diamond Sword  | 47    | —     | 720        |
+| Wood Spear     | 11    | 15    | 70         |
+| Stone Spear    | 16    | 21    | 140        |
+| Sliver Spear   | 22    | 28    | 230        |
+| Ruby Spear     | 29    | 36    | 330        |
+| Sapphire Spear | 33    | 41    | 420        |
+| Gold Spear     | 38    | 47    | 500        |
+| Diamond Spear  | 45    | 55    | 680        |
+
+All durable gear is non-stackable: armor, tools, knives, swords, and spears each
+occupy one inventory or chest slot.
 
 ### Armor
 

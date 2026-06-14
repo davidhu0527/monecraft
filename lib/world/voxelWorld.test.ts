@@ -52,6 +52,14 @@ describe("VoxelWorld data structure", () => {
     expect(world.highestSolidY(0, 0)).toBe(0);
   });
 
+  test("highestSolidY ignores doors so mobs cannot walk over their tops", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(2, 1, 2, BlockId.Stone);
+    world.set(2, 2, 2, BlockId.DoorNorthLower);
+    world.set(2, 3, 2, BlockId.DoorNorthUpper);
+    expect(world.highestSolidY(2, 2)).toBe(1);
+  });
+
   test("voxel index formula is x + z*sizeX + y*sizeX*sizeZ (save-format invariant)", () => {
     // Saved block-change deltas address voxels by this exact formula.
     // Changing it silently corrupts every existing save.

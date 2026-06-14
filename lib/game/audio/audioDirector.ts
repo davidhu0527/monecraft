@@ -235,6 +235,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "openedContainer":
           backend.play(CHEST_OPEN_SOUND);
           break;
+        case "doorToggled":
+          backend.play(PLACE_SOUNDS.wood, { gain: event.open ? 0.8 : 1 });
+          break;
         case "mobFed":
           backend.play(MOB_FED_SOUND);
           break;

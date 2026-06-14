@@ -1,5 +1,5 @@
-import { BlockId } from "@/lib/world";
-import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS } from "@/lib/game/config";
+import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
+import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS, MAX_STACK_SIZE, SPEAR_MELEE_REACH } from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
@@ -24,6 +24,7 @@ export function createEmptyArmorEquipment(): EquippedArmor {
 }
 
 export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
+  ...Object.fromEntries(DOOR_BLOCK_IDS.map((block) => [block, 3])),
   [BlockId.Grass]: 2,
   [BlockId.Dirt]: 2,
   [BlockId.Sand]: 2,
@@ -75,6 +76,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
+  { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -109,6 +111,69 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35, maxDurability: 450 },
   { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40, maxDurability: 540 },
   { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47, maxDurability: 720 },
+  {
+    id: "wood_spear",
+    label: "Wood Spear",
+    kind: "weapon",
+    attack: 11,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 15,
+    maxDurability: 70
+  },
+  {
+    id: "stone_spear",
+    label: "Stone Spear",
+    kind: "weapon",
+    attack: 16,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 21,
+    maxDurability: 140
+  },
+  {
+    id: "sliver_spear",
+    label: "Sliver Spear",
+    kind: "weapon",
+    attack: 22,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 28,
+    maxDurability: 230
+  },
+  {
+    id: "ruby_spear",
+    label: "Ruby Spear",
+    kind: "weapon",
+    attack: 29,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 36,
+    maxDurability: 330
+  },
+  {
+    id: "sapphire_spear",
+    label: "Sapphire Spear",
+    kind: "weapon",
+    attack: 33,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 41,
+    maxDurability: 420
+  },
+  {
+    id: "gold_spear",
+    label: "Gold Spear",
+    kind: "weapon",
+    attack: 38,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 47,
+    maxDurability: 500
+  },
+  {
+    id: "diamond_spear",
+    label: "Diamond Spear",
+    kind: "weapon",
+    attack: 45,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 55,
+    maxDurability: 680
+  },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },
   { id: "face_mask", label: "Face Mask", kind: "armor", armorSlot: "face_mask", defense: 2, maxDurability: 220 },
   { id: "neck_protection", label: "Neck Protection", kind: "armor", armorSlot: "neck_protection", defense: 2, maxDurability: 230 },
@@ -119,6 +184,10 @@ export const ITEM_DEFS: ItemDef[] = [
 
 export const ITEM_DEF_BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEM_DEFS.map((item) => [item.id, item]));
 
+export function maxStackSizeForItem(itemId: string): number {
+  return ITEM_DEF_BY_ID[itemId]?.maxDurability ? 1 : MAX_STACK_SIZE;
+}
+
 export function createEmptySlot(): InventorySlot {
   return { id: null, label: "Empty", kind: null, count: 0 };
 }
@@ -126,7 +195,7 @@ export function createEmptySlot(): InventorySlot {
 export function createSlot(itemId: string, count: number): InventorySlot {
   const def = ITEM_DEF_BY_ID[itemId];
   if (!def) return createEmptySlot();
-  const slot: InventorySlot = { ...def, count };
+  const slot: InventorySlot = { ...def, count: Math.min(maxStackSizeForItem(itemId), Math.max(0, Math.floor(count))) };
   if ((def.kind === "tool" || def.kind === "weapon" || def.kind === "armor") && def.maxDurability) {
     slot.maxDurability = def.maxDurability;
     slot.durability = def.maxDurability;
@@ -173,6 +242,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Furnace]: "furnace",
   [BlockId.Chest]: "chest",
   [BlockId.MossyCobblestone]: "mossy_cobble",
+  [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",
@@ -186,6 +256,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
  * wheat drops wheat plus 1–2 seeds. `rng` is injectable for deterministic tests.
  */
 export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
+  if (isDoorBlock(block)) return [{ itemId: "door", count: 1 }];
   const drops: Array<{ itemId: string; count: number }> = [];
   const base = BLOCK_TO_SLOT[block];
   if (base) drops.push({ itemId: base, count: 1 });

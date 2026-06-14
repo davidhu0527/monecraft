@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BiomeId, BlockId, VoxelWorld, buildGeometryRegion, collectDungeonSites, generateWorld } from "@/lib/world";
+import { BiomeId, BlockId, VoxelWorld, buildGeometryLayersRegion, buildGeometryRegion, collectDungeonSites, generateWorld } from "@/lib/world";
 
 /**
  * Worldgen determinism characterization tests.
@@ -235,5 +235,30 @@ describe("meshing", () => {
     world.set(4, 3, 3, BlockId.Water);
     const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
     expect(geometry.getAttribute("position").count).toBe(72); // all 6 faces of each
+  });
+
+  test("glass is split into a clear layer and keeps adjacent opaque faces visible", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.Stone);
+    world.set(4, 3, 3, BlockId.Glass);
+    world.set(5, 3, 3, BlockId.Glass);
+    const geometry = buildGeometryLayersRegion(world, 0, 7, 0, 7);
+
+    expect(geometry.opaque.getAttribute("position").count).toBe(36);
+    expect(geometry.glass.getAttribute("position").count).toBe(60);
+  });
+
+  test("a two-block door meshes as two thin cuboids", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.set(3, 3, 3, BlockId.DoorNorthLower);
+    world.set(3, 4, 3, BlockId.DoorNorthUpper);
+    const geometry = buildGeometryRegion(world, 0, 7, 0, 7);
+    const positions = geometry.getAttribute("position");
+    expect(positions.count).toBe(72);
+    expect(geometry.boundingBox).toBeNull();
+    geometry.computeBoundingBox();
+    expect(geometry.boundingBox!.min.z).toBeCloseTo(3.40625);
+    expect(geometry.boundingBox!.max.z).toBeCloseTo(3.59375);
+    expect(geometry.boundingBox!.max.y - geometry.boundingBox!.min.y).toBe(2);
   });
 });

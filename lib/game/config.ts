@@ -16,6 +16,9 @@ export const MAX_HEARTS = 20;
 export const MAX_HUNGER = 20;
 export const RESPAWN_SECONDS = 3;
 export const HEALTH_REGEN_INTERVAL_SECONDS = 3;
+export const WATER_DAMAGE_DELAY_SECONDS = 60;
+export const WATER_DAMAGE_INTERVAL_SECONDS = 1;
+export const WATER_DAMAGE_HP = 3; // 1.5 hearts
 // Health regen only runs at or above this hunger level; sprint needs more than SPRINT_MIN_HUNGER.
 export const REGEN_MIN_HUNGER = 12;
 export const SPRINT_MIN_HUNGER = 6;
@@ -38,6 +41,13 @@ export const BARE_HAND_MINE_POWER = 0.8;
 export const FIST_DAMAGE = 6;
 export const ATTACK_REACH = 4.5;
 export const ATTACK_AIM_DOT = 0.89; // how precisely the camera must face a mob
+export const SPEAR_MELEE_REACH = 7;
+export const SPEAR_THROW_SPEED = 32;
+export const SPEAR_THROW_GRAVITY = 6;
+export const SPEAR_THROW_LIFETIME_SECONDS = 4;
+export const SPEAR_STUCK_SECONDS = 2;
+export const SPEAR_THROW_COOLDOWN_SECONDS = 0.45;
+export const SPEAR_HIT_RADIUS = 0.65;
 
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;

@@ -34,22 +34,22 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                                |
-| ------------------ | --------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                  |
-| `Space`            | Jump                                                                  |
-| `C`                | Crouch (slower, careful movement)                                     |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                    |
-| Mouse              | Look around (click the game first to lock the pointer)                |
-| Left-click (hold)  | Break the targeted block / attack a mob                               |
-| Right-click or `E` | Place the selected block / interact (bed, furnace, chest, hoe, seeds) |
-| `1`–`9`            | Select a hotbar slot                                                  |
-| `I`                | Open / close inventory & crafting                                     |
-| `F`                | Eat the selected food                                                 |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front   |
-| `U`                | Emergency unstuck (teleport to safe ground if wedged)                 |
-| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)         |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                   |
+| Key / input        | Action                                                              |
+| ------------------ | ------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                |
+| `Space`            | Jump                                                                |
+| `C`                | Crouch (slower, careful movement)                                   |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                  |
+| Mouse              | Look around (click the game first to lock the pointer)              |
+| Left-click (hold)  | Break the targeted block / attack a mob                             |
+| Right-click or `E` | Place/interact, or throw a selected spear                           |
+| `1`–`9`            | Select a hotbar slot                                                |
+| `I`                | Open / close inventory & crafting                                   |
+| `F`                | Eat the selected food                                               |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front |
+| `U`                | Emergency unstuck (teleport to safe ground if wedged)               |
+| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
@@ -64,7 +64,10 @@ freeze for **3 seconds**, then respawn — at your bed if you've slept in one,
 otherwise at a random land point. Death doesn't wipe your world or inventory.
 
 If you ever get wedged inside terrain, press **`U`** to teleport free. (Standing in
-water is _not_ "stuck" — you're allowed to swim.)
+water is _not_ "stuck" — you're allowed to swim.) You can place blocks into water
+to replace water cells when building underwater. Do not remain continuously
+immersed for more than **60 seconds**: after that grace period you take **1.5
+hearts every second**, ignoring armor. Leaving the water resets the timer.
 
 ### Hunger
 
@@ -90,6 +93,13 @@ Hold **left-click** to swing. You hit a mob if it's within **~4.5 blocks** and
 close to your crosshair (a fairly tight aim cone). Bare fists do **6 damage**;
 weapons do much more and have durability that ticks down with each hit. A landed
 blow knocks the mob back.
+
+Spears trade a little melee damage for **~7-block reach**. With a spear selected,
+press **`E`** or right-click to throw it: the projectile follows an arc, stops on
+the first mob it hits, and costs one durability. A missed spear embeds in terrain
+for two seconds before disappearing. The spear remains in your inventory until
+its durability runs out. Armor, tools, knives, swords, and spears never stack;
+every durable item occupies its own slot.
 
 **Armor** reduces incoming damage. Equip a helmet, face mask, neck protection,
 chestplate, leggings, and boots from the inventory's armor slots. Each piece adds
@@ -163,7 +173,15 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **32 recipes** in the [reference](reference.md#recipes).
+See the full list of **33 recipes** in the [reference](reference.md#recipes).
+
+## Doors
+
+Craft a **wood door** from **6 planks** and place it on a solid floor with two
+clear blocks above it. A door is a thin, two-block-tall panel: right-click either
+half to open or close the whole door. Closed doors block players and mobs; open
+doors rotate against their hinge so you can pass. Mobs cannot open or close doors.
+Breaking either half removes the whole door and returns one door item.
 
 ## Storage
 

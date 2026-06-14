@@ -28,7 +28,8 @@ changing them affects which gaps the player fits through.
 
 `MAX_HEARTS`, `MAX_HUNGER`, `RESPAWN_SECONDS`, `HEALTH_REGEN_INTERVAL_SECONDS`,
 `REGEN_MIN_HUNGER`, `SPRINT_MIN_HUNGER`, `SPRINT_BLOCKS_PER_HUNGER`,
-`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`.
+`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`, `WATER_DAMAGE_DELAY_SECONDS`,
+`WATER_DAMAGE_INTERVAL_SECONDS`, `WATER_DAMAGE_HP`.
 
 Read by `systems/playerStats.ts` (drain + regen) and `systems/playerLife.ts`
 (respawn). This group is where "how hard is it to stay alive" is set. The
@@ -37,6 +38,10 @@ eating. The two gates are the key feedback loop: you must stay above
 `REGEN_MIN_HUNGER` (12) to heal and above `SPRINT_MIN_HUNGER` (6) to sprint, so
 hunger pressure indirectly throttles both combat recovery and escape speed. Keep
 `REGEN_MIN_HUNGER > SPRINT_MIN_HUNGER` so there's a "can run but can't heal" band.
+Water exposure is continuous body-midpoint immersion: leaving water resets both
+timers. After `WATER_DAMAGE_DELAY_SECONDS` (60), environmental damage bypasses
+armor every `WATER_DAMAGE_INTERVAL_SECONDS` (1) for `WATER_DAMAGE_HP` (3 HP = 1.5
+hearts). These counters are transient and reset on reload/respawn.
 
 ## Danger — day-night & the mob director
 
@@ -76,15 +81,21 @@ shorten the cycle for more frequent, briefer showers.
 ## Progression — mining & combat reach
 
 `MINE_REACH`, `MINING_RATE`, `BARE_HAND_MINE_POWER`, `FIST_DAMAGE`, `ATTACK_REACH`,
-`ATTACK_AIM_DOT`.
+`ATTACK_AIM_DOT`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
+`SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
+`SPEAR_STUCK_SECONDS`, `SPEAR_THROW_COOLDOWN_SECONDS`, `SPEAR_HIT_RADIUS`.
 
-Read by `systems/mining.ts` and `systems/combat.ts`. `MINING_RATE` × a tool's
+Read by `systems/mining.ts`, `systems/combat.ts`, and `systems/spears.ts`.
+`MINING_RATE` × a tool's
 `minePower` (from `items.ts`) ÷ block hardness = break time, so this constant scales
 _all_ mining globally while item tiers scale it per-tool. Note the deliberate
 asymmetry: `MINE_REACH` (7) is longer than `ATTACK_REACH` (4.5) — you can dig
 farther than you can punch. `ATTACK_AIM_DOT` (0.89) is how precisely the crosshair
 must point at a mob to hit it — lower is more forgiving. The per-ore **tool-tier
-gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config.
+gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config. Spears
+override only melee reach; their projectile speed, gravity, lifetime, cooldown,
+terrain embed duration, and collision radius are global, while tier
+damage/durability live in `items.ts`.
 
 ## Farming & breeding pace
 

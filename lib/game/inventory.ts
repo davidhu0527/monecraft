@@ -1,5 +1,5 @@
 import { MAX_STACK_SIZE } from "@/lib/game/config";
-import { ARMOR_SLOTS, createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
+import { ARMOR_SLOTS, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 /**
@@ -51,13 +51,14 @@ export function adjustSlotCount(slots: InventorySlot[], slotId: string, delta: n
   }
 
   if (!ITEM_DEF_BY_ID[slotId]) return null;
+  const stackSize = maxStackSizeForItem(slotId);
 
   const fillIndex = (index: number) => {
     if (remaining <= 0) return;
     if (index < 0 || index >= next.length) return;
     const slot = next[index];
-    if (slot.id !== slotId || slot.count >= MAX_STACK_SIZE) return;
-    const add = Math.min(remaining, MAX_STACK_SIZE - slot.count);
+    if (slot.id !== slotId || slot.count >= stackSize) return;
+    const add = Math.min(remaining, stackSize - slot.count);
     slot.count += add;
     remaining -= add;
   };
@@ -66,7 +67,7 @@ export function adjustSlotCount(slots: InventorySlot[], slotId: string, delta: n
   for (let i = 0; i < next.length && remaining > 0; i += 1) fillIndex(i);
   for (let i = 0; i < next.length && remaining > 0; i += 1) {
     if (next[i].id !== null || next[i].count !== 0) continue;
-    const add = Math.min(remaining, MAX_STACK_SIZE);
+    const add = Math.min(remaining, stackSize);
     next[i] = createSlot(slotId, add);
     remaining -= add;
   }
@@ -115,9 +116,10 @@ export function canCraft(slots: InventorySlot[], recipe: Recipe): boolean {
   if (!hasCost) return false;
 
   let freeForResult = 0;
+  const stackSize = maxStackSizeForItem(recipe.result.slotId);
   for (const slot of slots) {
-    if (slot.id === recipe.result.slotId) freeForResult += MAX_STACK_SIZE - slot.count;
-    if (slot.id === null && slot.count === 0) freeForResult += MAX_STACK_SIZE;
+    if (slot.id === recipe.result.slotId) freeForResult += stackSize - slot.count;
+    if (slot.id === null && slot.count === 0) freeForResult += stackSize;
   }
   return freeForResult >= recipe.result.count;
 }
@@ -144,15 +146,16 @@ export function craft(slots: InventorySlot[], recipe: Recipe): InventorySlot[] |
   }
 
   let remaining = recipe.result.count;
+  const stackSize = maxStackSizeForItem(recipe.result.slotId);
   for (let i = 0; i < next.length && remaining > 0; i += 1) {
-    if (next[i].id !== recipe.result.slotId || next[i].count >= MAX_STACK_SIZE) continue;
-    const add = Math.min(remaining, MAX_STACK_SIZE - next[i].count);
+    if (next[i].id !== recipe.result.slotId || next[i].count >= stackSize) continue;
+    const add = Math.min(remaining, stackSize - next[i].count);
     next[i].count += add;
     remaining -= add;
   }
   for (let i = 0; i < next.length && remaining > 0; i += 1) {
     if (next[i].id !== null || next[i].count !== 0) continue;
-    const add = Math.min(remaining, MAX_STACK_SIZE);
+    const add = Math.min(remaining, stackSize);
     next[i] = createSlot(recipe.result.slotId, add);
     remaining -= add;
   }

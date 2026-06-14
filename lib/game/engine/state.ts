@@ -54,6 +54,17 @@ export type MiningState = {
   progress: number;
 };
 
+export type ThrownSpearState = {
+  id: number;
+  itemId: string;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  damage: number;
+  age: number;
+  /** Seconds embedded in terrain, or null while still flying. */
+  stuckTimer: number | null;
+};
+
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
 export type DebugInfo = {
   x: number;
@@ -65,6 +76,8 @@ export type DebugInfo = {
 export type GameTimers = {
   voidTimer: number;
   regenTimer: number;
+  waterExposureTimer: number;
+  waterDamageTimer: number;
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
@@ -75,6 +88,7 @@ export type GameTimers = {
   debugHudTimer: number;
   randomTickTimer: number;
   breedTimer: number;
+  spearThrowCooldown: number;
 };
 
 export type WeatherKind = "clear" | "rain" | "snow";
@@ -112,6 +126,8 @@ export type GameState = {
   capsActive: boolean;
   mobs: MobState[];
   nextMobId: number;
+  thrownSpears: ThrownSpearState[];
+  nextThrownSpearId: number;
   dayClock: number;
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
@@ -132,6 +148,8 @@ export function createTimers(): GameTimers {
   return {
     voidTimer: 0,
     regenTimer: 0,
+    waterExposureTimer: 0,
+    waterDamageTimer: 0,
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,
@@ -141,7 +159,8 @@ export function createTimers(): GameTimers {
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
-    breedTimer: 0
+    breedTimer: 0,
+    spearThrowCooldown: 0
   };
 }
 
@@ -217,6 +236,7 @@ export type GameEvent =
   | { type: "plantedSeed" }
   | { type: "openedStation"; station: "furnace" }
   | { type: "openedContainer" }
+  | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "mobFed"; kind: MobKind }

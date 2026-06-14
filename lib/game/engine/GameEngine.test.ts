@@ -10,7 +10,9 @@ import {
   PLAYER_HEIGHT,
   REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
-  SPRINT_MIN_HUNGER
+  SPRINT_MIN_HUNGER,
+  WATER_DAMAGE_DELAY_SECONDS,
+  WATER_DAMAGE_HP
 } from "@/lib/game/config";
 import { CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
@@ -161,6 +163,51 @@ describe("movement and stats", () => {
     engine.state.hunger = REGEN_MIN_HUNGER - 1;
     run(engine, 6.5);
     expect(engine.state.hearts).toBe(MAX_HEARTS - 3);
+  });
+
+  test("continuous water exposure damages 1.5 hearts per second after one minute", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const y = Math.floor(state.player.position.y + PLAYER_HEIGHT * 0.5);
+    const z = Math.floor(state.player.position.z);
+    state.blockChanges.set(x, y, z, BlockId.Water);
+    const armorSlot = state.inventory.findIndex((slot) => !slot.id);
+    state.inventory = [...state.inventory];
+    state.inventory[armorSlot] = createSlot("chestplate", 1);
+    state.equippedArmor.chestplate = "chestplate";
+    const durability = state.inventory[armorSlot].durability;
+    state.timers.waterExposureTimer = WATER_DAMAGE_DELAY_SECONDS - 0.5;
+    engine.consumeEvents();
+
+    run(engine, 0.4);
+    expect(state.hearts).toBe(MAX_HEARTS);
+    run(engine, 1.2);
+    expect(state.hearts).toBe(MAX_HEARTS - WATER_DAMAGE_HP);
+    expect(state.inventory[armorSlot].durability).toBe(durability);
+    expect(engine.consumeEvents().some((event) => event.type === "playerHurt")).toBe(true);
+  });
+
+  test("leaving water resets both exposure counters", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const y = Math.floor(state.player.position.y + PLAYER_HEIGHT * 0.5);
+    const z = Math.floor(state.player.position.z);
+    state.blockChanges.set(x, y, z, BlockId.Water);
+    state.timers.waterExposureTimer = 42;
+    state.timers.waterDamageTimer = 0.8;
+    state.blockChanges.set(x, y, z, BlockId.Air);
+
+    engine.step(0.1, input());
+    expect(state.timers.waterExposureTimer).toBe(0);
+    expect(state.timers.waterDamageTimer).toBe(0);
   });
 });
 
@@ -516,6 +563,115 @@ describe("dungeon spawners", () => {
   });
 });
 
+describe("doors", () => {
+  function setAimedDoor(engine: GameEngine, open = false): { x: number; y: number; z: number } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(x, y, z, open ? BlockId.DoorNorthOpenLower : BlockId.DoorNorthLower);
+    state.blockChanges.set(x, y + 1, z, open ? BlockId.DoorNorthOpenUpper : BlockId.DoorNorthUpper);
+    return { x, y, z };
+  }
+
+  test("right-clicking either half toggles both halves", () => {
+    const engine = makeEngine();
+    const door = setAimedDoor(engine);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.DoorNorthOpenLower);
+    expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.DoorNorthOpenUpper);
+    expect(engine.consumeEvents()).toContainEqual({ type: "doorToggled", open: true });
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.DoorNorthLower);
+    expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.DoorNorthUpper);
+  });
+
+  test("placing one door item creates a supported two-block door", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const floorY = Math.floor(state.player.position.y) - 1;
+    state.player.position.set(x + 0.5, floorY + 1, z + 0.5);
+    state.player.yaw = 0;
+    state.player.pitch = -0.6;
+    for (let dz = -1; dz >= -5; dz -= 1) {
+      state.blockChanges.set(x, floorY, z + dz, BlockId.Stone);
+      state.blockChanges.set(x, floorY + 1, z + dz, BlockId.Air);
+      state.blockChanges.set(x, floorY + 2, z + dz, BlockId.Air);
+    }
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("door", 1);
+
+    engine.dispatch({ type: "placeBlock" });
+
+    const placed: Array<{ y: number; block: number }> = [];
+    for (let dz = -1; dz >= -5; dz -= 1) {
+      for (let y = floorY + 1; y <= floorY + 2; y += 1) {
+        const block = state.world.get(x, y, z + dz);
+        if (block >= BlockId.DoorNorthLower && block <= BlockId.DoorWestOpenUpper) placed.push({ y, block });
+      }
+    }
+    expect(placed).toHaveLength(2);
+    expect(placed[0].block).toBe(BlockId.DoorNorthLower);
+    expect(placed[1].block).toBe(BlockId.DoorNorthUpper);
+    expect(state.inventory[state.selectedSlot].id).toBeNull();
+  });
+
+  test("breaking either half removes the whole door and drops one item", () => {
+    const engine = makeEngine();
+    const door = setAimedDoor(engine);
+    const before = countsById(engine.state.inventory).get("door") ?? 0;
+    run(engine, 5, input({ leftMouseHeld: true, pointerLocked: true }));
+    expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.Air);
+    expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.Air);
+    expect(countsById(engine.state.inventory).get("door")).toBe(before + 1);
+  });
+
+  test("door state persists through the ordinary block-change save", () => {
+    const engine = makeEngine();
+    const door = setAimedDoor(engine, true);
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.world.get(door.x, door.y, door.z)).toBe(BlockId.DoorNorthOpenLower);
+    expect(restored.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.DoorNorthOpenUpper);
+  });
+
+  test("mobs cannot toggle a door and stop at its closed panel", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    const { state } = engine;
+    const mob = state.mobs.find((entry) => !entry.hostile)!;
+    const ground = 30;
+    state.player.position.set(50, ground, 50);
+    for (let z = 19; z <= 22; z += 1) {
+      for (let y = ground; y < state.world.sizeY; y += 1) state.blockChanges.set(20, y, z, BlockId.Air);
+      state.blockChanges.set(20, ground - 1, z, BlockId.Stone);
+    }
+    mob.position.set(20.5, ground + mob.halfHeight, 21.1);
+    mob.direction.set(0, 0, -1);
+    mob.turnTimer = 10;
+    state.blockChanges.set(20, ground, 20, BlockId.DoorNorthLower);
+    state.blockChanges.set(20, ground + 1, 20, BlockId.DoorNorthUpper);
+    const beforeZ = mob.position.z;
+    engine.step(0.5, input());
+    expect(mob.position.z).toBe(beforeZ);
+    expect(state.world.get(20, ground, 20)).toBe(BlockId.DoorNorthLower);
+    expect(state.world.get(20, ground + 1, 20)).toBe(BlockId.DoorNorthUpper);
+  });
+});
+
 /** Decodes a voxel index back to [x, y, z] for the active world. */
 function indexToXYZ(state: GameEngine["state"], idx: number): [number, number, number] {
   const layer = state.world.sizeX * state.world.sizeZ;
@@ -759,6 +915,49 @@ describe("gameplay events", () => {
     expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Grass);
   });
 
+  test("placing a block replaces the targeted water cell", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Water);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Water);
+    state.blockChanges.set(ex, ey, ez - 3, BlockId.Stone);
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Grass);
+  });
+
+  test("a refused self-overlapping placement restores the water cell", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(ex, ey, ez, BlockId.Water);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Stone);
+    const grassBefore = countsById(state.inventory).get("grass");
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(ex, ey, ez)).toBe(BlockId.Water);
+    expect(countsById(state.inventory).get("grass")).toBe(grassBefore);
+  });
+
   test("eating emits ateFood", () => {
     const engine = makeEngine();
     calmDaytime(engine);
@@ -794,6 +993,7 @@ describe("gameplay events", () => {
     calmDaytime(engine);
     run(engine, 1);
     const { state } = engine;
+    state.mobs = [];
     state.player.yaw = 0;
     state.player.pitch = 0;
     spawnTestMob(engine, "zombie", true, { x: 0, y: EYE_HEIGHT, z: -2 });
@@ -865,6 +1065,7 @@ describe("gameplay events", () => {
     calmDaytime(engine);
     run(engine, 1);
     const { state } = engine;
+    state.mobs = [];
     state.player.yaw = 0;
     state.player.pitch = 0;
     // Park a sheep dead ahead at eye height so the aim-dot check passes.
@@ -872,6 +1073,77 @@ describe("gameplay events", () => {
     engine.consumeEvents();
     engine.dispatch({ type: "attack" });
     expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "sheep")).toBe(true);
+  });
+
+  test("spears hit farther than ordinary melee weapons", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    spawnTestMob(engine, "sheep", false, { x: 0, y: EYE_HEIGHT, z: -6 });
+    const mob = state.mobs[state.mobs.length - 1];
+
+    state.inventory[0] = createSlot("stone_sword", 1);
+    state.selectedSlot = 0;
+    engine.dispatch({ type: "attack" });
+    expect(mob.hp).toBe(50);
+
+    state.inventory[0] = createSlot("stone_spear", 1);
+    engine.dispatch({ type: "attack" });
+    expect(mob.hp).toBe(34);
+  });
+
+  test("right-click throws a spear that damages mobs and wears the weapon", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.player.yaw = 0;
+    state.inventory[0] = createSlot("diamond_spear", 1);
+    state.selectedSlot = 0;
+    const durability = state.inventory[0].durability!;
+    const targetDistance = 2;
+    const targetZ = state.player.position.z - targetDistance;
+    const targetY = state.world.highestSolidY(Math.floor(state.player.position.x), Math.floor(targetZ)) + 1.9;
+    state.player.pitch = Math.atan2(targetY - (state.player.position.y + EYE_HEIGHT), targetDistance) + 0.01;
+    spawnTestMob(engine, "zombie", false, { x: 0, y: targetY - state.player.position.y, z: -targetDistance });
+    const mobId = state.mobs[state.mobs.length - 1].id;
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(state.thrownSpears).toHaveLength(1);
+    expect(state.inventory[0].durability).toBe(durability - 1);
+    engine.dispatch({ type: "placeBlock" }); // cooldown prevents repeat spam
+    expect(state.thrownSpears).toHaveLength(1);
+
+    run(engine, 0.6);
+    expect(state.thrownSpears).toHaveLength(0);
+    expect(state.mobs.some((mob) => mob.id === mobId)).toBe(false);
+    expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "zombie")).toBe(true);
+  });
+
+  test("a spear that hits terrain stays embedded for two seconds", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.inventory[0] = createSlot("wood_spear", 1);
+    state.selectedSlot = 0;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+
+    engine.dispatch({ type: "placeBlock" });
+    run(engine, 0.2);
+    expect(state.thrownSpears).toHaveLength(1);
+    expect(state.thrownSpears[0].stuckTimer).not.toBeNull();
+
+    run(engine, 1.7);
+    expect(state.thrownSpears).toHaveLength(1);
+    run(engine, 0.2);
+    expect(state.thrownSpears).toHaveLength(0);
   });
 
   test("attacking emits attackSwung even when nothing is hit", () => {

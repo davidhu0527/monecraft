@@ -34,7 +34,25 @@ export const enum BlockId {
   Chest = 27,
   // Dungeon blocks (worldgen-only flavor + the spawner block-entity marker).
   MossyCobblestone = 28,
-  Spawner = 29
+  Spawner = 29,
+  // Wood doors — 16 contiguous ids (4 facings × open/closed × lower/upper).
+  // doors.ts derives state by offset from DoorNorthLower, so keep them in order.
+  DoorNorthLower = 30,
+  DoorNorthUpper = 31,
+  DoorEastLower = 32,
+  DoorEastUpper = 33,
+  DoorSouthLower = 34,
+  DoorSouthUpper = 35,
+  DoorWestLower = 36,
+  DoorWestUpper = 37,
+  DoorNorthOpenLower = 38,
+  DoorNorthOpenUpper = 39,
+  DoorEastOpenLower = 40,
+  DoorEastOpenUpper = 41,
+  DoorSouthOpenLower = 42,
+  DoorSouthOpenUpper = 43,
+  DoorWestOpenLower = 44,
+  DoorWestOpenUpper = 45
 }
 
 export enum BiomeId {
@@ -67,7 +85,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Bed]: 0xc0392b,
   [BlockId.Furnace]: 0x63666a,
   [BlockId.Chest]: 0x9c6a3c,
-  [BlockId.MossyCobblestone]: 0x6a7a55
+  [BlockId.MossyCobblestone]: 0x6a7a55,
+  [BlockId.DoorNorthLower]: 0xa8753f
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -105,5 +124,21 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.Chest]: [0.58, 0.41, 0.22],
   // Cobble tinted with patches of moss; the spawner is a near-black iron cage.
   [BlockId.MossyCobblestone]: [0.34, 0.42, 0.3],
-  [BlockId.Spawner]: [0.18, 0.19, 0.22]
+  [BlockId.Spawner]: [0.18, 0.19, 0.22],
+  [BlockId.DoorNorthLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorNorthUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorNorthOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorNorthOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorEastOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorSouthOpenUpper]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestOpenLower]: [0.62, 0.4, 0.2],
+  [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2]
 };

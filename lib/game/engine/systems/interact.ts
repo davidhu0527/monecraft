@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, voxelRaycast } from "@/lib/world";
+import { BlockId, doorBlock, doorState, voxelRaycast } from "@/lib/world";
 import {
   BREED_FED_WINDOW_SECONDS,
   CHEST_SLOTS,
@@ -21,12 +21,28 @@ const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace" | "chest";
+export type InteractiveKind = "bed" | "furnace" | "chest" | "door";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
-  [BlockId.Chest]: "chest"
+  [BlockId.Chest]: "chest",
+  [BlockId.DoorNorthLower]: "door",
+  [BlockId.DoorNorthUpper]: "door",
+  [BlockId.DoorEastLower]: "door",
+  [BlockId.DoorEastUpper]: "door",
+  [BlockId.DoorSouthLower]: "door",
+  [BlockId.DoorSouthUpper]: "door",
+  [BlockId.DoorWestLower]: "door",
+  [BlockId.DoorWestUpper]: "door",
+  [BlockId.DoorNorthOpenLower]: "door",
+  [BlockId.DoorNorthOpenUpper]: "door",
+  [BlockId.DoorEastOpenLower]: "door",
+  [BlockId.DoorEastOpenUpper]: "door",
+  [BlockId.DoorSouthOpenLower]: "door",
+  [BlockId.DoorSouthOpenUpper]: "door",
+  [BlockId.DoorWestOpenLower]: "door",
+  [BlockId.DoorWestOpenUpper]: "door"
 };
 
 /**
@@ -51,7 +67,22 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
   if (kind === "bed") return interactBed(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "furnace") return interactFurnace(state, emit);
   if (kind === "chest") return interactChest(state, emit, result.hit.x, result.hit.y, result.hit.z);
+  if (kind === "door") return interactDoor(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
+}
+
+function interactDoor(state: GameState, emit: EmitGameEvent, x: number, y: number, z: number): boolean {
+  const current = doorState(state.world.get(x, y, z));
+  if (!current) return false;
+  const lowerY = current.upper ? y - 1 : y;
+  const lower = doorState(state.world.get(x, lowerY, z));
+  const upper = doorState(state.world.get(x, lowerY + 1, z));
+  if (!lower || lower.upper || !upper?.upper || lower.facing !== upper.facing || lower.open !== upper.open) return true;
+  state.blockChanges.set(x, lowerY, z, doorBlock(lower.facing, !lower.open, false));
+  state.blockChanges.set(x, lowerY + 1, z, doorBlock(lower.facing, !lower.open, true));
+  state.worldMeshDirty = true;
+  emit({ type: "doorToggled", open: !lower.open });
+  return true;
 }
 
 /** Opens the chest at (x,y,z) in the inventory panel, creating its (lazy) empty store. */

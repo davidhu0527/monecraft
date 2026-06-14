@@ -20,7 +20,7 @@ const CONTROLS: Array<[string, string]> = [
   ["Move / Jump", "W A S D / Space"],
   ["Sprint / Crouch", "W + CapsLock / C"],
   ["Mine / Attack", "Hold left click / Left click"],
-  ["Place block", "Right click or E"],
+  ["Place / interact / throw spear", "Right click or E"],
   ["Inventory", "I"],
   ["Eat food", "F"],
   ["Hotbar", "1-9"],

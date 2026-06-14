@@ -113,6 +113,18 @@ describe("collidesAt", () => {
     // Right edge of the AABB lands exactly on x=6.0; the epsilon excludes cell 6.
     expect(collidesAt(world, new THREE.Vector3(5.7, 5.5, 5.5), 0.3, 1.8)).toBe(false);
   });
+
+  test("a closed door blocks its opening while an open door leaves the center passable", () => {
+    const world = emptyWorld();
+    world.set(5, 5, 5, BlockId.DoorNorthLower);
+    world.set(5, 6, 5, BlockId.DoorNorthUpper);
+    const feet = new THREE.Vector3(5.5, 5, 5.5);
+    expect(collidesAt(world, feet, 0.3, 1.8)).toBe(true);
+
+    world.set(5, 5, 5, BlockId.DoorNorthOpenLower);
+    world.set(5, 6, 5, BlockId.DoorNorthOpenUpper);
+    expect(collidesAt(world, feet, 0.3, 1.8)).toBe(false);
+  });
 });
 
 describe("hasSupportUnderPlayer", () => {

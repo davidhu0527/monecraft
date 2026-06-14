@@ -5,7 +5,7 @@
 `SaveData` (version 5) in `lib/game/types.ts`:
 
 - world `seed`
-- a block **diff** list — `changes: [blockIndex, blockId][]`; edits that revert to the generated baseline are pruned (player-placed crops, beds, furnaces, and chests ride this list — they are ordinary block edits)
+- a block **diff** list — `changes: [blockIndex, blockId][]`; edits that revert to the generated baseline are pruned (player-placed crops, beds, furnaces, chests, and both halves/states of doors ride this list — they are ordinary block edits)
 - inventory slots with durability (36 slots; the first 9 are the hotbar)
 - equipped armor
 - selected hotbar slot (0–8)
@@ -18,6 +18,9 @@
 Stored in localStorage under `SAVE_KEY` (`minecraft_save_v6`, defined in `lib/game/config.ts`). Read/write and restore validation live in `lib/game/save.ts` (the `Storage` is injectable for tests); `GameEngine.serialize()` produces the save from live state, and `lib/game/engine/blockChanges.ts` maintains the block diff.
 
 Audio volume preferences live under a **separate** key (`minecraft_audio_v1`, `lib/game/audio/settings.ts`) and are not part of the world save or its versioning.
+
+Continuous-water exposure and damage cadence live only in transient `GameTimers`.
+Saving/reloading or respawning resets the one-minute exposure clock.
 
 ### Version history
 
@@ -37,4 +40,7 @@ Every 15s via `setInterval`, plus on `beforeunload`.
 - Saves store **diffs against generated terrain**, so changing world generation or the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) silently corrupts existing saves — bump `SAVE_KEY` when you do.
 - Worldgen output is pinned by SHA-256 characterization tests in `lib/world/generation.test.ts`; they fail on any byte-level change. See [testing.md](testing.md) for the re-baseline policy. Caveat: the noise functions use `Math.sin`, whose exact results are engine-defined — the tests prove refactor purity on the pinned Bun version, not cross-browser save portability.
 - Changing the save shape requires bumping the `version` field and handling (or discarding) old data. Round-trip tests live in `lib/game/save.test.ts` and `lib/game/engine/GameEngine.test.ts`.
+- Durable gear restores at a maximum count of one per slot. The v1→v2 migration
+  splits legacy stacked gear into separate slots until inventory capacity is
+  exhausted; current malformed stacks are clamped to one.
 - Note save-format/worldgen impact in PRs.
