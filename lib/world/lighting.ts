@@ -73,6 +73,8 @@ export function emission(block: BlockId): number {
   switch (block) {
     case BlockId.Torch:
       return 14;
+    case BlockId.Lava:
+      return MAX_LIGHT;
     default:
       return 0;
   }

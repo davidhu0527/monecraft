@@ -41,11 +41,16 @@ describe("light classification", () => {
     expect(isLightBlocker(BlockId.Bedrock)).toBe(true);
   });
 
-  test("torches emit block light; ordinary blocks do not", () => {
+  test("torches and lava emit block light; ordinary blocks do not", () => {
     expect(emission(BlockId.Torch)).toBe(14);
+    expect(emission(BlockId.Lava)).toBe(15);
     expect(emission(BlockId.Air)).toBe(0);
     expect(emission(BlockId.Stone)).toBe(0);
     expect(emission(BlockId.Glass)).toBe(0);
+  });
+
+  test("lava blocks sky light (it is opaque) while still emitting", () => {
+    expect(isLightBlocker(BlockId.Lava)).toBe(true);
   });
 });
 
@@ -78,6 +83,15 @@ describe("block light", () => {
     world.set(12, 12, 12, BlockId.Air);
     applyEdit(world, light, 12, 12, 12);
     expect(block(world, light, 13, 12, 12)).toBe(0); // torch gone, dark again
+  });
+
+  test("lava emits the brightest block light from an opaque source cell", () => {
+    const world = airWorld(40);
+    world.set(12, 12, 12, BlockId.Lava);
+    const light = computeFullLight(world);
+    expect(block(world, light, 12, 12, 12)).toBe(15); // the molten cell itself
+    expect(block(world, light, 13, 12, 12)).toBe(14); // radiates into the air beside it
+    expect(block(world, light, 16, 12, 12)).toBe(11);
   });
 });
 
