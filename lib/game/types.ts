@@ -45,11 +45,14 @@ export type Recipe = {
   label: string;
   cost: Array<{ slotId: string; count: number }>;
   result: { slotId: string; count: number };
-  /** Crafting station required; omitted means the basic crafting grid. */
-  station?: "furnace";
+  /**
+   * Station required for this recipe; omitted means the basic crafting grid.
+   * "furnace" smelts; "villager" is a trade offer, unlocked while trading with a villager.
+   */
+  station?: "furnace" | "villager";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "zombie" | "skeleton" | "spider" | "boss";
+export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
 
 export type MobModel = {
   group: THREE.Group;

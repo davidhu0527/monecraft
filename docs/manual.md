@@ -92,9 +92,11 @@ hearts every second**, ignoring armor. Leaving the water resets the timer.
 
 Underground is now genuinely **dark**: sunlight reaches down open shafts and
 spills a little way into cave mouths, but the deep tunnels are pitch black. Craft
-**torches** (1 wood → 4 torches) and place them as you explore — each casts a warm
-pool of light that won't fade at night. Without a light source you're mining blind,
-and the dark is where monsters lurk.
+**torches** (1 coal + 1 wood → 4 torches) and place them as you explore — each casts
+a warm pool of light that won't fade at night. Without a light source you're mining
+blind, and the dark is where monsters lurk. **Coal** is the shallow, common ore you
+mine for torch and furnace fuel — if you're out, smelt a log into **charcoal**, which
+works the same.
 
 ### Drowning and lava
 
@@ -185,6 +187,7 @@ harvest at all — mining with too weak a tool yields nothing:
 | To mine…                  | You need at least… |
 | ------------------------- | ------------------ |
 | Stone, cobblestone, brick | Wood pickaxe       |
+| Coal ore                  | Wood pickaxe       |
 | Sliver ore                | Stone pickaxe      |
 | Ruby & gold ore           | Sliver pickaxe     |
 | Sapphire & diamond ore    | Ruby pickaxe       |
@@ -192,6 +195,13 @@ harvest at all — mining with too weak a tool yields nothing:
 Higher-tier pickaxes (sapphire, gold, diamond) also mine **faster**. Dirt, sand,
 wood, leaves, and crops need no special tool. Ores hide underground and in caves;
 the rarer the ore, the deeper it tends to sit.
+
+**Blasting with TNT.** Collect **gunpowder** from creepers and craft **TNT** (4
+gunpowder + 1 sand). Place it like any block, then **right-click it with a torch**
+to light the fuse — stand well back, because after a couple of seconds it blows a
+crater and hurts anything close. TNT next to more TNT chains. It won't touch
+bedrock, and it mostly destroys rather than drops blocks, so it's for digging and
+demolition, not free resources.
 
 ## Dungeons and loot
 
@@ -245,24 +255,44 @@ everything, the break is refused and the chest stays put — empty it a bit firs
 
 ## Mobs and breeding
 
-Six creatures roam the world:
+Ten creatures roam the world:
 
-- **Passive** — **sheep**, **chicken**, **horse**. They wander, flee when you get
-  close, and never attack. They drop materials and raw meat when killed.
-- **Hostile** — **zombie**, **skeleton**, **spider**. They hunt you at night,
-  chase within their detection range, and attack when they have line of sight.
-  **Skeletons are archers** — they keep their distance and fire arrows, so close
-  in or take cover. Spiders are only hostile in the dark.
+- **Passive** — **sheep**, **chicken**, **horse**, **cow**, **pig**. They wander,
+  flee when you get close, and never attack. They drop materials and raw meat when
+  killed — cows give leather and beef, pigs give porkchops.
+- **Villager** — passive but **doesn't flee**, so you can walk right up and
+  **right-click to trade** (see [Trading](#trading)). It drops nothing if killed —
+  no reason to harm your shopkeeper.
+- **Hostile** — **zombie**, **skeleton**, **spider**, **creeper**. They hunt you at
+  night, chase within their detection range, and attack when they have line of sight.
+  **Skeletons are archers** — they keep their distance and fire arrows, so close in
+  or take cover. **Creepers** sneak up and **explode** — they light a short fuse when
+  they get close (you'll hear the hiss and see them swell), then blow a crater and
+  hurt you badly. Back away to defuse one, or kill it first for its gunpowder.
+  Spiders are only hostile in the dark. Nothing spawns within 16 blocks of you.
 
 Full stats and drop tables are in the [bestiary](reference.md#mobs). The summoned
 **boss** is covered under [Endgame](#endgame-the-boss).
 
-**Breeding** makes loot renewable. Right-click an adult **sheep or horse with
-wheat**, or a **chicken with seeds**, to put it "in love" for **30 seconds**. Two
+**Breeding** makes loot renewable. Right-click an adult **sheep, horse, or cow with
+wheat**, or a **chicken or pig with seeds**, to put it "in love" for **30 seconds**. Two
 in-love adults of the same kind standing within **3 blocks** produce a **baby**,
 which follows its parents, drops nothing while young, and grows to full size after
 **~90 seconds**. The passive population is capped (and feeding costs crops), so it
 stays under control.
+
+## Trading
+
+**Villagers** wander the world like the animals, but they won't run from you —
+walk up and **right-click one** to open its **trades**. The inventory's recipe book
+switches to a **Trading** panel showing what the villager offers.
+
+The currency is the **emerald**. Trading is two-sided: **sell** what you gather
+(wheat, coal, leather, gold ore) for emeralds, then **spend** those emeralds on
+goods you'd rather buy than make — bread, a stack of torches, arrows, a stone
+pickaxe, even sliver or ruby ore to skip some mining. There's no limit beyond what
+you can carry and gather, so a good farm or mine turns into steady emeralds, and
+emeralds into whatever you're short on.
 
 ## Endgame: the boss
 

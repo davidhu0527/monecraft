@@ -15,6 +15,7 @@ import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
 import { findAimedMobIndex } from "./combat";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
+import { primeTnt } from "./explosion";
 import { lookDirection } from "./playerMotion";
 
 const scratchEye = new THREE.Vector3();
@@ -106,7 +107,9 @@ function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: numb
 const FEED_ITEMS: Partial<Record<MobKind, string>> = {
   sheep: "wheat",
   horse: "wheat",
-  chicken: "seeds"
+  cow: "wheat",
+  chicken: "seeds",
+  pig: "seeds"
 };
 
 /**
@@ -134,6 +137,21 @@ function interactFurnace(state: GameState, emit: EmitGameEvent): boolean {
   state.inventoryOpen = true;
   state.craftingStation = "furnace";
   emit({ type: "openedStation", station: "furnace" });
+  return true;
+}
+
+/**
+ * Right-click a villager to open its trades (the inventory in "villager" station
+ * mode, which unlocks the trade offers in the recipe book). Returns true when an
+ * aimed villager consumed the click. Runs after feeding in the right-click
+ * precedence, but villagers aren't breedable so the two never collide.
+ */
+export function tryTradeAimedVillager(state: GameState, emit: EmitGameEvent): boolean {
+  const index = findAimedMobIndex(state);
+  if (index < 0 || state.mobs[index].kind !== "villager") return false;
+  state.inventoryOpen = true;
+  state.craftingStation = "villager";
+  emit({ type: "openedStation", station: "villager" });
   return true;
 }
 
@@ -167,7 +185,8 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
   if (!slot?.id || slot.count <= 0) return false;
   const isHoe = slot.id.endsWith("_hoe");
   const isSeeds = slot.id === "seeds";
-  if (!isHoe && !isSeeds) return false;
+  const isTorch = slot.id === "torch";
+  if (!isHoe && !isSeeds && !isTorch) return false;
 
   const { world, player } = state;
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
@@ -176,6 +195,14 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
   if (!result) return false;
   const { x, y, z } = result.hit;
   const block = world.get(x, y, z) as BlockId;
+
+  // Light TNT with a torch (the torch is not consumed). Only consumes the click
+  // when actually aimed at TNT, so a torch otherwise still places normally.
+  if (isTorch) {
+    if (block !== BlockId.Tnt) return false;
+    primeTnt(state, x, y, z, emit);
+    return true;
+  }
 
   if (isHoe) {
     if (block !== BlockId.Grass && block !== BlockId.Dirt) return false;

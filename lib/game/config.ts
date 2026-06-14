@@ -102,6 +102,21 @@ export const BOSS_SUMMON_RADIUS = 10; // where the boss appears, around the play
 export const BOSS_MINION_CAP = 4; // boss-summoned minions alive at once
 export const BOSS_SUMMON_INTERVAL_SECONDS = 12;
 
+// Creepers, TNT & explosions. An explosion destroys blocks within `power` (with a
+// distance falloff vs each block's blast resistance) and damages the player/mobs
+// out to twice that radius, also with falloff. Damage scales with power, so a
+// bigger blast both digs a wider crater and hits harder.
+export const EXPLOSION_DAMAGE_PER_POWER = 6; // peak (point-blank) damage = power × this
+export const CREEPER_EXPLOSION_POWER = 3; // crater radius in blocks
+export const CREEPER_FUSE_SECONDS = 1.5; // hiss-to-detonation once primed
+export const CREEPER_FUSE_RANGE = 2.6; // how close the player must be to light the fuse
+export const CREEPER_ABORT_RANGE = 4.5; // walk past this while primed and the fuse aborts
+export const TNT_EXPLOSION_POWER = 4; // a stronger blast than a creeper
+export const TNT_FUSE_SECONDS = 2.5; // delay between igniting and detonating
+// A blast lights neighboring TNT after a short, randomized fuse so chains ripple.
+export const TNT_CHAIN_FUSE_MIN_SECONDS = 0.1;
+export const TNT_CHAIN_FUSE_MAX_SECONDS = 0.35;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
@@ -126,6 +141,9 @@ export const WAKE_DAY_PHASE = 0.07;
 // Mob director
 export const HOSTILE_SPAWN_INTERVAL_SECONDS = 10;
 export const HOSTILE_CAP = 16;
+// Hostiles never spawn closer than this to the player, so nothing — least of all
+// a creeper — can materialize point-blank and attack before you can react.
+export const HOSTILE_SPAWN_MIN_RADIUS = 16;
 
 // Dungeon spawners. A spawner drips one hostile every interval while the player
 // is within the activation radius, up to a local cluster cap (and the shared
@@ -166,12 +184,13 @@ export const SAVE_KEY = "minecraft_save_v7";
 // The deterministic world-generation baseline. Bumped whenever worldgen
 // changes, so old block-diffs (which index against generated terrain) can't be
 // applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
-// lakes. Each world records the WORLDGEN_VERSION it was generated under; a world
-// whose recorded version differs from this constant has its block-diffs
-// discarded and is rebooted from its stored seed (lib/game/worlds.ts). The save
-// *schema* (SaveData) is independent and stays at version 5 — lighting is a
-// derived cache and lava is worldgen, so neither is persisted.
-export const WORLDGEN_VERSION = 7;
+// lakes; v8 added shallow coal ore. Each world records the WORLDGEN_VERSION it
+// was generated under; a world whose recorded version differs from this constant
+// has its block-diffs discarded and is rebooted from its stored seed
+// (lib/game/worlds.ts). The save *schema* (SaveData) is independent and stays at
+// version 5 — lighting is a derived cache and lava is worldgen, so neither is
+// persisted.
+export const WORLDGEN_VERSION = 8;
 
 // Rendering
 export const RENDER_RADIUS = 90;

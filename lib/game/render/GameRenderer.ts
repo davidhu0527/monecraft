@@ -319,6 +319,57 @@ export class GameRenderer {
           colorJitter: 0.12
         });
         break;
+      case "explosion": {
+        // A big fireball plus a slower smoke cloud, both scaled by the blast power.
+        const p = event.power;
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: Math.round(28 * p),
+          color: [0.96, 0.55, 0.16],
+          speed: 3.5 + p,
+          spread: p,
+          gravity: 4,
+          drag: 1.6,
+          life: [0.3, 0.8],
+          size: 0.32,
+          colorJitter: 0.14
+        });
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: Math.round(18 * p),
+          color: [0.22, 0.2, 0.18],
+          speed: 1.6,
+          spread: p * 0.9,
+          gravity: -1.5,
+          drag: 1.3,
+          life: [0.7, 1.6],
+          size: 0.42,
+          upBias: 0.5,
+          colorJitter: 0.06
+        });
+        break;
+      }
+      case "tntPrimed":
+        // A small spark puff at the fuse as it lights.
+        this.particles.emitBurst({
+          x: event.x + 0.5,
+          y: event.y + 1,
+          z: event.z + 0.5,
+          count: 6,
+          color: [1, 0.85, 0.4],
+          speed: 1.4,
+          spread: 0.6,
+          gravity: 6,
+          drag: 1.6,
+          life: [0.2, 0.45],
+          size: 0.1,
+          upBias: 0.5
+        });
+        break;
       case "ateFood":
         this.particles.emitBurst({
           x: state.player.position.x,

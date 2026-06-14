@@ -489,6 +489,41 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       filter: -300
     })
   },
+  cow: {
+    params: zz({
+      volume: 0.6,
+      randomness: 0.1,
+      frequency: 130,
+      attack: 0.05,
+      sustain: 0.3,
+      release: 0.35,
+      shape: 2,
+      shapeCurve: 1.4,
+      slide: -0.6,
+      modulation: 12,
+      sustainVolume: 0.8,
+      decay: 0.15,
+      tremolo: 0.3,
+      filter: -250
+    })
+  },
+  pig: {
+    params: zz({
+      volume: 0.5,
+      randomness: 0.2,
+      frequency: 220,
+      attack: 0.02,
+      sustain: 0.06,
+      release: 0.08,
+      shape: 4,
+      shapeCurve: 0.9,
+      repeatTime: 0.09,
+      noise: 0.6,
+      sustainVolume: 0.6,
+      decay: 0.04,
+      filter: 300
+    })
+  },
   zombie: {
     params: zz({
       volume: 0.55,
@@ -537,6 +572,41 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       sustainVolume: 0.5,
       decay: 0.1,
       filter: 600
+    })
+  },
+  creeper: {
+    // A soft airy rustle — the creeper's quiet approach before it hisses.
+    params: zz({
+      volume: 0.4,
+      randomness: 0.2,
+      frequency: 220,
+      attack: 0.06,
+      sustain: 0.18,
+      release: 0.22,
+      shape: 4,
+      shapeCurve: 0.8,
+      noise: 1.1,
+      sustainVolume: 0.5,
+      decay: 0.12,
+      filter: 700
+    })
+  },
+  villager: {
+    // A low, content "hmm" mumble.
+    params: zz({
+      volume: 0.5,
+      randomness: 0.15,
+      frequency: 160,
+      attack: 0.04,
+      sustain: 0.2,
+      release: 0.2,
+      shape: 2,
+      shapeCurve: 1.2,
+      pitchJump: -30,
+      pitchJumpTime: 0.12,
+      sustainVolume: 0.7,
+      decay: 0.12,
+      filter: -120
     })
   },
   boss: {
@@ -598,6 +668,40 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
     }),
     minRetriggerMs: 100
   },
+  // Cows and pigs are passive (attackDamage 0) and never trigger this, but the
+  // Record is exhaustive — a soft thud keeps the table complete.
+  cow: {
+    params: zz({
+      volume: 0.6,
+      randomness: 0.1,
+      frequency: 95,
+      sustain: 0.02,
+      release: 0.09,
+      shape: 4,
+      shapeCurve: 1.3,
+      noise: 0.6,
+      sustainVolume: 0.7,
+      decay: 0.04,
+      filter: -550
+    }),
+    minRetriggerMs: 100
+  },
+  pig: {
+    params: zz({
+      volume: 0.55,
+      randomness: 0.15,
+      frequency: 160,
+      sustain: 0.02,
+      release: 0.07,
+      shape: 4,
+      shapeCurve: 1,
+      noise: 0.7,
+      sustainVolume: 0.7,
+      decay: 0.03,
+      filter: -200
+    }),
+    minRetriggerMs: 100
+  },
   zombie: {
     params: zz({
       volume: 0.8,
@@ -647,6 +751,30 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       filter: 500
     }),
     minRetriggerMs: 100
+  },
+  creeper: {
+    // The fuse hiss when a creeper starts to swell — bright, sharp, rising noise.
+    params: zz({
+      volume: 0.7,
+      randomness: 0.05,
+      frequency: 900,
+      attack: 0.02,
+      sustain: 0.25,
+      release: 0.15,
+      shape: 4,
+      slide: 2,
+      noise: 1.6,
+      sustainVolume: 0.8,
+      decay: 0.1,
+      filter: 1200
+    }),
+    minRetriggerMs: 400
+  },
+  // Villagers never attack (attackDamage 0); this entry exists only to keep the
+  // exhaustive Record complete — a startled grunt, in case it is ever triggered.
+  villager: {
+    params: zz({ volume: 0.5, randomness: 0.15, frequency: 200, sustain: 0.03, release: 0.1, shape: 2, sustainVolume: 0.6, decay: 0.05, filter: -150 }),
+    minRetriggerMs: 200
   },
   boss: {
     params: zz({
@@ -1039,6 +1167,46 @@ export const VICTORY_SOUND: SoundDef = {
     decay: 0.2
   }),
   minRetriggerMs: 1000
+};
+
+/** A deep, noisy boom when an explosion goes off (creeper or TNT). */
+export const EXPLOSION_SOUND: SoundDef = {
+  params: zz({
+    volume: 1,
+    randomness: 0.2,
+    frequency: 80,
+    attack: 0,
+    sustain: 0.05,
+    release: 0.5,
+    shape: 4,
+    shapeCurve: 1.4,
+    slide: -2,
+    deltaSlide: -0.4,
+    noise: 1.4,
+    sustainVolume: 0.9,
+    decay: 0.3,
+    filter: -260
+  }),
+  minRetriggerMs: 120
+};
+
+/** A short fizzing pop when a TNT fuse is lit. */
+export const TNT_FUSE_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    randomness: 0.2,
+    frequency: 480,
+    attack: 0.01,
+    sustain: 0.06,
+    release: 0.12,
+    shape: 4,
+    slide: 1,
+    noise: 1.5,
+    sustainVolume: 0.6,
+    decay: 0.05,
+    filter: 1000
+  }),
+  minRetriggerMs: 200
 };
 
 /** Low ominous whoosh when a dungeon spawner conjures a hostile. */

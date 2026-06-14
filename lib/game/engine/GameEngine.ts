@@ -54,10 +54,11 @@ import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickMobs } from "./systems/mobAI";
+import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
@@ -141,6 +142,7 @@ export class GameEngine {
       inventoryOpen: false,
       craftingStation: null,
       containers: new Map(),
+      primedTnt: new Map(),
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
@@ -226,7 +228,9 @@ export class GameEngine {
       if (tickRespawnTimer(state, dt)) this.respawn();
       else {
         tickMobs(state, dt, this.mobTickDeps);
-        // Keep ticking so in-flight arrows clear; applyDamage no-ops while dead.
+        // Keep ticking so lit fuses and in-flight arrows resolve instead of
+        // freezing for the respawn countdown; applyDamage no-ops while dead.
+        tickPrimedTnt(state, dt, this.mobTickDeps);
         tickProjectiles(state, dt, this.mobTickDeps);
       }
       this.refreshSnapshot();
@@ -258,6 +262,7 @@ export class GameEngine {
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);
@@ -326,6 +331,7 @@ export class GameEngine {
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
         if (tryFeedAimedMob(state, this.emit)) break;
+        if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;

@@ -47,7 +47,12 @@ export const GEN = Object.freeze({
     { id: BlockId.GoldOre, attempts: 36000, minY: 2, maxYOffset: 22, minSize: 3, maxSize: 10 },
     { id: BlockId.SapphireOre, attempts: 28000, minY: 2, maxYOffset: 28, minSize: 2, maxSize: 7 },
     { id: BlockId.DiamondOre, attempts: 18000, minY: 2, maxYOffset: 36, minSize: 2, maxSize: 6 }
-  ])
+  ]),
+  // Coal is placed in its own pass on a dedicated PRNG (see placeCoal) so it never
+  // shifts the shared `rand` stream — existing ores, trees, and structures stay
+  // byte-identical to before coal, exactly as deep-cave lava did. It is the
+  // shallowest, most common ore: large veins reaching near the surface.
+  coalConfig: Object.freeze({ attempts: 160000, minY: 4, maxYOffset: 8, minSize: 4, maxSize: 12 })
 });
 
 /**
@@ -138,6 +143,9 @@ export function generateWorld(world: VoxelWorld, worldType: WorldType = "default
   placeWater(world, cfg);
   placeBeaches(world, cfg);
   placeOres(world, rand);
+  // Coal runs on its own PRNG (placeCoal), so it adds ore underground without
+  // shifting the shared `rand` — trees/structures/dungeons stay byte-identical.
+  placeCoal(world);
   // After placeOres so it can't shift ore RNG (placeOres gates rand on air
   // adjacency, which lava would change), and before placeDungeons so dungeon
   // rooms — whose floors can sit at or below lavaLevel — overwrite any lava
@@ -318,6 +326,46 @@ function placeOres(world: VoxelWorld, rand: () => number): void {
       if ((block !== BlockId.Stone && block !== BlockId.Cobblestone) || !hasNearbyAir(x, y, z)) continue;
       placeOreVein(x, y, z, config.id, config.minSize, config.maxSize);
     }
+  }
+}
+
+/** A coal-only PRNG seeded from the world seed, decoupled from the main gen stream. */
+function coalRand(seed: number): () => number {
+  let t = (seed ^ 0x85ebca6b) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Coal veins, placed on their own PRNG so the pass never consumes from the shared
+ * `rand` stream — every other ore, tree, and structure stays byte-identical to a
+ * coal-free world. Like the other ores, coal only replaces stone/cobblestone.
+ */
+function placeCoal(world: VoxelWorld): void {
+  const rand = coalRand(world.seed);
+  const cfg = GEN.coalConfig;
+  const placeVein = (x: number, y: number, z: number) => {
+    const size = cfg.minSize + Math.floor(rand() * Math.max(1, cfg.maxSize - cfg.minSize + 1));
+    for (let i = 0; i < size; i += 1) {
+      const vx = x + Math.floor((rand() - 0.5) * 4);
+      const vy = y + Math.floor((rand() - 0.5) * 3);
+      const vz = z + Math.floor((rand() - 0.5) * 4);
+      if (!world.inBounds(vx, vy, vz) || vy <= 1) continue;
+      const b = world.get(vx, vy, vz);
+      if (b === BlockId.Stone || b === BlockId.Cobblestone) world.set(vx, vy, vz, BlockId.CoalOre);
+    }
+  };
+  for (let i = 0; i < cfg.attempts; i += 1) {
+    const x = 8 + Math.floor(rand() * (world.sizeX - 16));
+    const y = cfg.minY + Math.floor(rand() * Math.max(2, world.sizeY - cfg.maxYOffset));
+    const z = 8 + Math.floor(rand() * (world.sizeZ - 16));
+    const block = world.get(x, y, z);
+    if (block !== BlockId.Stone && block !== BlockId.Cobblestone) continue;
+    placeVein(x, y, z);
   }
 }
 

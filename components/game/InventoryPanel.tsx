@@ -13,7 +13,7 @@ type InventoryPanelProps = {
   selectedHotbarSlot: number;
   hotbarSlots: number;
   recipes: Recipe[];
-  craftingStation: "furnace" | null;
+  craftingStation: "furnace" | "villager" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   canCraft: (recipe: Recipe) => boolean;
@@ -25,7 +25,8 @@ type InventoryPanelProps = {
 };
 
 const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
-  furnace: "Furnace"
+  furnace: "Furnace",
+  villager: "Villager"
 };
 
 /**
@@ -151,7 +152,7 @@ export default function InventoryPanel({
         </div>
 
         <div className="recipe-book">
-          <div className="inventory-heading">Crafting</div>
+          <div className="inventory-heading">{craftingStation === "villager" ? "Trading" : "Crafting"}</div>
           <div className="recipe-list">
             {recipes.map((recipe) => {
               const stationLocked = !!recipe.station && recipe.station !== craftingStation;

@@ -27,9 +27,18 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
     { itemId: "raw_chicken", min: 1, max: 1 }
   ],
   horse: [{ itemId: "leather", min: 1, max: 2 }],
+  cow: [
+    { itemId: "leather", min: 1, max: 2 },
+    { itemId: "raw_beef", min: 1, max: 1 }
+  ],
+  pig: [{ itemId: "raw_porkchop", min: 1, max: 1 }],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
   spider: [{ itemId: "string", min: 0, max: 2 }],
+  creeper: [{ itemId: "gunpowder", min: 1, max: 2 }],
+  // Villagers are non-combat trade NPCs — killing one yields nothing (don't murder
+  // your shopkeeper). The empty table is intentional; mobLoot.test.ts allows it.
+  villager: [],
   boss: [
     { itemId: "dragon_heart", min: 1, max: 1 },
     { itemId: "diamond_ore", min: 2, max: 4 }

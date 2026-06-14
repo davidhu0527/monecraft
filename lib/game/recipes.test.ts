@@ -59,3 +59,90 @@ describe("ranged recipes", () => {
     expect(canCraft(slots, recipe("bow"))).toBe(false);
   });
 });
+
+describe("cooking new meats", () => {
+  test("raw beef smelts into cooked beef with coal at a furnace", () => {
+    const r = recipe("cook_beef");
+    expect(r.station).toBe("furnace");
+    const slots = inventory([
+      ["raw_beef", 1],
+      ["coal", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    const next = craft(slots, r);
+    expect(next).not.toBeNull();
+    expect(countsById(next!).get("cooked_beef")).toBe(1);
+  });
+
+  test("raw porkchop smelts into cooked porkchop with coal at a furnace", () => {
+    const r = recipe("cook_porkchop");
+    expect(r.station).toBe("furnace");
+    const slots = inventory([
+      ["raw_porkchop", 1],
+      ["coal", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    const next = craft(slots, r);
+    expect(next).not.toBeNull();
+    expect(countsById(next!).get("cooked_porkchop")).toBe(1);
+  });
+});
+
+describe("coal & fuel economy", () => {
+  test("charcoal smelts from a single wood at a furnace", () => {
+    const r = recipe("charcoal");
+    expect(r.station).toBe("furnace");
+    const slots = inventory([["wood", 1]]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("charcoal")).toBe(1);
+  });
+
+  test("cooking accepts charcoal as an alternative fuel", () => {
+    const slots = inventory([
+      ["raw_chicken", 1],
+      ["charcoal", 1]
+    ]);
+    const r = recipe("cook_chicken_charcoal");
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("cooked_chicken")).toBe(1);
+  });
+
+  test("TNT crafts from gunpowder and sand", () => {
+    const r = recipe("tnt");
+    const slots = inventory([
+      ["gunpowder", 4],
+      ["sand", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("tnt")).toBe(1);
+    expect(canCraft(inventory([["gunpowder", 3]]), r)).toBe(false);
+  });
+
+  test("torches now require coal (or charcoal) plus wood", () => {
+    const r = recipe("torch");
+    expect(r.cost.some((c) => c.slotId === "coal")).toBe(true);
+    // Wood alone no longer crafts a torch.
+    expect(canCraft(inventory([["wood", 1]]), r)).toBe(false);
+    expect(
+      canCraft(
+        inventory([
+          ["coal", 1],
+          ["wood", 1]
+        ]),
+        r
+      )
+    ).toBe(true);
+    // The charcoal variant yields the same four torches.
+    expect(
+      countsById(
+        craft(
+          inventory([
+            ["charcoal", 1],
+            ["wood", 1]
+          ]),
+          recipe("torch_charcoal")
+        )!
+      ).get("torch")
+    ).toBe(4);
+  });
+});

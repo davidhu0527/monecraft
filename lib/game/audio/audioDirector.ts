@@ -29,6 +29,8 @@ import {
   SMELT_SOUND,
   TILL_SOUND,
   VICTORY_SOUND,
+  EXPLOSION_SOUND,
+  TNT_FUSE_SOUND,
   WAKE_SOUND
 } from "./soundParams";
 import { createFootstepScheduler } from "./footsteps";
@@ -226,6 +228,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "bossDefeated":
           backend.play(VICTORY_SOUND);
+          break;
+        case "explosion":
+          backend.play(EXPLOSION_SOUND);
+          break;
+        case "tntPrimed":
+          backend.play(TNT_FUSE_SOUND);
           break;
         case "died":
           backend.play(DEATH_SOUND);

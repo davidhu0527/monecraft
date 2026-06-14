@@ -1,6 +1,7 @@
 import type { Recipe } from "@/lib/game/types";
+import { TRADES } from "@/lib/game/trades";
 
-export const RECIPES: Recipe[] = [
+const CRAFTING_RECIPES: Recipe[] = [
   { id: "planks", label: "2 Wood -> 4 Planks", cost: [{ slotId: "wood", count: 2 }], result: { slotId: "planks", count: 4 } },
   { id: "wool_from_string", label: "4 String -> 1 Wool", cost: [{ slotId: "string", count: 4 }], result: { slotId: "wool", count: 1 } },
   {
@@ -25,28 +26,119 @@ export const RECIPES: Recipe[] = [
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
-  { id: "torch", label: "1 Wood -> 4 Torch", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "torch", count: 4 } },
+  {
+    id: "torch",
+    label: "1 Coal + 1 Wood -> 4 Torch",
+    cost: [
+      { slotId: "coal", count: 1 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "torch", count: 4 }
+  },
+  {
+    id: "torch_charcoal",
+    label: "1 Charcoal + 1 Wood -> 4 Torch",
+    cost: [
+      { slotId: "charcoal", count: 1 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "torch", count: 4 }
+  },
+  // Charcoal: smelt a log into fuel. The furnace is a station gate (it consumes
+  // no fuel itself), so this is a straight wood -> charcoal conversion — the
+  // bootstrap fuel for a player who hasn't found coal yet.
+  { id: "charcoal", label: "1 Wood -> 1 Charcoal", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "charcoal", count: 1 }, station: "furnace" },
+  // Cooking burns a fuel ingredient: coal (mined) or charcoal (smelted from wood).
   {
     id: "cook_chicken",
-    label: "Raw Chicken + Planks -> Cooked Chicken",
+    label: "Raw Chicken + Coal -> Cooked Chicken",
     cost: [
       { slotId: "raw_chicken", count: 1 },
-      { slotId: "planks", count: 1 }
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "cooked_chicken", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_chicken_charcoal",
+    label: "Raw Chicken + Charcoal -> Cooked Chicken",
+    cost: [
+      { slotId: "raw_chicken", count: 1 },
+      { slotId: "charcoal", count: 1 }
     ],
     result: { slotId: "cooked_chicken", count: 1 },
     station: "furnace"
   },
   {
     id: "cook_mutton",
-    label: "Raw Mutton + Planks -> Cooked Mutton",
+    label: "Raw Mutton + Coal -> Cooked Mutton",
     cost: [
       { slotId: "raw_mutton", count: 1 },
-      { slotId: "planks", count: 1 }
+      { slotId: "coal", count: 1 }
     ],
     result: { slotId: "cooked_mutton", count: 1 },
     station: "furnace"
   },
+  {
+    id: "cook_mutton_charcoal",
+    label: "Raw Mutton + Charcoal -> Cooked Mutton",
+    cost: [
+      { slotId: "raw_mutton", count: 1 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "cooked_mutton", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_beef",
+    label: "Raw Beef + Coal -> Cooked Beef",
+    cost: [
+      { slotId: "raw_beef", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "cooked_beef", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_beef_charcoal",
+    label: "Raw Beef + Charcoal -> Cooked Beef",
+    cost: [
+      { slotId: "raw_beef", count: 1 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "cooked_beef", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_porkchop",
+    label: "Raw Porkchop + Coal -> Cooked Porkchop",
+    cost: [
+      { slotId: "raw_porkchop", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "cooked_porkchop", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_porkchop_charcoal",
+    label: "Raw Porkchop + Charcoal -> Cooked Porkchop",
+    cost: [
+      { slotId: "raw_porkchop", count: 1 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "cooked_porkchop", count: 1 },
+    station: "furnace"
+  },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
+  {
+    id: "tnt",
+    label: "4 Gunpowder + 1 Sand -> TNT",
+    cost: [
+      { slotId: "gunpowder", count: 4 },
+      { slotId: "sand", count: 1 }
+    ],
+    result: { slotId: "tnt", count: 1 }
+  },
   {
     id: "brick",
     label: "2 Dirt + 2 Stone -> 2 Brick",
@@ -347,3 +439,7 @@ export const RECIPES: Recipe[] = [
     result: { slotId: "boots", count: 1 }
   }
 ];
+
+// Villager trades are station-gated recipes, so they share the recipe book + the
+// `craft` command. They live in their own module (the trade analog of recipes).
+export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];

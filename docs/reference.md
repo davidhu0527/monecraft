@@ -23,22 +23,24 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**45 recipes.** All use the always-available crafting grid except the two
-**furnace** smelting recipes, which need an open furnace.
+**54 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+All use the always-available crafting grid except the nine **furnace** smelting
+recipes, which need an open furnace.
 
 ### Building & materials
 
-| Result      | Ingredients       |
-| ----------- | ----------------- |
-| 4 Planks    | 2 Wood            |
-| 2 Glass     | 4 Sand            |
-| 2 Brick     | 2 Dirt + 2 Stone  |
-| 1 Furnace   | 8 Cobble          |
-| 1 Chest     | 8 Planks          |
-| 1 Wood Door | 6 Planks          |
-| 4 Torch     | 1 Wood            |
-| 1 Bed       | 3 Wool + 3 Planks |
-| 1 Wool      | 4 String          |
+| Result      | Ingredients          |
+| ----------- | -------------------- |
+| 4 Planks    | 2 Wood               |
+| 2 Glass     | 4 Sand               |
+| 2 Brick     | 2 Dirt + 2 Stone     |
+| 1 Furnace   | 8 Cobble             |
+| 1 Chest     | 8 Planks             |
+| 1 Wood Door | 6 Planks             |
+| 4 Torch     | 1 Coal + 1 Wood      |
+| 1 Bed       | 3 Wool + 3 Planks    |
+| 1 Wool      | 4 String             |
+| 1 TNT       | 4 Gunpowder + 1 Sand |
 
 ### Tools
 
@@ -95,54 +97,63 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ### Food & smelting
 
-| Result         | Ingredients            | Station |
-| -------------- | ---------------------- | ------- |
-| Bread          | 3 Wheat                | —       |
-| Cooked Chicken | Raw Chicken + 1 Planks | Furnace |
-| Cooked Mutton  | Raw Mutton + 1 Planks  | Furnace |
+"Fuel" is coal or charcoal (interchangeable). Charcoal is smelted from wood, so a
+player who hasn't found coal can still cook.
+
+| Result          | Ingredients         | Station |
+| --------------- | ------------------- | ------- |
+| Bread           | 3 Wheat             | —       |
+| Charcoal        | 1 Wood              | Furnace |
+| Cooked Chicken  | Raw Chicken + Fuel  | Furnace |
+| Cooked Mutton   | Raw Mutton + Fuel   | Furnace |
+| Cooked Beef     | Raw Beef + Fuel     | Furnace |
+| Cooked Porkchop | Raw Porkchop + Fuel | Furnace |
 
 ## Blocks
 
-**32 block types** (plus air). Hardness is relative break time — higher is slower.
+**34 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
-| Block             | Hardness | Mine with       | Notes                                                                                                         |
-| ----------------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
-| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                   |
-| Dirt              | 2        | any             | —                                                                                                             |
-| Sand              | 2        | any             | Common on beaches and in deserts                                                                              |
-| Snow              | 2        | any             | Mountain peaks                                                                                                |
-| Leaves            | 2        | any             | From trees; drops dirt                                                                                        |
-| Cactus            | 2        | any             | Desert decoration                                                                                             |
-| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                          |
-| Wood              | 3        | any             | Tree trunks                                                                                                   |
-| Planks            | 3        | any             | Crafted from wood                                                                                             |
-| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                          |
-| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                |
-| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                 |
-| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                      |
-| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full) |
-| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                           |
-| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 wood                             |
-| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item  |
-| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                    |
-| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it      |
-| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                             |
-| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                             |
-| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                             |
-| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                             |
-| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                           |
-| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                           |
-| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                      |
-| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                 |
-| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                          |
-| Bedrock           | —        | unbreakable     | World floor and border                                                                                        |
-| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second  |
+| Block             | Hardness | Mine with       | Notes                                                                                                                 |
+| ----------------- | -------- | --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                           |
+| Dirt              | 2        | any             | —                                                                                                                     |
+| Sand              | 2        | any             | Common on beaches and in deserts                                                                                      |
+| Snow              | 2        | any             | Mountain peaks                                                                                                        |
+| Leaves            | 2        | any             | From trees; drops dirt                                                                                                |
+| Cactus            | 2        | any             | Desert decoration                                                                                                     |
+| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                  |
+| Wood              | 3        | any             | Tree trunks                                                                                                           |
+| Planks            | 3        | any             | Crafted from wood                                                                                                     |
+| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                                  |
+| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                        |
+| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                         |
+| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                              |
+| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full)         |
+| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                   |
+| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                            |
+| TNT               | 1        | any             | **Interactive** — right-click with a torch to light a fuse, then it explodes (power 4). Crafted from gunpowder + sand |
+| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item          |
+| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                            |
+| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it              |
+| Coal Ore          | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                                |
+| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                                     |
+| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                                     |
+| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                                     |
+| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                                     |
+| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                                   |
+| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                                   |
+| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                              |
+| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                         |
+| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                  |
+| Bedrock           | —        | unbreakable     | World floor and border                                                                                                |
+| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second          |
 
 ## Mobs
 
-**6 mob kinds.** Passive animals flee but never attack and can be bred; hostiles
+**10 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+can be bred; the villager is passive but doesn't flee (right-click to trade); hostiles
 hunt at night. Drop counts are inclusive ranges rolled per kill.
 
 | Mob      | Type    | HP  | Speed | Detect range | Attack             | Cooldown | Drops                           |
@@ -150,16 +161,45 @@ hunt at night. Drop counts are inclusive ranges rolled per kill.
 | Sheep    | passive | 10  | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
 | Chicken  | passive | 7   | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
 | Horse    | passive | 14  | 1.4   | —            | —                  | —        | 1–2 Leather                     |
+| Cow      | passive | 10  | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
+| Pig      | passive | 8   | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
+| Villager | passive | 20  | 0.6   | —            | — (trade partner)  | —        | nothing                         |
 | Zombie   | hostile | 10  | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
 | Skeleton | hostile | 9   | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
 | Spider   | hostile | 8   | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
+| Creeper  | hostile | 10  | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
 | Boss     | hostile | 400 | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
 
+### Trading
+
+Right-click a **villager** to open its trades (the recipe book switches to a
+**Trading** panel). The currency is the **emerald**: sell gathered materials for
+emeralds, then spend them on goods. No use caps — trading is bounded only by what
+you can gather. Trades live in `lib/game/trades.ts`.
+
+| Trade             | Give       | Get             |
+| ----------------- | ---------- | --------------- |
+| Sell wheat        | 6 Wheat    | 1 Emerald       |
+| Sell coal         | 3 Coal     | 1 Emerald       |
+| Sell leather      | 2 Leather  | 1 Emerald       |
+| Sell gold ore     | 1 Gold Ore | 1 Emerald       |
+| Buy bread         | 1 Emerald  | 2 Bread         |
+| Buy torches       | 1 Emerald  | 8 Torch         |
+| Buy arrows        | 2 Emerald  | 8 Arrow         |
+| Buy stone pickaxe | 3 Emerald  | 1 Stone Pickaxe |
+| Buy sliver ore    | 5 Emerald  | 1 Sliver Ore    |
+| Buy ruby ore      | 8 Emerald  | 1 Ruby Ore      |
+
 Skeletons are now **ranged** — they kite and fire arrows instead of meleeing.
+**Creepers** chase silently, then light a ~1.5 s fuse when they get within ~2.6
+blocks (hissing and swelling) and **explode**, cratering terrain and hurting
+everything nearby; walk away while it is primed and the fuse aborts. Kill one
+before it detonates to claim its gunpowder safely. Hostiles never spawn within 16
+blocks of you, so nothing materializes point-blank.
 Spiders are hostile only in the dark (daylight below 0.42); in twilight and day
-they behave like passives. **Breeding:** feed wheat to a sheep or horse, or seeds
-to a chicken; babies grow up in ~90 s. Passive population is capped at 24, hostiles
-at 16.
+they behave like passives. **Breeding:** feed wheat to a sheep, horse, or cow, or
+seeds to a chicken or pig; babies grow up in ~90 s. Passive population is capped at
+24, hostiles at 16.
 
 The **Boss** is summoned, not spawned (see [Endgame](#endgame)): it bears down on
 you, melees up close, fires a 3-arrow spread at range, summons minions, and is
@@ -234,21 +274,28 @@ always deals at least 1).
 
 `Eat` (`F`) restores the listed hunger.
 
-| Item           | Hunger restored | Source             |
-| -------------- | --------------- | ------------------ |
-| Cooked Chicken | 8               | Smelt raw chicken  |
-| Cooked Mutton  | 8               | Smelt raw mutton   |
-| Food           | 7               | Generic food item  |
-| Bread          | 6               | Craft from 3 wheat |
-| Raw Chicken    | 3               | Chicken drop       |
-| Raw Mutton     | 3               | Sheep drop         |
-| Rotten Flesh   | 2               | Zombie drop        |
+| Item            | Hunger restored | Source             |
+| --------------- | --------------- | ------------------ |
+| Cooked Chicken  | 8               | Smelt raw chicken  |
+| Cooked Mutton   | 8               | Smelt raw mutton   |
+| Cooked Beef     | 8               | Smelt raw beef     |
+| Cooked Porkchop | 8               | Smelt raw porkchop |
+| Food            | 7               | Generic food item  |
+| Bread           | 6               | Craft from 3 wheat |
+| Raw Chicken     | 3               | Chicken drop       |
+| Raw Mutton      | 3               | Sheep drop         |
+| Raw Beef        | 3               | Cow drop           |
+| Raw Porkchop    | 3               | Pig drop           |
+| Rotten Flesh    | 2               | Zombie drop        |
 
 ### Materials
 
 Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
-(from farming and grass). Ranged/endgame materials: **Arrow** (bow ammo),
+(from farming and grass). Fuels: **Coal** (mined from coal ore) and **Charcoal**
+(smelted from wood) — interchangeable for smelting and torches. **Gunpowder**
+(creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
+Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
 boss drop that crafts the Dragon Sword).
 

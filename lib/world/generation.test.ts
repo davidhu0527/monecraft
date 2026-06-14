@@ -59,9 +59,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "2037297fd8b8269fa984f907b84bcf3b185e4c261ae4a93b089de0178cc510d2"],
-    [1, "c55a0b3395d2a95643ded6af66d49bbea4de44d045f5a812f625f397f5b377d7"],
-    [999999937, "4407190a254fdb5fa7f00aff69ba75b6c624bac6bc27096934e713506979384c"]
+    [1337, "b4e2ca0894d0ab7c1f6cadf2579e333364f05080d7311dc1c2b073a531e1a679"],
+    [1, "5e4e21ad716a2d4745f1896ee663543ac74c4eedf2776819548e8bb99cc66b79"],
+    [999999937, "acf5681013bcc13bc7d6a241c1f99df57f9096b0d16e438adcab7ad3dfd64a10"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -69,7 +69,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("3675b077d5a0a677aadf7a4b5e781cfb38cec2eef6aa62c676e3a9f0f48a404f");
+      expect(hashBytes(fullWorld().blocks)).toBe("afcd535bf83f487ca54a71c0adee745fcb6e782744bea3575efa947d7382efef");
     },
     { timeout: 60000 }
   );
@@ -124,9 +124,9 @@ describe("world types", () => {
   // refactor can't silently corrupt worlds created with it. Re-baseline only on
   // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
   test.each([
-    ["flat", "b520ba2b1b47471c9d7b7930c5e7e045b1e76df090a7767ebb79b664fac2ea9c"],
-    ["amplified", "eac66fb572945c40c44aff36e1b832bcdd1b6bcdc1d3e0cdc86b9dd054a7140d"],
-    ["islands", "5cedc6d611d771da2e3488768fa251f5acd5777667ec15062e27ba5eca21ae29"]
+    ["flat", "e613623bff9436cabda91dbf289ab93f8c7678184206f8f7a5dfda0d6c8f0229"],
+    ["amplified", "634544124b5e72743b4ea09ad92acf00d7184526ac5ddc077c55b3a5f2cca4c6"],
+    ["islands", "e9937c0d947a0952130c79c46c26fc37c9492c7d164e2dc61a626ea9d7d8a662"]
   ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
     expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
   });
@@ -282,6 +282,38 @@ describe("world content balance", () => {
         }
       }
       expect(beachFound).toBe(true);
+    },
+    { timeout: 60000 }
+  );
+
+  test(
+    "coal is the most common ore and reaches shallower than the rare ores",
+    () => {
+      const world = fullWorld();
+      const layer = world.sizeX * world.sizeZ;
+      let coal = 0;
+      let sliver = 0;
+      let diamond = 0;
+      let maxCoalY = -1;
+      let maxDiamondY = -1;
+      for (let i = 0; i < world.blocks.length; i += 1) {
+        const b = world.blocks[i];
+        if (b === BlockId.CoalOre) {
+          coal += 1;
+          const y = Math.floor(i / layer);
+          if (y > maxCoalY) maxCoalY = y;
+        } else if (b === BlockId.SliverOre) {
+          sliver += 1;
+        } else if (b === BlockId.DiamondOre) {
+          diamond += 1;
+          const y = Math.floor(i / layer);
+          if (y > maxDiamondY) maxDiamondY = y;
+        }
+      }
+      expect(coal).toBeGreaterThan(sliver); // coal is the staple early-game ore
+      expect(coal).toBeGreaterThan(diamond * 4);
+      // Coal veins can sit higher (closer to the surface) than the deep ores.
+      expect(maxCoalY).toBeGreaterThan(maxDiamondY);
     },
     { timeout: 60000 }
   );

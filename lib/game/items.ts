@@ -35,6 +35,7 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Cobblestone]: 5,
   [BlockId.Brick]: 5,
   [BlockId.Glass]: 2,
+  [BlockId.CoalOre]: 6,
   [BlockId.SliverOre]: 7,
   [BlockId.RubyOre]: 9,
   [BlockId.GoldOre]: 11,
@@ -53,7 +54,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.MossyCobblestone]: 5,
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
-  [BlockId.Torch]: 1
+  [BlockId.Torch]: 1,
+  [BlockId.Tnt]: 1
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -93,10 +95,21 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "bone", label: "Bone", kind: "material" },
   { id: "leather", label: "Leather", kind: "material" },
   { id: "string", label: "String", kind: "material" },
+  // Furnace fuels: coal is mined from coal ore, charcoal is smelted from wood.
+  // Both are interchangeable as the smelting/torch "fuel" ingredient.
+  { id: "coal", label: "Coal", kind: "material" },
+  { id: "charcoal", label: "Charcoal", kind: "material" },
+  // Creeper drop; crafts TNT. TNT places like a block and ignites with a torch.
+  { id: "gunpowder", label: "Gunpowder", kind: "material" },
+  { id: "tnt", label: "TNT", kind: "block", blockId: BlockId.Tnt },
+  // Trade currency: earn emeralds by selling materials to a villager, spend them on goods.
+  { id: "emerald", label: "Emerald", kind: "material" },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
   { id: "raw_mutton", label: "Raw Mutton", kind: "food", hunger: 3 },
+  { id: "raw_beef", label: "Raw Beef", kind: "food", hunger: 3 },
+  { id: "raw_porkchop", label: "Raw Porkchop", kind: "food", hunger: 3 },
   // Farming
   { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
   { id: "seeds", label: "Wheat Seeds", kind: "material" },
@@ -105,6 +118,8 @@ export const ITEM_DEFS: ItemDef[] = [
   // Cooked meats — smelted in a furnace; restore more than their raw form.
   { id: "cooked_chicken", label: "Cooked Chicken", kind: "food", hunger: 8 },
   { id: "cooked_mutton", label: "Cooked Mutton", kind: "food", hunger: 8 },
+  { id: "cooked_beef", label: "Cooked Beef", kind: "food", hunger: 8 },
+  { id: "cooked_porkchop", label: "Cooked Porkchop", kind: "food", hunger: 8 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },
@@ -242,6 +257,8 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Sand]: "sand",
   [BlockId.Brick]: "brick",
   [BlockId.Glass]: "glass",
+  // Coal ore drops the usable coal item directly (not a placeable ore block).
+  [BlockId.CoalOre]: "coal",
   [BlockId.SliverOre]: "sliver_ore",
   [BlockId.RubyOre]: "ruby_ore",
   [BlockId.GoldOre]: "gold_ore",
@@ -254,6 +271,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Chest]: "chest",
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
+  [BlockId.Tnt]: "tnt",
   [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",

@@ -37,6 +37,24 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     attackCooldown: 0,
     modelArgs: [0x8a5d36, 0x74472a, 0x5d3a22, 0x101010, 0x3e2413, [1.45, 1.1, 2.2], [0.56, 0.6, 0.62]]
   },
+  cow: {
+    speed: 0.9,
+    hp: 10,
+    detectRange: 0,
+    attackDamage: 0,
+    attackCooldown: 0,
+    // White hide with brown patches and a pink snout — a stocky body like the sheep's.
+    modelArgs: [0xf3efe6, 0x6f4a2f, 0x4f3320, 0x111111, 0xd98c8c, [1.25, 0.9, 1.7], [0.6, 0.55, 0.58]]
+  },
+  pig: {
+    speed: 1.0,
+    hp: 8,
+    detectRange: 0,
+    attackDamage: 0,
+    attackCooldown: 0,
+    // Pink body and a darker pink snout; small and low to the ground.
+    modelArgs: [0xe79a9a, 0xd98484, 0xc06a6a, 0x111111, 0xb45656, [0.95, 0.62, 1.25], [0.5, 0.42, 0.46]]
+  },
   zombie: {
     speed: 1.05,
     hp: 10,
@@ -61,6 +79,26 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     attackDamage: 2,
     attackCooldown: 1.1,
     modelArgs: [0x2e2e2e, 0x1f1f1f, 0x161616, 0xff3333, 0x4a0f0f, [1.15, 0.52, 1.15], [0.5, 0.42, 0.5]]
+  },
+  creeper: {
+    speed: 1.0,
+    hp: 10,
+    detectRange: 12,
+    // Deals no melee damage — it detonates instead (see the creeper fuse in mobAI).
+    attackDamage: 0,
+    attackCooldown: 0,
+    // Mottled green, taller than wide, with a dark face — the classic silhouette.
+    modelArgs: [0x4f9a3a, 0x3f8030, 0x356b29, 0x1a1a1a, 0x2a5520, [0.7, 1.25, 0.7], [0.5, 0.5, 0.5]]
+  },
+  villager: {
+    speed: 0.6,
+    hp: 20,
+    detectRange: 0,
+    attackDamage: 0,
+    attackCooldown: 0,
+    // A robed humanoid: brown smock, tan head, big nose (the snout/detail). Passive
+    // but does NOT flee — you can walk right up to trade (see mobAI's villager case).
+    modelArgs: [0x6f5a44, 0xc9a986, 0x4a3b2c, 0x2a2a2a, 0xb98e6a, [0.7, 1.35, 0.55], [0.55, 0.6, 0.55]]
   },
   boss: {
     speed: 1.1,
