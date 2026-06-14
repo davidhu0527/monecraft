@@ -14,7 +14,7 @@ import {
   WATER_DAMAGE_DELAY_SECONDS,
   WATER_DAMAGE_HP
 } from "@/lib/game/config";
-import { CHEST_SLOTS } from "@/lib/game/config";
+import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
@@ -1603,5 +1603,99 @@ describe("animal breeding", () => {
     const after = countsById(engine.state.inventory);
     expect(after.get("wool") ?? 0).toBe(before.get("wool") ?? 0);
     expect(after.get("raw_mutton") ?? 0).toBe(before.get("raw_mutton") ?? 0);
+  });
+});
+
+describe("endgame boss", () => {
+  function giveSummoner(engine: GameEngine, count: number): void {
+    engine.state.inventory = [...engine.state.inventory];
+    engine.state.inventory[0] = createSlot("boss_summoner", count);
+    engine.state.selectedSlot = 0;
+  }
+
+  test("a Cursed Totem summons one boss, consuming the totem", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 2);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.mobs.filter((mob) => mob.kind === "boss")).toHaveLength(1);
+    expect(countsById(engine.state.inventory).get("boss_summoner")).toBe(1);
+    expect(engine.consumeEvents().some((event) => event.type === "bossSummoned")).toBe(true);
+    expect(engine.getSnapshot().boss).not.toBeNull();
+    expect(engine.getSnapshot().boss!.hpPercent).toBeCloseTo(1, 2);
+  });
+
+  test("a second summon is refused while a boss already walks", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 2);
+    engine.dispatch({ type: "placeBlock" }); // first boss
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" }); // refused
+    expect(engine.state.mobs.filter((mob) => mob.kind === "boss")).toHaveLength(1);
+    expect(countsById(engine.state.inventory).get("boss_summoner")).toBe(1); // totem kept
+    expect(engine.consumeEvents().some((event) => event.type === "summonFailed")).toBe(true);
+  });
+
+  test("the boss health snapshot tracks damage", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+
+    boss.hp = BOSS_HP / 2;
+    run(engine, 0.05); // a step refreshes the snapshot
+    expect(engine.getSnapshot().boss!.hpPercent).toBeCloseTo(0.5, 2);
+  });
+
+  test("defeating the boss drops the Dragon Heart and triggers victory", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+    engine.consumeEvents();
+
+    boss.hp = 0; // next tick removes it
+    run(engine, 0.1);
+
+    expect(engine.state.mobs.some((mob) => mob.kind === "boss")).toBe(false);
+    expect(countsById(engine.state.inventory).get("dragon_heart")).toBe(1);
+    expect(engine.consumeEvents().some((event) => event.type === "bossDefeated")).toBe(true);
+    const snap = engine.getSnapshot();
+    expect(snap.victory).toBe(true);
+    expect(snap.boss).toBeNull();
+
+    // The victory screen owns its lock-loss, so a lock-loss pause is ignored
+    // until it's dismissed (otherwise the pause menu would stack over it).
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(false);
+
+    engine.dispatch({ type: "dismissVictory" });
+    expect(engine.getSnapshot().victory).toBe(false);
+    engine.dispatch({ type: "pause" });
+    expect(engine.getSnapshot().paused).toBe(true); // pausing works again once dismissed
+  });
+
+  test("the boss does not burn in daylight", () => {
+    const engine = makeEngine();
+    engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
+    engine.state.dayClock = 60; // bright midday
+    run(engine, 0.5);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+    const hpBefore = boss.hp;
+    run(engine, 2);
+    expect(engine.state.daylight).toBeGreaterThan(0.72);
+    expect(boss.hp).toBe(hpBefore); // immune to the daylight burn
   });
 });

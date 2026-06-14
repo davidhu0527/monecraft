@@ -49,6 +49,46 @@ export const SPEAR_STUCK_SECONDS = 2;
 export const SPEAR_THROW_COOLDOWN_SECONDS = 0.45;
 export const SPEAR_HIT_RADIUS = 0.65;
 
+// Ranged combat — arrows are transient projectiles shared by the bow, ranged
+// skeletons, and the boss. Gravity is below the player's so the arc stays flat
+// and readable; substepping the swept block/entity tests stops fast arrows from
+// tunnelling through 1-block walls or thin mobs between frames.
+export const ARROW_SPEED = 34; // m/s launch speed (skeletons/boss scale this down)
+export const ARROW_GRAVITY = 14; // < player GRAVITY (26)
+export const ARROW_TTL = 4; // seconds before an in-flight arrow despawns
+export const ARROW_HIT_RADIUS = 0.45; // hit padding around the arrow point
+export const ARROW_MAX_SUBSTEPS = 4; // cap on per-frame integration substeps
+export const ARROW_MAX_SEGMENT = 0.5; // blocks per substep before the swept tests run
+
+// Bow — instant click-to-fire (no draw-charge); fixed damage, gated by a cooldown.
+export const BOW_ARROW_DAMAGE = 9; // matches a stone sword's melee, but at range
+export const BOW_KNOCKBACK = 0.6;
+export const BOW_COOLDOWN_SECONDS = 0.4;
+export const BOW_DURABILITY_PER_SHOT = 1;
+
+// Ranged mobs (skeletons, boss) — kite within a standoff band and loose arrows
+// instead of meleeing. Lead aims slightly ahead of a moving target.
+export const SKELETON_STANDOFF_MIN = 5; // back away when the player is closer than this
+export const SKELETON_STANDOFF_MAX = 9; // approach when farther; hold in the band
+export const SKELETON_ARROW_DAMAGE = 4;
+export const SKELETON_ARROW_SPEED = 27; // a touch slower than the player's bow (34)
+export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
+export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
+export const MOB_ARROW_KNOCKBACK = 0.35;
+
+// Endgame boss — summoned from a Cursed Totem (diamond-gated). It approaches
+// (does not kite), melees up close, looses a 3-arrow spread at range, and
+// periodically summons minions. Its defeat is the win condition.
+export const BOSS_HP = 400; // a real fight even with diamond gear
+export const BOSS_MELEE_REACH = 3.5;
+export const BOSS_MELEE_DAMAGE = 10;
+export const BOSS_ARROW_DAMAGE = 7;
+export const BOSS_ARROW_SPEED = 30;
+export const BOSS_SPREAD = 0.18; // radians between the three spread arrows
+export const BOSS_SUMMON_RADIUS = 10; // where the boss appears, around the player
+export const BOSS_MINION_CAP = 4; // boss-summoned minions alive at once
+export const BOSS_SUMMON_INTERVAL_SECONDS = 12;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;

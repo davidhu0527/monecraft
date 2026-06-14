@@ -1,7 +1,20 @@
 import * as THREE from "three";
-import { ATTACK_AIM_DOT, ATTACK_REACH, EYE_HEIGHT, FIST_DAMAGE } from "@/lib/game/config";
-import type { MobKind } from "@/lib/game/types";
-import type { GameState } from "../state";
+import {
+  ARROW_SPEED,
+  ARROW_TTL,
+  ATTACK_AIM_DOT,
+  ATTACK_REACH,
+  BOW_ARROW_DAMAGE,
+  BOW_COOLDOWN_SECONDS,
+  BOW_DURABILITY_PER_SHOT,
+  BOW_KNOCKBACK,
+  EYE_HEIGHT,
+  FIST_DAMAGE
+} from "@/lib/game/config";
+import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
+import type { InventorySlot, MobKind } from "@/lib/game/types";
+import type { EmitGameEvent, GameState } from "../state";
+import { spawnArrow } from "../projectiles";
 import { lookDirection } from "./playerMotion";
 
 const scratchForward = new THREE.Vector3();
@@ -70,4 +83,39 @@ export function tryAttackMob(state: GameState, damage: number, onMobKilled: (ind
 
   if (mob.hp <= 0) onMobKilled(bestIndex);
   return mob.kind;
+}
+
+/** True when the held slot is a usable bow (the attack input fires instead of melees). */
+export function isBow(slot: InventorySlot | undefined): boolean {
+  return slot?.id === "bow" && slot.count > 0;
+}
+
+/**
+ * Fires one arrow from the player's eye along their look direction, consuming an
+ * arrow and a point of bow durability and arming the fire-rate cooldown. Returns
+ * false (no shot) when the bow is on cooldown or the player has no arrows — the
+ * caller has already confirmed a bow is held via isBow, so a bow never melees.
+ */
+export function tryFireBow(state: GameState, emit: EmitGameEvent): boolean {
+  const slot = state.inventory[state.selectedSlot];
+  if (!isBow(slot)) return false;
+  if (state.timers.bowCooldownTimer > 0) return false;
+  if ((countsById(state.inventory).get("arrow") ?? 0) < 1) return false;
+
+  const { position, yaw, pitch } = state.player;
+  scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
+  lookDirection(yaw, pitch, scratchForward);
+  spawnArrow(state, scratchOrigin.x, scratchOrigin.y, scratchOrigin.z, scratchForward, {
+    speed: ARROW_SPEED,
+    damage: BOW_ARROW_DAMAGE,
+    knockback: BOW_KNOCKBACK,
+    fromPlayer: true,
+    ttl: ARROW_TTL
+  });
+
+  state.inventory = adjustSlotCount(state.inventory, "arrow", -1) ?? state.inventory;
+  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, BOW_DURABILITY_PER_SHOT) ?? state.inventory;
+  state.timers.bowCooldownTimer = BOW_COOLDOWN_SECONDS;
+  emit({ type: "bowFired" });
+  return true;
 }

@@ -10,7 +10,7 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ## Recipes
 
-**40 recipes.** All use the always-available crafting grid except the two
+**44 recipes.** All use the always-available crafting grid except the two
 **furnace** smelting recipes, which need an open furnace.
 
 ### Building & materials
@@ -41,23 +41,32 @@ stats. For how it all fits together, read the [player manual](manual.md).
 
 ### Weapons
 
-| Result         | Ingredients             |
-| -------------- | ----------------------- |
-| Knife          | 1 Stone + 1 Wood        |
-| Wood Sword     | 2 Planks + 1 Wood       |
-| Stone Sword    | 2 Cobble + 1 Wood       |
-| Sliver Sword   | 2 Sliver Ore + 1 Wood   |
-| Ruby Sword     | 2 Ruby Ore + 1 Wood     |
-| Sapphire Sword | 2 Sapphire Ore + 1 Wood |
-| Gold Sword     | 2 Gold Ore + 1 Wood     |
-| Diamond Sword  | 2 Diamond Ore + 1 Wood  |
-| Wood Spear     | 1 Planks + 2 Wood       |
-| Stone Spear    | 1 Cobble + 2 Wood       |
-| Sliver Spear   | 1 Sliver Ore + 2 Wood   |
-| Ruby Spear     | 1 Ruby Ore + 2 Wood     |
-| Sapphire Spear | 1 Sapphire Ore + 2 Wood |
-| Gold Spear     | 1 Gold Ore + 2 Wood     |
-| Diamond Spear  | 1 Diamond Ore + 2 Wood  |
+| Result         | Ingredients                    |
+| -------------- | ------------------------------ |
+| Knife          | 1 Stone + 1 Wood               |
+| Wood Sword     | 2 Planks + 1 Wood              |
+| Stone Sword    | 2 Cobble + 1 Wood              |
+| Sliver Sword   | 2 Sliver Ore + 1 Wood          |
+| Ruby Sword     | 2 Ruby Ore + 1 Wood            |
+| Sapphire Sword | 2 Sapphire Ore + 1 Wood        |
+| Gold Sword     | 2 Gold Ore + 1 Wood            |
+| Diamond Sword  | 2 Diamond Ore + 1 Wood         |
+| Dragon Sword   | 1 Dragon Heart + 2 Diamond Ore |
+| Wood Spear     | 1 Planks + 2 Wood              |
+| Stone Spear    | 1 Cobble + 2 Wood              |
+| Sliver Spear   | 1 Sliver Ore + 2 Wood          |
+| Ruby Spear     | 1 Ruby Ore + 2 Wood            |
+| Sapphire Spear | 1 Sapphire Ore + 2 Wood        |
+| Gold Spear     | 1 Gold Ore + 2 Wood            |
+| Diamond Spear  | 1 Diamond Ore + 2 Wood         |
+
+### Ranged & endgame
+
+| Result       | Ingredients                         |
+| ------------ | ----------------------------------- |
+| Bow          | 3 Wood + 3 String                   |
+| Arrow (×4)   | 1 Stone + 1 Wood + 1 Feather        |
+| Cursed Totem | 1 Diamond Ore + 2 Bone + 2 Gold Ore |
 
 ### Armor
 
@@ -120,19 +129,25 @@ hands or any tool. Bedrock and water cannot be broken.
 **6 mob kinds.** Passive animals flee but never attack and can be bred; hostiles
 hunt at night. Drop counts are inclusive ranges rolled per kill.
 
-| Mob      | Type    | HP  | Speed | Detect range | Attack | Cooldown | Drops                      |
-| -------- | ------- | --- | ----- | ------------ | ------ | -------- | -------------------------- |
-| Sheep    | passive | 10  | 0.9   | —            | —      | —        | 1–2 Wool, 1 Raw Mutton     |
-| Chicken  | passive | 7   | 1.2   | —            | —      | —        | 0–2 Feather, 1 Raw Chicken |
-| Horse    | passive | 14  | 1.4   | —            | —      | —        | 1–2 Leather                |
-| Zombie   | hostile | 10  | 1.05  | 11           | 3      | 1.35 s   | 1–2 Rotten Flesh           |
-| Skeleton | hostile | 9   | 1.08  | 12           | 3      | 1.4 s    | 1–2 Bone                   |
-| Spider   | hostile | 8   | 1.2   | 10           | 2      | 1.1 s    | 0–2 String                 |
+| Mob      | Type    | HP  | Speed | Detect range | Attack             | Cooldown | Drops                           |
+| -------- | ------- | --- | ----- | ------------ | ------------------ | -------- | ------------------------------- |
+| Sheep    | passive | 10  | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
+| Chicken  | passive | 7   | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
+| Horse    | passive | 14  | 1.4   | —            | —                  | —        | 1–2 Leather                     |
+| Zombie   | hostile | 10  | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
+| Skeleton | hostile | 9   | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
+| Spider   | hostile | 8   | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
+| Boss     | hostile | 400 | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
 
+Skeletons are now **ranged** — they kite and fire arrows instead of meleeing.
 Spiders are hostile only in the dark (daylight below 0.42); in twilight and day
 they behave like passives. **Breeding:** feed wheat to a sheep or horse, or seeds
 to a chicken; babies grow up in ~90 s. Passive population is capped at 24, hostiles
 at 16.
+
+The **Boss** is summoned, not spawned (see [Endgame](#endgame)): it bears down on
+you, melees up close, fires a 3-arrow spread at range, summons minions, and is
+immune to the daylight burn.
 
 ## Items
 
@@ -168,6 +183,7 @@ quickly with a shallow arc; misses remain stuck in terrain for 2 seconds.
 | Sapphire Sword | 35    | —     | 450        |
 | Gold Sword     | 40    | —     | 540        |
 | Diamond Sword  | 47    | —     | 720        |
+| Dragon Sword   | 60    | —     | 1200       |
 | Wood Spear     | 11    | 15    | 70         |
 | Stone Spear    | 16    | 21    | 140        |
 | Sliver Spear   | 22    | 28    | 230        |
@@ -175,9 +191,14 @@ quickly with a shallow arc; misses remain stuck in terrain for 2 seconds.
 | Sapphire Spear | 33    | 41    | 420        |
 | Gold Spear     | 38    | 47    | 500        |
 | Diamond Spear  | 45    | 55    | 680        |
+| Bow            | —     | —     | 200        |
 
-All durable gear is non-stackable: armor, tools, knives, swords, and spears each
-occupy one inventory or chest slot.
+The **Bow** does no melee damage; holding it makes the attack input fire an arrow
+(`BOW_ARROW_DAMAGE`, 9) per click on a short cooldown, spending one arrow and a
+point of durability. The **Dragon Sword** is the best-in-game melee weapon,
+craftable only from the boss's Dragon Heart drop. All durable gear is
+non-stackable: armor, tools, knives, swords, spears, and the bow each occupy one
+inventory or chest slot.
 
 ### Armor
 
@@ -211,7 +232,9 @@ always deals at least 1).
 
 Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
-(from farming and grass).
+(from farming and grass). Ranged/endgame materials: **Arrow** (bow ammo),
+**Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
+boss drop that crafts the Dragon Sword).
 
 ## Dungeons
 
@@ -231,3 +254,17 @@ Each chest rolls a tier:
 drips one hostile (zombie/skeleton/spider) every ~8 s onto the room floor, up to
 6 clustered nearby (and never past the global hostile cap of 16). Mining the
 spawner block out stops it.
+
+## Endgame
+
+Craft a **Cursed Totem** (1 diamond ore + 2 bone + 2 gold ore) and right-click
+it in the open to summon the **Boss** nearby (refused if one already walks). The
+fight is meant to test full diamond gear plus a bow:
+
+- It approaches and **bites** for 10 up close, looses a **3-arrow spread** for 7
+  each at range, and periodically **summons** a skeleton or zombie (up to 4, under
+  the global cap). It has **400 HP** and does not burn in daylight.
+- A boss health bar shows at the top of the screen while it lives.
+- Defeating it drops a **Dragon Heart** (+ 2–4 diamond ore), shows a one-time
+  **victory screen**, and lets you craft the **Dragon Sword** (60 attack). You
+  keep playing afterward; another totem summons it again.

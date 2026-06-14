@@ -106,6 +106,13 @@ chestplate, leggings, and boots from the inventory's armor slots. Each piece add
 defense and absorbs durability when you're struck — but a hit always deals at
 least **1 damage**, even in a full set.
 
+**Ranged combat.** Craft a **bow** (3 wood + 3 string) and **arrows** (1 stone +
+1 wood + 1 feather makes 4). With the bow selected, **left-click fires an arrow**
+along your aim — arrows arc with gravity, so lead distant or moving targets and
+aim a little high. Each shot spends one arrow and a little bow durability. Watch
+out: **skeletons now shoot back**, keeping their distance and firing arrows, so
+use cover and close the gap or out-shoot them.
+
 ## Day, night, and danger
 
 A full day lasts **240 seconds (4 minutes)**. Daylight rises and falls on a smooth
@@ -173,7 +180,7 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **33 recipes** in the [reference](reference.md#recipes).
+See the full list of **44 recipes** in the [reference](reference.md#recipes).
 
 ## Doors
 
@@ -204,9 +211,11 @@ Six creatures roam the world:
   close, and never attack. They drop materials and raw meat when killed.
 - **Hostile** — **zombie**, **skeleton**, **spider**. They hunt you at night,
   chase within their detection range, and attack when they have line of sight.
-  Spiders are only hostile in the dark.
+  **Skeletons are archers** — they keep their distance and fire arrows, so close
+  in or take cover. Spiders are only hostile in the dark.
 
-Full stats and drop tables are in the [bestiary](reference.md#mobs).
+Full stats and drop tables are in the [bestiary](reference.md#mobs). The summoned
+**boss** is covered under [Endgame](#endgame-the-boss).
 
 **Breeding** makes loot renewable. Right-click an adult **sheep or horse with
 wheat**, or a **chicken with seeds**, to put it "in love" for **30 seconds**. Two
@@ -214,6 +223,24 @@ in-love adults of the same kind standing within **3 blocks** produce a **baby**,
 which follows its parents, drops nothing while young, and grows to full size after
 **~90 seconds**. The passive population is capped (and feeding costs crops), so it
 stays under control.
+
+## Endgame: the boss
+
+Once you've reached **diamonds**, the diamond grind finally has a goal. Craft a
+**Cursed Totem** (1 diamond ore + 2 bone + 2 gold ore) and **right-click it in the
+open** to summon the **boss** — a towering figure that erupts nearby. (It refuses
+if a boss is already alive.)
+
+Come prepared: full **armor**, the best sword you can make, a **bow** and plenty of
+**arrows**, and some food. The boss has a huge health pool (shown on a bar at the
+top of the screen), **charges you and bites hard** up close, **fires a spread of
+arrows** at range, and **summons skeletons and zombies** to wear you down. It
+ignores daylight, so you can fight it whenever you like — open ground helps you
+kite it with the bow.
+
+Beat it and you **win**: a victory screen appears, and it drops a **Dragon Heart**.
+Craft that into the **Dragon Sword** — the strongest weapon in the game (60 attack).
+You keep playing afterward, and another totem summons the boss again.
 
 ## Farming
 

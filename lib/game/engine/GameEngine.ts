@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { BlockId, collectDungeonSites, collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
 import {
+  BOSS_HP,
+  BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
   HOTBAR_SLOTS,
   MAX_HUNGER,
@@ -41,12 +43,13 @@ import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
-import { tryAttackMob, weaponDamage, weaponReach } from "./systems/combat";
+import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickMobs } from "./systems/mobAI";
+import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
@@ -72,6 +75,10 @@ export class GameEngine {
   private readonly listeners = new Set<() => void>();
   private events: GameEvent[] = [];
   private snapshot: GameSnapshot;
+  // Boss snapshot is rebuilt only when its rounded HP% changes, so the
+  // ref-equality diff in refreshSnapshot doesn't re-render React every frame.
+  private lastBoss: { hpPercent: number } | null = null;
+  private lastBossPercent = -1;
 
   constructor(options: GameEngineOptions = {}) {
     const save = options.save ?? null;
@@ -124,6 +131,8 @@ export class GameEngine {
       nextMobId: 1,
       thrownSpears: [],
       nextThrownSpearId: 1,
+      projectiles: [],
+      nextProjectileId: 1,
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
@@ -132,7 +141,8 @@ export class GameEngine {
       spawnPoint: null,
       mining: { targetKey: "", progress: 0 },
       timers: createTimers(),
-      worldMeshDirty: true
+      worldMeshDirty: true,
+      victory: false
     };
 
     if (save) {
@@ -191,7 +201,11 @@ export class GameEngine {
     // Death: only mobs and the respawn countdown tick while dead.
     if (state.isDead) {
       if (tickRespawnTimer(state, dt)) this.respawn();
-      else tickMobs(state, dt, this.mobTickDeps);
+      else {
+        tickMobs(state, dt, this.mobTickDeps);
+        // Keep ticking so in-flight arrows clear; applyDamage no-ops while dead.
+        tickProjectiles(state, dt, this.mobTickDeps);
+      }
       this.refreshSnapshot();
       return;
     }
@@ -210,6 +224,7 @@ export class GameEngine {
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
+    state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
     tickDayNight(state, dt);
@@ -218,6 +233,7 @@ export class GameEngine {
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);
 
@@ -286,6 +302,7 @@ export class GameEngine {
         // place a block if none of those consumed the click.
         if (tryFeedAimedMob(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
+        if (this.trySummonBoss()) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
         break;
@@ -293,6 +310,12 @@ export class GameEngine {
       case "attack": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         this.emit({ type: "attackSwung" });
+        // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
+        // cooldown or with no arrows, but the swing animation still plays.
+        if (isBow(state.inventory[state.selectedSlot])) {
+          tryFireBow(state, this.emit);
+          break;
+        }
         const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt, weaponReach(state));
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
@@ -307,11 +330,11 @@ export class GameEngine {
         break;
       }
       case "pause": {
-        // The inventory panel and the death screen own their lock-loss; only
-        // plain gameplay lock-loss (or an explicit Escape) opens the pause menu.
-        // Sleeping is a brief, atomic freeze — pausing mid-fade would stall the
-        // sleep timer (step early-returns on paused before the sleep branch).
-        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0) break;
+        // The inventory panel, death screen, and victory screen own their
+        // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
+        // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
+        // would stall the sleep timer (step early-returns on paused before sleep).
+        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory) break;
         state.paused = true;
         state.craftingStation = null;
         state.openContainerIndex = null;
@@ -334,6 +357,10 @@ export class GameEngine {
       case "respawn": {
         // Skip the rest of the countdown; the next step performs the respawn.
         if (state.isDead) state.respawnTimer = 0;
+        break;
+      }
+      case "dismissVictory": {
+        state.victory = false;
         break;
       }
     }
@@ -457,7 +484,32 @@ export class GameEngine {
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
+    // Defeating the boss is the win condition — fire the one-shot victory.
+    if (mob.kind === "boss") {
+      state.victory = true;
+      this.emit({ type: "bossDefeated", x: mob.position.x, y: mob.position.y, z: mob.position.z });
+    }
   };
+
+  /**
+   * Summons the boss from a held Cursed Totem at a seeded land point near the
+   * player, consuming the totem. Refuses (keeping the totem) when a boss already
+   * walks. Returns true when the click was consumed.
+   */
+  private trySummonBoss(): boolean {
+    const state = this.state;
+    const slot = state.inventory[state.selectedSlot];
+    if (slot?.id !== "boss_summoner" || slot.count <= 0) return false;
+    if (state.mobs.some((mob) => mob.kind === "boss")) {
+      this.emit({ type: "summonFailed" });
+      return true;
+    }
+    const point = randomLandPointNear(state.world, this.surfaceYAt, state.player.position.x, state.player.position.z, BOSS_SUMMON_RADIUS, this.rng);
+    spawnBoss(state, point.x, point.y, point.z, this.rng);
+    state.inventory = inv.adjustSlotCount(state.inventory, "boss_summoner", -1, state.selectedSlot) ?? state.inventory;
+    this.emit({ type: "bossSummoned", x: point.x, y: point.y, z: point.z });
+    return true;
+  }
 
   private get mobTickDeps() {
     return {
@@ -532,6 +584,24 @@ export class GameEngine {
     };
   }
 
+  /** Boss HP as a ref-stable {hpPercent} object, recomputed only when the rounded percent moves. */
+  private bossSnapshot(): { hpPercent: number } | null {
+    const bossMob = this.state.mobs.find((mob) => mob.kind === "boss");
+    if (!bossMob) {
+      if (this.lastBoss !== null) {
+        this.lastBoss = null;
+        this.lastBossPercent = -1;
+      }
+      return null;
+    }
+    const percent = Math.max(0, Math.min(1, Math.round((bossMob.hp / BOSS_HP) * 100) / 100));
+    if (percent !== this.lastBossPercent) {
+      this.lastBoss = { hpPercent: percent };
+      this.lastBossPercent = percent;
+    }
+    return this.lastBoss;
+  }
+
   private buildSnapshot(): GameSnapshot {
     const state = this.state;
     return {
@@ -554,7 +624,9 @@ export class GameEngine {
       capsActive: state.capsActive,
       sleeping: state.sleepTimer > 0,
       craftingStation: state.craftingStation,
-      container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null
+      container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
+      boss: this.bossSnapshot(),
+      victory: state.victory
     };
   }
 

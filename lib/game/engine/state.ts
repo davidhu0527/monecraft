@@ -46,6 +46,27 @@ export type MobState = {
   fedTimer: number;
   /** Seconds left as a baby; > 0 means a scaled-down, no-drop juvenile. */
   ageTimer: number;
+  /** Boss-only: seconds until the next minion summon (session-only, never saved). */
+  summonTimer?: number;
+};
+
+/**
+ * Simulation-side projectile (arrow) — transient, never serialized, like mobs.
+ * Shared by the player's bow, ranged skeletons, and the boss; `fromPlayer` is
+ * the hit filter (player arrows hit mobs, mob arrows hit the player).
+ */
+export type ProjectileState = {
+  id: number;
+  position: THREE.Vector3;
+  /** m/s; gravity-integrated each step. yaw/pitch are derived from it for the renderer. */
+  velocity: THREE.Vector3;
+  yaw: number;
+  pitch: number;
+  damage: number;
+  knockback: number;
+  fromPlayer: boolean;
+  /** Seconds remaining before the arrow despawns mid-air. */
+  ttl: number;
 };
 
 export type MiningState = {
@@ -89,6 +110,8 @@ export type GameTimers = {
   randomTickTimer: number;
   breedTimer: number;
   spearThrowCooldown: number;
+  /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
+  bowCooldownTimer: number;
 };
 
 export type WeatherKind = "clear" | "rain" | "snow";
@@ -128,6 +151,9 @@ export type GameState = {
   nextMobId: number;
   thrownSpears: ThrownSpearState[];
   nextThrownSpearId: number;
+  /** In-flight arrows (session-only; never serialized). */
+  projectiles: ProjectileState[];
+  nextProjectileId: number;
   dayClock: number;
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
@@ -142,6 +168,8 @@ export type GameState = {
   timers: GameTimers;
   /** Set when world geometry changed; the renderer rebuilds the mesh and clears it. */
   worldMeshDirty: boolean;
+  /** True once the boss has been defeated — drives the one-shot victory screen (session-only). */
+  victory: boolean;
 };
 
 export function createTimers(): GameTimers {
@@ -160,7 +188,8 @@ export function createTimers(): GameTimers {
     debugHudTimer: 0,
     randomTickTimer: 0,
     breedTimer: 0,
-    spearThrowCooldown: 0
+    spearThrowCooldown: 0,
+    bowCooldownTimer: 0
   };
 }
 
@@ -212,6 +241,10 @@ export type GameSnapshot = {
   craftingStation: "furnace" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
+  /** Live boss health (0..1), or null when no boss is alive — drives the boss bar. */
+  boss: { hpPercent: number } | null;
+  /** True after the boss is defeated — drives the victory screen. */
+  victory: boolean;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
@@ -228,6 +261,11 @@ export type GameEvent =
   | { type: "mobHit"; kind: MobKind }
   | { type: "mobDied"; kind: MobKind; x: number; y: number; z: number }
   | { type: "mobSpawned"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "arrowHit"; x: number; y: number; z: number; target: "block" | "mob" | "player" }
+  | { type: "bowFired" }
+  | { type: "bossSummoned"; x: number; y: number; z: number }
+  | { type: "bossDefeated"; x: number; y: number; z: number }
+  | { type: "summonFailed" }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

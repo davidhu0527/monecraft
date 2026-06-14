@@ -51,7 +51,9 @@ export const MATERIAL_PALETTES: Record<string, { m: Rgb; M: Rgb; l: Rgb }> = {
   ruby: { m: [214, 72, 84], M: [140, 38, 50], l: [243, 134, 144] },
   sapphire: { m: [62, 128, 222], M: [34, 80, 156], l: [130, 180, 245] },
   gold: { m: [240, 190, 60], M: [180, 128, 32], l: [252, 228, 130] },
-  diamond: { m: [110, 228, 235], M: [52, 160, 170], l: [190, 248, 250] }
+  diamond: { m: [110, 228, 235], M: [52, 160, 170], l: [190, 248, 250] },
+  // Endgame Dragon gear: a smouldering violet/magenta ramp, unlike any tier.
+  dragon: { m: [168, 58, 196], M: [104, 30, 128], l: [226, 138, 244] }
 };
 
 const STEEL: { m: Rgb; M: Rgb; l: Rgb } = { m: [192, 197, 207], M: [124, 131, 144], l: [236, 239, 246] };
@@ -279,6 +281,86 @@ const STRING_GRID = [
 ];
 
 // Shared chunk-of-meat shape, recolored per meat (chicken/mutton/rotten).
+// A recurve bow: a wooden limb curving down the left, a straight bowstring (s).
+const BOW_GRID = [
+  ".........s......",
+  "......mm.s......",
+  ".....mM..s......",
+  "....mM...s......",
+  "....mM...s......",
+  "...mM....s......",
+  "...mM....s......",
+  "...mM....s......",
+  "...mM....s......",
+  "...mM....s......",
+  "....mM...s......",
+  "....mM...s......",
+  ".....mM..s......",
+  "......mm.s......",
+  ".........s......",
+  "................"
+];
+
+// A carved totem skull on a dark plinth — the boss-summon item.
+const SUMMONER_GRID = [
+  "................",
+  ".....mmmmmm.....",
+  "....mMMMMMMm....",
+  "...mMlMMMMlMm...",
+  "...mMllMMllMm...",
+  "...mMMMMMMMMm...",
+  "...mMMrMMrMMm...",
+  "...mMMMMMMMMm...",
+  "...mMMMeeMMMm...",
+  "....mMMMMMMm....",
+  ".....mMMMMm.....",
+  "......mMMm......",
+  ".....dddddd.....",
+  "....dDDDDDDd....",
+  "....dDdddDDd....",
+  "................"
+];
+
+// A glowing crystalline heart — the unique boss drop.
+const DRAGON_HEART_GRID = [
+  "................",
+  "...ll....ll.....",
+  "..lmmll..llmm...",
+  ".lmmmmllllmmml..",
+  ".lmmllllllllml..",
+  ".lmllllwwllllm..",
+  ".lmlllwwwwlllm..",
+  "..lmlllwwlllml..",
+  "..lmmlllllllm...",
+  "...lmmllllml....",
+  "....lmmllml.....",
+  ".....lmmml......",
+  "......lml.......",
+  ".......l........",
+  "................",
+  "................"
+];
+
+// A vertical arrow: steel head (l/m), wooden shaft (h), feather fletching (f).
+const ARROW_GRID = [
+  ".......l........",
+  "......lml.......",
+  ".....lmmml......",
+  "....lmm.mml.....",
+  ".....l.h.l......",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".......h........",
+  ".....f.h.f......",
+  "....ff.h.ff.....",
+  "...ff..h..ff....",
+  "..ff...h...ff...",
+  ".......h........",
+  "................"
+];
+
 const RAW_MEAT_GRID = [
   "................",
   ".....mmmm.......",
@@ -537,6 +619,18 @@ const DOOR_GRID = [
   "...dddddddddd...",
   "................"
 ];
+const BOW_PALETTE: PixelPalette = { m: [158, 110, 57], M: [104, 72, 37], s: [224, 221, 208] };
+const ARROW_PALETTE: PixelPalette = { l: [236, 239, 246], m: [192, 197, 207], h: [146, 102, 52], f: [228, 230, 235] };
+const SUMMONER_PALETTE: PixelPalette = {
+  m: [120, 96, 70],
+  M: [72, 56, 40],
+  l: [168, 142, 110],
+  r: [196, 58, 58],
+  e: [255, 96, 64],
+  d: [60, 50, 44],
+  D: [92, 78, 66]
+};
+const DRAGON_HEART_PALETTE: PixelPalette = { m: [196, 60, 168], M: [120, 30, 104], l: [236, 150, 230], w: [255, 240, 255] };
 
 /**
  * Pixel grids for non-block, non-gear items (materials, food). Keyed by item id
@@ -558,7 +652,11 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
   wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
   bread: { grid: BREAD_GRID, palette: BREAD_PALETTE },
-  door: { grid: DOOR_GRID, palette: DOOR_PALETTE }
+  door: { grid: DOOR_GRID, palette: DOOR_PALETTE },
+  bow: { grid: BOW_GRID, palette: BOW_PALETTE },
+  arrow: { grid: ARROW_GRID, palette: ARROW_PALETTE },
+  boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
+  dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE }
 };
 
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).

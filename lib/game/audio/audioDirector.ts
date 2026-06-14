@@ -3,6 +3,9 @@ import { BREAK_HARDNESS } from "@/lib/game/items";
 import type { GameEvent, GameState } from "@/lib/game/engine/state";
 import { materialGroupFor } from "./materials";
 import {
+  ARROW_HIT_SOUND,
+  BOSS_ROAR_SOUND,
+  BOW_FIRE_SOUND,
   BREAK_SOUNDS,
   DEATH_SOUND,
   EAT_SOUND,
@@ -25,6 +28,7 @@ import {
   CHEST_OPEN_SOUND,
   SMELT_SOUND,
   TILL_SOUND,
+  VICTORY_SOUND,
   WAKE_SOUND
 } from "./soundParams";
 import { createFootstepScheduler } from "./footsteps";
@@ -210,6 +214,18 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "mobSpawned":
           backend.play(MOB_SPAWN_SOUND);
+          break;
+        case "bowFired":
+          backend.play(BOW_FIRE_SOUND);
+          break;
+        case "arrowHit":
+          backend.play(ARROW_HIT_SOUND);
+          break;
+        case "bossSummoned":
+          backend.play(BOSS_ROAR_SOUND);
+          break;
+        case "bossDefeated":
+          backend.play(VICTORY_SOUND);
           break;
         case "died":
           backend.play(DEATH_SOUND);
