@@ -24,7 +24,8 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Any item with `maxDurability` is automatically non-stackable. Spears also set
   `meleeReach` and `throwDamage`; `systems/spears.ts` handles throwing.
 - `ITEM_DEF_BY_ID` is derived from `ITEM_DEFS`; never edit it directly.
-- Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` (e.g. `"furnace"`) makes a recipe a smelting recipe: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book.
+- Recipes are `{ id, label, cost: [{slotId, count}], result: {slotId, count} }` in `lib/game/recipes.ts`. An optional `station` makes a recipe station-gated: it only crafts while that station's panel is open, enforced in the `craft` command and shown locked in the recipe book. The stations are `"furnace"` (smelting) and `"villager"` (a **trade** — see below).
+- **Villager trades** (`lib/game/trades.ts`) ARE just `station: "villager"` recipes spread into `RECIPES`, so they reuse the whole crafting pipeline and recipe-book UI for free. To open them, an interaction sets `state.craftingStation = "villager"` (right-clicking a villager via `tryTradeAimedVillager` in `interact.ts`); the panel then shows the trades as a **Trading** book and the `craft` command runs them. Emerald is the currency — add sell offers (material → emerald) and buy offers (emerald → goods) to keep the economy two-sided. There's no persisted trade state, so this needs no save-format change.
 - Items with durability don't stack; durability is initialized in `createSlot` and persisted in saves.
 
 ## A new mob drop

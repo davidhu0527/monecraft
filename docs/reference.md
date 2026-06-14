@@ -23,8 +23,9 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**54 recipes.** All use the always-available crafting grid except the nine
-**furnace** smelting recipes, which need an open furnace.
+**54 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+All use the always-available crafting grid except the nine **furnace** smelting
+recipes, which need an open furnace.
 
 ### Building & materials
 
@@ -151,8 +152,9 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 
 ## Mobs
 
-**9 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
-can be bred; hostiles hunt at night. Drop counts are inclusive ranges rolled per kill.
+**10 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+can be bred; the villager is passive but doesn't flee (right-click to trade); hostiles
+hunt at night. Drop counts are inclusive ranges rolled per kill.
 
 | Mob      | Type    | HP  | Speed | Detect range | Attack             | Cooldown | Drops                           |
 | -------- | ------- | --- | ----- | ------------ | ------------------ | -------- | ------------------------------- |
@@ -161,11 +163,32 @@ can be bred; hostiles hunt at night. Drop counts are inclusive ranges rolled per
 | Horse    | passive | 14  | 1.4   | —            | —                  | —        | 1–2 Leather                     |
 | Cow      | passive | 10  | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
 | Pig      | passive | 8   | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
+| Villager | passive | 20  | 0.6   | —            | — (trade partner)  | —        | nothing                         |
 | Zombie   | hostile | 10  | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
 | Skeleton | hostile | 9   | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
 | Spider   | hostile | 8   | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
 | Creeper  | hostile | 10  | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
 | Boss     | hostile | 400 | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
+
+### Trading
+
+Right-click a **villager** to open its trades (the recipe book switches to a
+**Trading** panel). The currency is the **emerald**: sell gathered materials for
+emeralds, then spend them on goods. No use caps — trading is bounded only by what
+you can gather. Trades live in `lib/game/trades.ts`.
+
+| Trade             | Give       | Get             |
+| ----------------- | ---------- | --------------- |
+| Sell wheat        | 6 Wheat    | 1 Emerald       |
+| Sell coal         | 3 Coal     | 1 Emerald       |
+| Sell leather      | 2 Leather  | 1 Emerald       |
+| Sell gold ore     | 1 Gold Ore | 1 Emerald       |
+| Buy bread         | 1 Emerald  | 2 Bread         |
+| Buy torches       | 1 Emerald  | 8 Torch         |
+| Buy arrows        | 2 Emerald  | 8 Arrow         |
+| Buy stone pickaxe | 3 Emerald  | 1 Stone Pickaxe |
+| Buy sliver ore    | 5 Emerald  | 1 Sliver Ore    |
+| Buy ruby ore      | 8 Emerald  | 1 Ruby Ore      |
 
 Skeletons are now **ranged** — they kite and fire arrows instead of meleeing.
 **Creepers** chase silently, then light a ~1.5 s fuse when they get within ~2.6
@@ -271,7 +294,8 @@ Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
 (from farming and grass). Fuels: **Coal** (mined from coal ore) and **Charcoal**
 (smelted from wood) — interchangeable for smelting and torches. **Gunpowder**
-(creeper drop) crafts TNT. Ranged/endgame materials: **Arrow** (bow ammo),
+(creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
+Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
 boss drop that crafts the Dragon Sword).
 

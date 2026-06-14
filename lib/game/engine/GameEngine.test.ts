@@ -96,10 +96,10 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 8 + 6 + 6 + 4); // sheep/chicken/horse/cow/pig + zombie/skeleton/spider/creeper
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 3 + 8 + 6 + 6 + 4); // sheep/chicken/horse/cow/pig/villager + zombie/skeleton/spider/creeper
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(22);
+    expect(engine.getSnapshot().passiveCount).toBe(25);
     expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
@@ -1848,5 +1848,59 @@ describe("TNT", () => {
     run(engine, 3);
     expect(state.world.get(x, y, z)).toBe(BlockId.Air);
     expect(state.primedTnt.size).toBe(0);
+  });
+});
+
+describe("villager trading", () => {
+  test("right-clicking a villager opens its trades, which only craft while open", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+
+    // A villager standing in the crosshair, two blocks ahead at eye height.
+    const p = state.player.position;
+    state.mobs.push({
+      id: state.nextMobId++,
+      kind: "villager",
+      hostile: false,
+      hp: 20,
+      position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 9,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    });
+
+    // A villager trade is refused while no villager is open.
+    const slot = state.inventory.findIndex((s) => !s.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("wheat", 6);
+    engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
+    expect(countsById(state.inventory).get("emerald")).toBeUndefined();
+
+    // Right-click the villager → opens the trade station.
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((e) => e.type === "openedStation" && e.station === "villager")).toBe(true);
+    expect(state.craftingStation).toBe("villager");
+    expect(state.inventoryOpen).toBe(true);
+
+    // Now the trade goes through: wheat → emerald.
+    engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
+    expect(countsById(state.inventory).get("emerald")).toBe(1);
+    expect(countsById(state.inventory).get("wheat")).toBeUndefined();
   });
 });

@@ -140,6 +140,21 @@ function interactFurnace(state: GameState, emit: EmitGameEvent): boolean {
   return true;
 }
 
+/**
+ * Right-click a villager to open its trades (the inventory in "villager" station
+ * mode, which unlocks the trade offers in the recipe book). Returns true when an
+ * aimed villager consumed the click. Runs after feeding in the right-click
+ * precedence, but villagers aren't breedable so the two never collide.
+ */
+export function tryTradeAimedVillager(state: GameState, emit: EmitGameEvent): boolean {
+  const index = findAimedMobIndex(state);
+  if (index < 0 || state.mobs[index].kind !== "villager") return false;
+  state.inventoryOpen = true;
+  state.craftingStation = "villager";
+  emit({ type: "openedStation", station: "villager" });
+  return true;
+}
+
 /** Sleep in a bed: only at night, only when no hostile is near. Sets the respawn point. */
 function interactBed(state: GameState, emit: EmitGameEvent, x: number, y: number, z: number): boolean {
   if (state.daylight >= SLEEP_ALLOWED_BELOW_DAYLIGHT) {

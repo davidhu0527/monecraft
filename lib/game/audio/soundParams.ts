@@ -591,6 +591,24 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       filter: 700
     })
   },
+  villager: {
+    // A low, content "hmm" mumble.
+    params: zz({
+      volume: 0.5,
+      randomness: 0.15,
+      frequency: 160,
+      attack: 0.04,
+      sustain: 0.2,
+      release: 0.2,
+      shape: 2,
+      shapeCurve: 1.2,
+      pitchJump: -30,
+      pitchJumpTime: 0.12,
+      sustainVolume: 0.7,
+      decay: 0.12,
+      filter: -120
+    })
+  },
   boss: {
     params: zz({
       volume: 0.7,
@@ -751,6 +769,12 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       filter: 1200
     }),
     minRetriggerMs: 400
+  },
+  // Villagers never attack (attackDamage 0); this entry exists only to keep the
+  // exhaustive Record complete — a startled grunt, in case it is ever triggered.
+  villager: {
+    params: zz({ volume: 0.5, randomness: 0.15, frequency: 200, sustain: 0.03, release: 0.1, shape: 2, sustainVolume: 0.6, decay: 0.05, filter: -150 }),
+    minRetriggerMs: 200
   },
   boss: {
     params: zz({

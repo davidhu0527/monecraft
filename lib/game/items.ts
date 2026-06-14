@@ -102,6 +102,8 @@ export const ITEM_DEFS: ItemDef[] = [
   // Creeper drop; crafts TNT. TNT places like a block and ignites with a torch.
   { id: "gunpowder", label: "Gunpowder", kind: "material" },
   { id: "tnt", label: "TNT", kind: "block", blockId: BlockId.Tnt },
+  // Trade currency: earn emeralds by selling materials to a villager, spend them on goods.
+  { id: "emerald", label: "Emerald", kind: "material" },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },

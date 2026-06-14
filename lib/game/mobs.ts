@@ -90,6 +90,16 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     // Mottled green, taller than wide, with a dark face — the classic silhouette.
     modelArgs: [0x4f9a3a, 0x3f8030, 0x356b29, 0x1a1a1a, 0x2a5520, [0.7, 1.25, 0.7], [0.5, 0.5, 0.5]]
   },
+  villager: {
+    speed: 0.6,
+    hp: 20,
+    detectRange: 0,
+    attackDamage: 0,
+    attackCooldown: 0,
+    // A robed humanoid: brown smock, tan head, big nose (the snout/detail). Passive
+    // but does NOT flee — you can walk right up to trade (see mobAI's villager case).
+    modelArgs: [0x6f5a44, 0xc9a986, 0x4a3b2c, 0x2a2a2a, 0xb98e6a, [0.7, 1.35, 0.55], [0.55, 0.6, 0.55]]
+  },
   boss: {
     speed: 1.1,
     hp: 400,

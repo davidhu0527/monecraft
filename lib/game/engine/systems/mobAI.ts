@@ -152,7 +152,8 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
         if (distanceToPlayer < SKELETON_STANDOFF_MIN) moveSign = -1;
         else if (distanceToPlayer <= SKELETON_STANDOFF_MAX) moveSign = 0;
       }
-    } else if (!mob.hostile && distanceToPlayer < 4.2) {
+    } else if (!mob.hostile && mob.kind !== "villager" && distanceToPlayer < 4.2) {
+      // Animals flee when you get close; villagers don't, so you can walk up to trade.
       if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize().multiplyScalar(-1), 0.2).normalize();
       moveSpeed *= 1.15;
     } else if (mob.turnTimer <= 0) {

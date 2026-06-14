@@ -255,11 +255,14 @@ everything, the break is refused and the chest stays put — empty it a bit firs
 
 ## Mobs and breeding
 
-Eight creatures roam the world:
+Ten creatures roam the world:
 
 - **Passive** — **sheep**, **chicken**, **horse**, **cow**, **pig**. They wander,
   flee when you get close, and never attack. They drop materials and raw meat when
   killed — cows give leather and beef, pigs give porkchops.
+- **Villager** — passive but **doesn't flee**, so you can walk right up and
+  **right-click to trade** (see [Trading](#trading)). It drops nothing if killed —
+  no reason to harm your shopkeeper.
 - **Hostile** — **zombie**, **skeleton**, **spider**, **creeper**. They hunt you at
   night, chase within their detection range, and attack when they have line of sight.
   **Skeletons are archers** — they keep their distance and fire arrows, so close in
@@ -277,6 +280,19 @@ in-love adults of the same kind standing within **3 blocks** produce a **baby**,
 which follows its parents, drops nothing while young, and grows to full size after
 **~90 seconds**. The passive population is capped (and feeding costs crops), so it
 stays under control.
+
+## Trading
+
+**Villagers** wander the world like the animals, but they won't run from you —
+walk up and **right-click one** to open its **trades**. The inventory's recipe book
+switches to a **Trading** panel showing what the villager offers.
+
+The currency is the **emerald**. Trading is two-sided: **sell** what you gather
+(wheat, coal, leather, gold ore) for emeralds, then **spend** those emeralds on
+goods you'd rather buy than make — bread, a stack of torches, arrows, a stone
+pickaxe, even sliver or ruby ore to skip some mining. There's no limit beyond what
+you can carry and gather, so a good farm or mine turns into steady emeralds, and
+emeralds into whatever you're short on.
 
 ## Endgame: the boss
 

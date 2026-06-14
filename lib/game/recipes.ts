@@ -1,6 +1,7 @@
 import type { Recipe } from "@/lib/game/types";
+import { TRADES } from "@/lib/game/trades";
 
-export const RECIPES: Recipe[] = [
+const CRAFTING_RECIPES: Recipe[] = [
   { id: "planks", label: "2 Wood -> 4 Planks", cost: [{ slotId: "wood", count: 2 }], result: { slotId: "planks", count: 4 } },
   { id: "wool_from_string", label: "4 String -> 1 Wool", cost: [{ slotId: "string", count: 4 }], result: { slotId: "wool", count: 1 } },
   {
@@ -438,3 +439,7 @@ export const RECIPES: Recipe[] = [
     result: { slotId: "boots", count: 1 }
   }
 ];
+
+// Villager trades are station-gated recipes, so they share the recipe book + the
+// `craft` command. They live in their own module (the trade analog of recipes).
+export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];

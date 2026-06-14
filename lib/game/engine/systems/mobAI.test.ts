@@ -162,3 +162,29 @@ describe("creepers", () => {
     expect(events.some((e) => e.type === "explosion")).toBe(false);
   });
 });
+
+describe("villagers", () => {
+  function makePassive(kind: MobKind, z: number): MobState {
+    const m = makeMob(kind, 24, 30, z);
+    m.hostile = false;
+    m.detectRange = 0;
+    m.speed = 0.6;
+    m.moveSpeed = 0.6;
+    return m;
+  }
+
+  test("a villager does not take the flee path the player triggers in a sheep", () => {
+    // Both start two blocks from the player (well inside the 4.2 flee range). A
+    // sheep enters the flee branch (which boosts moveSpeed ×1.15 and turns away);
+    // a villager skips it and keeps its base speed, so you can walk up to trade.
+    const sheep = makePassive("sheep", 22);
+    const villager = makePassive("villager", 22);
+    const state = makeState([sheep, villager]);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(sheep.moveSpeed).toBeCloseTo(sheep.speed * 1.15, 5); // fled
+    expect(villager.moveSpeed).toBeCloseTo(villager.speed, 5); // did not flee
+  });
+});

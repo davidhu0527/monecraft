@@ -54,7 +54,7 @@ import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickMobs } from "./systems/mobAI";
@@ -329,6 +329,7 @@ export class GameEngine {
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
         if (tryFeedAimedMob(state, this.emit)) break;
+        if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
