@@ -16,6 +16,7 @@ function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
     onSave: mock(),
     onLoad: mock(),
     onReset: mock(),
+    onQuitToWorlds: mock(),
     ...overrides
   };
   render(<PauseMenu {...props} />);
@@ -29,9 +30,11 @@ describe("PauseMenu", () => {
     await user.click(screen.getByRole("button", { name: "Back to Game" }));
     await user.click(screen.getByRole("button", { name: "Save Game" }));
     await user.click(screen.getByRole("button", { name: "Load Save" }));
+    await user.click(screen.getByRole("button", { name: "Save & Quit to Worlds" }));
     expect(props.onBack).toHaveBeenCalledTimes(1);
     expect(props.onSave).toHaveBeenCalledTimes(1);
     expect(props.onLoad).toHaveBeenCalledTimes(1);
+    expect(props.onQuitToWorlds).toHaveBeenCalledTimes(1);
   });
 
   test("reset requires a confirmation step", async () => {

@@ -14,6 +14,7 @@ type PauseMenuProps = {
   onSave: () => void;
   onLoad: () => void;
   onReset: () => void;
+  onQuitToWorlds: () => void;
 };
 
 const CONTROLS: Array<[string, string]> = [
@@ -42,7 +43,8 @@ export default function PauseMenu({
   onBack,
   onSave,
   onLoad,
-  onReset
+  onReset,
+  onQuitToWorlds
 }: PauseMenuProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
 
@@ -88,6 +90,9 @@ export default function PauseMenu({
             Reset World
           </button>
         )}
+        <button className="mc-button" onClick={onQuitToWorlds}>
+          Save &amp; Quit to Worlds
+        </button>
         <div className="pause-sound">
           {volumeSlider("Sound", audioSettings.master, (volume) => onAudioSettingsChange({ master: volume }))}
           {volumeSlider("Music", audioSettings.music, (volume) => onAudioSettingsChange({ music: volume }))}

@@ -10,10 +10,19 @@ import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import VictoryScreen from "@/components/game/VictoryScreen";
+import type { Profile } from "@/lib/game/profiles";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
+import type { WorldMeta } from "@/lib/game/worlds";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
-export default function MinecraftGame() {
+type MinecraftGameProps = {
+  world: WorldMeta;
+  profile: Profile;
+  onQuitToWorlds: () => void;
+  onReloadWorld: () => void;
+};
+
+export default function MinecraftGame({ world, profile, onQuitToWorlds, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -61,8 +70,9 @@ export default function MinecraftGame() {
     dismissVictory,
     saveNow,
     loadNow,
-    resetNow
-  } = useMinecraftGame();
+    resetNow,
+    quitToWorlds
+  } = useMinecraftGame({ world, profile, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
     installUiTiles();
@@ -144,6 +154,7 @@ export default function MinecraftGame() {
           onSave={saveNow}
           onLoad={loadNow}
           onReset={resetNow}
+          onQuitToWorlds={quitToWorlds}
         />
       ) : null}
 
