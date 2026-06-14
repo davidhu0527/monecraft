@@ -48,6 +48,8 @@ export type MobState = {
   ageTimer: number;
   /** Boss-only: seconds until the next minion summon (session-only, never saved). */
   summonTimer?: number;
+  /** Creeper-only: seconds left on a lit fuse (>0 means primed); detonates at 0. Session-only. */
+  fuseTimer?: number;
 };
 
 /**
@@ -140,6 +142,8 @@ export type GameState = {
   craftingStation: "furnace" | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
+  /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
+  primedTnt: Map<number, number>;
   /** Voxel index of the chest open in the inventory panel, or null. */
   openContainerIndex: number | null;
   /** Worldgen dungeon chest voxel indices (session; re-derived from the seed each load). */
@@ -278,6 +282,8 @@ export type GameEvent =
   | { type: "bossSummoned"; x: number; y: number; z: number }
   | { type: "bossDefeated"; x: number; y: number; z: number }
   | { type: "summonFailed" }
+  | { type: "explosion"; x: number; y: number; z: number; power: number }
+  | { type: "tntPrimed"; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }

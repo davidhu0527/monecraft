@@ -196,6 +196,13 @@ Higher-tier pickaxes (sapphire, gold, diamond) also mine **faster**. Dirt, sand,
 wood, leaves, and crops need no special tool. Ores hide underground and in caves;
 the rarer the ore, the deeper it tends to sit.
 
+**Blasting with TNT.** Collect **gunpowder** from creepers and craft **TNT** (4
+gunpowder + 1 sand). Place it like any block, then **right-click it with a torch**
+to light the fuse — stand well back, because after a couple of seconds it blows a
+crater and hurts anything close. TNT next to more TNT chains. It won't touch
+bedrock, and it mostly destroys rather than drops blocks, so it's for digging and
+demolition, not free resources.
+
 ## Dungeons and loot
 
 Digging around underground can turn up a **dungeon**: a small cobblestone room,
@@ -253,10 +260,13 @@ Eight creatures roam the world:
 - **Passive** — **sheep**, **chicken**, **horse**, **cow**, **pig**. They wander,
   flee when you get close, and never attack. They drop materials and raw meat when
   killed — cows give leather and beef, pigs give porkchops.
-- **Hostile** — **zombie**, **skeleton**, **spider**. They hunt you at night,
-  chase within their detection range, and attack when they have line of sight.
-  **Skeletons are archers** — they keep their distance and fire arrows, so close
-  in or take cover. Spiders are only hostile in the dark.
+- **Hostile** — **zombie**, **skeleton**, **spider**, **creeper**. They hunt you at
+  night, chase within their detection range, and attack when they have line of sight.
+  **Skeletons are archers** — they keep their distance and fire arrows, so close in
+  or take cover. **Creepers** sneak up and **explode** — they light a short fuse when
+  they get close (you'll hear the hiss and see them swell), then blow a crater and
+  hurt you badly. Back away to defuse one, or kill it first for its gunpowder.
+  Spiders are only hostile in the dark. Nothing spawns within 16 blocks of you.
 
 Full stats and drop tables are in the [bestiary](reference.md#mobs). The summoned
 **boss** is covered under [Endgame](#endgame-the-boss).

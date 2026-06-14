@@ -107,6 +107,17 @@ describe("coal & fuel economy", () => {
     expect(countsById(craft(slots, r)!).get("cooked_chicken")).toBe(1);
   });
 
+  test("TNT crafts from gunpowder and sand", () => {
+    const r = recipe("tnt");
+    const slots = inventory([
+      ["gunpowder", 4],
+      ["sand", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("tnt")).toBe(1);
+    expect(canCraft(inventory([["gunpowder", 3]]), r)).toBe(false);
+  });
+
   test("torches now require coal (or charcoal) plus wood", () => {
     const r = recipe("torch");
     expect(r.cost.some((c) => c.slotId === "coal")).toBe(true);

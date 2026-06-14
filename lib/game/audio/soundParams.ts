@@ -574,6 +574,23 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       filter: 600
     })
   },
+  creeper: {
+    // A soft airy rustle — the creeper's quiet approach before it hisses.
+    params: zz({
+      volume: 0.4,
+      randomness: 0.2,
+      frequency: 220,
+      attack: 0.06,
+      sustain: 0.18,
+      release: 0.22,
+      shape: 4,
+      shapeCurve: 0.8,
+      noise: 1.1,
+      sustainVolume: 0.5,
+      decay: 0.12,
+      filter: 700
+    })
+  },
   boss: {
     params: zz({
       volume: 0.7,
@@ -716,6 +733,24 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       filter: 500
     }),
     minRetriggerMs: 100
+  },
+  creeper: {
+    // The fuse hiss when a creeper starts to swell — bright, sharp, rising noise.
+    params: zz({
+      volume: 0.7,
+      randomness: 0.05,
+      frequency: 900,
+      attack: 0.02,
+      sustain: 0.25,
+      release: 0.15,
+      shape: 4,
+      slide: 2,
+      noise: 1.6,
+      sustainVolume: 0.8,
+      decay: 0.1,
+      filter: 1200
+    }),
+    minRetriggerMs: 400
   },
   boss: {
     params: zz({
@@ -1108,6 +1143,46 @@ export const VICTORY_SOUND: SoundDef = {
     decay: 0.2
   }),
   minRetriggerMs: 1000
+};
+
+/** A deep, noisy boom when an explosion goes off (creeper or TNT). */
+export const EXPLOSION_SOUND: SoundDef = {
+  params: zz({
+    volume: 1,
+    randomness: 0.2,
+    frequency: 80,
+    attack: 0,
+    sustain: 0.05,
+    release: 0.5,
+    shape: 4,
+    shapeCurve: 1.4,
+    slide: -2,
+    deltaSlide: -0.4,
+    noise: 1.4,
+    sustainVolume: 0.9,
+    decay: 0.3,
+    filter: -260
+  }),
+  minRetriggerMs: 120
+};
+
+/** A short fizzing pop when a TNT fuse is lit. */
+export const TNT_FUSE_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    randomness: 0.2,
+    frequency: 480,
+    attack: 0.01,
+    sustain: 0.06,
+    release: 0.12,
+    shape: 4,
+    slide: 1,
+    noise: 1.5,
+    sustainVolume: 0.6,
+    decay: 0.05,
+    filter: 1000
+  }),
+  minRetriggerMs: 200
 };
 
 /** Low ominous whoosh when a dungeon spawner conjures a hostile. */

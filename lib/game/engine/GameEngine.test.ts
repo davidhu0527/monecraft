@@ -96,11 +96,11 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 8 + 6 + 6); // sheep/chicken/horse/cow/pig + zombie/skeleton/spider
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 8 + 6 + 6 + 4); // sheep/chicken/horse/cow/pig + zombie/skeleton/spider/creeper
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
     expect(engine.getSnapshot().passiveCount).toBe(22);
-    expect(engine.getSnapshot().hostileCount).toBe(20);
+    expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
   test("the player settles onto the ground under gravity and stays put", () => {
@@ -1471,6 +1471,7 @@ describe("beds and sleep", () => {
   test("a destroyed bed falls back to a random respawn", () => {
     const engine = makeEngine();
     const { state } = engine;
+    state.mobs = []; // this checks respawn *location*, not surviving a random hostile nest
     state.spawnPoint = { x: 5, y: 40, z: 5 }; // block here is NOT a bed (never placed)
     const bedSpotY = 40 + 1.05;
     state.hearts = 1;
@@ -1811,5 +1812,41 @@ describe("endgame boss", () => {
     run(engine, 2);
     expect(engine.state.daylight).toBeGreaterThan(0.72);
     expect(boss.hp).toBe(hpBefore); // immune to the daylight burn
+  });
+});
+
+describe("TNT", () => {
+  test("igniting placed TNT with a torch blows it up after its fuse", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+
+    // Aim at a TNT block one cell ahead at eye height.
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(x, y, z, BlockId.Tnt);
+
+    // Hold a torch and right-click the TNT to light it (the torch is not consumed).
+    state.inventory = [...state.inventory];
+    state.inventory[0] = createSlot("torch", 1);
+    state.selectedSlot = 0;
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(engine.consumeEvents().some((e) => e.type === "tntPrimed")).toBe(true);
+    expect(state.primedTnt.size).toBe(1);
+    expect(countsById(state.inventory).get("torch")).toBe(1); // torch survives
+
+    // Run past the fuse; the TNT detonates, clearing itself and firing an explosion.
+    run(engine, 3);
+    expect(state.world.get(x, y, z)).toBe(BlockId.Air);
+    expect(state.primedTnt.size).toBe(0);
   });
 });

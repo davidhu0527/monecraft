@@ -5,6 +5,7 @@ import {
   HOSTILE_CAP,
   HOSTILE_SPAWN_BELOW_DAYLIGHT,
   HOSTILE_SPAWN_INTERVAL_SECONDS,
+  HOSTILE_SPAWN_MIN_RADIUS,
   RENDER_RADIUS,
   SPAWNER_ACTIVATION_RADIUS,
   SPAWNER_INTERVAL_SECONDS,
@@ -22,6 +23,8 @@ export type SpawnGroupArgs = {
   centerX: number;
   centerZ: number;
   radius: number;
+  /** Minimum distance from the center; keeps hostiles from spawning point-blank. */
+  minRadius?: number;
 };
 
 /** Adds one mob standing with its feet at (x, y, z) (y is the ground, not the body center). */
@@ -64,7 +67,7 @@ export function spawnBoss(state: GameState, x: number, y: number, z: number, rng
 
 export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
   for (let i = 0; i < args.count; i += 1) {
-    const spawnPos = randomLandPointNear(state.world, surfaceYAt, args.centerX, args.centerZ, args.radius, rng);
+    const spawnPos = randomLandPointNear(state.world, surfaceYAt, args.centerX, args.centerZ, args.radius, rng, args.minRadius ?? 0);
     pushMob(state, args.kind, args.hostile, spawnPos.x, spawnPos.y, spawnPos.z, rng);
   }
 }
@@ -87,10 +90,13 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     ["pig", false, 4, passiveRadius],
     ["zombie", true, 8, hostileRadius],
     ["skeleton", true, 6, hostileRadius],
-    ["spider", true, 6, hostileRadius]
+    ["spider", true, 6, hostileRadius],
+    ["creeper", true, 4, hostileRadius]
   ];
   for (const [kind, hostile, count, radius] of groups) {
-    spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius }, rng, surfaceYAt);
+    // Hostiles keep a minimum standoff so nothing (notably a creeper) starts the
+    // game point-blank; passives may roam right up to the spawn area.
+    spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius, minRadius: hostile ? HOSTILE_SPAWN_MIN_RADIUS : 0 }, rng, surfaceYAt);
   }
 }
 
@@ -103,7 +109,7 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
   const livingHostiles = state.mobs.filter((mob) => mob.hostile).length;
   if (livingHostiles >= HOSTILE_CAP) return;
 
-  const spawnKinds: Array<"zombie" | "skeleton" | "spider"> = ["zombie", "skeleton", "spider"];
+  const spawnKinds: Array<"zombie" | "skeleton" | "spider" | "creeper"> = ["zombie", "skeleton", "spider", "creeper"];
   const kind = spawnKinds[Math.floor(rng() * spawnKinds.length)];
   spawnMobGroup(
     state,
@@ -113,7 +119,8 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
       count: 1 + (rng() > 0.7 ? 1 : 0),
       centerX: state.player.position.x,
       centerZ: state.player.position.z,
-      radius: Math.max(26, RENDER_RADIUS * 0.85)
+      radius: Math.max(26, RENDER_RADIUS * 0.85),
+      minRadius: HOSTILE_SPAWN_MIN_RADIUS
     },
     rng,
     surfaceYAt

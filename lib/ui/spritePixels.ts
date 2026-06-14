@@ -624,6 +624,7 @@ const RAW_PORKCHOP_PALETTE: PixelPalette = { m: [232, 168, 168], M: [196, 120, 1
 const COOKED_PORKCHOP_PALETTE: PixelPalette = { m: [196, 138, 84], M: [142, 92, 48], r: [188, 128, 78], w: [224, 184, 132] };
 const COAL_PALETTE: PixelPalette = { c: [28, 28, 32], C: [10, 10, 12], h: [64, 64, 70] };
 const CHARCOAL_PALETTE: PixelPalette = { c: [54, 50, 46], C: [30, 28, 26], h: [92, 86, 78] };
+const GUNPOWDER_PALETTE: PixelPalette = { c: [120, 120, 126], C: [78, 78, 84], h: [168, 168, 174] };
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 const WHEAT_PALETTE: PixelPalette = { w: [226, 193, 90], W: [176, 142, 55], g: [110, 150, 60] };
 const BREAD_PALETTE: PixelPalette = { M: [120, 70, 35], b: [170, 110, 55], l: [210, 160, 95], s: [140, 90, 45] };
@@ -673,6 +674,7 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   string: { grid: STRING_GRID, palette: STRING_PALETTE },
   coal: { grid: COAL_GRID, palette: COAL_PALETTE },
   charcoal: { grid: COAL_GRID, palette: CHARCOAL_PALETTE },
+  gunpowder: { grid: COAL_GRID, palette: GUNPOWDER_PALETTE },
   raw_chicken: { grid: RAW_MEAT_GRID, palette: RAW_CHICKEN_PALETTE },
   raw_mutton: { grid: RAW_MEAT_GRID, palette: RAW_MUTTON_PALETTE },
   rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE },

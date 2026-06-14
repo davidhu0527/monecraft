@@ -80,6 +80,16 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     attackCooldown: 1.1,
     modelArgs: [0x2e2e2e, 0x1f1f1f, 0x161616, 0xff3333, 0x4a0f0f, [1.15, 0.52, 1.15], [0.5, 0.42, 0.5]]
   },
+  creeper: {
+    speed: 1.0,
+    hp: 10,
+    detectRange: 12,
+    // Deals no melee damage — it detonates instead (see the creeper fuse in mobAI).
+    attackDamage: 0,
+    attackCooldown: 0,
+    // Mottled green, taller than wide, with a dark face — the classic silhouette.
+    modelArgs: [0x4f9a3a, 0x3f8030, 0x356b29, 0x1a1a1a, 0x2a5520, [0.7, 1.25, 0.7], [0.5, 0.5, 0.5]]
+  },
   boss: {
     speed: 1.1,
     hp: 400,

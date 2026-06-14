@@ -54,7 +54,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.MossyCobblestone]: 5,
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
-  [BlockId.Torch]: 1
+  [BlockId.Torch]: 1,
+  [BlockId.Tnt]: 1
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -98,6 +99,9 @@ export const ITEM_DEFS: ItemDef[] = [
   // Both are interchangeable as the smelting/torch "fuel" ingredient.
   { id: "coal", label: "Coal", kind: "material" },
   { id: "charcoal", label: "Charcoal", kind: "material" },
+  // Creeper drop; crafts TNT. TNT places like a block and ignites with a torch.
+  { id: "gunpowder", label: "Gunpowder", kind: "material" },
+  { id: "tnt", label: "TNT", kind: "block", blockId: BlockId.Tnt },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
@@ -265,6 +269,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Chest]: "chest",
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
+  [BlockId.Tnt]: "tnt",
   [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",

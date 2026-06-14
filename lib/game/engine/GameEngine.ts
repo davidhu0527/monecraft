@@ -58,6 +58,7 @@ import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/int
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickMobs } from "./systems/mobAI";
+import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
@@ -141,6 +142,7 @@ export class GameEngine {
       inventoryOpen: false,
       craftingStation: null,
       containers: new Map(),
+      primedTnt: new Map(),
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
@@ -258,6 +260,7 @@ export class GameEngine {
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     this.tickDebugInfo(dt);

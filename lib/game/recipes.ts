@@ -130,6 +130,15 @@ export const RECIPES: Recipe[] = [
   },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   {
+    id: "tnt",
+    label: "4 Gunpowder + 1 Sand -> TNT",
+    cost: [
+      { slotId: "gunpowder", count: 4 },
+      { slotId: "sand", count: 1 }
+    ],
+    result: { slotId: "tnt", count: 1 }
+  },
+  {
     id: "brick",
     label: "2 Dirt + 2 Stone -> 2 Brick",
     cost: [

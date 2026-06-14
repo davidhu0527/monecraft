@@ -49,6 +49,13 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - A **ranged mob** sets `ranged: true` on its `MobTemplate`; `mobAI.ts` then makes it kite (a standoff band) and fire toward the player's chest (with simple lead) instead of meleeing. The boss is the special case there: it approaches, melees up close, fires a spread, and summons minions — see `fireBossSpread` / `tickBossSummon`.
 - The renderer auto-renders any arrow via `projectileVisuals.ts` (a pooled extruded `arrow` sprite); add an impact event (e.g. `arrowHit`) for particles/sound if you want feedback.
 
+## An explosion (creeper, TNT, or anything that blows up)
+
+- The blast itself is one reusable primitive: `explode(state, cx, cy, cz, power, deps)` in `lib/game/engine/systems/explosion.ts`. It destroys blocks in a `power`-radius sphere (distance falloff vs each block's `blastResistance`, skipping the unbreakable set), then damages the player and mobs out to **twice** that radius with the same falloff, applies knockback, and emits one `explosion` event. `deps` is `{ applyDamage, rng, emit }` — a subset of `MobTickDeps`, so a mob can pass its own `deps` straight in.
+- It is **not** a new subsystem: it batches over the existing `blockChanges.set` chokepoint (each removed cell relights locally and records the save delta) and sets `worldMeshDirty` **once**, so a whole crater costs a single remesh — the same one a single mined block pays. It only lowers mob hp (never splices), so it is safe to call mid `tickMobs`; the caller sweeps any mob at 0 hp.
+- To give a new thing a blast, just call `explode(...)`. The **creeper** lights a fuse near the player then detonates (`mobAI.ts`, `MobState.fuseTimer`); **TNT** is a placeable block lit by right-clicking it with a torch (`primeTnt` in `interact.tryUseHeldItem`), counted down and detonated by `tickPrimedTnt` (a `state.primedTnt` map, session-only). Both are transient — nothing here is serialized.
+- Tunables (power, fuses, peak damage, chain delay) live in `config.ts`; the per-block `blastResistance` and unbreakable set live in `explosion.ts`. Cover new blasts in `explosion.test.ts` (headless: assert the crater, spared unbreakables, falloff, one remesh/event).
+
 ## A new player skin preset
 
 - Add an entry to `SKIN_PRESETS` in `lib/game/playerSkins.ts` (id, label, seven-color palette). That's the whole feature: the pause-menu grid, the generated bust portrait (`lib/ui/skinPortrait.ts`), and the 3D body recolor all derive from the palette.

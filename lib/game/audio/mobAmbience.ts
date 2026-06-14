@@ -13,6 +13,7 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   zombie: [4, 9],
   skeleton: [5, 11],
   spider: [4, 10],
+  creeper: [6, 13],
   boss: [6, 12]
 };
 
