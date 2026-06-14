@@ -144,8 +144,8 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
 
   // Persist and reload: the chest block-entity survives in the per-world save.
   await page.evaluate(() => {
-    const worlds = JSON.parse(localStorage.getItem("minecraft_worlds_v1")!).worlds as Array<{ id: string }>;
-    localStorage.setItem(`minecraft_world_save_${worlds[0].id}`, JSON.stringify(window.__monecraft!.engine.serialize()));
+    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
+    localStorage.setItem(`minecraft_world_save_${session.worldId}`, JSON.stringify(window.__monecraft!.engine.serialize()));
   });
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
@@ -201,7 +201,7 @@ test("picking a skin persists across a reload", async ({ gamePage: page }) => {
   // The skin now lives on the active profile, not a global key.
   const storedSkin = await page.evaluate(() => {
     const manifest = JSON.parse(localStorage.getItem("minecraft_profiles_v1")!);
-    return manifest.profiles[0].skinId as string;
+    return manifest.profiles.find((p: { id: string }) => p.id === manifest.activeProfileId).skinId as string;
   });
   expect(storedSkin).toBe("robot");
 
@@ -220,8 +220,8 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Save Game" }).click();
   const saved = await page.evaluate(() => {
-    const worlds = JSON.parse(localStorage.getItem("minecraft_worlds_v1")!).worlds as Array<{ id: string }>;
-    return localStorage.getItem(`minecraft_world_save_${worlds[0].id}`);
+    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
+    return localStorage.getItem(`minecraft_world_save_${session.worldId}`);
   });
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);

@@ -2,16 +2,21 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import WorldSelect from "@/components/menu/WorldSelect";
-import type { Profile } from "@/lib/game/profiles";
+import { createProfile, type Profile } from "@/lib/game/profiles";
 import { createWorld, readWorlds } from "@/lib/game/worlds";
 
 const PROFILE: Profile = { id: "p1", name: "Tester", skinId: "default", createdAt: 1 };
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  // createWorld requires the owning profile to exist, so seed it with a known id.
+  createProfile("Tester", "default", { uid: () => "p1" });
+});
 
 describe("WorldSelect", () => {
   test("lists only this profile's worlds, most-recent first, and plays one", async () => {
     const user = userEvent.setup();
+    createProfile("Other", "default", { uid: () => "other" });
     createWorld("p1", "Alpha", "1", { now: () => 10, uid: () => "wa" });
     createWorld("p1", "Beta", "2", { now: () => 20, uid: () => "wb" });
     createWorld("other", "Hidden", "3", { uid: () => "wo" });
@@ -56,6 +61,21 @@ describe("WorldSelect", () => {
     await user.click(screen.getByRole("button", { name: "Delete" })); // confirm
     expect(screen.queryByText("Doomed")).toBeNull();
     expect(readWorlds().worlds).toHaveLength(0);
+  });
+
+  test("renaming a world updates the manifest", async () => {
+    const user = userEvent.setup();
+    createWorld("p1", "Old", "1", { uid: () => "wr" });
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onBack={mock()} />);
+
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    const input = screen.getByLabelText("Rename world");
+    await user.clear(input);
+    await user.type(input, "Renamed");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(readWorlds().worlds[0].name).toBe("Renamed");
+    expect(screen.getByText("Renamed")).toBeTruthy();
   });
 
   test("back returns to the profile list", async () => {

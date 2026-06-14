@@ -1,4 +1,5 @@
 import { test as base, expect, type Page } from "@playwright/test";
+import { WORLDGEN_VERSION } from "@/lib/game/config";
 
 /**
  * Shared E2E plumbing. Tests assert against the live simulation through the
@@ -22,7 +23,7 @@ export const test = base.extend<{ gamePage: Page }>({
     // Seed a known profile + world so the menu has something to enter. Runs on
     // every navigation (including reloads), but only fills the manifests when
     // absent so a test's own writes survive a reload.
-    await page.addInitScript(() => {
+    await page.addInitScript((worldgenVersion) => {
       if (!localStorage.getItem("minecraft_profiles_v1")) {
         localStorage.setItem(
           "minecraft_profiles_v1",
@@ -34,11 +35,11 @@ export const test = base.extend<{ gamePage: Page }>({
           "minecraft_worlds_v1",
           JSON.stringify({
             version: 1,
-            worlds: [{ id: "e2e-world", profileId: "e2e-profile", name: "Test World", seed: 1337, worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+            worlds: [{ id: "e2e-world", profileId: "e2e-profile", name: "Test World", seed: 1337, worldgenVersion, createdAt: 1, lastPlayedAt: 1 }]
           })
         );
       }
-    });
+    }, WORLDGEN_VERSION);
 
     await page.goto("/");
     // Enter the world through the menu (first load only; reloads auto-resume the tab's world).
