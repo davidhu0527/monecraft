@@ -24,6 +24,14 @@ export const WATER_DAMAGE_HP = 3; // 1.5 hearts
 export const LAVA_DAMAGE_INTERVAL_SECONDS = 0.5;
 export const LAVA_DAMAGE_HP = 6; // 3 hearts per tick
 export const LAVA_BURN_SECONDS = 3; // damage lingers this long after leaving lava
+// Drowning: the bubble bar empties over OXYGEN_HOLD_SECONDS with the head
+// underwater, then drowning damage starts; it refills quickly on surfacing.
+// Separate from the slow 60s water-exposure timer (which keys on the body).
+export const MAX_OXYGEN = 10;
+export const OXYGEN_HOLD_SECONDS = 15; // full breath -> empty while submerged
+export const OXYGEN_REFILL_SECONDS = 1.5; // empty -> full after surfacing
+export const OXYGEN_DROWN_INTERVAL_SECONDS = 1;
+export const OXYGEN_DROWN_HP = 2; // 1 heart per tick once out of air
 // Health regen only runs at or above this hunger level; sprint needs more than SPRINT_MIN_HUNGER.
 export const REGEN_MIN_HUNGER = 12;
 export const SPRINT_MIN_HUNGER = 6;

@@ -1,11 +1,17 @@
 import {
   HEALTH_REGEN_INTERVAL_SECONDS,
   JUMPS_PER_HUNGER,
+  EYE_HEIGHT,
   LAVA_BURN_SECONDS,
   LAVA_DAMAGE_HP,
   LAVA_DAMAGE_INTERVAL_SECONDS,
   MAX_HUNGER,
   MAX_HEARTS,
+  MAX_OXYGEN,
+  OXYGEN_DROWN_HP,
+  OXYGEN_DROWN_INTERVAL_SECONDS,
+  OXYGEN_HOLD_SECONDS,
+  OXYGEN_REFILL_SECONDS,
   PLAYER_HEIGHT,
   REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
@@ -120,6 +126,37 @@ export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amo
     timers.lavaDamageTimer -= LAVA_DAMAGE_INTERVAL_SECONDS;
     applyDamage(LAVA_DAMAGE_HP);
   }
+}
+
+/**
+ * Drowning. While the head (eye-height cell) is underwater the breath meter
+ * drains over OXYGEN_HOLD_SECONDS; once empty, drowning deals armor-bypassing
+ * damage every interval. Surfacing refills the meter quickly. Keyed on the head,
+ * so wading chest-deep never drowns you — distinct from the body-keyed 60s
+ * water-exposure timer, which still runs in parallel.
+ */
+export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+  const { player, timers, world } = state;
+  const x = Math.floor(player.position.x);
+  const headY = Math.floor(player.position.y + EYE_HEIGHT);
+  const z = Math.floor(player.position.z);
+
+  if (world.get(x, headY, z) === BlockId.Water) {
+    state.oxygen = Math.max(0, state.oxygen - (MAX_OXYGEN / OXYGEN_HOLD_SECONDS) * dt);
+    if (state.oxygen > 0) {
+      timers.drownTimer = 0;
+      return;
+    }
+    timers.drownTimer += dt;
+    while (timers.drownTimer >= OXYGEN_DROWN_INTERVAL_SECONDS && !state.isDead) {
+      timers.drownTimer -= OXYGEN_DROWN_INTERVAL_SECONDS;
+      applyDamage(OXYGEN_DROWN_HP);
+    }
+    return;
+  }
+
+  state.oxygen = Math.min(MAX_OXYGEN, state.oxygen + (MAX_OXYGEN / OXYGEN_REFILL_SECONDS) * dt);
+  timers.drownTimer = 0;
 }
 
 /** Restores hunger by a food's value when it is eaten, clamped to the max. */

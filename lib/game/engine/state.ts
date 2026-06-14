@@ -102,6 +102,8 @@ export type GameTimers = {
   /** Seconds of lava burn left; refreshed to LAVA_BURN_SECONDS on contact. */
   lavaBurnTimer: number;
   lavaDamageTimer: number;
+  /** Accumulates drowning damage once oxygen is exhausted. */
+  drownTimer: number;
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
@@ -129,6 +131,8 @@ export type GameState = {
   selectedSlot: number;
   hearts: number;
   hunger: number;
+  /** Remaining breath, 0..MAX_OXYGEN. Session-only; refills out of water. */
+  oxygen: number;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
@@ -183,6 +187,7 @@ export function createTimers(): GameTimers {
     waterDamageTimer: 0,
     lavaBurnTimer: 0,
     lavaDamageTimer: 0,
+    drownTimer: 0,
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,
@@ -228,6 +233,8 @@ export type GameSnapshot = {
   selectedSlot: number;
   hearts: number;
   hunger: number;
+  /** Remaining breath, 0..MAX_OXYGEN — drives the bubble bar (hidden when full). */
+  oxygen: number;
   daylightPercent: number;
   passiveCount: number;
   hostileCount: number;

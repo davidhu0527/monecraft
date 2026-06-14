@@ -7,6 +7,7 @@ import {
   HOTBAR_SLOTS,
   MAX_HUNGER,
   MAX_HEARTS,
+  MAX_OXYGEN,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   RENDER_RADIUS,
@@ -40,7 +41,7 @@ import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
-import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickWaterExposure } from "./systems/playerStats";
+import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -117,6 +118,7 @@ export class GameEngine {
       selectedSlot: 0,
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
+      oxygen: MAX_OXYGEN,
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -229,6 +231,7 @@ export class GameEngine {
     tickHealthRegen(state, dt);
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
     tickLavaExposure(state, dt, this.applyEnvironmentalDamage);
+    tickOxygen(state, dt, this.applyEnvironmentalDamage);
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
@@ -616,6 +619,7 @@ export class GameEngine {
       selectedSlot: state.selectedSlot,
       hearts: state.hearts,
       hunger: state.hunger,
+      oxygen: state.oxygen,
       daylightPercent: state.daylightPercent,
       passiveCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 0 : 1), 0),
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),

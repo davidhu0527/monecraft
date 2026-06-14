@@ -13,7 +13,8 @@ import {
   SPRINT_MIN_HUNGER,
   WATER_DAMAGE_DELAY_SECONDS,
   WATER_DAMAGE_HP,
-  LAVA_DAMAGE_HP
+  LAVA_DAMAGE_HP,
+  MAX_OXYGEN
 } from "@/lib/game/config";
 import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
@@ -272,6 +273,34 @@ describe("movement and stats", () => {
     run(engine, 0.6); // within LAVA_BURN_SECONDS
     expect(state.hearts).toBeLessThan(afterTouch);
     expect(state.hearts).toBeGreaterThan(0);
+  });
+
+  test("a submerged head drains oxygen then drowns; surfacing refills it", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1); // settle
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const headY = Math.floor(state.player.position.y + EYE_HEIGHT);
+
+    expect(state.oxygen).toBe(MAX_OXYGEN);
+    state.blockChanges.set(x, headY, z, BlockId.Water); // submerge the head
+    run(engine, 5);
+    expect(state.oxygen).toBeLessThan(MAX_OXYGEN); // breath draining
+    expect(state.oxygen).toBeGreaterThan(0); // not yet empty at 5s of 15
+
+    // Exhaust the air: drowning damage begins (armor-bypassing).
+    state.oxygen = 0;
+    const hp = state.hearts;
+    run(engine, 1.2);
+    expect(state.hearts).toBeLessThan(hp);
+
+    // Surface: oxygen refills back to full.
+    state.blockChanges.set(x, headY, z, BlockId.Air);
+    run(engine, 2);
+    expect(state.oxygen).toBe(MAX_OXYGEN);
   });
 });
 
