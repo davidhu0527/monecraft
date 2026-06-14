@@ -93,7 +93,7 @@ describe("boot", () => {
     expect(engine.state.player.onGround).toBe(true);
   });
 
-  test("light is baked at load: open sky is lit, solid ground is dark, no block light yet", () => {
+  test("light is baked at load: open sky is lit, solid ground is dark", () => {
     const { world } = makeEngine().state;
     const cx = Math.floor(world.sizeX / 2);
     const cz = Math.floor(world.sizeZ / 2);
@@ -103,8 +103,8 @@ describe("boot", () => {
     const surfaceY = world.highestSolidY(cx, cz);
     expect(world.isSolid(cx, surfaceY, cz)).toBe(true);
     expect(world.getSky(cx, surfaceY, cz)).toBe(0);
-    // Phase 1 has no emitters, so block light is entirely unlit.
-    expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(false);
+    // Generated lava emits block light, so the deep caves carry some.
+    expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(true);
   });
 
   test("block edits relight locally: placing darkens the cell, mining restores sky", () => {

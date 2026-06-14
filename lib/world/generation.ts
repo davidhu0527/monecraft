@@ -27,6 +27,9 @@ export const GEN = Object.freeze({
   }),
   mountainStoneAboveY: 65,
   snowAboveY: 68,
+  // Lava pools in the deepest caves: carved air at or below this Y floods with
+  // lava, well under the surface so it stays a deep-cave hazard.
+  lavaLevel: 9,
   // Sand shoreline band around sea level (deeper floors keep their biome top).
   beachMaxAboveSea: 1,
   beachDepthBelowSea: 2,
@@ -77,6 +80,11 @@ export function generateWorld(world: VoxelWorld): void {
   placeWater(world);
   placeBeaches(world);
   placeOres(world, rand);
+  // After placeOres so it can't shift ore RNG (placeOres gates rand on air
+  // adjacency, which lava would change), and before placeDungeons so dungeon
+  // rooms — whose floors can sit at or below lavaLevel — overwrite any lava
+  // rather than flooding. Trees/cacti/houses only read the surface, far above.
+  placeLava(world);
   placeTrees(world, rand);
   placeCacti(world);
   placeStructures(world, rand);
@@ -186,6 +194,17 @@ function carveCaves(world: VoxelWorld, rand: () => number): void {
     const cy = 5 + rand() * (world.sizeY - 14);
     const cz = 12 + rand() * (world.sizeZ - 24);
     carveSphere(cx, cy, cz, 5.4 + rand() * 6.4);
+  }
+}
+
+function placeLava(world: VoxelWorld): void {
+  const { lavaLevel } = GEN;
+  for (let x = 1; x < world.sizeX - 1; x += 1) {
+    for (let z = 1; z < world.sizeZ - 1; z += 1) {
+      for (let y = 1; y <= lavaLevel; y += 1) {
+        if (world.get(x, y, z) === BlockId.Air) world.set(x, y, z, BlockId.Lava);
+      }
+    }
   }
 }
 

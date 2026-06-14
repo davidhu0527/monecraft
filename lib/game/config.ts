@@ -144,9 +144,12 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
-// Bumped to v6 with the dungeon worldgen: dungeons change the deterministic
-// world baseline, so old block-diffs would index against the wrong terrain.
-export const SAVE_KEY = "minecraft_save_v6";
+// Bumped whenever the deterministic world baseline changes, so old block-diffs
+// (which index against terrain) can't be applied to a different world: v6 added
+// dungeons; v7 adds deep-cave lava lakes. The save *schema* (SaveData) is
+// unchanged — lighting is a derived cache and lava is worldgen, neither is
+// persisted — so the payload version stays 5.
+export const SAVE_KEY = "minecraft_save_v7";
 
 // Rendering
 export const RENDER_RADIUS = 90;
