@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import ItemIcon from "@/components/game/ItemIcon";
 import { itemTooltipFor, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot } from "@/lib/game/items";
+import { groupRecipes } from "@/lib/game/recipes";
 import { itemIconUrl } from "@/lib/ui/sprites";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
@@ -99,6 +100,37 @@ export default function InventoryPanel({
   const hotbar = inventory.slice(0, hotbarSlots);
   const storage = inventory.slice(hotbarSlots);
 
+  // A recipe is locked when it needs a station the player isn't using; it can be
+  // made right now only when it's both unlocked and affordable. The recipe book
+  // groups by category and floats the "make now" recipes to the top of each group.
+  const stationLocked = (recipe: Recipe) => !!recipe.station && recipe.station !== craftingStation;
+  const canMakeNow = (recipe: Recipe) => !stationLocked(recipe) && canCraft(recipe);
+  const recipeGroups = groupRecipes(recipes, canMakeNow);
+
+  const renderRecipe = (recipe: Recipe) => {
+    const locked = stationLocked(recipe);
+    return (
+      <button
+        key={recipe.id}
+        className="recipe-entry"
+        onClick={() => onCraft(recipe)}
+        disabled={locked || !canCraft(recipe)}
+        aria-label={recipe.label}
+        {...bind({ title: recipe.label, lines: locked ? [`Requires ${STATION_LABELS[recipe.station!]}`] : undefined })}
+      >
+        <span className="recipe-ingredients">
+          {recipe.cost.map((cost) => (
+            <ItemIcon key={`${recipe.id}-${cost.slotId}`} slot={createSlot(cost.slotId, cost.count)} size={24} />
+          ))}
+        </span>
+        <span className="recipe-arrow" aria-hidden>
+          →
+        </span>
+        <ItemIcon slot={createSlot(recipe.result.slotId, recipe.result.count)} size={24} />
+      </button>
+    );
+  };
+
   return (
     <div className="inventory-panel">
       <div className="inventory-columns">
@@ -154,29 +186,14 @@ export default function InventoryPanel({
         <div className="recipe-book">
           <div className="inventory-heading">{craftingStation === "villager" ? "Trading" : "Crafting"}</div>
           <div className="recipe-list">
-            {recipes.map((recipe) => {
-              const stationLocked = !!recipe.station && recipe.station !== craftingStation;
-              return (
-                <button
-                  key={recipe.id}
-                  className="recipe-entry"
-                  onClick={() => onCraft(recipe)}
-                  disabled={stationLocked || !canCraft(recipe)}
-                  aria-label={recipe.label}
-                  {...bind({ title: recipe.label, lines: stationLocked ? [`Requires ${STATION_LABELS[recipe.station!]}`] : undefined })}
-                >
-                  <span className="recipe-ingredients">
-                    {recipe.cost.map((cost) => (
-                      <ItemIcon key={`${recipe.id}-${cost.slotId}`} slot={createSlot(cost.slotId, cost.count)} size={24} />
-                    ))}
-                  </span>
-                  <span className="recipe-arrow" aria-hidden>
-                    →
-                  </span>
-                  <ItemIcon slot={createSlot(recipe.result.slotId, recipe.result.count)} size={24} />
-                </button>
-              );
-            })}
+            {recipeGroups.map((group) => (
+              <Fragment key={group.category}>
+                <div className="recipe-category" role="presentation">
+                  {group.category}
+                </div>
+                {group.recipes.map(renderRecipe)}
+              </Fragment>
+            ))}
           </div>
         </div>
       </div>
