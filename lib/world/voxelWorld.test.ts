@@ -60,6 +60,27 @@ describe("VoxelWorld data structure", () => {
     expect(world.highestSolidY(2, 2)).toBe(1);
   });
 
+  test("light field is allocated per voxel and starts dark", () => {
+    const world = new VoxelWorld(8, 6, 4, 1);
+    expect(world.light).toHaveLength(8 * 6 * 4);
+    expect(world.light.every((v) => v === 0)).toBe(true);
+    expect(world.getSky(3, 3, 3)).toBe(0);
+    expect(world.getBlockLight(3, 3, 3)).toBe(0);
+  });
+
+  test("sky and block light pack into separate nibbles and read back", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    world.light[world.index(2, 3, 4)] = (12 << 4) | 7;
+    expect(world.getSky(2, 3, 4)).toBe(12);
+    expect(world.getBlockLight(2, 3, 4)).toBe(7);
+  });
+
+  test("light outside the world reads as open sky, unlit", () => {
+    const world = new VoxelWorld(8, 8, 8, 1);
+    expect(world.getSky(0, 8, 0)).toBe(15);
+    expect(world.getBlockLight(0, 8, 0)).toBe(0);
+  });
+
   test("voxel index formula is x + z*sizeX + y*sizeX*sizeZ (save-format invariant)", () => {
     // Saved block-change deltas address voxels by this exact formula.
     // Changing it silently corrupts every existing save.

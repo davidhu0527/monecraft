@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, collectDungeonSites, collidesAt, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
+import { BlockId, collectDungeonSites, collidesAt, computeFullLight, generateWorld, VoxelWorld, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "@/lib/world";
 import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
@@ -94,6 +94,10 @@ export class GameEngine {
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
+
+    // Bake per-voxel light now the block grid is final (worldgen + saved edits).
+    // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
+    world.light = computeFullLight(world);
 
     this.surfaceYAt = createSurfaceYAt(world);
 

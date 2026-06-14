@@ -15,6 +15,13 @@ export class VoxelWorld {
   readonly sizeZ: number;
   readonly seed: number;
   readonly blocks: Uint8Array;
+  /**
+   * Per-voxel light, packed (skyLight << 4) | blockLight, 0..15 each. A DERIVED
+   * cache (never serialized): computeFullLight bakes it from blocks at load and
+   * applyEdit patches it on block edits — see lighting.ts. Starts dark; the
+   * engine bakes it once the block grid is final.
+   */
+  light: Uint8Array;
 
   constructor(sizeX = WORLD_SIZE_X, sizeY = WORLD_SIZE_Y, sizeZ = WORLD_SIZE_Z, seed = 1337) {
     this.sizeX = sizeX;
@@ -22,6 +29,7 @@ export class VoxelWorld {
     this.sizeZ = sizeZ;
     this.seed = seed;
     this.blocks = new Uint8Array(sizeX * sizeY * sizeZ);
+    this.light = new Uint8Array(sizeX * sizeY * sizeZ);
   }
 
   index(x: number, y: number, z: number): number {
@@ -45,6 +53,18 @@ export class VoxelWorld {
   isSolid(x: number, y: number, z: number): boolean {
     const block = this.get(x, y, z);
     return block !== BlockId.Air && block !== BlockId.Water;
+  }
+
+  /** Sky-light level (0..15) at a voxel. Outside the world reads as open sky. */
+  getSky(x: number, y: number, z: number): number {
+    if (!this.inBounds(x, y, z)) return 15;
+    return this.light[this.index(x, y, z)] >> 4;
+  }
+
+  /** Block-light level (0..15) at a voxel. Outside the world is unlit. */
+  getBlockLight(x: number, y: number, z: number): number {
+    if (!this.inBounds(x, y, z)) return 0;
+    return this.light[this.index(x, y, z)] & 0x0f;
   }
 
   highestSolidY(x: number, z: number): number {
