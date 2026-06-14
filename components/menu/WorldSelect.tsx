@@ -2,7 +2,13 @@ import { useState } from "react";
 import CreateWorldForm from "@/components/menu/CreateWorldForm";
 import MenuScreen from "@/components/menu/MenuScreen";
 import type { Profile } from "@/lib/game/profiles";
-import { createWorld, deleteWorld, MAX_WORLD_NAME, renameWorld, worldsForProfile } from "@/lib/game/worlds";
+import { createWorld, deleteWorld, MAX_WORLD_NAME, renameWorld, WORLD_TYPE_PRESETS, worldsForProfile } from "@/lib/game/worlds";
+import type { WorldType } from "@/lib/world";
+
+/** Short label for a world type (the default type is left unlabelled on cards). */
+function worldTypeLabel(id: WorldType): string {
+  return WORLD_TYPE_PRESETS.find((preset) => preset.id === id)?.label ?? id;
+}
 
 type WorldSelectProps = {
   profile: Profile;
@@ -23,8 +29,8 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
     return (
       <MenuScreen title={`${profile.name} — New World`}>
         <CreateWorldForm
-          onCreate={(name, seed) => {
-            const world = createWorld(profile.id, name, seed);
+          onCreate={(name, seed, worldType) => {
+            const world = createWorld(profile.id, name, seed, { worldType });
             setCreating(false);
             onPlay(world.id); // straight into the freshly created world
           }}
@@ -90,7 +96,9 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
                 <>
                   <button className="menu-card-play" data-testid={`world-${world.id}`} onClick={() => onPlay(world.id)}>
                     <span className="menu-card-name">{world.name}</span>
-                    <span className="menu-card-sub">Seed {world.seed}</span>
+                    <span className="menu-card-sub">
+                      {world.worldType !== "default" ? `${worldTypeLabel(world.worldType)} · ` : ""}Seed {world.seed}
+                    </span>
                   </button>
                   <div className="menu-card-actions">
                     <button
