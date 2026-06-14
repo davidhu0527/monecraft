@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Endgame & ranged combat**: the game gains its first ranged weapon, ranged enemies, and a true win condition — all on one new transient projectile system, with **no save-format or worldgen change** and **zero new assets** (procedural pixel sprites + synthesized sounds)
+  - **Projectile system** (`lib/game/engine/projectiles.ts`, `engine/systems/projectileAI.ts`): arrows are session-only entities (like mobs, never serialized) that integrate under gravity and despawn on a hit, a TTL, or leaving the world. Block collision reuses the world DDA (`voxelRaycast`), which already sweeps the whole segment, so even a very fast arrow can't tunnel a 1-block wall; the entity test is substepped too so a fast arrow can't skip a thin mob between frames. A `fromPlayer` flag is the hit filter — player arrows hit mobs (with knockback), mob arrows hit the player (armor-mitigated) — so a mob's arrow can never hit the firer or another mob. `tickProjectiles` runs right after `tickMobs` in both the live and dead step branches
+  - **Bow & arrows**: craft a **bow** (3 wood + 3 string) and **arrows** (1 stone + 1 wood + 1 feather → 4). Holding a bow makes the attack input fire instead of melee — **instant click-to-fire** (no draw-charge; holding left-click already means mine) at a fixed damage on a short cooldown, spending one arrow and a point of bow durability per shot. The swing animation still plays
+  - **Ranged skeletons**: a `ranged` flag on the mob template makes skeletons **kite** — backing off inside a standoff band, holding in the middle, approaching only when far — and loose arrows from across their detect range (leading a moving target) instead of meleeing. Finally distinct from zombies, which stay melee
+  - **Endgame boss & victory**: craft a **Cursed Totem** (1 diamond ore + 2 bone + 2 gold ore — the diamond grind's first real goal) and right-click to summon a towering boss nearby (refused if one already walks). It bears down on the player, bites for heavy damage up close, looses a 3-arrow spread at range, periodically conjures minions (capped, under the global hostile cap), and is immune to the daylight burn. Defeating it drops a **Dragon Heart** that crafts the best-in-game **Dragon Sword** (60 attack), fires a one-shot **victory screen**, and shows a top-center **boss health bar** while it lives
+  - New `"boss"` `MobKind` touches all five exhaustive `Record<MobKind>` tables (templates, drops, ambience intervals, ambient + attack sounds). New events (`arrowHit`, `bowFired`, `bossSummoned`, `bossDefeated`, `summonFailed`) drive procedural impact sparks, a conjuring column, a victory burst, and synthesized bow-twang / arrow-tick / boss-roar / victory-fanfare sounds. In-flight arrows render as a pooled extruded-sprite mesh (one shared geometry/material) oriented along their velocity
+  - **No version bump**: the boss, its minions, projectiles, and the victory flag are all transient; the new items (bow, arrow, Cursed Totem, Dragon Heart, Dragon Sword) are additive, saved by string id. New tunables live in the `config.ts` "Ranged combat & endgame" group
+
 ## [0.7.0] - 2026-06-14
 
 ### Added

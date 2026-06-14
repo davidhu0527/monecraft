@@ -86,6 +86,27 @@ farther than you can punch. `ATTACK_AIM_DOT` (0.89) is how precisely the crossha
 must point at a mob to hit it — lower is more forgiving. The per-ore **tool-tier
 gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config.
 
+## Ranged combat & endgame
+
+Arrows: `ARROW_SPEED`, `ARROW_GRAVITY`, `ARROW_TTL`, `ARROW_HIT_RADIUS`,
+`ARROW_MAX_SUBSTEPS`, `ARROW_MAX_SEGMENT`.
+Bow: `BOW_ARROW_DAMAGE`, `BOW_KNOCKBACK`, `BOW_COOLDOWN_SECONDS`, `BOW_DURABILITY_PER_SHOT`.
+Ranged mobs: `SKELETON_STANDOFF_MIN/MAX`, `SKELETON_ARROW_DAMAGE`, `SKELETON_ARROW_SPEED`,
+`SKELETON_FIRE_VGAP`, `SKELETON_LEAD_FACTOR`, `MOB_ARROW_KNOCKBACK`.
+Boss: `BOSS_HP`, `BOSS_MELEE_REACH`, `BOSS_MELEE_DAMAGE`, `BOSS_ARROW_DAMAGE`,
+`BOSS_ARROW_SPEED`, `BOSS_SPREAD`, `BOSS_SUMMON_RADIUS`, `BOSS_MINION_CAP`,
+`BOSS_SUMMON_INTERVAL_SECONDS`.
+
+Read by `systems/projectileAI.ts`, `systems/combat.ts`, and `systems/mobAI.ts`.
+`ARROW_GRAVITY` (14) is below the player's `GRAVITY` (26) so arrows fly flatter and
+read clearly; `ARROW_MAX_SEGMENT`/`ARROW_MAX_SUBSTEPS` bound the per-frame anti-tunnel
+substepping (raise the substep cap only if very fast arrows ever slip past thin mobs).
+`BOW_COOLDOWN_SECONDS` is the fire rate; bow/Dragon-Sword durability and damage live in
+`items.ts`. The skeleton standoff band is the kite distance — widen it to make archers
+harder to corner. `BOSS_HP` (400) is the headline difficulty dial for the fight;
+`BOSS_MINION_CAP` and the shared `HOSTILE_CAP` together bound how crowded it gets (the
+boss summon itself bypasses the spawn-director cap so the fight always starts).
+
 ## Farming & breeding pace
 
 Farming: `RANDOM_TICK_INTERVAL_SECONDS`, `RANDOM_TICK_SAMPLES`, `RANDOM_TICK_RADIUS`,

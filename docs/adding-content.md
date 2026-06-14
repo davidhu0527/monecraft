@@ -33,6 +33,14 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Give it a voice: `MOB_AMBIENT_SOUNDS` and `MOB_ATTACK_SOUNDS` rows in `lib/game/audio/soundParams.ts`, and a call interval in `lib/game/audio/mobAmbience.ts` (`CALL_INTERVALS`) — all keyed by `MobKind`, so typecheck enforces them.
 - A headless test in `lib/game/engine/GameEngine.test.ts` is cheap: boot the engine, fast-forward to night, assert the mob appears/behaves.
 - To make a passive animal **breedable**, add it to `FEED_ITEMS` in `lib/game/engine/systems/interact.ts` (which food puts it "in love"). Breeding itself is generic: `lib/game/engine/systems/breeding.ts` pairs two fed adults of the same kind into a baby (scaled down via `ageTimer`/`BABY_SCALE`, no drops until grown), bounded by `PASSIVE_CAP`. `MobState.fedTimer`/`ageTimer` and the tunables in `config.ts` drive it; mobs are never persisted, so this is session-only by design.
+- **A new `MobKind` touches five exhaustive `Record<MobKind>` tables** (typecheck enforces all of them): `MOB_TEMPLATES` (`mobs.ts`), `MOB_DROPS` (`mobLoot.ts`), `CALL_INTERVALS` (`mobAmbience.ts`), and `MOB_AMBIENT_SOUNDS` + `MOB_ATTACK_SOUNDS` (`soundParams.ts`). `soundParams.test.ts` iterates `MOB_TEMPLATES`, so the three sound/template tables must stay in lockstep.
+
+## A ranged weapon or ranged mob
+
+- Arrows ride the shared **projectile system** (`lib/game/engine/projectiles.ts`, `engine/systems/projectileAI.ts`): call `spawnArrow(state, x, y, z, dir, { speed, damage, knockback, fromPlayer, ttl })`. `fromPlayer: true` hits mobs, `false` hits the player; arrows never hit their firer. Projectiles are session-only `ProjectileState` (never serialized).
+- A **player ranged weapon** branches the `attack` command: gate on the held item (see `isBow`/`tryFireBow` in `combat.ts`) and fire instead of meleeing. Use a `config.ts` cooldown timer (`GameTimers`, decremented in `GameEngine.step`) for fire rate, and spend ammo + durability via `adjustSlotCount` / `consumeToolDurability`.
+- A **ranged mob** sets `ranged: true` on its `MobTemplate`; `mobAI.ts` then makes it kite (a standoff band) and fire toward the player's chest (with simple lead) instead of meleeing. The boss is the special case there: it approaches, melees up close, fires a spread, and summons minions — see `fireBossSpread` / `tickBossSummon`.
+- The renderer auto-renders any arrow via `projectileVisuals.ts` (a pooled extruded `arrow` sprite); add an impact event (e.g. `arrowHit`) for particles/sound if you want feedback.
 
 ## A new player skin preset
 
