@@ -61,7 +61,10 @@ export const enum BlockId {
   // A shallow, common ore: mineable with a wood pickaxe, drops coal (furnace fuel).
   CoalOre = 48,
   // A placeable explosive: right-click with a torch to ignite a fuse, then it blows.
-  Tnt = 49
+  Tnt = 49,
+  // A young tree: plant on grass/dirt, grows into a tree over time (random ticks)
+  // or instantly with bone meal. A solid cube like wheat (see atlas.ts).
+  Sapling = 50
 }
 
 export enum BiomeId {
@@ -98,7 +101,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.MossyCobblestone]: 0x6a7a55,
   [BlockId.DoorNorthLower]: 0xa8753f,
   [BlockId.Torch]: 0xffab40,
-  [BlockId.Tnt]: 0xc0392b
+  [BlockId.Tnt]: 0xc0392b,
+  [BlockId.Sapling]: 0x5ea74a
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -157,5 +161,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.DoorWestOpenUpper]: [0.62, 0.4, 0.2],
   [BlockId.Torch]: [0.9, 0.6, 0.25],
   [BlockId.Lava]: [0.85, 0.3, 0.08],
-  [BlockId.Tnt]: [0.8, 0.22, 0.16]
+  [BlockId.Tnt]: [0.8, 0.22, 0.16],
+  // A leafy green sprout with a hint of stem (painted in atlas.ts).
+  [BlockId.Sapling]: [0.28, 0.52, 0.22]
 };

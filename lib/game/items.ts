@@ -1,5 +1,5 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
-import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS, MAX_STACK_SIZE, SPEAR_MELEE_REACH } from "@/lib/game/config";
+import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS, LEAVES_SAPLING_DROP_CHANCE, MAX_STACK_SIZE, SPEAR_MELEE_REACH } from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
@@ -55,7 +55,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
   [BlockId.Torch]: 1,
-  [BlockId.Tnt]: 1
+  [BlockId.Tnt]: 1,
+  [BlockId.Sapling]: 1
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -112,6 +113,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "raw_porkchop", label: "Raw Porkchop", kind: "food", hunger: 3 },
   // Farming
   { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
+  { id: "sapling", label: "Sapling", kind: "block", blockId: BlockId.Sapling },
   { id: "seeds", label: "Wheat Seeds", kind: "material" },
   { id: "wheat", label: "Wheat", kind: "material" },
   { id: "bread", label: "Bread", kind: "food", hunger: 6 },
@@ -251,7 +253,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Dirt]: "dirt",
   [BlockId.Stone]: "stone",
   [BlockId.Wood]: "wood",
-  [BlockId.Leaves]: "dirt",
+  // Leaves drop only a sapling (by chance) — handled in rollBlockDrops, not here.
   [BlockId.Planks]: "planks",
   [BlockId.Cobblestone]: "cobble",
   [BlockId.Sand]: "sand",
@@ -272,6 +274,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",
+  [BlockId.Sapling]: "sapling",
   [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
@@ -282,8 +285,9 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
 
 /**
  * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
- * grass occasionally also drops a seed (the natural seed source), and mature
- * wheat drops wheat plus 1–2 seeds. `rng` is injectable for deterministic tests.
+ * grass occasionally also drops a seed (the natural seed source), mature wheat
+ * drops wheat plus 1–2 seeds, and leaves occasionally drop a sapling (their only
+ * yield — the renewable tree source). `rng` is injectable for deterministic tests.
  */
 export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
   if (isDoorBlock(block)) return [{ itemId: "door", count: 1 }];
@@ -291,6 +295,9 @@ export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemI
   const base = BLOCK_TO_SLOT[block];
   if (base) drops.push({ itemId: base, count: 1 });
 
+  if (block === BlockId.Leaves && rng() < LEAVES_SAPLING_DROP_CHANCE) {
+    drops.push({ itemId: "sapling", count: 1 });
+  }
   if (block === BlockId.Grass && rng() < GRASS_SEED_DROP_CHANCE) {
     drops.push({ itemId: "seeds", count: 1 });
   }

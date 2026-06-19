@@ -186,7 +186,8 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
   const isHoe = slot.id.endsWith("_hoe");
   const isSeeds = slot.id === "seeds";
   const isTorch = slot.id === "torch";
-  if (!isHoe && !isSeeds && !isTorch) return false;
+  const isSapling = slot.id === "sapling";
+  if (!isHoe && !isSeeds && !isTorch && !isSapling) return false;
 
   const { world, player } = state;
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
@@ -210,6 +211,17 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
     state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
     state.worldMeshDirty = true;
     emit({ type: "tilledSoil" });
+    return true;
+  }
+
+  // Sapling: plant on grass/dirt when the cell above is clear. Falls through to
+  // normal placement elsewhere, so a sapling stays a placeable block too.
+  if (isSapling) {
+    if ((block !== BlockId.Grass && block !== BlockId.Dirt) || world.get(x, y + 1, z) !== BlockId.Air) return false;
+    state.blockChanges.set(x, y + 1, z, BlockId.Sapling);
+    state.inventory = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot) ?? state.inventory;
+    state.worldMeshDirty = true;
+    emit({ type: "plantedSapling" });
     return true;
   }
 

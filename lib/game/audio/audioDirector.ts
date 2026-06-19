@@ -251,6 +251,7 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           backend.play(TILL_SOUND);
           break;
         case "plantedSeed":
+        case "plantedSapling":
           backend.play(PLANT_SOUND);
           break;
         case "smelted":

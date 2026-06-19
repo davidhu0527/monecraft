@@ -78,6 +78,13 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         if (block === BlockId.Snow) c = tone(base, 0.97 + n * 0.06);
         if (block === BlockId.Bed && face === "top" && y < 5) c = tone([0.95, 0.95, 0.97], 0.95 + n * 0.1); // pillow band
         if (block >= BlockId.WheatStage0 && block <= BlockId.WheatStage3 && face === "side" && x % 3 === 1) c = tone(base, 0.66); // gaps read as stalks
+        if (block === BlockId.Sapling) {
+          // A young sprout: a short brown stem in the lower center under a small
+          // green leafy crown. Like wheat, it's a full cube painted to read as a plant.
+          const stem = x >= 7 && x <= 8 && y >= 10;
+          const crown = Math.abs(x - 7.5) + Math.abs(y - 6) < 5;
+          c = stem ? tone([0.45, 0.32, 0.18], 0.85 + n * 0.2) : crown ? tone([0.27, 0.5, 0.2], 0.8 + n * 0.4) : tone([0.2, 0.36, 0.16], 0.85 + n * 0.25);
+        }
         if (block === BlockId.Furnace && face === "side" && x >= 5 && x <= 10 && y >= 8 && y <= 12) c = tone([0.95, 0.45, 0.12], 0.85 + n * 0.3); // glowing mouth
         if (block === BlockId.Chest) {
           if ((x + y) % 4 === 0) c = tone(base, 0.82); // plank grain

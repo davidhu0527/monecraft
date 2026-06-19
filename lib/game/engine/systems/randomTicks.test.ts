@@ -66,4 +66,38 @@ describe("random block ticks", () => {
     tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0.99));
     expect(state.world.get(8, 5, 8)).toBe(BlockId.WheatStage0);
   });
+
+  test("a sapling on soil grows into a tree", () => {
+    const state = makeState();
+    state.blockChanges.set(8, 4, 8, BlockId.Dirt);
+    state.blockChanges.set(8, 5, 8, BlockId.Sapling);
+    // First sample lands on (8,8), passes the grow roll (0.0), and draws trunk
+    // height (0.0 -> 3 tall); every later sample finds canopy leaves (no handler).
+    let i = 0;
+    const seq = [0.5, 0.5, 0.0, 0.0];
+    const rng = () => (i < seq.length ? seq[i++] : 0.5);
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, rng);
+    expect(state.world.get(8, 5, 8)).toBe(BlockId.Wood); // trunk base replaced the sapling
+    expect(state.world.get(8, 6, 8)).toBe(BlockId.Wood);
+    expect(state.world.get(8, 9, 8)).toBe(BlockId.Leaves); // canopy above the trunk
+    expect(state.world.get(8, 4, 8)).toBe(BlockId.Dirt); // soil it grew from is untouched
+    expect(state.worldMeshDirty).toBe(true);
+  });
+
+  test("a sapling floating off soil never grows", () => {
+    const state = makeState();
+    state.blockChanges.set(8, 5, 8, BlockId.Sapling); // nothing solid below it
+    // 0.0 passes the grow roll, so only the soil gate keeps it a sapling.
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0));
+    expect(state.world.get(8, 5, 8)).toBe(BlockId.Sapling);
+  });
+
+  test("a sapling does not grow when the growth roll fails", () => {
+    const state = makeState();
+    state.blockChanges.set(8, 4, 8, BlockId.Dirt);
+    state.blockChanges.set(8, 5, 8, BlockId.Sapling);
+    // 0.99 is at/above SAPLING_GROWTH_CHANCE, so every roll fails.
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0.99));
+    expect(state.world.get(8, 5, 8)).toBe(BlockId.Sapling);
+  });
 });

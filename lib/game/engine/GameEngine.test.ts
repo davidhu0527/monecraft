@@ -333,8 +333,11 @@ describe("mining", () => {
     const px = Math.floor(state.player.position.x);
     const py = Math.floor(state.player.position.y) - 1;
     const pz = Math.floor(state.player.position.z);
-    const targetBlock = state.world.get(px, py, pz);
-    expect(targetBlock).not.toBe(BlockId.Air);
+    // Pin the block underfoot to a guaranteed-drop block: the spawn surface can
+    // be leaves (a tree canopy), which now drop only an occasional sapling, so a
+    // generic "yields a drop" assertion would be flaky.
+    state.blockChanges.set(px, py, pz, BlockId.Dirt);
+    expect(state.world.get(px, py, pz)).not.toBe(BlockId.Air);
 
     // Center the player in the cell: a ray origin exactly on a cell boundary
     // is ambiguous in the DDA and may target the diagonal neighbor.
@@ -1902,5 +1905,57 @@ describe("villager trading", () => {
     engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
     expect(countsById(state.inventory).get("emerald")).toBe(1);
     expect(countsById(state.inventory).get("wheat")).toBeUndefined();
+  });
+});
+
+describe("living world", () => {
+  /** Settles the player, centers it, aims straight down, and returns the floor cell. */
+  function aimDownAtFloor(engine: GameEngine): { x: number; y: number; z: number } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const y = Math.floor(state.player.position.y) - 1;
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    return { x, y, z };
+  }
+
+  test("planting a sapling on grass places a Sapling above, consumes one, and emits plantedSapling", () => {
+    const engine = makeEngine();
+    const { x, y, z } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(x, y, z, BlockId.Grass);
+    state.blockChanges.set(x, y + 1, z, BlockId.Air);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("sapling", 3);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(x, y + 1, z)).toBe(BlockId.Sapling);
+    expect(state.inventory[state.selectedSlot].count).toBe(2);
+    expect(engine.consumeEvents().some((e) => e.type === "plantedSapling")).toBe(true);
+  });
+
+  test("aiming a sapling at stone does not take the planting path", () => {
+    const engine = makeEngine();
+    const { x, y, z } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(x, y, z, BlockId.Stone);
+    state.blockChanges.set(x, y + 1, z, BlockId.Air);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("sapling", 3);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" });
+
+    // Planting is gated to grass/dirt, so stone never emits plantedSapling nor
+    // places a sapling into the player's own cell above the block.
+    expect(engine.consumeEvents().some((e) => e.type === "plantedSapling")).toBe(false);
+    expect(state.world.get(x, y + 1, z)).not.toBe(BlockId.Sapling);
   });
 });
