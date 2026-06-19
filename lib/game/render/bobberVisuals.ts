@@ -23,6 +23,9 @@ export function createBobberVisuals(scene: THREE.Scene): BobberVisuals {
   lineGeometry.setAttribute("position", new THREE.BufferAttribute(linePositions, 3));
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xdedede });
   const line = new THREE.Line(lineGeometry, lineMaterial);
+  // Endpoints move every frame; skip frustum culling so the stale cached bounding
+  // sphere can't cull the line off-screen (matches the particle system).
+  line.frustumCulled = false;
 
   let present = false;
   const setPresent = (next: boolean): void => {
