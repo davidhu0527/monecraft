@@ -87,7 +87,9 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 - Block updates that happen "over time" run through `lib/game/engine/systems/randomTicks.ts`: every `RANDOM_TICK_INTERVAL_SECONDS` it samples `RANDOM_TICK_SAMPLES` columns within `RANDOM_TICK_RADIUS` of the player and runs a handler on each column's top block. Register a `BlockId → handler` in `RANDOM_TICK_HANDLERS`; the handler edits via `state.blockChanges` and sets `state.worldMeshDirty`.
 - The crop handler is the reference: wheat stage ids are consecutive, so growth is `block + 1`, and the mature stage has no handler so it stops. Because crops are ordinary block edits, they persist for free via the save's block diff — no new save fields.
-- Tunables live in `config.ts`; the headless test pattern (a minimal `GameState`, a scripted rng that maps a sample onto a known column) is in `randomTicks.test.ts`.
+- Other handlers show the range: `growSapling` checks the block below (only soil matures a sapling) then calls the shared `growTreeAt` (`systems/treeGrowth.ts`); `spreadGrass` reads the four face-neighbour columns' top blocks to re-grass exposed dirt. Both ride `blockChanges`, so they need no save changes either.
+- A growing block also needs the usual block plumbing — a `BlockId` (appended at the end of the enum so saved ids don't shift), `BLOCK_COLORS` + an atlas paint branch (plants reuse the wheat trick: a solid cube painted to read as a plant, so no new geometry), an exhaustive `GROUP_BY_BLOCK` sound entry, and `BREAK_HARDNESS`/`BLOCK_TO_SLOT`/`rollBlockDrops`. A new **material** item (e.g. bone meal) must also get an `ITEM_SPRITE_GRIDS` entry, or the sprite test fails its no-magenta-checker assertion.
+- Tunables live in `config.ts`; the headless test pattern (a minimal `GameState`, a scripted rng that maps a sample onto a known column) is in `randomTicks.test.ts`. Watch the rng cadence: a handler that draws a variable number of times (e.g. a tree's trunk-height roll) shifts the sampler's `n % 3` pattern, so prefer an explicit sequence over `scriptedRng` for those.
 
 ## A worldgen structure (houses, dungeons, …)
 

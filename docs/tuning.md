@@ -170,6 +170,8 @@ the next. Damage uses the armor-aware path, so armor still mitigates a blast.
 
 Farming: `RANDOM_TICK_INTERVAL_SECONDS`, `RANDOM_TICK_SAMPLES`, `RANDOM_TICK_RADIUS`,
 `CROP_GROWTH_CHANCE`, `GRASS_SEED_DROP_CHANCE`.
+Living world: `SAPLING_GROWTH_CHANCE`, `LEAVES_SAPLING_DROP_CHANCE`,
+`GRASS_SPREAD_CHANCE`, `BONE_MEAL_PER_BONE`, `BONE_MEAL_CROP_STAGES_MAX`.
 Breeding: `BREED_FED_WINDOW_SECONDS`, `BREED_PARTNER_RADIUS`,
 `BREED_CHECK_INTERVAL_SECONDS`, `BABY_GROW_SECONDS`, `BABY_SCALE`, `PASSIVE_CAP`.
 
@@ -180,6 +182,18 @@ columns within `RANDOM_TICK_RADIUS` of the player and advances eligible crops wi
 samples or a larger radius means crops far from the player keep growing, at more
 per-tick work. Breeding is bounded by `PASSIVE_CAP` (24) plus the crop cost of
 feeding, so animals can't explode in number.
+
+The same sampler drives the **living world** (read by `systems/randomTicks.ts`
+and `systems/treeGrowth.ts`). `SAPLING_GROWTH_CHANCE` (0.12) is deliberately
+below `CROP_GROWTH_CHANCE` so a tree is a slower, bigger event than a wheat
+stage; a sapling only matures while it sits on grass/dirt/farmland.
+`LEAVES_SAPLING_DROP_CHANCE` (0.08) is the per-break odds a leaf block yields a
+sapling — its only drop, so the rate sets how renewable wood is. `GRASS_SPREAD_CHANCE`
+(0.18) is the per-tick odds exposed dirt re-grasses when a face-neighbour column's
+top block is grass — raise it to heal terrain faster, lower it to leave scars
+longer. Bone meal short-circuits the wait: `BONE_MEAL_PER_BONE` (3) is the grind
+yield, and one application advances a crop a random `1..BONE_MEAL_CROP_STAGES_MAX`
+(2) stages or grows a sapling instantly.
 
 ## Beds & sleep
 

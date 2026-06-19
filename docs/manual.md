@@ -331,6 +331,20 @@ Grow your own food:
    crop harvests into **wheat plus 1–2 seeds**.
 5. Craft **3 wheat → bread**, or use wheat to breed sheep and horses.
 
+## Trees, saplings, and bone meal
+
+The forest renews itself, so wood never runs out:
+
+1. Breaking **leaves** occasionally drops a **sapling** (about 1 in 12).
+2. Right-click a sapling onto **grass or dirt** to plant it. Left where it is, it
+   grows into a full tree over a few minutes — but only while it sits on soil.
+3. **Bone meal** speeds things up. Grind a **bone** (dropped by skeletons) into
+   **3 bone meal**, then right-click it on a sapling to grow the tree **instantly**,
+   or on growing **wheat** to jump it forward 1–2 stages.
+
+Bare ground heals too: **dirt** exposed next to grass slowly turns back to grass,
+so mined patches and trampled paths green over on their own.
+
 ## Beds and sleeping
 
 Craft a **bed** (3 wool + 3 planks) and place it. Right-click it **at night** to
