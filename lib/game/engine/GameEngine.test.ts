@@ -1994,3 +1994,64 @@ describe("living world", () => {
     expect(engine.consumeEvents().some((e) => e.type === "usedBoneMeal")).toBe(true);
   });
 });
+
+describe("fishing", () => {
+  /** Settles the player, equips a rod, and carves a clear line of sight to a water surface 2 cells ahead (-Z). */
+  function castSetup(engine: GameEngine): { state: GameEngine["state"] } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const px = Math.floor(state.player.position.x);
+    const pz = Math.floor(state.player.position.z);
+    state.player.position.x = px + 0.5;
+    state.player.position.z = pz + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const eyeY = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(px, eyeY, pz - 1, BlockId.Air);
+    state.blockChanges.set(px, eyeY, pz - 2, BlockId.Water);
+    state.blockChanges.set(px, eyeY + 1, pz - 2, BlockId.Air);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("fishing_rod", 1);
+    return { state };
+  }
+
+  test("casting at water starts a bobber, and reeling on a bite yields a catch", () => {
+    const engine = makeEngine();
+    const { state } = castSetup(engine);
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(state.fishing).not.toBeNull();
+
+    // Advance until the bite window opens (delay is bounded by FISHING_BITE_MAX_SECONDS).
+    let guard = 0;
+    while (!state.fishing!.biting && guard < 2000) {
+      engine.step(1 / 60, input());
+      guard += 1;
+    }
+    expect(state.fishing!.biting).toBe(true);
+
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" }); // reel in during the bite
+    expect(state.fishing).toBeNull();
+    // A catch always lands and wears the rod one point (the item is random).
+    expect(state.inventory[state.selectedSlot].durability).toBe(state.inventory[state.selectedSlot].maxDurability! - 1);
+    expect(engine.consumeEvents().some((e) => e.type === "fishingCaught")).toBe(true);
+  });
+
+  test("reeling before a bite comes back empty with no rod wear", () => {
+    const engine = makeEngine();
+    const { state } = castSetup(engine);
+
+    engine.dispatch({ type: "placeBlock" }); // cast
+    expect(state.fishing).not.toBeNull();
+    expect(state.fishing!.biting).toBe(false);
+
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" }); // reel immediately, before any bite
+    expect(state.fishing).toBeNull();
+    expect(state.inventory[state.selectedSlot].durability).toBe(state.inventory[state.selectedSlot].maxDurability);
+    expect(engine.consumeEvents().some((e) => e.type === "fishingReeledEmpty")).toBe(true);
+  });
+});

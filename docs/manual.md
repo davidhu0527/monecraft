@@ -345,6 +345,21 @@ The forest renews itself, so wood never runs out:
 Bare ground heals too: **dirt** exposed next to grass slowly turns back to grass,
 so mined patches and trampled paths green over on their own.
 
+## Fishing
+
+A calm, renewable way to feed yourself — and the odd lucky find:
+
+1. Craft a **fishing rod** (3 wood + 2 string).
+2. Hold the rod and **right-click while aiming at water** to cast a bobber.
+3. **Watch (and listen).** After a few seconds the bobber dips with a splash —
+   that's a bite. **Right-click again right away** (within about a second) to reel
+   it in. Miss the moment and the catch gets away, but the bobber keeps fishing.
+4. You'll mostly land **raw fish** (cook it at a furnace for more hunger), sometimes
+   junk (string, bone, seeds, rotten flesh), and once in a while a treasure.
+
+Wandering too far from the bobber, putting the rod away, or draining the water all
+retract the line.
+
 ## Beds and sleeping
 
 Craft a **bed** (3 wool + 3 planks) and place it. Right-click it **at night** to
