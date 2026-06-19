@@ -1,3 +1,4 @@
+import { BONE_MEAL_PER_BONE } from "@/lib/game/config";
 import { ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { TRADES } from "@/lib/game/trades";
 import type { ItemKind, Recipe } from "@/lib/game/types";
@@ -24,6 +25,12 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "wood_hoe", count: 1 }
   },
   { id: "bread", label: "3 Wheat -> Bread", cost: [{ slotId: "wheat", count: 3 }], result: { slotId: "bread", count: 1 } },
+  {
+    id: "bone_meal",
+    label: `1 Bone -> ${BONE_MEAL_PER_BONE} Bone Meal`,
+    cost: [{ slotId: "bone", count: 1 }],
+    result: { slotId: "bone_meal", count: BONE_MEAL_PER_BONE }
+  },
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },

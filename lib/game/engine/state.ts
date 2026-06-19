@@ -290,6 +290,8 @@ export type GameEvent =
   | { type: "wokeUp" }
   | { type: "tilledSoil" }
   | { type: "plantedSeed" }
+  | { type: "plantedSapling" }
+  | { type: "usedBoneMeal" }
   | { type: "openedStation"; station: "furnace" | "villager" }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }

@@ -172,6 +172,19 @@ export const RANDOM_TICK_SAMPLES = 64;
 export const RANDOM_TICK_RADIUS = 32;
 export const CROP_GROWTH_CHANCE = 0.65;
 export const GRASS_SEED_DROP_CHANCE = 0.2;
+// Living world. A sapling matures slower than a crop (a tree is a bigger event):
+// at ~0.12 per sampled tick it takes a few in-range minutes, or instantly with
+// bone meal. LEAVES_SAPLING_DROP_CHANCE is the per-break odds a leaf block yields
+// a sapling (its only drop). GRASS_SPREAD_CHANCE is the per-tick odds an exposed
+// dirt block beside grass re-grasses.
+export const SAPLING_GROWTH_CHANCE = 0.12;
+export const LEAVES_SAPLING_DROP_CHANCE = 0.08;
+export const GRASS_SPREAD_CHANCE = 0.18;
+// Bone meal: how many units one bone grinds into, and how many crop stages a
+// single application advances (a random 1..BONE_MEAL_CROP_STAGES_MAX, like
+// Minecraft); on a sapling it grows the tree instantly.
+export const BONE_MEAL_PER_BONE = 3;
+export const BONE_MEAL_CROP_STAGES_MAX = 2;
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;

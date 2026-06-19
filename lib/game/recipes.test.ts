@@ -126,6 +126,17 @@ describe("cooking new meats", () => {
   });
 });
 
+describe("living world recipes", () => {
+  test("bone meal grinds from a single bone in the Materials section", () => {
+    const r = recipe("bone_meal");
+    expect(r.station).toBeUndefined();
+    expect(recipeCategory(r)).toBe("Materials");
+    const slots = inventory([["bone", 1]]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("bone_meal")).toBe(r.result.count);
+  });
+});
+
 describe("coal & fuel economy", () => {
   test("charcoal smelts from a single wood at a furnace", () => {
     const r = recipe("charcoal");

@@ -23,7 +23,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**54 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**55 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the nine **furnace** smelting
 recipes, which need an open furnace.
 
@@ -45,6 +45,7 @@ can currently afford first within each section.
 | 1 Bed       | 3 Wool + 3 Planks    |
 | 1 Wool      | 4 String             |
 | 1 TNT       | 4 Gunpowder + 1 Sand |
+| 3 Bone Meal | 1 Bone               |
 
 ### Tools
 
@@ -115,7 +116,7 @@ player who hasn't found coal can still cook.
 
 ## Blocks
 
-**32 block types** (plus air). Hardness is relative break time — higher is slower.
+**33 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
@@ -125,7 +126,7 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Dirt              | 2        | any             | —                                                                                                                     |
 | Sand              | 2        | any             | Common on beaches and in deserts                                                                                      |
 | Snow              | 2        | any             | Mountain peaks                                                                                                        |
-| Leaves            | 2        | any             | From trees; drops dirt                                                                                                |
+| Leaves            | 2        | any             | From trees; drops a sapling ~8% of the time, else nothing                                                             |
 | Cactus            | 2        | any             | Desert decoration                                                                                                     |
 | Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                  |
 | Wood              | 3        | any             | Tree trunks                                                                                                           |
@@ -151,6 +152,7 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                              |
 | Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                         |
 | Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                  |
+| Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                          |
 | Bedrock           | —        | unbreakable     | World floor and border                                                                                                |
 | Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second          |
 
@@ -296,9 +298,11 @@ always deals at least 1).
 
 Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
-(from farming and grass). Fuels: **Coal** (mined from coal ore) and **Charcoal**
-(smelted from wood) — interchangeable for smelting and torches. **Gunpowder**
-(creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
+(from farming and grass). **Bone Meal** (ground from a bone, 1 → 3) is a
+fertilizer: right-click it on a sapling to grow the tree instantly, or on
+immature wheat to advance it 1–2 stages. Fuels: **Coal** (mined from coal ore)
+and **Charcoal** (smelted from wood) — interchangeable for smelting and torches.
+**Gunpowder** (creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
 Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
 boss drop that crafts the Dragon Sword).

@@ -1,13 +1,21 @@
 import { BlockId } from "@/lib/world";
-import { CROP_GROWTH_CHANCE, RANDOM_TICK_INTERVAL_SECONDS, RANDOM_TICK_RADIUS, RANDOM_TICK_SAMPLES } from "@/lib/game/config";
+import {
+  CROP_GROWTH_CHANCE,
+  GRASS_SPREAD_CHANCE,
+  RANDOM_TICK_INTERVAL_SECONDS,
+  RANDOM_TICK_RADIUS,
+  RANDOM_TICK_SAMPLES,
+  SAPLING_GROWTH_CHANCE
+} from "@/lib/game/config";
 import type { GameState } from "../state";
+import { growTreeAt } from "./treeGrowth";
 
 /**
  * Random block ticks: on a fixed interval, sample columns near the player and
  * run a per-block handler on the top block. This is the growth/spread engine —
- * today only crops, but the handler registry is the extension point for
- * saplings, grass spread, etc. Crops persist for free: they are ordinary block
- * edits, so they ride blockChanges and the save diff with no extra state.
+ * crops grow, saplings become trees, and bare dirt re-grasses. Every result is
+ * an ordinary block edit, so it rides blockChanges and the save diff with no
+ * extra state. The handler registry is the extension point for new behaviours.
  */
 
 type RandomTickHandler = (state: GameState, x: number, y: number, z: number, rng: () => number) => void;
@@ -20,11 +28,41 @@ function growCrop(state: GameState, x: number, y: number, z: number, rng: () => 
   state.worldMeshDirty = true;
 }
 
+/** A sapling sitting on soil matures into a tree. Off-soil saplings never grow. */
+function growSapling(state: GameState, x: number, y: number, z: number, rng: () => number): void {
+  if (rng() >= SAPLING_GROWTH_CHANCE) return;
+  const below = state.world.get(x, y - 1, z) as BlockId;
+  if (below !== BlockId.Grass && below !== BlockId.Dirt && below !== BlockId.Farmland) return;
+  growTreeAt(state, x, y, z, rng);
+}
+
+/** Exposed dirt re-grasses when an adjacent column's top block is grass. */
+const GRASS_SPREAD_NEIGHBORS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1]
+];
+function spreadGrass(state: GameState, x: number, y: number, z: number, rng: () => number): void {
+  if (rng() >= GRASS_SPREAD_CHANCE) return;
+  const { world } = state;
+  for (const [dx, dz] of GRASS_SPREAD_NEIGHBORS) {
+    const ny = world.highestSolidY(x + dx, z + dz);
+    if (world.get(x + dx, ny, z + dz) === BlockId.Grass) {
+      state.blockChanges.set(x, y, z, BlockId.Grass);
+      state.worldMeshDirty = true;
+      return;
+    }
+  }
+}
+
 const RANDOM_TICK_HANDLERS: Partial<Record<BlockId, RandomTickHandler>> = {
   [BlockId.WheatStage0]: growCrop,
   [BlockId.WheatStage1]: growCrop,
-  [BlockId.WheatStage2]: growCrop
+  [BlockId.WheatStage2]: growCrop,
   // WheatStage3 has no handler — mature crops stop growing.
+  [BlockId.Sapling]: growSapling,
+  [BlockId.Dirt]: spreadGrass
 };
 
 export function tickRandomBlocks(state: GameState, dt: number, rng: () => number): void {

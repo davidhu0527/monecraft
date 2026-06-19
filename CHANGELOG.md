@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Living world — saplings, bone meal & grass spread**: the world now renews and heals itself, all on **zero new assets** (a procedural sprout atlas tile + a recolored powder sprite). **No save-format or worldgen change** — every effect is an ordinary block edit riding the save diff, and the hash-pinned worldgen tree code is left untouched
+  - **Saplings**: breaking **leaves** now drops a **sapling** (its only yield, ~8% per break) instead of the old placeholder dirt. Right-click a sapling onto grass/dirt to plant it; once it sits on soil it matures into a tree through the existing random-tick system (`SAPLING_GROWTH_CHANCE`). Trees are renewable at last
+  - **Bone meal**: grind a skeleton's **bone** into **bone meal** (1 → 3, in the recipe book's Materials section), then right-click it on a sapling to grow the tree **instantly**, or on immature wheat to advance it a random **1–2** stages. A second, renewable use for bones beyond the cursed totem
+  - **Grass spread**: exposed **dirt** (a column's top block) **re-grasses** over time when one of its four face-neighbour columns has grass on top, healing mined or built-over terrain
+  - **Architecture**: tree building lives in `lib/game/engine/systems/treeGrowth.ts`, shared by the sapling random-tick handler and the bone-meal use; it writes through the `blockChanges` chokepoint (so the tree persists and relights) using the engine rng, and deliberately shares **no** code with worldgen's `placeTrees`, so the generation hashes stay **byte-identical**. Saplings render like wheat — a solid cube with an atlas-painted texture — so there is no new geometry path. The `Sapling` `BlockId` is appended at the end of the enum (id 50) so existing saved block ids never shift
+
 ### Changed
 
 - **Hostile health visibility and durability**: zombies, skeletons, spiders, and creepers now each have **100 HP**, while the boss has **1000 HP**. Every hostile renders a procedural billboard health bar above its head that tracks damage; the existing boss HUD bar remains. This is transient simulation/render state, so there is **no save-format or worldgen impact**.
