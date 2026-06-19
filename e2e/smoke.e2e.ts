@@ -17,6 +17,25 @@ test("boots without errors and renders the world", async ({ gamePage: page }) =>
   expect(clock2).toBeGreaterThan(clock1);
 });
 
+test("the Dragon Lord HUD points toward the boss and shows its distance", async ({ gamePage: page }) => {
+  await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    const boss = state.mobs[0];
+    boss.kind = "boss";
+    boss.hostile = true;
+    boss.hp = 1000;
+    boss.speed = 0;
+    boss.detectRange = 0;
+    boss.position.set(state.player.position.x + 20, state.player.position.y, state.player.position.z);
+    state.player.yaw = 0;
+  });
+
+  const hud = page.locator(".boss-bar");
+  await expect(hud).toBeVisible();
+  await expect(hud).toContainText("20 blocks");
+  await expect(page.locator(".boss-pointer")).toHaveCSS("transform", "matrix(0, 1, -1, 0, 0, 0)");
+});
+
 test("pointer-lock flow enables WASD movement", async ({ gamePage: page }) => {
   await calmDaytime(page);
   await acquirePointerLock(page);

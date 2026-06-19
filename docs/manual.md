@@ -309,10 +309,12 @@ if a boss is already alive.)
 
 Come prepared: full **armor**, the best sword you can make, a **bow** and plenty of
 **arrows**, and some food. The boss has **1000 HP** (shown above its head and on a
-bar at the top of the screen), **charges you and bites hard** up close, **fires a spread of
-arrows** at range, and **summons skeletons and zombies** to wear you down. It
-ignores daylight, so you can fight it whenever you like — open ground helps you
-kite it with the bow.
+bar at the top of the screen). Beside its name, a pointer continually aims toward
+the boss and shows its horizontal distance in blocks, so you can find it after
+breaking line of sight. It **charges you and bites hard** up close, **fires a
+spread of arrows** at range, and **summons skeletons and zombies** to wear you
+down. It ignores daylight, so you can fight it whenever you like — open ground
+helps you kite it with the bow.
 
 Beat it and you **win**: a victory screen appears, and it drops a **Dragon Heart**.
 Craft that into the **Dragon Sword** — the strongest weapon in the game (60 attack).

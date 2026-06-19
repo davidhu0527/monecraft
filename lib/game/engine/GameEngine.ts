@@ -25,6 +25,7 @@ import {
   STUCK_RESET_SECONDS,
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
+import { bossTracking, type BossTracking } from "@/lib/game/bossTracking";
 import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
@@ -92,10 +93,9 @@ export class GameEngine {
   private readonly listeners = new Set<() => void>();
   private events: GameEvent[] = [];
   private snapshot: GameSnapshot;
-  // Boss snapshot is rebuilt only when its rounded HP% changes, so the
-  // ref-equality diff in refreshSnapshot doesn't re-render React every frame.
-  private lastBoss: { hpPercent: number } | null = null;
-  private lastBossPercent = -1;
+  // Navigation values are rounded, so the ref-equality snapshot diff updates
+  // the HUD responsively without forcing a React render for sub-block movement.
+  private lastBoss: ({ hpPercent: number } & BossTracking) | null = null;
 
   constructor(options: GameEngineOptions = {}) {
     const save = options.save ?? null;
@@ -621,20 +621,22 @@ export class GameEngine {
     };
   }
 
-  /** Boss HP as a ref-stable {hpPercent} object, recomputed only when the rounded percent moves. */
-  private bossSnapshot(): { hpPercent: number } | null {
+  /** Boss HUD data as a ref-stable object, rebuilt only when a visible rounded value moves. */
+  private bossSnapshot(): ({ hpPercent: number } & BossTracking) | null {
     const bossMob = this.state.mobs.find((mob) => mob.kind === "boss");
     if (!bossMob) {
-      if (this.lastBoss !== null) {
-        this.lastBoss = null;
-        this.lastBossPercent = -1;
-      }
+      if (this.lastBoss !== null) this.lastBoss = null;
       return null;
     }
     const percent = Math.max(0, Math.min(1, Math.round((bossMob.hp / BOSS_HP) * 100) / 100));
-    if (percent !== this.lastBossPercent) {
-      this.lastBoss = { hpPercent: percent };
-      this.lastBossPercent = percent;
+    const tracking = bossTracking(this.state.player, bossMob);
+    if (
+      !this.lastBoss ||
+      percent !== this.lastBoss.hpPercent ||
+      tracking.bearingDegrees !== this.lastBoss.bearingDegrees ||
+      tracking.distanceBlocks !== this.lastBoss.distanceBlocks
+    ) {
+      this.lastBoss = { hpPercent: percent, ...tracking };
     }
     return this.lastBoss;
   }

@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Dragon Lord tracker**: while the boss lives, its top-center health HUD now includes a rotating pointer toward it and its horizontal distance in blocks, making it possible to reacquire the fight after terrain or summoned mobs break line of sight. The values are rounded before entering the React snapshot to avoid sub-block render churn. This is transient UI state with **no save-format or worldgen impact**.
 - **Fishing**: water was only ever a hazard to avoid — now it's a place to fish, a relaxed renewable food source with the odd lucky find, all on **zero new assets** (a procedural rod/fish sprite + synthesized splashes). **No save-format or worldgen change** — the cast is transient session state and the new items save by string id
   - **Fishing rod** (craft 3 wood + 2 string): right-click while aiming at water to **cast** a bobber. After a random wait it **dips with a splash** (a bite) — right-click again within ~1.2 s to **reel in** a catch; miss the window and it gets away while the bobber keeps fishing
   - **Catch table**: a weighted single pick per bite — mostly **raw fish** (cook it at a furnace, like the meats), sometimes junk (string/bone/seeds/rotten flesh), and rarely a treasure (emerald). Only a successful reel wears the rod

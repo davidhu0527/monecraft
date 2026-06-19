@@ -1773,6 +1773,25 @@ describe("endgame boss", () => {
     expect(engine.getSnapshot().boss!.hpPercent).toBeCloseTo(0.5, 2);
   });
 
+  test("the boss snapshot tracks direction and horizontal distance", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    giveSummoner(engine, 1);
+    engine.dispatch({ type: "placeBlock" });
+    const boss = engine.state.mobs.find((mob) => mob.kind === "boss")!;
+    const player = engine.state.player;
+
+    player.yaw = 0;
+    boss.position.set(player.position.x + 12, boss.position.y, player.position.z);
+    run(engine, 0.05);
+
+    expect(engine.getSnapshot().boss).toMatchObject({
+      bearingDegrees: 90,
+      distanceBlocks: 12
+    });
+  });
+
   test("defeating the boss drops the Dragon Heart and triggers victory", () => {
     const engine = makeEngine();
     calmDaytime(engine);

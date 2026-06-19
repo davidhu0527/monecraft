@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { VoxelWorld, type BlockId } from "@/lib/world";
+import type { BossTracking } from "@/lib/game/bossTracking";
 import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
@@ -270,8 +271,8 @@ export type GameSnapshot = {
   craftingStation: "furnace" | "villager" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
-  /** Live boss health (0..1), or null when no boss is alive — drives the boss bar. */
-  boss: { hpPercent: number } | null;
+  /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
+  boss: ({ hpPercent: number } & BossTracking) | null;
   /** True after the boss is defeated — drives the victory screen. */
   victory: boolean;
 };
