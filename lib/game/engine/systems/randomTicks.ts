@@ -1,5 +1,12 @@
 import { BlockId } from "@/lib/world";
-import { CROP_GROWTH_CHANCE, RANDOM_TICK_INTERVAL_SECONDS, RANDOM_TICK_RADIUS, RANDOM_TICK_SAMPLES, SAPLING_GROWTH_CHANCE } from "@/lib/game/config";
+import {
+  CROP_GROWTH_CHANCE,
+  GRASS_SPREAD_CHANCE,
+  RANDOM_TICK_INTERVAL_SECONDS,
+  RANDOM_TICK_RADIUS,
+  RANDOM_TICK_SAMPLES,
+  SAPLING_GROWTH_CHANCE
+} from "@/lib/game/config";
 import type { GameState } from "../state";
 import { growTreeAt } from "./treeGrowth";
 
@@ -29,12 +36,33 @@ function growSapling(state: GameState, x: number, y: number, z: number, rng: () 
   growTreeAt(state, x, y, z, rng);
 }
 
+/** Exposed dirt re-grasses when an adjacent column's top block is grass. */
+const GRASS_SPREAD_NEIGHBORS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1]
+];
+function spreadGrass(state: GameState, x: number, y: number, z: number, rng: () => number): void {
+  if (rng() >= GRASS_SPREAD_CHANCE) return;
+  const { world } = state;
+  for (const [dx, dz] of GRASS_SPREAD_NEIGHBORS) {
+    const ny = world.highestSolidY(x + dx, z + dz);
+    if (world.get(x + dx, ny, z + dz) === BlockId.Grass) {
+      state.blockChanges.set(x, y, z, BlockId.Grass);
+      state.worldMeshDirty = true;
+      return;
+    }
+  }
+}
+
 const RANDOM_TICK_HANDLERS: Partial<Record<BlockId, RandomTickHandler>> = {
   [BlockId.WheatStage0]: growCrop,
   [BlockId.WheatStage1]: growCrop,
   [BlockId.WheatStage2]: growCrop,
   // WheatStage3 has no handler — mature crops stop growing.
-  [BlockId.Sapling]: growSapling
+  [BlockId.Sapling]: growSapling,
+  [BlockId.Dirt]: spreadGrass
 };
 
 export function tickRandomBlocks(state: GameState, dt: number, rng: () => number): void {

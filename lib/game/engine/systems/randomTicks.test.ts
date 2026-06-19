@@ -100,4 +100,29 @@ describe("random block ticks", () => {
     tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0.99));
     expect(state.world.get(8, 5, 8)).toBe(BlockId.Sapling);
   });
+
+  test("exposed dirt beside grass re-grasses", () => {
+    const state = makeState();
+    state.blockChanges.set(8, 5, 8, BlockId.Dirt); // sampled column top
+    state.blockChanges.set(9, 5, 8, BlockId.Grass); // neighbour column top is grass
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0));
+    expect(state.world.get(8, 5, 8)).toBe(BlockId.Grass);
+    expect(state.worldMeshDirty).toBe(true);
+  });
+
+  test("exposed dirt with no grass neighbour stays dirt", () => {
+    const state = makeState();
+    state.blockChanges.set(8, 5, 8, BlockId.Dirt); // alone, surrounded by air columns
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0));
+    expect(state.world.get(8, 5, 8)).toBe(BlockId.Dirt);
+  });
+
+  test("dirt does not re-grass when the spread roll fails", () => {
+    const state = makeState();
+    state.blockChanges.set(8, 5, 8, BlockId.Dirt);
+    state.blockChanges.set(9, 5, 8, BlockId.Grass);
+    // 0.99 is at/above GRASS_SPREAD_CHANCE, so every roll fails.
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0.99));
+    expect(state.world.get(8, 5, 8)).toBe(BlockId.Dirt);
+  });
 });
