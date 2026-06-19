@@ -988,6 +988,24 @@ export const PLANT_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** Bright sparkle when bone meal fertilizes a plant. */
+export const BONE_MEAL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.4,
+    randomness: 0.25,
+    frequency: 760,
+    sustain: 0.02,
+    release: 0.12,
+    shape: 0,
+    pitchJump: 320,
+    pitchJumpTime: 0.05,
+    repeatTime: 0.06,
+    sustainVolume: 0.5,
+    decay: 0.03
+  }),
+  minRetriggerMs: 120
+};
+
 /** Soft munch when an animal is fed. */
 export const MOB_FED_SOUND: SoundDef = {
   params: zz({

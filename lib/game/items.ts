@@ -94,6 +94,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "wool", label: "Wool", kind: "material" },
   { id: "feather", label: "Feather", kind: "material" },
   { id: "bone", label: "Bone", kind: "material" },
+  // Ground bone: a fertilizer that instantly grows saplings and advances crops.
+  { id: "bone_meal", label: "Bone Meal", kind: "material" },
   { id: "leather", label: "Leather", kind: "material" },
   { id: "string", label: "String", kind: "material" },
   // Furnace fuels: coal is mined from coal ore, charcoal is smelted from wood.

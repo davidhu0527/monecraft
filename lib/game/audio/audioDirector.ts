@@ -4,6 +4,7 @@ import type { GameEvent, GameState } from "@/lib/game/engine/state";
 import { materialGroupFor } from "./materials";
 import {
   ARROW_HIT_SOUND,
+  BONE_MEAL_SOUND,
   BOSS_ROAR_SOUND,
   BOW_FIRE_SOUND,
   BREAK_SOUNDS,
@@ -253,6 +254,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "plantedSeed":
         case "plantedSapling":
           backend.play(PLANT_SOUND);
+          break;
+        case "usedBoneMeal":
+          backend.play(BONE_MEAL_SOUND);
           break;
         case "smelted":
           backend.play(SMELT_SOUND);

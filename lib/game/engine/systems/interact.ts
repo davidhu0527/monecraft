@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BlockId, doorBlock, doorState, voxelRaycast } from "@/lib/world";
 import {
+  BONE_MEAL_CROP_STAGES_MAX,
   BREED_FED_WINDOW_SECONDS,
   CHEST_SLOTS,
   EYE_HEIGHT,
@@ -17,6 +18,7 @@ import { findAimedMobIndex } from "./combat";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { primeTnt } from "./explosion";
 import { lookDirection } from "./playerMotion";
+import { growTreeAt } from "./treeGrowth";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
@@ -180,14 +182,14 @@ function interactBed(state: GameState, emit: EmitGameEvent, x: number, y: number
  * happened (consumes the click), false to fall through to block placement.
  */
 export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () => number): boolean {
-  void rng; // reserved for future randomized uses (bone meal, …)
   const slot = state.inventory[state.selectedSlot];
   if (!slot?.id || slot.count <= 0) return false;
   const isHoe = slot.id.endsWith("_hoe");
   const isSeeds = slot.id === "seeds";
   const isTorch = slot.id === "torch";
   const isSapling = slot.id === "sapling";
-  if (!isHoe && !isSeeds && !isTorch && !isSapling) return false;
+  const isBoneMeal = slot.id === "bone_meal";
+  if (!isHoe && !isSeeds && !isTorch && !isSapling && !isBoneMeal) return false;
 
   const { world, player } = state;
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
@@ -202,6 +204,23 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
   if (isTorch) {
     if (block !== BlockId.Tnt) return false;
     primeTnt(state, x, y, z, emit);
+    return true;
+  }
+
+  // Bone meal: fertilize. Instantly grows an aimed sapling into a tree, or
+  // advances an immature crop a random 1..MAX stages. Consumes one per use.
+  if (isBoneMeal) {
+    if (block === BlockId.Sapling) {
+      growTreeAt(state, x, y, z, rng);
+    } else if (block >= BlockId.WheatStage0 && block <= BlockId.WheatStage2) {
+      const next = Math.min(block + 1 + Math.floor(rng() * BONE_MEAL_CROP_STAGES_MAX), BlockId.WheatStage3) as BlockId;
+      state.blockChanges.set(x, y, z, next);
+      state.worldMeshDirty = true;
+    } else {
+      return false;
+    }
+    state.inventory = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot) ?? state.inventory;
+    emit({ type: "usedBoneMeal" });
     return true;
   }
 

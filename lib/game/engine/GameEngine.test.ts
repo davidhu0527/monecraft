@@ -1958,4 +1958,39 @@ describe("living world", () => {
     expect(engine.consumeEvents().some((e) => e.type === "plantedSapling")).toBe(false);
     expect(state.world.get(x, y + 1, z)).not.toBe(BlockId.Sapling);
   });
+
+  test("bone meal on a sapling grows a tree and consumes one", () => {
+    const engine = makeEngine();
+    const { x, y, z } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(x, y, z, BlockId.Sapling); // aim straight down at the sapling
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("bone_meal", 3);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(x, y, z)).toBe(BlockId.Wood); // sapling became the trunk base
+    expect(state.world.get(x, y + 1, z)).toBe(BlockId.Wood);
+    expect(state.inventory[state.selectedSlot].count).toBe(2);
+    expect(engine.consumeEvents().some((e) => e.type === "usedBoneMeal")).toBe(true);
+  });
+
+  test("bone meal on immature wheat advances it and consumes one", () => {
+    const engine = makeEngine();
+    const { x, y, z } = aimDownAtFloor(engine);
+    const { state } = engine;
+    state.blockChanges.set(x, y, z, BlockId.WheatStage0);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("bone_meal", 3);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" });
+
+    const stage = state.world.get(x, y, z);
+    expect(stage).toBeGreaterThan(BlockId.WheatStage0);
+    expect(stage).toBeLessThanOrEqual(BlockId.WheatStage3);
+    expect(state.inventory[state.selectedSlot].count).toBe(2);
+    expect(engine.consumeEvents().some((e) => e.type === "usedBoneMeal")).toBe(true);
+  });
 });
