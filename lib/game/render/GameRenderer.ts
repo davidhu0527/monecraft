@@ -12,6 +12,7 @@ import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
 import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
+import { createBobberVisuals, type BobberVisuals } from "./bobberVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
@@ -79,6 +80,8 @@ export class GameRenderer {
   private readonly mobVisuals: MobVisuals;
   private readonly spearVisuals: SpearVisuals;
   private readonly projectileVisuals: ProjectileVisuals;
+  private readonly bobberVisuals: BobberVisuals;
+  private readonly bobberEye = new THREE.Vector3();
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -149,6 +152,7 @@ export class GameRenderer {
     this.mobVisuals = createMobVisuals(this.scene);
     this.spearVisuals = createSpearVisuals(this.scene);
     this.projectileVisuals = createProjectileVisuals(this.scene);
+    this.bobberVisuals = createBobberVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -185,6 +189,7 @@ export class GameRenderer {
     this.mobVisuals.sync(state.mobs, timeMs);
     this.spearVisuals.sync(state.thrownSpears);
     this.projectileVisuals.sync(state.projectiles);
+    this.bobberVisuals.sync(state.fishing, this.bobberEye.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z));
     this.playerVisuals.sync(state, timeMs);
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
@@ -466,6 +471,7 @@ export class GameRenderer {
     this.playerVisuals.dispose();
     this.spearVisuals.dispose();
     this.projectileVisuals.dispose();
+    this.bobberVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();
