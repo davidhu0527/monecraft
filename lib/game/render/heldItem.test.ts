@@ -10,7 +10,7 @@ function heldHolder(camera: THREE.Camera): THREE.Group {
 }
 
 function frame(timeMs = 0, overrides: Partial<HeldItemFrame> = {}): HeldItemFrame {
-  return { timeMs, miningActive: false, moveFactor: 0, visible: true, ...overrides };
+  return { timeMs, miningActive: false, moveFactor: 0, visible: true, fishingActive: false, fishingBiting: false, ...overrides };
 }
 
 describe("heldItem", () => {

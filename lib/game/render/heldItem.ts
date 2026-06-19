@@ -11,6 +11,10 @@ export type HeldItemFrame = {
   moveFactor: number;
   /** False in third person — the body's hand shows the item instead. */
   visible: boolean;
+  /** True while a fishing cast is active — holds the rod out over the water. */
+  fishingActive: boolean;
+  /** True during the bite window — adds a rod-tip twitch. */
+  fishingBiting: boolean;
 };
 
 export type HeldItemView = {
@@ -18,6 +22,10 @@ export type HeldItemView = {
   update(slot: InventorySlot | undefined, frame: HeldItemFrame): void;
   /** Queues a one-shot swing (attack click); latched on the next update. */
   triggerSwing(): void;
+  /** Queues a one-shot cast flick; latched on the next update. */
+  triggerCast(): void;
+  /** Queues a one-shot reel pull-back; latched on the next update. */
+  triggerReel(): void;
   dispose(): void;
 };
 
@@ -36,6 +44,10 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
 
   let swingQueued = false;
   let swingStartMs = -Infinity;
+  let castQueued = false;
+  let castStartMs = -Infinity;
+  let reelQueued = false;
+  let reelStartMs = -Infinity;
   let equipStartMs = -Infinity;
   let wasMining = false;
 
@@ -51,8 +63,10 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
     update(slot, frame) {
       root.visible = frame.visible;
       if (!frame.visible) {
-        // Drop queued swings so they don't replay when the view returns.
+        // Drop queued one-shots so they don't replay when the view returns.
         swingQueued = false;
+        castQueued = false;
+        reelQueued = false;
         return;
       }
 
@@ -60,9 +74,13 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
       if (nextKey !== key) {
         clear();
         // The new item starts from its own equip transition — don't let it
-        // inherit the previous item's swing phase.
+        // inherit the previous item's swing/cast/reel phase.
         swingQueued = false;
         swingStartMs = -Infinity;
+        castQueued = false;
+        castStartMs = -Infinity;
+        reelQueued = false;
+        reelStartMs = -Infinity;
         wasMining = false;
         const model = buildItemModel(slot);
         if (model) {
@@ -79,6 +97,14 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
         swingQueued = false;
         swingStartMs = frame.timeMs;
       }
+      if (castQueued) {
+        castQueued = false;
+        castStartMs = frame.timeMs;
+      }
+      if (reelQueued) {
+        reelQueued = false;
+        reelStartMs = frame.timeMs;
+      }
       if (frame.miningActive && !wasMining) swingStartMs = frame.timeMs;
       wasMining = frame.miningActive;
 
@@ -87,7 +113,11 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
         swingStartMs,
         continuousSwing: frame.miningActive,
         equipStartMs,
-        moveFactor: frame.moveFactor
+        moveFactor: frame.moveFactor,
+        castStartMs,
+        reelStartMs,
+        fishingActive: frame.fishingActive,
+        fishingBiting: frame.fishingBiting
       });
       holder.position.set(pose.posX, pose.posY, pose.posZ);
       holder.rotation.set(pose.rotX, pose.rotY, pose.rotZ);
@@ -95,6 +125,14 @@ export function createHeldItemView(camera: THREE.Camera): HeldItemView {
 
     triggerSwing() {
       swingQueued = true;
+    },
+
+    triggerCast() {
+      castQueued = true;
+    },
+
+    triggerReel() {
+      reelQueued = true;
     },
 
     dispose() {

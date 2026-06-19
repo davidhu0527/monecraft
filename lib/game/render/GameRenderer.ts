@@ -190,7 +190,9 @@ export class GameRenderer {
       timeMs,
       miningActive: state.mining.targetKey !== "",
       moveFactor: state.player.onGround ? Math.min(1, Math.hypot(state.player.velocity.x, state.player.velocity.z) / WALK_SPEED) : 0,
-      visible: state.cameraMode === "first"
+      visible: state.cameraMode === "first",
+      fishingActive: state.fishing !== null,
+      fishingBiting: state.fishing?.biting ?? false
     });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
@@ -298,6 +300,10 @@ export class GameRenderer {
           size: 0.1
         });
         break;
+      case "fishingCast":
+        // The rod flicks forward; the bobber arc itself is driven by state.fishing.
+        this.heldItem.triggerCast();
+        break;
       case "fishingBite":
         // A sharp little plume as the fish strikes the bobber.
         this.particles.emitBurst({
@@ -333,6 +339,11 @@ export class GameRenderer {
           size: 0.1,
           colorJitter: 0.06
         });
+        this.heldItem.triggerReel();
+        break;
+      case "fishingReeledEmpty":
+        // No catch, no splash — just the rod's pull-back motion.
+        this.heldItem.triggerReel();
         break;
       case "bossSummoned":
         // A large, dark conjuring column where the boss appears.
