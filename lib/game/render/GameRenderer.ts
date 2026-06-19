@@ -13,6 +13,7 @@ import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleS
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
 import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
 import { createBobberVisuals, type BobberVisuals } from "./bobberVisuals";
+import { createCaughtItemVisuals, type CaughtItemVisuals } from "./caughtItemVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
@@ -86,6 +87,8 @@ export class GameRenderer {
   private readonly projectileVisuals: ProjectileVisuals;
   private readonly bobberVisuals: BobberVisuals;
   private readonly bobberTip = new THREE.Vector3();
+  private readonly caughtItems: CaughtItemVisuals;
+  private readonly catchTarget = new THREE.Vector3();
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -157,6 +160,7 @@ export class GameRenderer {
     this.spearVisuals = createSpearVisuals(this.scene);
     this.projectileVisuals = createProjectileVisuals(this.scene);
     this.bobberVisuals = createBobberVisuals(this.scene);
+    this.caughtItems = createCaughtItemVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -202,6 +206,7 @@ export class GameRenderer {
     this.playerVisuals.sync(state, timeMs);
     const rodTip = state.cameraMode === "first" ? this.camera.localToWorld(this.bobberTip.copy(ROD_TIP_OFFSET)) : this.playerVisuals.getRodTip(this.bobberTip);
     this.bobberVisuals.sync(state.fishing, rodTip, dtMs);
+    this.caughtItems.sync(timeMs, this.catchTarget.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z));
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
   }
@@ -342,6 +347,8 @@ export class GameRenderer {
         });
         this.heldItem.triggerReel();
         this.playerVisuals.triggerReel();
+        // The catch flies from the bobber to the player.
+        if (event.items.length > 0) this.caughtItems.spawn(event.items[0].itemId, event.x, event.y, event.z);
         break;
       case "fishingReeledEmpty":
         // No catch, no splash — just the rod's pull-back motion.
@@ -531,6 +538,7 @@ export class GameRenderer {
     this.spearVisuals.dispose();
     this.projectileVisuals.dispose();
     this.bobberVisuals.dispose();
+    this.caughtItems.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();
