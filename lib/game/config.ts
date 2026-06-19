@@ -192,8 +192,8 @@ export const BONE_MEAL_CROP_STAGES_MAX = 2;
 // auto-cancelled if the player strays past FISHING_TETHER_DISTANCE from the bobber
 // (or unequips the rod / the water drains). The rod is a durable tool.
 export const FISHING_REACH = 7;
-export const FISHING_BITE_MIN_SECONDS = 3;
-export const FISHING_BITE_MAX_SECONDS = 9;
+export const FISHING_BITE_MIN_SECONDS = 2;
+export const FISHING_BITE_MAX_SECONDS = 5;
 export const FISHING_BITE_WINDOW_SECONDS = 1.2;
 export const FISHING_TETHER_DISTANCE = 12;
 export const FISHING_ROD_DURABILITY = 64;

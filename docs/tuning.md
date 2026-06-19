@@ -202,8 +202,10 @@ yield, and one application advances a crop a random `1..BONE_MEAL_CROP_STAGES_MA
 
 Read by `systems/fishing.ts`. `FISHING_REACH` (7) is how far water can be to cast,
 matching mining reach. The wait before a bite is a uniform random in
-`[FISHING_BITE_MIN_SECONDS, FISHING_BITE_MAX_SECONDS]` (3–9 s) — widen it for a
-slower, more patient rhythm. `FISHING_BITE_WINDOW_SECONDS` (1.2) is the reaction
+`[FISHING_BITE_MIN_SECONDS, FISHING_BITE_MAX_SECONDS]` (2–5 s) — widen it for a
+slower, more patient rhythm. Note the wait is also the throttle on the whole catch
+table, so shortening it raises the rate of the rare treasure too; drop the emerald
+weight in `FISHING_LOOT` if you make bites much faster. `FISHING_BITE_WINDOW_SECONDS` (1.2) is the reaction
 window to reel in once the bobber dips: lower it to demand sharper timing, raise it
 to be forgiving. `FISHING_TETHER_DISTANCE` (12) auto-cancels a cast if the player
 strays past it. `FISHING_ROD_DURABILITY` (64, in `items.ts` via this constant) is

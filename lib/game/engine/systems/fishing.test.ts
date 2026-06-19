@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { BlockId, VoxelWorld } from "@/lib/world";
-import { FISHING_BITE_WINDOW_SECONDS } from "@/lib/game/config";
+import { FISHING_BITE_MAX_SECONDS, FISHING_BITE_MIN_SECONDS, FISHING_BITE_WINDOW_SECONDS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import type { GameEvent, GameState } from "../state";
@@ -44,6 +44,25 @@ describe("fishing", () => {
       y: state.fishing!.position.y,
       z: state.fishing!.position.z
     });
+  });
+
+  test("the initial bite wait stays within the configured bounds", () => {
+    const low = makeState();
+    tryFish(
+      low,
+      () => {},
+      () => 0
+    );
+    expect(low.fishing!.timer).toBeCloseTo(FISHING_BITE_MIN_SECONDS);
+
+    const high = makeState();
+    tryFish(
+      high,
+      () => {},
+      () => 0.999
+    );
+    expect(high.fishing!.timer).toBeGreaterThanOrEqual(FISHING_BITE_MIN_SECONDS);
+    expect(high.fishing!.timer).toBeLessThanOrEqual(FISHING_BITE_MAX_SECONDS);
   });
 
   test("aiming the rod away from water consumes the click but starts no cast", () => {
