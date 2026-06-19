@@ -18,6 +18,7 @@ function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsSt
     inventory: [createSlot("dirt", 5)],
     selectedSlot: 0,
     mining: { targetKey: "" },
+    fishing: null,
     ...overrides
   };
 }

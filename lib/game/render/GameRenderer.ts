@@ -303,6 +303,7 @@ export class GameRenderer {
       case "fishingCast":
         // The rod flicks forward; the bobber arc itself is driven by state.fishing.
         this.heldItem.triggerCast();
+        this.playerVisuals.triggerCast();
         break;
       case "fishingBite":
         // A sharp little plume as the fish strikes the bobber.
@@ -340,10 +341,12 @@ export class GameRenderer {
           colorJitter: 0.06
         });
         this.heldItem.triggerReel();
+        this.playerVisuals.triggerReel();
         break;
       case "fishingReeledEmpty":
         // No catch, no splash — just the rod's pull-back motion.
         this.heldItem.triggerReel();
+        this.playerVisuals.triggerReel();
         break;
       case "bossSummoned":
         // A large, dark conjuring column where the boss appears.
