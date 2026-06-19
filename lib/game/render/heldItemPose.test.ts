@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BASE_POSE, computeHeldPose, EQUIP_MS, SWING_MS } from "@/lib/game/render/heldItemPose";
+import { BASE_POSE, CAST_MS, computeHeldPose, EQUIP_MS, REEL_MS, SWING_MS } from "@/lib/game/render/heldItemPose";
 
 const REST = { swingStartMs: -Infinity, continuousSwing: false, equipStartMs: -Infinity, moveFactor: 0 };
 
@@ -48,5 +48,40 @@ describe("computeHeldPose", () => {
   test("is deterministic for the same input", () => {
     const input = { timeMs: 1234, swingStartMs: 1100, continuousSwing: false, equipStartMs: 1000, moveFactor: 0.7 };
     expect(computeHeldPose(input)).toEqual(computeHeldPose(input));
+  });
+
+  test("the fishing stance holds the rod up and forward over the water", () => {
+    const idle = computeHeldPose({ timeMs: 0, ...REST });
+    const fishing = computeHeldPose({ timeMs: 0, ...REST, fishingActive: true });
+    expect(fishing.posY).toBeGreaterThan(idle.posY); // raised
+    expect(fishing.posZ).toBeLessThan(idle.posZ); // pushed forward
+    expect(fishing.rotX).toBeGreaterThan(idle.rotX); // tip tilted up
+  });
+
+  test("a cast winds the tip back then flicks it forward", () => {
+    const base = computeHeldPose({ timeMs: 0, ...REST, fishingActive: true });
+    const windUp = computeHeldPose({ timeMs: CAST_MS * 0.2, ...REST, fishingActive: true, castStartMs: 0 });
+    const flick = computeHeldPose({ timeMs: CAST_MS * 0.7, ...REST, fishingActive: true, castStartMs: 0 });
+    expect(windUp.rotX).toBeGreaterThan(base.rotX); // tip back during the wind-up
+    expect(flick.rotX).toBeLessThan(base.rotX); // snaps forward on the flick
+    // After the cast completes only the stance remains.
+    const after = computeHeldPose({ timeMs: CAST_MS * 1.5, ...REST, fishingActive: true, castStartMs: 0 });
+    expect(after).toEqual(computeHeldPose({ timeMs: CAST_MS * 1.5, ...REST, fishingActive: true }));
+  });
+
+  test("a reel yanks the rod up and back, then settles", () => {
+    const base = computeHeldPose({ timeMs: 0, ...REST, fishingActive: true });
+    const mid = computeHeldPose({ timeMs: REEL_MS / 2, ...REST, fishingActive: true, reelStartMs: 0 });
+    expect(mid.rotX).toBeGreaterThan(base.rotX);
+    expect(mid.posY).toBeGreaterThan(base.posY);
+    const after = computeHeldPose({ timeMs: REEL_MS * 1.5, ...REST, fishingActive: true, reelStartMs: 0 });
+    expect(after).toEqual(computeHeldPose({ timeMs: REEL_MS * 1.5, ...REST, fishingActive: true }));
+  });
+
+  test("a bite adds a tip twitch", () => {
+    const timeMs = 100;
+    const calm = computeHeldPose({ timeMs, ...REST, fishingActive: true });
+    const biting = computeHeldPose({ timeMs, ...REST, fishingActive: true, fishingBiting: true });
+    expect(biting.rotX).not.toBeCloseTo(calm.rotX, 5);
   });
 });

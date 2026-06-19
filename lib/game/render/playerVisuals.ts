@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { WALK_SPEED } from "@/lib/game/config";
-import type { CameraMode } from "@/lib/game/engine/state";
+import type { CameraMode, FishingState } from "@/lib/game/engine/state";
 import type { InventorySlot } from "@/lib/game/types";
 import type { PlayerPalette } from "@/lib/game/playerSkins";
 import { buildItemModel, type ItemModel } from "./itemModel";
@@ -21,6 +21,7 @@ export type PlayerVisualsState = {
   inventory: InventorySlot[];
   selectedSlot: number;
   mining: { targetKey: string };
+  fishing: FishingState | null;
 };
 
 export type PlayerVisuals = {
@@ -28,6 +29,12 @@ export type PlayerVisuals = {
   sync(state: PlayerVisualsState, timeMs: number): void;
   /** Queues a one-shot arm swing (attack click); latched on the next sync. */
   triggerSwing(): void;
+  /** Queues a one-shot cast flick; latched on the next sync. */
+  triggerCast(): void;
+  /** Queues a one-shot reel pull-back; latched on the next sync. */
+  triggerReel(): void;
+  /** World position of the third-person rod tip (hand anchor) — for the fishing line origin. */
+  getRodTip(out: THREE.Vector3): THREE.Vector3;
   /** Recolors the body in place (skin preset change) — live-safe. */
   setPalette(palette: PlayerPalette): void;
   dispose(): void;
@@ -42,6 +49,10 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
   let heldKey = "";
   let swingQueued = false;
   let swingStartMs = -Infinity;
+  let castQueued = false;
+  let castStartMs = -Infinity;
+  let reelQueued = false;
+  let reelStartMs = -Infinity;
   let wasMining = false;
 
   const clearHeldModel = () => {
@@ -70,8 +81,10 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
       const visible = state.cameraMode !== "first" && !state.isDead;
       model.group.visible = visible;
       if (!visible) {
-        // Don't replay stale swings when the body next becomes visible.
+        // Don't replay stale one-shots when the body next becomes visible.
         swingQueued = false;
+        castQueued = false;
+        reelQueued = false;
         return;
       }
 
@@ -87,11 +100,27 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
         swingQueued = false;
         swingStartMs = timeMs;
       }
+      if (castQueued) {
+        castQueued = false;
+        castStartMs = timeMs;
+      }
+      if (reelQueued) {
+        reelQueued = false;
+        reelStartMs = timeMs;
+      }
       if (miningActive && !wasMining) swingStartMs = timeMs;
       wasMining = miningActive;
 
       const moveFactor = player.onGround ? Math.min(1, Math.hypot(player.velocity.x, player.velocity.z) / WALK_SPEED) : 0;
-      const pose = computePlayerPose({ timeMs, moveFactor, miningActive, swingStartMs });
+      const pose = computePlayerPose({
+        timeMs,
+        moveFactor,
+        miningActive,
+        swingStartMs,
+        castStartMs,
+        reelStartMs,
+        fishingActive: state.fishing !== null
+      });
       model.leftArm.rotation.x = pose.leftArmX;
       model.rightArm.rotation.x = pose.rightArmX;
       model.leftLeg.rotation.x = pose.leftLegX;
@@ -100,6 +129,21 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
 
     triggerSwing() {
       swingQueued = true;
+    },
+
+    triggerCast() {
+      castQueued = true;
+    },
+
+    triggerReel() {
+      reelQueued = true;
+    },
+
+    getRodTip(out) {
+      // Flush the holder's parent chain (group → right arm → holder) so the world
+      // position is current this frame, not one frame stale. Call after sync().
+      model.itemHolder.updateWorldMatrix(true, false);
+      return model.itemHolder.getWorldPosition(out);
     },
 
     setPalette(palette) {

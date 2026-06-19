@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { computePlayerPose, PLAYER_SWING_MS } from "@/lib/game/render/playerPose";
+import { computePlayerPose, PLAYER_CAST_MS, PLAYER_REEL_MS, PLAYER_SWING_MS } from "@/lib/game/render/playerPose";
 
 const idle = { moveFactor: 0, miningActive: false, swingStartMs: -Infinity };
 
@@ -39,5 +39,24 @@ describe("computePlayerPose", () => {
   test("mining loops the chop past the one-shot window", () => {
     const looped = computePlayerPose({ timeMs: PLAYER_SWING_MS * 2.5, ...idle, miningActive: true, swingStartMs: 0 });
     expect(looped.rightArmX).toBeLessThan(-1);
+  });
+
+  test("fishing extends the rod arm forward and returns to rest after a cast/reel", () => {
+    const stance = computePlayerPose({ timeMs: 1234, ...idle, fishingActive: true });
+    expect(stance.rightArmX).toBeLessThan(-1); // held out over the water
+
+    const flick = computePlayerPose({ timeMs: PLAYER_CAST_MS * 0.7, ...idle, fishingActive: true, castStartMs: 0 });
+    expect(flick.rightArmX).toBeLessThan(stance.rightArmX); // flicks further forward
+
+    const reel = computePlayerPose({ timeMs: PLAYER_REEL_MS / 2, ...idle, fishingActive: true, reelStartMs: 0 });
+    expect(reel.rightArmX).toBeGreaterThan(stance.rightArmX); // yanks back up
+
+    // Both one-shots over → only the stance remains.
+    const after = computePlayerPose({ timeMs: PLAYER_CAST_MS * 2, ...idle, fishingActive: true, castStartMs: 0, reelStartMs: 0 });
+    expect(after.rightArmX).toBeCloseTo(stance.rightArmX);
+  });
+
+  test("the fishing arm layers stay off when not fishing", () => {
+    expect(computePlayerPose({ timeMs: 1234, ...idle })).toEqual(computePlayerPose({ timeMs: 1234, ...idle, fishingActive: false }));
   });
 });
