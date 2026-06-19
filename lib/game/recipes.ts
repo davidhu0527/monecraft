@@ -1,3 +1,4 @@
+import { BONE_MEAL_PER_BONE } from "@/lib/game/config";
 import { ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { TRADES } from "@/lib/game/trades";
 import type { ItemKind, Recipe } from "@/lib/game/types";
@@ -24,6 +25,12 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "wood_hoe", count: 1 }
   },
   { id: "bread", label: "3 Wheat -> Bread", cost: [{ slotId: "wheat", count: 3 }], result: { slotId: "bread", count: 1 } },
+  {
+    id: "bone_meal",
+    label: `1 Bone -> ${BONE_MEAL_PER_BONE} Bone Meal`,
+    cost: [{ slotId: "bone", count: 1 }],
+    result: { slotId: "bone_meal", count: BONE_MEAL_PER_BONE }
+  },
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
@@ -128,6 +135,26 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "charcoal", count: 1 }
     ],
     result: { slotId: "cooked_porkchop", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_fish",
+    label: "Raw Fish + Coal -> Cooked Fish",
+    cost: [
+      { slotId: "raw_fish", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "cooked_fish", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_fish_charcoal",
+    label: "Raw Fish + Charcoal -> Cooked Fish",
+    cost: [
+      { slotId: "raw_fish", count: 1 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "cooked_fish", count: 1 },
     station: "furnace"
   },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
@@ -355,6 +382,15 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "string", count: 3 }
     ],
     result: { slotId: "bow", count: 1 }
+  },
+  {
+    id: "fishing_rod",
+    label: "3 Wood + 2 String -> Fishing Rod",
+    cost: [
+      { slotId: "wood", count: 3 },
+      { slotId: "string", count: 2 }
+    ],
+    result: { slotId: "fishing_rod", count: 1 }
   },
   {
     id: "arrow",

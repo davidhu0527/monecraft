@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { BlockId } from "./blocks";
 import { VoxelWorld } from "./voxelWorld";
 import { doorBounds, isDoorBlock } from "./doors";
 
@@ -40,6 +41,67 @@ export function voxelRaycast(world: VoxelWorld, origin: THREE.Vector3, direction
   while (t <= maxDist) {
     if (world.isSolid(x, y, z)) return { hit: new THREE.Vector3(x, y, z), previous, distance: t };
     previous = new THREE.Vector3(x, y, z);
+
+    if (tMaxX < tMaxY) {
+      if (tMaxX < tMaxZ) {
+        x += stepX;
+        t = tMaxX;
+        tMaxX += invDx;
+      } else {
+        z += stepZ;
+        t = tMaxZ;
+        tMaxZ += invDz;
+      }
+    } else if (tMaxY < tMaxZ) {
+      y += stepY;
+      t = tMaxY;
+      tMaxY += invDy;
+    } else {
+      z += stepZ;
+      t = tMaxZ;
+      tMaxZ += invDz;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Marches the ray and returns the first Water cell whose cell above is Air — the
+ * water *surface* the player is aiming at (for casting a fishing bobber). Returns
+ * null if a solid block is hit first (you can't fish through terrain) or no such
+ * water cell is reached within `maxDist`. Mirrors `voxelRaycast`'s DDA; the normal
+ * raycast can't be reused because it treats water as empty and passes through it.
+ */
+export function waterSurfaceRaycast(world: VoxelWorld, origin: THREE.Vector3, direction: THREE.Vector3, maxDist = 7): THREE.Vector3 | null {
+  const dir = direction.clone().normalize();
+  const pos = origin.clone();
+
+  let x = Math.floor(pos.x);
+  let y = Math.floor(pos.y);
+  let z = Math.floor(pos.z);
+
+  const stepX = dir.x > 0 ? 1 : -1;
+  const stepY = dir.y > 0 ? 1 : -1;
+  const stepZ = dir.z > 0 ? 1 : -1;
+
+  const invDx = Math.abs(1 / (dir.x || 1e-6));
+  const invDy = Math.abs(1 / (dir.y || 1e-6));
+  const invDz = Math.abs(1 / (dir.z || 1e-6));
+
+  let tMaxX = ((stepX > 0 ? x + 1 : x) - pos.x) / (dir.x || 1e-6);
+  let tMaxY = ((stepY > 0 ? y + 1 : y) - pos.y) / (dir.y || 1e-6);
+  let tMaxZ = ((stepZ > 0 ? z + 1 : z) - pos.z) / (dir.z || 1e-6);
+  if (tMaxX < 0) tMaxX += invDx;
+  if (tMaxY < 0) tMaxY += invDy;
+  if (tMaxZ < 0) tMaxZ += invDz;
+
+  let t = 0;
+  while (t <= maxDist) {
+    if (world.isSolid(x, y, z)) return null; // terrain blocks the cast
+    if (world.get(x, y, z) === BlockId.Water && world.get(x, y + 1, z) === BlockId.Air) {
+      return new THREE.Vector3(x, y, z);
+    }
 
     if (tMaxX < tMaxY) {
       if (tMaxX < tMaxZ) {

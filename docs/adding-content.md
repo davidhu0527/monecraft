@@ -20,7 +20,10 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
   spears get one for free when named `<material>_pickaxe`, `<material>_sword`, or
   `<material>_spear` and the material exists in `MATERIAL_PALETTES`;
   food/material items need a 16×16 grid + palette in `ITEM_SPRITE_GRIDS`. The
-  sprite integrity test rejects placeholder fallbacks.
+  sprite integrity test rejects placeholder fallbacks. A **tool with a non-material
+  prefix** (e.g. `fishing_rod`) must either add a `MATERIAL_PALETTES` entry or use a
+  custom `ITEM_SPRITE_GRIDS` grid AND be listed in the `customGrid` exempt set in
+  `spritePixels.test.ts` — otherwise the tool-prefix-palette test fails.
 - Any item with `maxDurability` is automatically non-stackable. Spears also set
   `meleeReach` and `throwDamage`; `systems/spears.ts` handles throwing.
 - `ITEM_DEF_BY_ID` is derived from `ITEM_DEFS`; never edit it directly.
@@ -87,7 +90,15 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 - Block updates that happen "over time" run through `lib/game/engine/systems/randomTicks.ts`: every `RANDOM_TICK_INTERVAL_SECONDS` it samples `RANDOM_TICK_SAMPLES` columns within `RANDOM_TICK_RADIUS` of the player and runs a handler on each column's top block. Register a `BlockId → handler` in `RANDOM_TICK_HANDLERS`; the handler edits via `state.blockChanges` and sets `state.worldMeshDirty`.
 - The crop handler is the reference: wheat stage ids are consecutive, so growth is `block + 1`, and the mature stage has no handler so it stops. Because crops are ordinary block edits, they persist for free via the save's block diff — no new save fields.
-- Tunables live in `config.ts`; the headless test pattern (a minimal `GameState`, a scripted rng that maps a sample onto a known column) is in `randomTicks.test.ts`.
+- Other handlers show the range: `growSapling` checks the block below (only soil matures a sapling) then calls the shared `growTreeAt` (`systems/treeGrowth.ts`); `spreadGrass` reads the four face-neighbour columns' top blocks to re-grass exposed dirt. Both ride `blockChanges`, so they need no save changes either.
+- A growing block also needs the usual block plumbing — a `BlockId` (appended at the end of the enum so saved ids don't shift), `BLOCK_COLORS` + an atlas paint branch (plants reuse the wheat trick: a solid cube painted to read as a plant, so no new geometry), an exhaustive `GROUP_BY_BLOCK` sound entry, and `BREAK_HARDNESS`/`BLOCK_TO_SLOT`/`rollBlockDrops`. A new **material** item (e.g. bone meal) must also get an `ITEM_SPRITE_GRIDS` entry, or the sprite test fails its no-magenta-checker assertion.
+- Tunables live in `config.ts`; the headless test pattern (a minimal `GameState`, a scripted rng that maps a sample onto a known column) is in `randomTicks.test.ts`. Watch the rng cadence: a handler that draws a variable number of times (e.g. a tree's trunk-height roll) shifts the sampler's `n % 3` pattern, so prefer an explicit sequence over `scriptedRng` for those.
+
+## A transient (session-only) entity (projectile, bobber, …)
+
+- Entities that exist only at runtime — arrows, thrown spears, the fishing bobber — live in `GameState` as session fields (an array with a `nextId` counter, or a single nullable field like `state.fishing`). They are **never serialized** (left out of `serialize()`), so they vanish on reload and must be cleared in `respawn()`.
+- Spawn from the held-item action (e.g. `tryFish`/`tryThrowSelectedSpear` in their systems, wired into the `placeBlock`/`attack` precedence in `GameEngine.ts`), advance them in a per-frame `tick*` system called from `GameEngine.step`, and remove them on expiry/collision/cancel.
+- Render by reading the field **directly from engine state** in `GameRenderer.sync` (the snapshot does not carry them) — add a `*Visuals` module mirroring `projectileVisuals.ts`/`bobberVisuals.ts` (create/sync/dispose, freeing its geometry/material). Because nothing is persisted, there is no save-format or worldgen impact.
 
 ## A worldgen structure (houses, dungeons, …)
 

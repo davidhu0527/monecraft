@@ -172,6 +172,31 @@ export const RANDOM_TICK_SAMPLES = 64;
 export const RANDOM_TICK_RADIUS = 32;
 export const CROP_GROWTH_CHANCE = 0.65;
 export const GRASS_SEED_DROP_CHANCE = 0.2;
+// Living world. A sapling matures slower than a crop (a tree is a bigger event):
+// at ~0.12 per sampled tick it takes a few in-range minutes, or instantly with
+// bone meal. LEAVES_SAPLING_DROP_CHANCE is the per-break odds a leaf block yields
+// a sapling (its only drop). GRASS_SPREAD_CHANCE is the per-tick odds an exposed
+// dirt block beside grass re-grasses.
+export const SAPLING_GROWTH_CHANCE = 0.12;
+export const LEAVES_SAPLING_DROP_CHANCE = 0.08;
+export const GRASS_SPREAD_CHANCE = 0.18;
+// Bone meal: how many units one bone grinds into, and how many crop stages a
+// single application advances (a random 1..BONE_MEAL_CROP_STAGES_MAX, like
+// Minecraft); on a sapling it grows the tree instantly.
+export const BONE_MEAL_PER_BONE = 3;
+export const BONE_MEAL_CROP_STAGES_MAX = 2;
+
+// Fishing. Cast a bobber at water within FISHING_REACH; after a random wait in
+// [BITE_MIN, BITE_MAX] the bobber dips for FISHING_BITE_WINDOW_SECONDS — reel in
+// (right-click) during that window to catch, else a new wait begins. The cast is
+// auto-cancelled if the player strays past FISHING_TETHER_DISTANCE from the bobber
+// (or unequips the rod / the water drains). The rod is a durable tool.
+export const FISHING_REACH = 7;
+export const FISHING_BITE_MIN_SECONDS = 2;
+export const FISHING_BITE_MAX_SECONDS = 5;
+export const FISHING_BITE_WINDOW_SECONDS = 1.2;
+export const FISHING_TETHER_DISTANCE = 12;
+export const FISHING_ROD_DURABILITY = 64;
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;

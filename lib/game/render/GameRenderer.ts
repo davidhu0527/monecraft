@@ -12,6 +12,8 @@ import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
 import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
+import { createBobberVisuals, type BobberVisuals } from "./bobberVisuals";
+import { createCaughtItemVisuals, type CaughtItemVisuals } from "./caughtItemVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
@@ -19,6 +21,10 @@ import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 const scratchPose = new THREE.Vector3();
+// First-person rod-tip anchor in camera space (lower-right, well forward of the
+// camera — roughly the far end of the held rod). Tuned by eye; the fishing line
+// is drawn from here. Third person uses the body's hand anchor instead.
+const ROD_TIP_OFFSET = new THREE.Vector3(0.34, -0.18, -0.95);
 
 export type CreateRendererResult = { ok: true; renderer: GameRenderer } | { ok: false; error: string };
 
@@ -79,6 +85,10 @@ export class GameRenderer {
   private readonly mobVisuals: MobVisuals;
   private readonly spearVisuals: SpearVisuals;
   private readonly projectileVisuals: ProjectileVisuals;
+  private readonly bobberVisuals: BobberVisuals;
+  private readonly bobberTip = new THREE.Vector3();
+  private readonly caughtItems: CaughtItemVisuals;
+  private readonly catchTarget = new THREE.Vector3();
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -149,6 +159,8 @@ export class GameRenderer {
     this.mobVisuals = createMobVisuals(this.scene);
     this.spearVisuals = createSpearVisuals(this.scene);
     this.projectileVisuals = createProjectileVisuals(this.scene);
+    this.bobberVisuals = createBobberVisuals(this.scene);
+    this.caughtItems = createCaughtItemVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -173,19 +185,28 @@ export class GameRenderer {
       this.emitFootstepDust(state);
     }
     this.syncCamera(state);
+    // Flush the camera's world matrix now so the first-person rod-tip anchor
+    // (camera.localToWorld below) reads this frame's pose, not the last frame's.
+    this.camera.updateMatrixWorld();
     if (!state.paused) this.precip.sync(state, dtMs, this.camera.position);
     this.syncWorldMesh(state);
     this.heldItem.update(state.inventory[state.selectedSlot], {
       timeMs,
       miningActive: state.mining.targetKey !== "",
       moveFactor: state.player.onGround ? Math.min(1, Math.hypot(state.player.velocity.x, state.player.velocity.z) / WALK_SPEED) : 0,
-      visible: state.cameraMode === "first"
+      visible: state.cameraMode === "first",
+      fishingActive: state.fishing !== null,
+      fishingBiting: state.fishing?.biting ?? false
     });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
     this.spearVisuals.sync(state.thrownSpears);
     this.projectileVisuals.sync(state.projectiles);
+    // Body must sync before the rod-tip read so the third-person hand matrices are fresh.
     this.playerVisuals.sync(state, timeMs);
+    const rodTip = state.cameraMode === "first" ? this.camera.localToWorld(this.bobberTip.copy(ROD_TIP_OFFSET)) : this.playerVisuals.getRodTip(this.bobberTip);
+    this.bobberVisuals.sync(state.fishing, rodTip, dtMs);
+    this.caughtItems.sync(timeMs, this.catchTarget.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z));
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
   }
@@ -283,6 +304,56 @@ export class GameRenderer {
           life: [0.18, 0.4],
           size: 0.1
         });
+        break;
+      case "fishingCast":
+        // The rod flicks forward; the bobber arc itself is driven by state.fishing.
+        this.heldItem.triggerCast();
+        this.playerVisuals.triggerCast();
+        break;
+      case "fishingBite":
+        // A sharp little plume as the fish strikes the bobber.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: 8,
+          color: [0.62, 0.8, 0.96],
+          speed: 1.8,
+          spread: 0.5,
+          gravity: 16,
+          drag: 1.6,
+          upBias: 1.3,
+          life: [0.22, 0.45],
+          size: 0.09,
+          colorJitter: 0.06
+        });
+        break;
+      case "fishingCaught":
+        // A bigger splash as the catch breaks the surface on the reel-in.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: 12,
+          color: [0.7, 0.85, 0.98],
+          speed: 2.4,
+          spread: 0.7,
+          gravity: 16,
+          drag: 1.5,
+          upBias: 1.6,
+          life: [0.25, 0.55],
+          size: 0.1,
+          colorJitter: 0.06
+        });
+        this.heldItem.triggerReel();
+        this.playerVisuals.triggerReel();
+        // The catch flies from the bobber to the player.
+        if (event.items.length > 0) this.caughtItems.spawn(event.items[0].itemId, event.x, event.y, event.z);
+        break;
+      case "fishingReeledEmpty":
+        // No catch, no splash — just the rod's pull-back motion.
+        this.heldItem.triggerReel();
+        this.playerVisuals.triggerReel();
         break;
       case "bossSummoned":
         // A large, dark conjuring column where the boss appears.
@@ -466,6 +537,8 @@ export class GameRenderer {
     this.playerVisuals.dispose();
     this.spearVisuals.dispose();
     this.projectileVisuals.dispose();
+    this.bobberVisuals.dispose();
+    this.caughtItems.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();

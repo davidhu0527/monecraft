@@ -1,5 +1,12 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
-import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS, MAX_STACK_SIZE, SPEAR_MELEE_REACH } from "@/lib/game/config";
+import {
+  FISHING_ROD_DURABILITY,
+  GRASS_SEED_DROP_CHANCE,
+  INVENTORY_SLOTS,
+  LEAVES_SAPLING_DROP_CHANCE,
+  MAX_STACK_SIZE,
+  SPEAR_MELEE_REACH
+} from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
@@ -55,7 +62,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
   [BlockId.Torch]: 1,
-  [BlockId.Tnt]: 1
+  [BlockId.Tnt]: 1,
+  [BlockId.Sapling]: 1
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -88,11 +96,16 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
+  // A durable tool used (via the right-click held-item path) to fish, not to mine —
+  // minePower 0 means it breaks no blocks; it renders from a custom sprite grid.
+  { id: "fishing_rod", label: "Fishing Rod", kind: "tool", minePower: 0, mineTier: 0, maxDurability: FISHING_ROD_DURABILITY },
   { id: "food", label: "Food", kind: "food", hunger: 7 },
   // Mob materials — craft ingredients with no direct use on their own yet.
   { id: "wool", label: "Wool", kind: "material" },
   { id: "feather", label: "Feather", kind: "material" },
   { id: "bone", label: "Bone", kind: "material" },
+  // Ground bone: a fertilizer that instantly grows saplings and advances crops.
+  { id: "bone_meal", label: "Bone Meal", kind: "material" },
   { id: "leather", label: "Leather", kind: "material" },
   { id: "string", label: "String", kind: "material" },
   // Furnace fuels: coal is mined from coal ore, charcoal is smelted from wood.
@@ -110,8 +123,11 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "raw_mutton", label: "Raw Mutton", kind: "food", hunger: 3 },
   { id: "raw_beef", label: "Raw Beef", kind: "food", hunger: 3 },
   { id: "raw_porkchop", label: "Raw Porkchop", kind: "food", hunger: 3 },
+  // Fishing — reeled from water; cooks to a heartier meal at a furnace.
+  { id: "raw_fish", label: "Raw Fish", kind: "food", hunger: 2 },
   // Farming
   { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
+  { id: "sapling", label: "Sapling", kind: "block", blockId: BlockId.Sapling },
   { id: "seeds", label: "Wheat Seeds", kind: "material" },
   { id: "wheat", label: "Wheat", kind: "material" },
   { id: "bread", label: "Bread", kind: "food", hunger: 6 },
@@ -120,6 +136,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "cooked_mutton", label: "Cooked Mutton", kind: "food", hunger: 8 },
   { id: "cooked_beef", label: "Cooked Beef", kind: "food", hunger: 8 },
   { id: "cooked_porkchop", label: "Cooked Porkchop", kind: "food", hunger: 8 },
+  { id: "cooked_fish", label: "Cooked Fish", kind: "food", hunger: 6 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },
@@ -251,7 +268,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Dirt]: "dirt",
   [BlockId.Stone]: "stone",
   [BlockId.Wood]: "wood",
-  [BlockId.Leaves]: "dirt",
+  // Leaves drop only a sapling (by chance) — handled in rollBlockDrops, not here.
   [BlockId.Planks]: "planks",
   [BlockId.Cobblestone]: "cobble",
   [BlockId.Sand]: "sand",
@@ -272,6 +289,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",
+  [BlockId.Sapling]: "sapling",
   [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
@@ -282,8 +300,9 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
 
 /**
  * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
- * grass occasionally also drops a seed (the natural seed source), and mature
- * wheat drops wheat plus 1–2 seeds. `rng` is injectable for deterministic tests.
+ * grass occasionally also drops a seed (the natural seed source), mature wheat
+ * drops wheat plus 1–2 seeds, and leaves occasionally drop a sapling (their only
+ * yield — the renewable tree source). `rng` is injectable for deterministic tests.
  */
 export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
   if (isDoorBlock(block)) return [{ itemId: "door", count: 1 }];
@@ -291,6 +310,9 @@ export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemI
   const base = BLOCK_TO_SLOT[block];
   if (base) drops.push({ itemId: base, count: 1 });
 
+  if (block === BlockId.Leaves && rng() < LEAVES_SAPLING_DROP_CHANCE) {
+    drops.push({ itemId: "sapling", count: 1 });
+  }
   if (block === BlockId.Grass && rng() < GRASS_SEED_DROP_CHANCE) {
     drops.push({ itemId: "seeds", count: 1 });
   }

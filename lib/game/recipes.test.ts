@@ -126,6 +126,53 @@ describe("cooking new meats", () => {
   });
 });
 
+describe("living world recipes", () => {
+  test("bone meal grinds from a single bone in the Materials section", () => {
+    const r = recipe("bone_meal");
+    expect(r.station).toBeUndefined();
+    expect(recipeCategory(r)).toBe("Materials");
+    const slots = inventory([["bone", 1]]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("bone_meal")).toBe(r.result.count);
+  });
+});
+
+describe("fishing recipes", () => {
+  test("a fishing rod crafts from wood and string in the Tools section", () => {
+    const r = recipe("fishing_rod");
+    expect(recipeCategory(r)).toBe("Tools");
+    const slots = inventory([
+      ["wood", 3],
+      ["string", 2]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("fishing_rod")).toBe(1);
+  });
+
+  test("raw fish smelts into cooked fish with coal (or charcoal) at a furnace", () => {
+    const r = recipe("cook_fish");
+    expect(r.station).toBe("furnace");
+    expect(recipeCategory(r)).toBe("Smelting");
+    const slots = inventory([
+      ["raw_fish", 1],
+      ["coal", 1]
+    ]);
+    expect(canCraft(slots, r)).toBe(true);
+    expect(countsById(craft(slots, r)!).get("cooked_fish")).toBe(1);
+    expect(
+      countsById(
+        craft(
+          inventory([
+            ["raw_fish", 1],
+            ["charcoal", 1]
+          ]),
+          recipe("cook_fish_charcoal")
+        )!
+      ).get("cooked_fish")
+    ).toBe(1);
+  });
+});
+
 describe("coal & fuel economy", () => {
   test("charcoal smelts from a single wood at a furnace", () => {
     const r = recipe("charcoal");

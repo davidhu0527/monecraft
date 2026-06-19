@@ -115,6 +115,11 @@ describe("block drop rolls", () => {
   test("immature wheat returns just a seed", () => {
     expect(rollBlockDrops(BlockId.WheatStage1, () => 0.5)).toEqual([{ itemId: "seeds", count: 1 }]);
   });
+
+  test("leaves drop a sapling on a low roll, nothing on a high roll", () => {
+    expect(rollBlockDrops(BlockId.Leaves, () => 0)).toEqual([{ itemId: "sapling", count: 1 }]);
+    expect(rollBlockDrops(BlockId.Leaves, () => 0.99)).toEqual([]);
+  });
 });
 
 describe("slot factories", () => {

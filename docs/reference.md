@@ -23,7 +23,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**54 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**58 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the nine **furnace** smelting
 recipes, which need an open furnace.
 
@@ -45,12 +45,14 @@ can currently afford first within each section.
 | 1 Bed       | 3 Wool + 3 Planks    |
 | 1 Wool      | 4 String             |
 | 1 TNT       | 4 Gunpowder + 1 Sand |
+| 3 Bone Meal | 1 Bone               |
 
 ### Tools
 
 | Result           | Ingredients             |
 | ---------------- | ----------------------- |
 | Wood Hoe         | 2 Planks + 1 Wood       |
+| Fishing Rod      | 3 Wood + 2 String       |
 | Wood Pickaxe     | 2 Planks + 2 Wood       |
 | Stone Pickaxe    | 2 Cobble + 1 Wood       |
 | Sliver Pickaxe   | 2 Sliver Ore + 1 Wood   |
@@ -112,10 +114,11 @@ player who hasn't found coal can still cook.
 | Cooked Mutton   | Raw Mutton + Fuel   | Furnace |
 | Cooked Beef     | Raw Beef + Fuel     | Furnace |
 | Cooked Porkchop | Raw Porkchop + Fuel | Furnace |
+| Cooked Fish     | Raw Fish + Fuel     | Furnace |
 
 ## Blocks
 
-**32 block types** (plus air). Hardness is relative break time — higher is slower.
+**33 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
@@ -125,7 +128,7 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Dirt              | 2        | any             | —                                                                                                                     |
 | Sand              | 2        | any             | Common on beaches and in deserts                                                                                      |
 | Snow              | 2        | any             | Mountain peaks                                                                                                        |
-| Leaves            | 2        | any             | From trees; drops dirt                                                                                                |
+| Leaves            | 2        | any             | From trees; drops a sapling ~8% of the time, else nothing                                                             |
 | Cactus            | 2        | any             | Desert decoration                                                                                                     |
 | Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                  |
 | Wood              | 3        | any             | Tree trunks                                                                                                           |
@@ -151,6 +154,7 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                              |
 | Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                         |
 | Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                  |
+| Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                          |
 | Bedrock           | —        | unbreakable     | World floor and border                                                                                                |
 | Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second          |
 
@@ -219,6 +223,7 @@ immune to the daylight burn.
 | Item             | Mine power | Tier | Durability |
 | ---------------- | ---------- | ---- | ---------- |
 | Wood Hoe         | 1.0        | 0    | 90         |
+| Fishing Rod      | 0 (fishes) | 0    | 64         |
 | Wood Pickaxe     | 1.05       | 1    | 70         |
 | Stone Pickaxe    | 1.55       | 2    | 140        |
 | Sliver Pickaxe   | 2.2        | 3    | 240        |
@@ -285,20 +290,24 @@ always deals at least 1).
 | Cooked Beef     | 8               | Smelt raw beef     |
 | Cooked Porkchop | 8               | Smelt raw porkchop |
 | Food            | 7               | Generic food item  |
+| Cooked Fish     | 6               | Smelt raw fish     |
 | Bread           | 6               | Craft from 3 wheat |
 | Raw Chicken     | 3               | Chicken drop       |
 | Raw Mutton      | 3               | Sheep drop         |
 | Raw Beef        | 3               | Cow drop           |
 | Raw Porkchop    | 3               | Pig drop           |
+| Raw Fish        | 2               | Reel in by fishing |
 | Rotten Flesh    | 2               | Zombie drop        |
 
 ### Materials
 
 Crafting ingredients with no direct use on their own: **Wool**, **Feather**,
 **Bone**, **Leather**, **String** (mob drops), and **Wheat Seeds** / **Wheat**
-(from farming and grass). Fuels: **Coal** (mined from coal ore) and **Charcoal**
-(smelted from wood) — interchangeable for smelting and torches. **Gunpowder**
-(creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
+(from farming and grass). **Bone Meal** (ground from a bone, 1 → 3) is a
+fertilizer: right-click it on a sapling to grow the tree instantly, or on
+immature wheat to advance it 1–2 stages. Fuels: **Coal** (mined from coal ore)
+and **Charcoal** (smelted from wood) — interchangeable for smelting and torches.
+**Gunpowder** (creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
 Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
 boss drop that crafts the Dragon Sword).
