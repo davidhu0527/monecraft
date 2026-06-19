@@ -28,6 +28,8 @@ export type PlayerVisuals = {
   sync(state: PlayerVisualsState, timeMs: number): void;
   /** Queues a one-shot arm swing (attack click); latched on the next sync. */
   triggerSwing(): void;
+  /** World position of the third-person rod tip (hand anchor) — for the fishing line origin. */
+  getRodTip(out: THREE.Vector3): THREE.Vector3;
   /** Recolors the body in place (skin preset change) — live-safe. */
   setPalette(palette: PlayerPalette): void;
   dispose(): void;
@@ -100,6 +102,13 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
 
     triggerSwing() {
       swingQueued = true;
+    },
+
+    getRodTip(out) {
+      // Flush the holder's parent chain (group → right arm → holder) so the world
+      // position is current this frame, not one frame stale. Call after sync().
+      model.itemHolder.updateWorldMatrix(true, false);
+      return model.itemHolder.getWorldPosition(out);
     },
 
     setPalette(palette) {
