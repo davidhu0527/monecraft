@@ -7,4 +7,4 @@ export { isWorldType, WORLD_TYPE_IDS, type WorldType } from "./worldTypes";
 export { buildGeometryLayersRegion, buildGeometryRegion, type GeometryLayers } from "./meshing";
 export { applyEdit, blockLightAt, computeFullLight, emission, isLightBlocker, MAX_LIGHT, opacity, skyLightAt } from "./lighting";
 export { createBlockAtlasTexture } from "./atlas";
-export { collidesAt, hasSupportUnderPlayer, voxelRaycast, type RaycastResult } from "./queries";
+export { collidesAt, hasSupportUnderPlayer, voxelRaycast, waterSurfaceRaycast, type RaycastResult } from "./queries";

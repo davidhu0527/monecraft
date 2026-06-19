@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { BlockId, VoxelWorld, collidesAt, hasSupportUnderPlayer, voxelRaycast } from "@/lib/world";
+import { BlockId, VoxelWorld, collidesAt, hasSupportUnderPlayer, voxelRaycast, waterSurfaceRaycast } from "@/lib/world";
 import { createSurfaceYAt } from "@/lib/game/spawn";
 
 function emptyWorld(): VoxelWorld {
@@ -71,6 +71,42 @@ describe("voxelRaycast", () => {
     const result = voxelRaycast(world, new THREE.Vector3(5.5, 2.5, 5.5), new THREE.Vector3(0, 1, 0), 10);
     expect(result).not.toBeNull();
     expect(result!.hit.toArray()).toEqual([5, 8, 5]);
+  });
+});
+
+describe("waterSurfaceRaycast", () => {
+  // A water column with air above it at x=8; the player looks along +x from x=2.5.
+  function waterWorld(): VoxelWorld {
+    const world = emptyWorld();
+    world.set(8, 5, 5, BlockId.Water); // surface cell (air above by default)
+    world.set(8, 4, 5, BlockId.Water); // deeper water
+    return world;
+  }
+
+  test("returns the first water-surface cell along the ray", () => {
+    const hit = waterSurfaceRaycast(waterWorld(), new THREE.Vector3(2.5, 5.5, 5.5), new THREE.Vector3(1, 0, 0), 10);
+    expect(hit).not.toBeNull();
+    expect(hit!.toArray()).toEqual([8, 5, 5]);
+  });
+
+  test("returns null when a solid block blocks the way to the water", () => {
+    const world = waterWorld();
+    world.set(5, 5, 5, BlockId.Stone); // wall between the player and the water
+    expect(waterSurfaceRaycast(world, new THREE.Vector3(2.5, 5.5, 5.5), new THREE.Vector3(1, 0, 0), 10)).toBeNull();
+  });
+
+  test("returns null when no water is within reach", () => {
+    expect(waterSurfaceRaycast(emptyWorld(), new THREE.Vector3(2.5, 5.5, 5.5), new THREE.Vector3(1, 0, 0), 10)).toBeNull();
+  });
+
+  test("skips a submerged water cell whose cell above is also water", () => {
+    // Aiming at the deeper cell (y=4) along its row still finds nothing: it has
+    // water above, so it is not a surface. Only the y=5 surface cell qualifies.
+    const world = emptyWorld();
+    world.set(8, 4, 5, BlockId.Water);
+    world.set(8, 5, 5, BlockId.Water);
+    const hit = waterSurfaceRaycast(world, new THREE.Vector3(2.5, 4.5, 5.5), new THREE.Vector3(1, 0, 0), 10);
+    expect(hit).toBeNull();
   });
 });
 
