@@ -23,7 +23,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**55 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**58 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the nine **furnace** smelting
 recipes, which need an open furnace.
 
@@ -52,6 +52,7 @@ can currently afford first within each section.
 | Result           | Ingredients             |
 | ---------------- | ----------------------- |
 | Wood Hoe         | 2 Planks + 1 Wood       |
+| Fishing Rod      | 3 Wood + 2 String       |
 | Wood Pickaxe     | 2 Planks + 2 Wood       |
 | Stone Pickaxe    | 2 Cobble + 1 Wood       |
 | Sliver Pickaxe   | 2 Sliver Ore + 1 Wood   |
@@ -113,6 +114,7 @@ player who hasn't found coal can still cook.
 | Cooked Mutton   | Raw Mutton + Fuel   | Furnace |
 | Cooked Beef     | Raw Beef + Fuel     | Furnace |
 | Cooked Porkchop | Raw Porkchop + Fuel | Furnace |
+| Cooked Fish     | Raw Fish + Fuel     | Furnace |
 
 ## Blocks
 
@@ -221,6 +223,7 @@ immune to the daylight burn.
 | Item             | Mine power | Tier | Durability |
 | ---------------- | ---------- | ---- | ---------- |
 | Wood Hoe         | 1.0        | 0    | 90         |
+| Fishing Rod      | 0 (fishes) | 0    | 64         |
 | Wood Pickaxe     | 1.05       | 1    | 70         |
 | Stone Pickaxe    | 1.55       | 2    | 140        |
 | Sliver Pickaxe   | 2.2        | 3    | 240        |
@@ -287,11 +290,13 @@ always deals at least 1).
 | Cooked Beef     | 8               | Smelt raw beef     |
 | Cooked Porkchop | 8               | Smelt raw porkchop |
 | Food            | 7               | Generic food item  |
+| Cooked Fish     | 6               | Smelt raw fish     |
 | Bread           | 6               | Craft from 3 wheat |
 | Raw Chicken     | 3               | Chicken drop       |
 | Raw Mutton      | 3               | Sheep drop         |
 | Raw Beef        | 3               | Cow drop           |
 | Raw Porkchop    | 3               | Pig drop           |
+| Raw Fish        | 2               | Reel in by fishing |
 | Rotten Flesh    | 2               | Zombie drop        |
 
 ### Materials

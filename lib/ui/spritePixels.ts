@@ -321,6 +321,26 @@ const BOW_GRID = [
   "................"
 ];
 
+// A diagonal wooden rod (r/R) with a taut line (l) and a red bobber (o).
+const FISHING_ROD_GRID = [
+  "............rr..",
+  "...........rrl..",
+  "..........rr.l..",
+  ".........rr..l..",
+  "........rr...l..",
+  ".......rr....o..",
+  "......rr........",
+  ".....rr.........",
+  "....rr..........",
+  "...rr...........",
+  "..rR............",
+  ".rR.............",
+  ".R..............",
+  "................",
+  "................",
+  "................"
+];
+
 // A carved totem skull on a dark plinth — the boss-summon item.
 const SUMMONER_GRID = [
   "................",
@@ -394,6 +414,27 @@ const RAW_MEAT_GRID = [
   "...mMrrrrMm.....",
   "....mMMMMm......",
   ".....mmmm.......",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
+// A left-facing fish: silvery body (m), dark tail/fin (M), a bright eye (l).
+// Recolored for raw (silver-blue) and cooked (golden-brown).
+const FISH_GRID = [
+  "................",
+  "................",
+  "................",
+  ".....mmmm.......",
+  "...mmmmmmmm.M...",
+  "..mmlmmmmmmmMM..",
+  ".mmmmmmmmmmmmMMM",
+  ".mmmmmmmmmmmmMM.",
+  "..mmmmmmmmmmMMM.",
+  "...mmmmmmmm.M...",
+  ".....mmmm.......",
+  "................",
   "................",
   "................",
   "................",
@@ -622,6 +663,9 @@ const RAW_BEEF_PALETTE: PixelPalette = { m: [164, 60, 56], M: [110, 34, 32], r: 
 const COOKED_BEEF_PALETTE: PixelPalette = { m: [120, 70, 44], M: [76, 42, 24], r: [112, 64, 40], w: [160, 110, 72] };
 const RAW_PORKCHOP_PALETTE: PixelPalette = { m: [232, 168, 168], M: [196, 120, 120], r: [240, 150, 154], w: [248, 214, 210] };
 const COOKED_PORKCHOP_PALETTE: PixelPalette = { m: [196, 138, 84], M: [142, 92, 48], r: [188, 128, 78], w: [224, 184, 132] };
+const RAW_FISH_PALETTE: PixelPalette = { m: [150, 170, 192], M: [96, 116, 140], l: [238, 240, 246] };
+const COOKED_FISH_PALETTE: PixelPalette = { m: [202, 150, 92], M: [150, 100, 55], l: [235, 212, 170] };
+const FISHING_ROD_PALETTE: PixelPalette = { r: [164, 116, 62], R: [104, 72, 37], l: [224, 224, 228], o: [208, 60, 52] };
 const COAL_PALETTE: PixelPalette = { c: [28, 28, 32], C: [10, 10, 12], h: [64, 64, 70] };
 const CHARCOAL_PALETTE: PixelPalette = { c: [54, 50, 46], C: [30, 28, 26], h: [92, 86, 78] };
 const GUNPOWDER_PALETTE: PixelPalette = { c: [120, 120, 126], C: [78, 78, 84], h: [168, 168, 174] };
@@ -688,6 +732,9 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   cooked_beef: { grid: RAW_MEAT_GRID, palette: COOKED_BEEF_PALETTE },
   raw_porkchop: { grid: RAW_MEAT_GRID, palette: RAW_PORKCHOP_PALETTE },
   cooked_porkchop: { grid: RAW_MEAT_GRID, palette: COOKED_PORKCHOP_PALETTE },
+  raw_fish: { grid: FISH_GRID, palette: RAW_FISH_PALETTE },
+  cooked_fish: { grid: FISH_GRID, palette: COOKED_FISH_PALETTE },
+  fishing_rod: { grid: FISHING_ROD_GRID, palette: FISHING_ROD_PALETTE },
   seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
   wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
   bread: { grid: BREAD_GRID, palette: BREAD_PALETTE },

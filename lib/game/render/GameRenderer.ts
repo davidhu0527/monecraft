@@ -12,6 +12,7 @@ import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
 import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
+import { createBobberVisuals, type BobberVisuals } from "./bobberVisuals";
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
@@ -79,6 +80,8 @@ export class GameRenderer {
   private readonly mobVisuals: MobVisuals;
   private readonly spearVisuals: SpearVisuals;
   private readonly projectileVisuals: ProjectileVisuals;
+  private readonly bobberVisuals: BobberVisuals;
+  private readonly bobberEye = new THREE.Vector3();
   private readonly playerVisuals: PlayerVisuals;
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
@@ -149,6 +152,7 @@ export class GameRenderer {
     this.mobVisuals = createMobVisuals(this.scene);
     this.spearVisuals = createSpearVisuals(this.scene);
     this.projectileVisuals = createProjectileVisuals(this.scene);
+    this.bobberVisuals = createBobberVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
@@ -185,6 +189,7 @@ export class GameRenderer {
     this.mobVisuals.sync(state.mobs, timeMs);
     this.spearVisuals.sync(state.thrownSpears);
     this.projectileVisuals.sync(state.projectiles);
+    this.bobberVisuals.sync(state.fishing, this.bobberEye.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z));
     this.playerVisuals.sync(state, timeMs);
     this.sky.sync(state, timeMs);
     this.syncDayNight(state);
@@ -282,6 +287,42 @@ export class GameRenderer {
           drag: 1.8,
           life: [0.18, 0.4],
           size: 0.1
+        });
+        break;
+      case "fishingBite":
+        // A sharp little plume as the fish strikes the bobber.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: 8,
+          color: [0.62, 0.8, 0.96],
+          speed: 1.8,
+          spread: 0.5,
+          gravity: 16,
+          drag: 1.6,
+          upBias: 1.3,
+          life: [0.22, 0.45],
+          size: 0.09,
+          colorJitter: 0.06
+        });
+        break;
+      case "fishingCaught":
+        // A bigger splash as the catch breaks the surface on the reel-in.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y,
+          z: event.z,
+          count: 12,
+          color: [0.7, 0.85, 0.98],
+          speed: 2.4,
+          spread: 0.7,
+          gravity: 16,
+          drag: 1.5,
+          upBias: 1.6,
+          life: [0.25, 0.55],
+          size: 0.1,
+          colorJitter: 0.06
         });
         break;
       case "bossSummoned":
@@ -466,6 +507,7 @@ export class GameRenderer {
     this.playerVisuals.dispose();
     this.spearVisuals.dispose();
     this.projectileVisuals.dispose();
+    this.bobberVisuals.dispose();
     this.mobVisuals.dispose();
     this.crackOverlay.dispose();
     this.heldItem.dispose();

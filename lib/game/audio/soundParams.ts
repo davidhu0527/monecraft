@@ -1006,6 +1006,77 @@ export const BONE_MEAL_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** A whoosh into a soft plop as the bobber lands on the water. */
+export const FISHING_CAST_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.45,
+    randomness: 0.25,
+    frequency: 300,
+    sustain: 0.02,
+    release: 0.12,
+    shape: 0,
+    slide: -3,
+    noise: 0.6,
+    sustainVolume: 0.5,
+    decay: 0.04,
+    filter: -200
+  }),
+  minRetriggerMs: 120
+};
+
+/** A wet plip as a fish takes the bobber under. */
+export const FISHING_BITE_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.3,
+    frequency: 520,
+    sustain: 0.01,
+    release: 0.08,
+    shape: 0,
+    pitchJump: -220,
+    pitchJumpTime: 0.03,
+    noise: 0.5,
+    sustainVolume: 0.5,
+    decay: 0.02
+  }),
+  minRetriggerMs: 120
+};
+
+/** A bright rising reel as the catch comes in. */
+export const FISHING_CATCH_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.1,
+    frequency: 480,
+    sustain: 0.03,
+    release: 0.14,
+    shape: 1,
+    pitchJump: 260,
+    pitchJumpTime: 0.06,
+    repeatTime: 0.05,
+    sustainVolume: 0.6,
+    decay: 0.03
+  }),
+  minRetriggerMs: 120
+};
+
+/** A soft retract when the line is reeled in with nothing on it. */
+export const FISHING_REEL_EMPTY_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.35,
+    randomness: 0.2,
+    frequency: 220,
+    sustain: 0.02,
+    release: 0.08,
+    shape: 0,
+    slide: 1,
+    sustainVolume: 0.5,
+    decay: 0.03,
+    filter: -300
+  }),
+  minRetriggerMs: 120
+};
+
 /** Soft munch when an animal is fed. */
 export const MOB_FED_SOUND: SoundDef = {
   params: zz({

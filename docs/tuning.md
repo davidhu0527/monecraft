@@ -195,6 +195,24 @@ longer. Bone meal short-circuits the wait: `BONE_MEAL_PER_BONE` (3) is the grind
 yield, and one application advances a crop a random `1..BONE_MEAL_CROP_STAGES_MAX`
 (2) stages or grows a sapling instantly.
 
+## Fishing
+
+`FISHING_REACH`, `FISHING_BITE_MIN_SECONDS`, `FISHING_BITE_MAX_SECONDS`,
+`FISHING_BITE_WINDOW_SECONDS`, `FISHING_TETHER_DISTANCE`, `FISHING_ROD_DURABILITY`.
+
+Read by `systems/fishing.ts`. `FISHING_REACH` (7) is how far water can be to cast,
+matching mining reach. The wait before a bite is a uniform random in
+`[FISHING_BITE_MIN_SECONDS, FISHING_BITE_MAX_SECONDS]` (2–5 s) — widen it for a
+slower, more patient rhythm. Note the wait is also the throttle on the whole catch
+table, so shortening it raises the rate of the rare treasure too; drop the emerald
+weight in `FISHING_LOOT` if you make bites much faster. `FISHING_BITE_WINDOW_SECONDS` (1.2) is the reaction
+window to reel in once the bobber dips: lower it to demand sharper timing, raise it
+to be forgiving. `FISHING_TETHER_DISTANCE` (12) auto-cancels a cast if the player
+strays past it. `FISHING_ROD_DURABILITY` (64, in `items.ts` via this constant) is
+how many catches a rod lands before breaking — only a successful reel wears it.
+The catch odds live in the weighted `FISHING_LOOT` table in `lib/game/fishingLoot.ts`,
+not here.
+
 ## Beds & sleep
 
 `SLEEP_ALLOWED_BELOW_DAYLIGHT`, `SLEEP_HOSTILE_RADIUS`, `SLEEP_FADE_SECONDS`,

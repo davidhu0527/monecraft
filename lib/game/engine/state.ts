@@ -88,6 +88,17 @@ export type ThrownSpearState = {
   stuckTimer: number | null;
 };
 
+/**
+ * The one active fishing cast — session-only, never serialized (like projectiles).
+ * `timer` counts down to the next state change: while `!biting` it's the wait for a
+ * bite; once `biting` it's the reel window before the catch gets away.
+ */
+export type FishingState = {
+  position: THREE.Vector3;
+  timer: number;
+  biting: boolean;
+};
+
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
 export type DebugInfo = {
   x: number;
@@ -165,6 +176,8 @@ export type GameState = {
   /** In-flight arrows (session-only; never serialized). */
   projectiles: ProjectileState[];
   nextProjectileId: number;
+  /** The active fishing cast, or null when not fishing (session-only). */
+  fishing: FishingState | null;
   dayClock: number;
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
@@ -292,6 +305,10 @@ export type GameEvent =
   | { type: "plantedSeed" }
   | { type: "plantedSapling" }
   | { type: "usedBoneMeal" }
+  | { type: "fishingCast"; x: number; y: number; z: number }
+  | { type: "fishingBite"; x: number; y: number; z: number }
+  | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
+  | { type: "fishingReeledEmpty" }
   | { type: "openedStation"; station: "furnace" | "villager" }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }

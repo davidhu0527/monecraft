@@ -137,6 +137,26 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "cooked_porkchop", count: 1 },
     station: "furnace"
   },
+  {
+    id: "cook_fish",
+    label: "Raw Fish + Coal -> Cooked Fish",
+    cost: [
+      { slotId: "raw_fish", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "cooked_fish", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "cook_fish_charcoal",
+    label: "Raw Fish + Charcoal -> Cooked Fish",
+    cost: [
+      { slotId: "raw_fish", count: 1 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "cooked_fish", count: 1 },
+    station: "furnace"
+  },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   {
     id: "tnt",
@@ -362,6 +382,15 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "string", count: 3 }
     ],
     result: { slotId: "bow", count: 1 }
+  },
+  {
+    id: "fishing_rod",
+    label: "3 Wood + 2 String -> Fishing Rod",
+    cost: [
+      { slotId: "wood", count: 3 },
+      { slotId: "string", count: 2 }
+    ],
+    result: { slotId: "fishing_rod", count: 1 }
   },
   {
     id: "arrow",

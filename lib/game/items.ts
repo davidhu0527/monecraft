@@ -1,5 +1,12 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
-import { GRASS_SEED_DROP_CHANCE, INVENTORY_SLOTS, LEAVES_SAPLING_DROP_CHANCE, MAX_STACK_SIZE, SPEAR_MELEE_REACH } from "@/lib/game/config";
+import {
+  FISHING_ROD_DURABILITY,
+  GRASS_SEED_DROP_CHANCE,
+  INVENTORY_SLOTS,
+  LEAVES_SAPLING_DROP_CHANCE,
+  MAX_STACK_SIZE,
+  SPEAR_MELEE_REACH
+} from "@/lib/game/config";
 import type { ArmorSlot, EquippedArmor, InventorySlot, ItemDef } from "@/lib/game/types";
 
 export const ARMOR_SLOTS: ArmorSlot[] = ["helmet", "face_mask", "neck_protection", "chestplate", "leggings", "boots"];
@@ -89,6 +96,9 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
+  // A durable tool used (via the right-click held-item path) to fish, not to mine —
+  // minePower 0 means it breaks no blocks; it renders from a custom sprite grid.
+  { id: "fishing_rod", label: "Fishing Rod", kind: "tool", minePower: 0, mineTier: 0, maxDurability: FISHING_ROD_DURABILITY },
   { id: "food", label: "Food", kind: "food", hunger: 7 },
   // Mob materials — craft ingredients with no direct use on their own yet.
   { id: "wool", label: "Wool", kind: "material" },
@@ -113,6 +123,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "raw_mutton", label: "Raw Mutton", kind: "food", hunger: 3 },
   { id: "raw_beef", label: "Raw Beef", kind: "food", hunger: 3 },
   { id: "raw_porkchop", label: "Raw Porkchop", kind: "food", hunger: 3 },
+  // Fishing — reeled from water; cooks to a heartier meal at a furnace.
+  { id: "raw_fish", label: "Raw Fish", kind: "food", hunger: 2 },
   // Farming
   { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
   { id: "sapling", label: "Sapling", kind: "block", blockId: BlockId.Sapling },
@@ -124,6 +136,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "cooked_mutton", label: "Cooked Mutton", kind: "food", hunger: 8 },
   { id: "cooked_beef", label: "Cooked Beef", kind: "food", hunger: 8 },
   { id: "cooked_porkchop", label: "Cooked Porkchop", kind: "food", hunger: 8 },
+  { id: "cooked_fish", label: "Cooked Fish", kind: "food", hunger: 6 },
   { id: "knife", label: "Knife", kind: "weapon", attack: 9, maxDurability: 50 },
   { id: "wood_sword", label: "Wood Sword", kind: "weapon", attack: 13, maxDurability: 80 },
   { id: "stone_sword", label: "Stone Sword", kind: "weapon", attack: 18, maxDurability: 160 },

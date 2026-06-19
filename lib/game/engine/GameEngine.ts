@@ -57,6 +57,7 @@ import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
+import { tickFishing, tryFish } from "./systems/fishing";
 import { tickMobs } from "./systems/mobAI";
 import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
@@ -158,6 +159,7 @@ export class GameEngine {
       nextThrownSpearId: 1,
       projectiles: [],
       nextProjectileId: 1,
+      fishing: null,
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
@@ -256,6 +258,7 @@ export class GameEngine {
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
+    tickFishing(state, dt, this.rng, this.emit);
     tickDayNight(state, dt);
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
@@ -334,6 +337,7 @@ export class GameEngine {
         if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
+        if (tryFish(state, this.emit, this.rng)) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
         break;
@@ -576,6 +580,7 @@ export class GameEngine {
     state.player.pitch = 0;
     resetMining(state);
     state.thrownSpears = [];
+    state.fishing = null;
     state.worldMeshDirty = true;
     this.events.push({ type: "respawned" });
   }
