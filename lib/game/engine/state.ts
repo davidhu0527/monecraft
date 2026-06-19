@@ -305,9 +305,9 @@ export type GameEvent =
   | { type: "plantedSeed" }
   | { type: "plantedSapling" }
   | { type: "usedBoneMeal" }
-  | { type: "fishingCast" }
-  | { type: "fishingBite" }
-  | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }> }
+  | { type: "fishingCast"; x: number; y: number; z: number }
+  | { type: "fishingBite"; x: number; y: number; z: number }
+  | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
   | { type: "openedStation"; station: "furnace" | "villager" }
   | { type: "openedContainer" }

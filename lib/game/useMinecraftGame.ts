@@ -263,6 +263,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
         }
+        if (event.type === "fishingCaught") {
+          // Common fish/junk stay diegetic (splash + sound); only the rare treasure earns a toast.
+          const treasure = event.items.find((drop) => drop.itemId === "emerald");
+          if (treasure) flashMessage(`Reeled in treasure: ${ITEM_DEF_BY_ID[treasure.itemId]?.label ?? treasure.itemId}!`);
+        }
         if (event.type === "summonFailed") {
           flashMessage("The totem lies dormant — a beast already walks");
         }

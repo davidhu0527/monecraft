@@ -37,11 +37,12 @@ export function tryFish(state: GameState, emit: EmitGameEvent, rng: () => number
   if (state.fishing) {
     if (state.fishing.biting) {
       const items = rollFishingCatch(rng);
+      const { x, y, z } = state.fishing.position;
       for (const drop of items) {
         state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
       }
       state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
-      emit({ type: "fishingCaught", items });
+      emit({ type: "fishingCaught", items, x, y, z });
     } else {
       emit({ type: "fishingReeledEmpty" });
     }
@@ -55,12 +56,9 @@ export function tryFish(state: GameState, emit: EmitGameEvent, rng: () => number
   const cell = waterSurfaceRaycast(world, scratchEye, scratchDir, FISHING_REACH);
   if (!cell) return true; // the rod still claims the click; there's just no water to cast at
 
-  state.fishing = {
-    position: new THREE.Vector3(cell.x + 0.5, cell.y + 1, cell.z + 0.5),
-    timer: nextBiteDelay(rng),
-    biting: false
-  };
-  emit({ type: "fishingCast" });
+  const position = new THREE.Vector3(cell.x + 0.5, cell.y + 1, cell.z + 0.5);
+  state.fishing = { position, timer: nextBiteDelay(rng), biting: false };
+  emit({ type: "fishingCast", x: position.x, y: position.y, z: position.z });
   return true;
 }
 
@@ -96,6 +94,6 @@ export function tickFishing(state: GameState, dt: number, rng: () => number, emi
   } else {
     fishing.biting = true;
     fishing.timer = FISHING_BITE_WINDOW_SECONDS;
-    emit({ type: "fishingBite" });
+    emit({ type: "fishingBite", x: fishing.position.x, y: fishing.position.y, z: fishing.position.z });
   }
 }

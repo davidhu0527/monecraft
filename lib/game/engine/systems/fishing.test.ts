@@ -38,7 +38,12 @@ describe("fishing", () => {
     expect(tryFish(state, emit, () => 0.5)).toBe(true);
     expect(state.fishing).not.toBeNull();
     expect(state.fishing!.biting).toBe(false);
-    expect(events.some((e) => e.type === "fishingCast")).toBe(true);
+    // The cast event carries the bobber position (drives the splash particle).
+    expect(events.find((e) => e.type === "fishingCast")).toMatchObject({
+      x: state.fishing!.position.x,
+      y: state.fishing!.position.y,
+      z: state.fishing!.position.z
+    });
   });
 
   test("aiming the rod away from water consumes the click but starts no cast", () => {
@@ -78,7 +83,7 @@ describe("fishing", () => {
     expect(countsById(state.inventory).get("raw_fish")).toBe(1);
     expect(state.inventory[0].durability).toBe(state.inventory[0].maxDurability! - 1);
     expect(state.fishing).toBeNull();
-    expect(events.some((e) => e.type === "fishingCaught")).toBe(true);
+    expect(events.find((e) => e.type === "fishingCaught")).toMatchObject({ x: 8.5, y: 8, z: 5.5 });
   });
 
   test("reeling with no bite comes back empty", () => {
