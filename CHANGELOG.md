@@ -37,6 +37,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 
 - **A corrupt save no longer loads a broken world**: the player position is validated on load (`restorePlayerPosition` in `lib/game/save.ts`) — a missing or non-finite (NaN/Infinity) coordinate is rejected, leaving the fresh spawn in place. Previously a bad value was copied straight into the player and also slipped past the `position.y < 2` auto-unstuck net (any comparison with NaN is false), so a single corrupt byte could wedge a save.
+- **The renderer no longer leaks the block-atlas texture**: `GameRenderer.dispose()` now releases the shared world/glass atlas texture (Three.js `Material.dispose()` does not dispose its map), so switching worlds no longer accumulates orphaned GPU textures.
 
 ## [0.9.0] - 2026-06-14
 
