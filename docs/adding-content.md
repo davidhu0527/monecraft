@@ -120,6 +120,14 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - **Show it.** Add a `HudIconName` + grid in `hudPixels.ts`; the cached `effectsProjection` in `GameEngine` feeds `GameSnapshot.activeEffects`, which `ActiveEffects.tsx` renders — keep the projection ref-stable (rebuild only when rounded seconds change) so the HUD doesn't thrash.
 - **Persist it.** Effects are an **additive save bump** — see [save-format.md](save-format.md) (v6); they're cleared on death and `restoreEffects` validates them on load.
 
+## An enchantment (per-item gear modifier)
+
+- Enchantments are **per-item-instance data, like durability** — they live on the `InventorySlot`'s `enchantments` field (`{ id, level }[]`), driven by `lib/game/enchantments.ts`. Add an id to the `EnchantmentId` union (`types.ts`), list it in `ENCHANTMENT_DEFS` (applicable item kinds + max level) and `ENCHANTMENT_ORDER`, and put magnitudes in `config.ts`.
+- **Read it at one seam**, the same as a status effect: add a reader (`sharpnessBonus`, `efficiencyMultiplier`, …) and call it where the value is computed — melee damage (the `GameEngine` attack dispatch), `equippedDefense`, `miningSpeed`, or the durability helpers (Unbreaking threads an optional `rng` into `consumeToolDurability`/`consumeEquippedArmorDurability` and returns `null`/unchanged to skip a point of wear).
+- **Non-stackable for free**: enchantments only sit on durable gear, which is already stack-size 1 (`maxStackSizeForItem`), and `{ ...slot }` clones carry the field through every inventory move.
+- **Apply it** with the `enchant` command (gated on an open enchanting table): `canEnchant` (kind + level cap) → `spendXpLevels` → immutable `applyEnchant`. The `EnchantingColumn` panel renders the options for the selected hotbar item.
+- **Persist it**: enchantments are an **additive save field** on `SavedSlot` — see [save-format.md](save-format.md) (v7); `restoreSlot` validates them on load (known ids, clamped levels, durable gear only).
+
 ## A new mechanic
 
 Add a system module under `lib/game/engine/systems/` (a function over `GameState`), give it a slot in the `GameEngine.step` sequence, and put its tunables in `lib/game/config.ts`. If the UI triggers it, add a `Command` variant. Write its headless test next to it.
