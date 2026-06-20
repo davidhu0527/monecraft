@@ -153,6 +153,8 @@ export type GameState = {
   oxygen: number;
   /** Active status effects → remaining seconds. Persisted (save v6); cleared on death. */
   effects: Map<EffectId, number>;
+  /** Banked XP points (XP_PER_LEVEL points = 1 level). Persisted (save v7); NOT cleared on death. */
+  xp: number;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
@@ -297,6 +299,7 @@ export type GameEvent =
   | { type: "ateFood" }
   | { type: "drankPotion" }
   | { type: "effectExpired"; effect: EffectId }
+  | { type: "xpGained"; amount: number }
   | { type: "jumped" }
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }

@@ -1193,6 +1193,36 @@ describe("gameplay events", () => {
     expect(engine.consumeEvents().some((event) => event.type === "mobHit" && event.kind === "sheep")).toBe(true);
   });
 
+  test("killing a mob grants its XP, and a baby grants none", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.inventory[0] = createSlot("diamond_sword", 1);
+    state.selectedSlot = 0;
+    state.xp = 0;
+
+    spawnTestMob(engine, "sheep", false, { x: 0, y: EYE_HEIGHT, z: -2 });
+    state.mobs[state.mobs.length - 1].hp = 1; // one hit kills it
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" });
+    expect(state.mobs).toHaveLength(0); // killed
+    expect(state.xp).toBe(1); // sheep XP
+    expect(engine.consumeEvents().some((e) => e.type === "xpGained")).toBe(true);
+
+    // A baby (ageTimer > 0) yields neither drops nor XP.
+    spawnTestMob(engine, "sheep", false, { x: 0, y: EYE_HEIGHT, z: -2 });
+    const baby = state.mobs[state.mobs.length - 1];
+    baby.hp = 1;
+    baby.ageTimer = 30;
+    engine.dispatch({ type: "attack" });
+    expect(state.mobs).toHaveLength(0);
+    expect(state.xp).toBe(1); // unchanged
+  });
+
   test("spears hit farther than ordinary melee weapons", () => {
     const engine = makeEngine();
     calmDaytime(engine);

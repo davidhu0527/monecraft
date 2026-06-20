@@ -913,6 +913,22 @@ export const DRINK_SOUND: SoundDef = {
   minRetriggerMs: 200
 };
 
+// A bright upward "orb pickup" blip when XP is gained.
+export const XP_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.35,
+    randomness: 0.05,
+    frequency: 660,
+    sustain: 0.02,
+    release: 0.09,
+    shape: 1,
+    pitchJump: 240,
+    pitchJumpTime: 0.04,
+    decay: 0.02
+  }),
+  minRetriggerMs: 60
+};
+
 export const DEATH_SOUND: SoundDef = {
   params: zz({
     volume: 0.8,

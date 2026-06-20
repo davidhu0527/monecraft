@@ -6,6 +6,7 @@ import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/ga
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
+import { awardXp, xpForBlock } from "./xp";
 import type { InventorySlot } from "@/lib/game/types";
 
 const scratchEye = new THREE.Vector3();
@@ -132,6 +133,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   }
   if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
   addBlockDrop(state, targetBlock as BlockId, rng);
+  awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
   state.worldMeshDirty = true;
   resetMining(state);
   emit({ type: "blockBroken", blockId: targetBlock as BlockId, x: bx, y: by, z: bz });

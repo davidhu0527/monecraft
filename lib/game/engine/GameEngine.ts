@@ -60,6 +60,8 @@ import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tic
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
+import { awardXp } from "./systems/xp";
+import { xpForMob } from "@/lib/game/mobXp";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -150,6 +152,7 @@ export class GameEngine {
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
       effects: new Map(),
+      xp: 0,
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -557,6 +560,8 @@ export class GameEngine {
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
+    // XP on kill, baby-gated like drops; the boss pays a jackpot.
+    if (mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
