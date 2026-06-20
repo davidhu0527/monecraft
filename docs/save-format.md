@@ -11,7 +11,7 @@
 - `xp` (optional) — banked experience points (`XP_PER_LEVEL` points = one level). Earned from kills/ore/fishing, spent at the enchanting table. Restored by `restoreXp` (finite, ≥ 0). Unlike effects, XP is a currency and is **kept across death**
 - equipped armor
 - selected hotbar slot (0–8)
-- player position
+- player position — validated on load by `restorePlayerPosition` (`lib/game/save.ts`): coords keep their fractional part (the player isn't grid-aligned) but a missing or non-finite (NaN/Infinity) position is rejected, leaving the fresh spawn in place so a corrupt blob can't load a broken world or slip past the `position.y < 2` unstuck net
 - `dayClock`, `hearts`, `hunger` (all optional) — time of day and player stats, so sleeping through the night and a hurt/hungry player survive a reload
 - `spawnPoint` (optional, `{x,y,z}` or null) — the bed respawn point; respawn falls back to a random land point when it is null or the block there is no longer a bed
 - `blockEntities` (optional) — chest contents as `{ index, slots }[]`, keyed by the block's voxel index (the same index space as `changes`). Only **non-empty** chests are stored; an empty one carries no data and is recreated empty when opened. On load each entry is kept only if that index still holds a Chest block. This is the first per-block metadata in the format — `lib/game/save.ts` (`serializeContainers` / `readContainers`) handles it

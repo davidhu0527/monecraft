@@ -112,6 +112,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const [skinId, setSkinId] = useState<SkinId>(opts.profile.skinId);
   const skinIdRef = useRef(skinId);
   const rendererRef = useRef<GameRenderer | null>(null);
+  // Pending UI timers (flash messages, world-reload defers) so they can be
+  // cancelled on unmount instead of firing setState/onReloadWorld after teardown.
+  const pendingTimeoutsRef = useRef<Set<number>>(new Set());
+  // Set by Load/Reset before they force a remount: those want to re-read (or
+  // discard) the on-disk save, so the unmount must NOT persist the live state
+  // over it. Consumed once by the cleanup; every other unmount saves.
+  const skipUnmountSaveRef = useRef(false);
 
   // Audio is a global preference loaded after mount: render never touches
   // localStorage (SSR), and the setState hops a microtask like the
@@ -170,10 +177,31 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const getServerSnapshot = useCallback(() => PRE_MOUNT_SNAPSHOT, []);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const flashMessage = useCallback((text: string, durationMs = 1200) => {
-    setSaveMessage(text);
-    window.setTimeout(() => setSaveMessage(""), durationMs);
+  // Tracks each timer so unmount can cancel it; the timer also self-removes when
+  // it fires so the set never grows unbounded.
+  const scheduleTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = window.setTimeout(() => {
+      pendingTimeoutsRef.current.delete(id);
+      fn();
+    }, ms);
+    pendingTimeoutsRef.current.add(id);
   }, []);
+
+  useEffect(
+    () => () => {
+      for (const id of pendingTimeoutsRef.current) window.clearTimeout(id);
+      pendingTimeoutsRef.current.clear();
+    },
+    []
+  );
+
+  const flashMessage = useCallback(
+    (text: string, durationMs = 1200) => {
+      setSaveMessage(text);
+      scheduleTimeout(() => setSaveMessage(""), durationMs);
+    },
+    [scheduleTimeout]
+  );
 
   useEffect(() => {
     if (!ctx) return;
@@ -212,7 +240,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     document.addEventListener("mousedown", unlockAudio);
     document.addEventListener("keydown", unlockAudio);
 
-    const autoSave = () => persistGame(gameEngine, saveKeyRef.current, flashMessage);
+    // The save key is fixed for the mount's life (the shell keys this hook by
+    // world id), so capture it once — also keeps it out of the cleanup's ref read.
+    const saveKey = saveKeyRef.current;
+    const autoSave = () => persistGame(gameEngine, saveKey, flashMessage);
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
@@ -289,6 +320,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     animationFrame = requestAnimationFrame(clock);
 
     return () => {
+      // Persist on teardown so progress survives an unmount that fires no
+      // `beforeunload` — most importantly dev Fast Refresh, which remounts the
+      // component (losing everything since the last 15s autosave) without a page
+      // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
+      // intentionally re-read or discard the on-disk save.
+      if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
+      else persistGame(gameEngine, saveKey, () => {});
       delete window.__monecraft;
       canvasRef.current = null;
       rendererRef.current = null;
@@ -375,14 +413,18 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       }
       flashMessage("Loaded");
       // Remount this world (no page reload) so the engine re-reads the saved blob.
-      window.setTimeout(() => opts.onReloadWorld(), 120);
+      // Suppress the unmount save so it can't overwrite the blob we're reloading.
+      skipUnmountSaveRef.current = true;
+      scheduleTimeout(() => opts.onReloadWorld(), 120);
     },
     resetNow: () => {
       try {
         localStorage.removeItem(saveKeyRef.current);
         setSaveMessage("Resetting...");
         // Remount with no blob: the fresh engine regenerates from the stored seed.
-        window.setTimeout(() => opts.onReloadWorld(), 500);
+        // Suppress the unmount save so it can't rewrite the blob we just removed.
+        skipUnmountSaveRef.current = true;
+        scheduleTimeout(() => opts.onReloadWorld(), 500);
       } catch {
         flashMessage("Reset failed");
       }

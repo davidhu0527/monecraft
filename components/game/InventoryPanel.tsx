@@ -1,10 +1,12 @@
 import { Fragment, useState } from "react";
 import EnchantingColumn from "@/components/game/EnchantingColumn";
 import ItemIcon from "@/components/game/ItemIcon";
-import { itemTooltipFor, useItemTooltip } from "@/components/game/ItemTooltip";
+import { itemTooltipFor, type TooltipContent, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
-import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot } from "@/lib/game/items";
+import { ingredientStatus } from "@/lib/game/inventory";
+import { itemSourceHint } from "@/lib/game/itemSources";
+import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { groupRecipes } from "@/lib/game/recipes";
 import { itemIconUrl } from "@/lib/ui/sprites";
 import type { EnchantmentId, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
@@ -35,6 +37,28 @@ const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
   villager: "Villager",
   brewing: "Brewing Stand"
 };
+
+const labelFor = (slotId: string): string => ITEM_DEF_BY_ID[slotId]?.label ?? slotId;
+
+/**
+ * Hover text for a recipe. A craftable recipe just names itself; a station-locked
+ * one says which station it needs; an unaffordable one lists each ingredient as
+ * have/need and, for every shortfall, a "how to obtain" hint. The detail is what
+ * the user can't read from the tiny grayscale icons alone.
+ */
+function recipeTooltip(recipe: Recipe, inventory: InventorySlot[], locked: boolean, craftable: boolean): TooltipContent {
+  if (locked) return { title: labelFor(recipe.result.slotId), lines: [`Requires ${STATION_LABELS[recipe.station!]}`] };
+  if (craftable) return { title: recipe.label };
+
+  const status = ingredientStatus(inventory, recipe);
+  const lines = status.map((s) => `${labelFor(s.slotId)}  ${s.have} / ${s.need}${s.have < s.need ? ` (need ${s.need - s.have} more)` : " ✓"}`);
+  for (const s of status) {
+    if (s.have >= s.need) continue;
+    const hint = itemSourceHint(s.slotId);
+    if (hint) lines.push(`→ ${labelFor(s.slotId)}: ${hint}`);
+  }
+  return { title: labelFor(recipe.result.slotId), lines };
+}
 
 /**
  * The survival inventory: armor column, 27-slot storage grid, hotbar row, and
@@ -118,14 +142,19 @@ export default function InventoryPanel({
 
   const renderRecipe = (recipe: Recipe) => {
     const locked = stationLocked(recipe);
+    const craftable = !locked && canCraft(recipe);
     return (
       <button
         key={recipe.id}
-        className="recipe-entry"
-        onClick={() => onCraft(recipe)}
-        disabled={locked || !canCraft(recipe)}
+        className={`recipe-entry${craftable ? "" : " is-disabled"}`}
+        // Not the native `disabled` attribute: disabled buttons swallow hover
+        // events, so the tooltip explaining what's missing would never appear.
+        onClick={() => {
+          if (craftable) onCraft(recipe);
+        }}
+        aria-disabled={!craftable}
         aria-label={recipe.label}
-        {...bind({ title: recipe.label, lines: locked ? [`Requires ${STATION_LABELS[recipe.station!]}`] : undefined })}
+        {...bind(recipeTooltip(recipe, inventory, locked, craftable))}
       >
         <span className="recipe-ingredients">
           {recipe.cost.map((cost) => (
