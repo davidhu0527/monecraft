@@ -244,7 +244,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   });
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(5);
+  expect(JSON.parse(saved!).version).toBe(6);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
