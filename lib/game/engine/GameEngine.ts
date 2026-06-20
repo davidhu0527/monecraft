@@ -19,10 +19,12 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  POISON_DURATION,
   POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   RENDER_RADIUS,
+  ROTTEN_FLESH_POISON_CHANCE,
   STUCK_RESET_SECONDS,
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
@@ -337,6 +339,11 @@ export class GameEngine {
         if (!next) break;
         state.inventory = next;
         state.hunger = restoreHunger(state.hunger, slot.hunger);
+        // Rotten flesh sometimes poisons — a never-lethal nibble of risk on the
+        // most desperate food. Uses the injected rng so the roll is deterministic.
+        if (slot.id === "rotten_flesh" && this.rng() < ROTTEN_FLESH_POISON_CHANCE) {
+          addEffect(state, "poison", POISON_DURATION);
+        }
         this.emit({ type: "ateFood" });
         break;
       }

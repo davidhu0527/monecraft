@@ -6,6 +6,7 @@ import {
   EFFECT_SPEED_DURATION,
   EYE_HEIGHT,
   MAX_HUNGER,
+  POISON_DURATION,
   MAX_HEARTS,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
@@ -2157,6 +2158,32 @@ describe("drinking potions", () => {
 
     expect(state.effects.size).toBe(0);
     expect(state.hunger).toBeGreaterThan(5);
+  });
+
+  test("an unlucky rotten-flesh roll poisons the eater, but it still feeds", () => {
+    const engine = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    const { state } = engine;
+    state.hunger = 5;
+    state.inventory[state.selectedSlot] = createSlot("rotten_flesh", 1);
+
+    engine.dispatch({ type: "eatFood" });
+
+    expect(state.effects.get("poison")).toBe(POISON_DURATION);
+    expect(state.hunger).toBeGreaterThan(5); // hunger still restored
+  });
+
+  test("a lucky rotten-flesh roll eats with no poison, and other foods never poison", () => {
+    const lucky = new GameEngine({ seed: 1337, rng: () => 0.99, worldSize: { x: 64, y: 150, z: 64 } });
+    lucky.state.inventory[lucky.state.selectedSlot] = createSlot("rotten_flesh", 1);
+    lucky.dispatch({ type: "eatFood" });
+    expect(lucky.state.effects.has("poison")).toBe(false);
+
+    // rng would poison rotten flesh, but bread is never a hazard.
+    const bread = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    bread.state.hunger = 5;
+    bread.state.inventory[bread.state.selectedSlot] = createSlot("bread", 1);
+    bread.dispatch({ type: "eatFood" });
+    expect(bread.state.effects.has("poison")).toBe(false);
   });
 
   test("the HUD effects projection is ref-stable until the rounded countdown changes", () => {
