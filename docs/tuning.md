@@ -67,6 +67,29 @@ the 0–15 levels), and the cave-darkness floor + torch tint are shader constant
 [`GameRenderer.ts`](../lib/game/render/GameRenderer.ts) (`SKY_LIGHT_FLOOR`,
 `TORCH_TINT`).
 
+## Status effects & potions
+
+`EFFECT_SPEED_DURATION`/`EFFECT_SPEED_MULTIPLIER`,
+`EFFECT_STRENGTH_DURATION`/`EFFECT_STRENGTH_BONUS`,
+`EFFECT_REGEN_DURATION`/`EFFECT_REGEN_INTERVAL`/`EFFECT_REGEN_HP`,
+`EFFECT_FIRE_RESIST_DURATION`, `EFFECT_WATER_BREATHING_DURATION`,
+`POISON_DURATION`/`POISON_INTERVAL`/`POISON_HP`/`POISON_FLOOR_HP`,
+`ROTTEN_FLESH_POISON_CHANCE`.
+
+Read by `systems/statusEffects.ts` (and the seams it feeds: `playerMotion.ts`
+for speed, the melee dispatch in `GameEngine.ts` for strength, and the gated
+`tickLavaExposure`/`tickOxygen` for fire-resist/water-breathing). The
+`*_DURATION` values are how long a drunk potion lasts (default Minecraft-ish:
+buffs 3:00, Regeneration 0:45). **Strength** adds `EFFECT_STRENGTH_BONUS` (3) flat
+melee damage; **Speed** multiplies movement by `EFFECT_SPEED_MULTIPLIER` (1.2);
+**Regeneration** heals `EFFECT_REGEN_HP` (1) every `EFFECT_REGEN_INTERVAL` (1.5 s)
+on its **own** accumulator, ignoring the hunger gate. **Poison** ticks `POISON_HP`
+(1) every `POISON_INTERVAL` (1.25 s) but floors at `POISON_FLOOR_HP` (1) so it can
+never kill; eating rotten flesh inflicts it with probability
+`ROTTEN_FLESH_POISON_CHANCE` (0.8) for `POISON_DURATION` (8 s). Brewing reagent
+costs are balanced in `recipes.ts`, not here. Lengthen the buffs or cut the poison
+odds to make the system gentler; the reagent map is the economic dial.
+
 ## Danger — day-night & the mob director
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,

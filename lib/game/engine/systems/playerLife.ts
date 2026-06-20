@@ -38,6 +38,19 @@ export function applyUnmitigatedDamage(state: GameState, amount: number): boolea
 }
 
 /**
+ * Applies armor-bypassing damage that can never be lethal: hearts never drop
+ * below `floorHp`. Used by Poison, which should chip a player down to half a
+ * heart yet never deliver the killing blow. Returns true when any damage landed.
+ */
+export function applyNonLethalDamage(state: GameState, amount: number, floorHp = 1): boolean {
+  if (state.isDead) return false;
+  const value = Math.max(0, Math.floor(amount));
+  if (value <= 0 || state.hearts <= floorHp) return false;
+  state.hearts = Math.max(floorHp, state.hearts - value);
+  return true;
+}
+
+/**
  * Counts down the respawn timer while dead. Returns true when the player
  * comes back to life this tick — the engine then performs the respawn.
  */

@@ -130,6 +130,130 @@ function halfIcon(full: Uint8ClampedArray, container: Uint8ClampedArray): Uint8C
   return out;
 }
 
+// --- Status-effect icons (16x16): one distinct silhouette + color per effect,
+// shown in the HUD active-effects readout. ---
+
+const EFFECT_SPEED_GRID = [
+  "................",
+  "................",
+  "....o....o......",
+  "....mo...mo.....",
+  "....mmo..mmo....",
+  "....mmmo.mmmo...",
+  "....mmmmommmmo..",
+  "....mmmmmmmmmo..",
+  "....mmmmommmmo..",
+  "....mmmo.mmmo...",
+  "....mmo..mmo....",
+  "....mo...mo.....",
+  "....o....o......",
+  "................",
+  "................",
+  "................"
+];
+
+const EFFECT_STRENGTH_GRID = [
+  "................",
+  ".......o........",
+  "......omo.......",
+  ".....ommmo......",
+  "....ommmmmo.....",
+  "...ommmmmmmo....",
+  "..ommmmmmmmmo...",
+  ".ommmmmmmmmmmo..",
+  "....ommmmo......",
+  "....ommmmo......",
+  "....ommmmo......",
+  "....ommmmo......",
+  "....ommmmo......",
+  "................",
+  "................",
+  "................"
+];
+
+const EFFECT_REGEN_GRID = [
+  "................",
+  "................",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "..mmmmmmmmmmmm..",
+  "..mmmmmmmmmmmm..",
+  "..mmmmmmmmmmmm..",
+  "..mmmmmmmmmmmm..",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "................",
+  "................",
+  "................",
+  "................"
+];
+
+const EFFECT_FLAME_GRID = [
+  "................",
+  "................",
+  ".......o........",
+  "......omo.......",
+  "......omo.......",
+  ".....ommmo......",
+  ".....ommmo......",
+  "....ommmmmo.....",
+  "....ommlmmo.....",
+  "...ommlllmmo....",
+  "...ommlllmmo....",
+  "...ommmmmmmo....",
+  "....ommmmmo.....",
+  ".....ooooo......",
+  "................",
+  "................"
+];
+
+const EFFECT_DROPLET_GRID = [
+  "................",
+  ".......o........",
+  ".......o........",
+  "......omo.......",
+  "......omo.......",
+  ".....ommmo......",
+  ".....ommmo......",
+  "....ommlmmo.....",
+  "....ommlmmo.....",
+  "...ommlllmmo....",
+  "...ommmmmmmo....",
+  "...ommmmmmmo....",
+  "....ommmmmo.....",
+  ".....ooooo......",
+  "................",
+  "................"
+];
+
+const EFFECT_SKULL_GRID = [
+  "................",
+  "....oooooo......",
+  "...ommmmmmo.....",
+  "..ommmmmmmmo....",
+  "..ommmmmmmmo....",
+  "..omoommoomo....",
+  "..omoommoomo....",
+  "..ommmmmmmmo....",
+  "..ommmoommmo....",
+  "..ommmmmmmmo....",
+  "...ommmmmmo.....",
+  "....ommmmo......",
+  "....o.mm.o......",
+  ".....oooo.......",
+  "................",
+  "................"
+];
+
+const EFFECT_SPEED_PALETTE: PixelPalette = { o: [18, 70, 86], m: [96, 206, 236] };
+const EFFECT_STRENGTH_PALETTE: PixelPalette = { o: [92, 22, 22], m: [226, 74, 66] };
+const EFFECT_REGEN_PALETTE: PixelPalette = { m: [226, 84, 180] };
+const EFFECT_FIRE_RESIST_PALETTE: PixelPalette = { o: [110, 44, 12], m: [236, 138, 42], l: [252, 222, 128] };
+const EFFECT_WATER_BREATHING_PALETTE: PixelPalette = { o: [16, 54, 96], m: [74, 144, 226], l: [186, 224, 255] };
+const EFFECT_POISON_PALETTE: PixelPalette = { o: [22, 52, 18], m: [122, 190, 72] };
+
 export type HudIconName =
   | "heart_full"
   | "heart_half"
@@ -142,7 +266,13 @@ export type HudIconName =
   | "armor_container"
   | "bubble_full"
   | "bubble_half"
-  | "bubble_container";
+  | "bubble_container"
+  | "effect_speed"
+  | "effect_strength"
+  | "effect_regeneration"
+  | "effect_fire_resistance"
+  | "effect_water_breathing"
+  | "effect_poison";
 
 export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
   switch (name) {
@@ -170,5 +300,17 @@ export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
       return paintGrid(BUBBLE_GRID, BUBBLE_CONTAINER_PALETTE);
     case "bubble_half":
       return halfIcon(paintGrid(BUBBLE_GRID, BUBBLE_PALETTE), paintGrid(BUBBLE_GRID, BUBBLE_CONTAINER_PALETTE));
+    case "effect_speed":
+      return paintGrid(EFFECT_SPEED_GRID, EFFECT_SPEED_PALETTE);
+    case "effect_strength":
+      return paintGrid(EFFECT_STRENGTH_GRID, EFFECT_STRENGTH_PALETTE);
+    case "effect_regeneration":
+      return paintGrid(EFFECT_REGEN_GRID, EFFECT_REGEN_PALETTE);
+    case "effect_fire_resistance":
+      return paintGrid(EFFECT_FLAME_GRID, EFFECT_FIRE_RESIST_PALETTE);
+    case "effect_water_breathing":
+      return paintGrid(EFFECT_DROPLET_GRID, EFFECT_WATER_BREATHING_PALETTE);
+    case "effect_poison":
+      return paintGrid(EFFECT_SKULL_GRID, EFFECT_POISON_PALETTE);
   }
 }

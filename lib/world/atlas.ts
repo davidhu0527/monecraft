@@ -129,6 +129,19 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           else if (onStick) c = tone([0.55, 0.38, 0.2], 0.85 + n * 0.2);
           else c = tone([0.05, 0.05, 0.07], 1);
         }
+        if (block === BlockId.BrewingStand) {
+          // A stone base under a glowing central rod, lit by a faint purple brew.
+          const rod = x >= 7 && x <= 8;
+          if (face === "top") {
+            c = Math.abs(x - 7.5) + Math.abs(y - 7.5) < 3 ? tone([0.62, 0.42, 0.82], 0.9 + n * 0.3) : tone(base, 0.9 + n * 0.2);
+          } else if (y >= 11) {
+            c = tone([0.42, 0.43, 0.47], 0.9 + n * 0.2); // stone base
+          } else if (rod && y >= 3) {
+            c = tone([0.86, 0.8, 0.5], 0.85 + n * 0.3); // the glowing rod
+          } else {
+            c = tone([0.52, 0.46, 0.62], 0.85 + n * 0.25); // purple-tinted body
+          }
+        }
         if (isDoorBlock(block)) {
           const state = doorState(block)!;
           const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;

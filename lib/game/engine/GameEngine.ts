@@ -19,9 +19,12 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  POISON_DURATION,
+  POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   RENDER_RADIUS,
+  ROTTEN_FLESH_POISON_CHANCE,
   STUCK_RESET_SECONDS,
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
@@ -37,10 +40,12 @@ import {
   restoreEquippedArmor,
   restoreHearts,
   restoreHungerLevel,
+  restoreEffects,
   restoreInventorySlots,
   restoreSelectedSlot,
   restoreSpawnPoint,
   serializeContainers,
+  serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
@@ -51,9 +56,10 @@ import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
-import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
+import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
+import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -96,6 +102,11 @@ export class GameEngine {
   // Navigation values are rounded, so the ref-equality snapshot diff updates
   // the HUD responsively without forcing a React render for sub-block movement.
   private lastBoss: ({ hpPercent: number } & BossTracking) | null = null;
+  // The effects HUD projection is rebuilt only when its content (ids / rounded
+  // seconds) changes, so the snapshot ref stays stable frame-to-frame and the
+  // countdown re-renders at most ~once per second instead of every frame.
+  private lastEffectsKey = "";
+  private lastEffects: GameSnapshot["activeEffects"] = [];
 
   constructor(options: GameEngineOptions = {}) {
     const save = options.save ?? null;
@@ -138,6 +149,7 @@ export class GameEngine {
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
+      effects: new Map(),
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -180,6 +192,8 @@ export class GameEngine {
       this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
       this.state.spawnPoint = restoreSpawnPoint(save);
       this.state.lootedDungeonChests = new Set(readLootedChests(save));
+      // Restore any active effects (cleared on death, so a live save carries them).
+      for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
@@ -252,9 +266,11 @@ export class GameEngine {
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
+    // Status effects tick here so the fire-resist / water-breathing gates below are current.
+    tickStatusEffects(state, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
-    tickLavaExposure(state, dt, this.applyEnvironmentalDamage);
-    tickOxygen(state, dt, this.applyEnvironmentalDamage);
+    tickLavaExposure(state, dt, this.applyEnvironmentalDamage, hasEffect(state, "fire_resistance"));
+    tickOxygen(state, dt, this.applyEnvironmentalDamage, hasEffect(state, "water_breathing"));
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
@@ -323,7 +339,23 @@ export class GameEngine {
         if (!next) break;
         state.inventory = next;
         state.hunger = restoreHunger(state.hunger, slot.hunger);
+        // Rotten flesh sometimes poisons — a never-lethal nibble of risk on the
+        // most desperate food. Uses the injected rng so the roll is deterministic.
+        if (slot.id === "rotten_flesh" && this.rng() < ROTTEN_FLESH_POISON_CHANCE) {
+          addEffect(state, "poison", POISON_DURATION);
+        }
         this.emit({ type: "ateFood" });
+        break;
+      }
+      case "drinkPotion": {
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        const slot = state.inventory[state.selectedSlot];
+        if (!slot?.id || !slot.effect || slot.count <= 0) break;
+        const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
+        if (!next) break;
+        state.inventory = next;
+        addEffect(state, slot.effect.id, slot.effect.durationSeconds);
+        this.emit({ type: "drankPotion" });
         break;
       }
       case "placeBlock": {
@@ -351,7 +383,7 @@ export class GameEngine {
           tryFireBow(state, this.emit);
           break;
         }
-        const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt, weaponReach(state));
+        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state), this.removeMobAt, weaponReach(state));
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
@@ -414,7 +446,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 5,
+      version: 6,
       seed: state.world.seed,
       worldType: this.worldType,
       changes: state.blockChanges.changes(),
@@ -431,7 +463,8 @@ export class GameEngine {
       hunger: state.hunger,
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
-      lootedChests: serializeLootedChests(state.lootedDungeonChests)
+      lootedChests: serializeLootedChests(state.lootedDungeonChests),
+      effects: serializeEffects(state.effects)
     };
   }
 
@@ -490,6 +523,7 @@ export class GameEngine {
     const died = applyDamageWithArmor(this.state, amount);
     this.syncEquippedArmor();
     if (died) {
+      clearEffects(this.state);
       resetMining(this.state);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
@@ -501,11 +535,17 @@ export class GameEngine {
     const heartsBefore = this.state.hearts;
     const died = applyUnmitigatedDamage(this.state, amount);
     if (died) {
+      clearEffects(this.state);
       resetMining(this.state);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
       this.emit({ type: "playerHurt" });
     }
+  };
+
+  /** Poison damage: armor-bypassing but never lethal (floors at half a heart). */
+  private applyPoisonDamage = (amount: number): void => {
+    if (applyNonLethalDamage(this.state, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
   };
 
   private removeMobAt = (index: number): void => {
@@ -578,6 +618,7 @@ export class GameEngine {
     }
     state.player.velocity.set(0, 0, 0);
     state.player.pitch = 0;
+    clearEffects(state);
     resetMining(state);
     state.thrownSpears = [];
     state.fishing = null;
@@ -641,6 +682,25 @@ export class GameEngine {
     return this.lastBoss;
   }
 
+  /**
+   * Active effects as a ref-stable array, rebuilt only when the visible content
+   * (ids or rounded seconds) changes — `Math.ceil(remaining)` only moves on
+   * integer-second boundaries, so the HUD countdown re-renders ~1 Hz, not 60 Hz.
+   */
+  private effectsProjection(): GameSnapshot["activeEffects"] {
+    const next: GameSnapshot["activeEffects"] = [];
+    for (const id of EFFECT_ORDER) {
+      const remaining = this.state.effects.get(id);
+      if (remaining && remaining > 0) next.push({ id, seconds: Math.ceil(remaining) });
+    }
+    const key = next.map((entry) => `${entry.id}:${entry.seconds}`).join(",");
+    if (key !== this.lastEffectsKey) {
+      this.lastEffectsKey = key;
+      this.lastEffects = next;
+    }
+    return this.lastEffects;
+  }
+
   private buildSnapshot(): GameSnapshot {
     const state = this.state;
     return {
@@ -666,7 +726,8 @@ export class GameEngine {
       craftingStation: state.craftingStation,
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
-      victory: state.victory
+      victory: state.victory,
+      activeEffects: this.effectsProjection()
     };
   }
 

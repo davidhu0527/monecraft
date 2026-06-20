@@ -7,19 +7,22 @@ import {
   migrateSaveV2toV3,
   migrateSaveV3toV4,
   migrateSaveV4toV5,
+  migrateSaveV5toV6,
   readContainers,
   readLootedChests,
   readSave,
   restoreDayClock,
+  restoreEffects,
   restoreHearts,
   restoreHungerLevel,
   restoreSpawnPoint,
   serializeContainers,
+  serializeEffects,
   serializeLootedChests,
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4 } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -39,7 +42,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 5,
+    version: 6,
     seed: 1337,
     changes: [
       [42, 0],
@@ -80,7 +83,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(5);
+    expect(parsed!.version).toBe(6);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -102,7 +105,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(5); // chained v1 -> v2 -> v3 -> v4 -> v5
+    expect(parsed!.version).toBe(6); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -191,11 +194,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v5", () => {
+  test("readSave migrates a v2 save through to v6", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(5);
+    expect(parsed!.version).toBe(6);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -232,7 +235,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(6);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -307,7 +310,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(6);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -326,6 +329,65 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
     const storage = memoryStorage();
     writeSave(KEY, sampleSave(), storage);
     expect(readSave(KEY, storage)!.lootedChests).toEqual([100, 200]);
+  });
+});
+
+describe("v5 to v6 migration & status effects", () => {
+  function v5Save(overrides: Partial<SaveDataV5> = {}): SaveDataV5 {
+    return {
+      version: 5,
+      seed: 1337,
+      changes: [[42, 0]],
+      inventorySlots: [{ id: "dirt", count: 3 }],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  test("migrateSaveV5toV6 is a pure version bump leaving effects absent", () => {
+    const migrated = migrateSaveV5toV6(v5Save());
+    expect(migrated.version).toBe(6);
+    expect(migrated.effects).toBeUndefined();
+    expect(migrated.changes).toEqual([[42, 0]]);
+  });
+
+  test("a pre-effect (v5) save loads with no active effects", () => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(6);
+    expect(restoreEffects(parsed)).toEqual([]);
+  });
+
+  test("serializeEffects / restoreEffects round-trip the active effects", () => {
+    const effects = new Map([
+      ["speed", 30],
+      ["poison", 4.5]
+    ] as const);
+    const out = serializeEffects(effects);
+    expect(out).toEqual([
+      { id: "speed", remaining: 30 },
+      { id: "poison", remaining: 4.5 }
+    ]);
+    expect(restoreEffects({ ...sampleSave(), effects: out })).toEqual(out);
+  });
+
+  test("restoreEffects drops unknown ids and non-positive / garbage durations", () => {
+    const dirty = [
+      { id: "speed", remaining: 30 },
+      { id: "not_an_effect", remaining: 10 },
+      { id: "toString", remaining: 5 }, // a prototype key must not slip through
+      { id: "poison", remaining: 0 },
+      { id: "strength", remaining: Number.NaN }
+    ] as never;
+    expect(restoreEffects({ ...sampleSave(), effects: dirty })).toEqual([{ id: "speed", remaining: 30 }]);
+    expect(restoreEffects({ ...sampleSave(), effects: undefined })).toEqual([]);
+  });
+
+  test("active effects survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, { ...sampleSave(), effects: [{ id: "regeneration", remaining: 12 }] }, storage);
+    expect(readSave(KEY, storage)!.effects).toEqual([{ id: "regeneration", remaining: 12 }]);
   });
 });
 
@@ -365,7 +427,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 6 };
+    const save = { ...sampleSave(), version: 7 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 

@@ -18,6 +18,7 @@ export type Command =
   | { type: "moveStack"; from: number; to: number }
   | { type: "toggleEquipArmor"; index: number }
   | { type: "eatFood" }
+  | { type: "drinkPotion" }
   | { type: "placeBlock" }
   | { type: "attack" }
   | { type: "unstuck" }

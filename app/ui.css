@@ -40,6 +40,40 @@
   filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.45));
 }
 
+/* --- Active status effects: a stacked top-left column of icon + countdown --- */
+
+.active-effects {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.active-effect {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 3px 4px;
+  background: rgba(10, 10, 10, 0.45);
+  border: 2px solid;
+  border-color: #6c6c6c #2e2e2e #2e2e2e #6c6c6c;
+}
+
+.active-effect img {
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.45));
+}
+
+.active-effect-time {
+  font-size: 13px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
 .hotbar-area {
   position: relative;
   display: grid;

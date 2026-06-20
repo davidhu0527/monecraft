@@ -5,6 +5,12 @@ export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "materia
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
 export type EquippedArmor = Record<ArmorSlot, string | null>;
 
+/** A timed status effect on the player. Positive effects come from potions; poison is a hazard. */
+export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "poison";
+
+/** The effect a drinkable potion applies, with how long it lasts. */
+export type ItemEffect = { id: EffectId; durationSeconds: number };
+
 export type ItemDef = {
   id: string;
   label: string;
@@ -20,6 +26,8 @@ export type ItemDef = {
   maxDurability?: number;
   /** Hunger points restored when eaten (food items only). */
   hunger?: number;
+  /** The status effect this potion applies when drunk (potion items only). */
+  effect?: ItemEffect;
 };
 
 export type InventorySlot = {
@@ -38,6 +46,7 @@ export type InventorySlot = {
   durability?: number;
   maxDurability?: number;
   hunger?: number;
+  effect?: ItemEffect;
 };
 
 export type Recipe = {
@@ -47,9 +56,10 @@ export type Recipe = {
   result: { slotId: string; count: number };
   /**
    * Station required for this recipe; omitted means the basic crafting grid.
-   * "furnace" smelts; "villager" is a trade offer, unlocked while trading with a villager.
+   * "furnace" smelts; "villager" is a trade offer, unlocked while trading with a
+   * villager; "brewing" is a potion recipe, unlocked at a brewing stand.
    */
-  station?: "furnace" | "villager";
+  station?: "furnace" | "villager" | "brewing";
 };
 
 export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
@@ -107,17 +117,29 @@ export type SaveDataV4 = Omit<SaveDataV3, "version"> & {
 };
 
 /**
- * Current save shape (v5): v4 plus the set of dungeon loot-chest voxel indices
- * the player has already opened or broken. Dungeon chests are filled lazily on
- * first access and this set — not the chest's emptiness — is what prevents a
- * re-roll on reload (an emptied chest is dropped from `blockEntities`). The
- * field is optional so the v4→v5 migration is a pure version bump. Note
- * `SAVE_KEY` is bumped to v6 alongside this because the dungeon worldgen
- * changed the deterministic block-diff baseline.
+ * v5 save shape: v4 plus the set of dungeon loot-chest voxel indices the player
+ * has already opened or broken. Dungeon chests are filled lazily on first access
+ * and this set — not the chest's emptiness — is what prevents a re-roll on reload
+ * (an emptied chest is dropped from `blockEntities`). The field is optional so
+ * the v4→v5 migration is a pure version bump.
  */
-export type SaveData = Omit<SaveDataV4, "version"> & {
+export type SaveDataV5 = Omit<SaveDataV4, "version"> & {
   version: 5;
   lootedChests?: number[];
   /** Generation preset; absent ⇒ "default" (pre-feature and legacy saves). Like `seed`, fixed for the world's life. */
   worldType?: WorldType;
+};
+
+/** One persisted status effect: its id and the seconds remaining when saved. */
+export type SavedEffect = { id: EffectId; remaining: number };
+
+/**
+ * Current save shape (v6): v5 plus the active status effects (with their
+ * remaining seconds). The field is optional so the v5→v6 migration is a pure
+ * version bump and pre-effect saves load with none. Effects are cleared on
+ * death, so a saved-then-reloaded world restores whatever was active at save.
+ */
+export type SaveData = Omit<SaveDataV5, "version"> & {
+  version: 6;
+  effects?: SavedEffect[];
 };

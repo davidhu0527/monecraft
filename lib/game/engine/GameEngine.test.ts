@@ -3,8 +3,10 @@ import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
 import {
   DAY_CYCLE_SECONDS,
+  EFFECT_SPEED_DURATION,
   EYE_HEIGHT,
   MAX_HUNGER,
+  POISON_DURATION,
   MAX_HEARTS,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
@@ -1324,14 +1326,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 5 and carries clock, stats, and spawn point", () => {
+  test("save format is version 6 and carries clock, stats, and spawn point", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(5);
+    expect(save.version).toBe(6);
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);
@@ -1340,6 +1342,16 @@ describe("persistence", () => {
     expect(restored.state.spawnPoint).toEqual({ x: 12, y: 40, z: 8 });
     // Daylight is re-derived from the restored clock, not left at dawn.
     expect(restored.state.daylight).toBeCloseTo(daylightAt(123), 5);
+  });
+
+  test("active status effects round-trip through serialize and restore", () => {
+    const engine = makeEngine();
+    engine.state.effects.set("speed", 25);
+    engine.state.effects.set("regeneration", 10);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.effects.get("speed")).toBe(25);
+    expect(restored.state.effects.get("regeneration")).toBe(10);
   });
 });
 
@@ -1648,6 +1660,43 @@ describe("furnace and cooking", () => {
     engine.dispatch({ type: "toggleInventory" });
     expect(engine.state.inventoryOpen).toBe(false);
     expect(engine.state.craftingStation).toBeNull();
+  });
+
+  test("right-clicking a brewing stand opens the inventory in brewing mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.BrewingStand);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "brewing")).toBe(true);
+    expect(state.inventoryOpen).toBe(true);
+    expect(state.craftingStation).toBe("brewing");
+  });
+
+  test("a potion only brews with the brewing stand open", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    giveItem(engine, "empty_bottle", 1);
+    giveItem(engine, "feather", 1);
+
+    engine.dispatch({ type: "craft", recipeId: "potion_speed" }); // no station open
+    expect(countsById(state.inventory).get("potion_speed")).toBeUndefined();
+    expect(countsById(state.inventory).get("empty_bottle")).toBe(1); // ingredients untouched
+
+    state.craftingStation = "brewing";
+    engine.dispatch({ type: "craft", recipeId: "potion_speed" });
+    expect(countsById(state.inventory).get("potion_speed")).toBe(1);
+    expect(countsById(state.inventory).get("empty_bottle")).toBeUndefined();
   });
 });
 
@@ -2072,5 +2121,85 @@ describe("fishing", () => {
     expect(state.fishing).toBeNull();
     expect(state.inventory[state.selectedSlot].durability).toBe(state.inventory[state.selectedSlot].maxDurability);
     expect(engine.consumeEvents().some((e) => e.type === "fishingReeledEmpty")).toBe(true);
+  });
+});
+
+describe("drinking potions", () => {
+  test("drinking a potion applies its effect, consumes one, and emits drankPotion", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[state.selectedSlot] = createSlot("potion_speed", 2);
+
+    engine.dispatch({ type: "drinkPotion" });
+
+    expect(state.effects.get("speed")).toBe(EFFECT_SPEED_DURATION);
+    expect(state.inventory[state.selectedSlot].count).toBe(1);
+    expect(engine.consumeEvents().some((e) => e.type === "drankPotion")).toBe(true);
+  });
+
+  test("drinkPotion is a no-op on a non-potion item (eat handles food)", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[state.selectedSlot] = createSlot("bread", 1);
+
+    engine.dispatch({ type: "drinkPotion" });
+
+    expect(state.effects.size).toBe(0);
+    expect(state.inventory[state.selectedSlot].count).toBe(1); // not consumed
+  });
+
+  test("eating food never grants an effect", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.hunger = 5;
+    state.inventory[state.selectedSlot] = createSlot("bread", 1);
+
+    engine.dispatch({ type: "eatFood" });
+
+    expect(state.effects.size).toBe(0);
+    expect(state.hunger).toBeGreaterThan(5);
+  });
+
+  test("an unlucky rotten-flesh roll poisons the eater, but it still feeds", () => {
+    const engine = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    const { state } = engine;
+    state.hunger = 5;
+    state.inventory[state.selectedSlot] = createSlot("rotten_flesh", 1);
+
+    engine.dispatch({ type: "eatFood" });
+
+    expect(state.effects.get("poison")).toBe(POISON_DURATION);
+    expect(state.hunger).toBeGreaterThan(5); // hunger still restored
+  });
+
+  test("a lucky rotten-flesh roll eats with no poison, and other foods never poison", () => {
+    const lucky = new GameEngine({ seed: 1337, rng: () => 0.99, worldSize: { x: 64, y: 150, z: 64 } });
+    lucky.state.inventory[lucky.state.selectedSlot] = createSlot("rotten_flesh", 1);
+    lucky.dispatch({ type: "eatFood" });
+    expect(lucky.state.effects.has("poison")).toBe(false);
+
+    // rng would poison rotten flesh, but bread is never a hazard.
+    const bread = new GameEngine({ seed: 1337, rng: () => 0, worldSize: { x: 64, y: 150, z: 64 } });
+    bread.state.hunger = 5;
+    bread.state.inventory[bread.state.selectedSlot] = createSlot("bread", 1);
+    bread.dispatch({ type: "eatFood" });
+    expect(bread.state.effects.has("poison")).toBe(false);
+  });
+
+  test("the HUD effects projection is ref-stable until the rounded countdown changes", () => {
+    const engine = makeEngine();
+    engine.state.effects.set("speed", 30);
+
+    engine.step(1 / 60, input());
+    const first = engine.getSnapshot().activeEffects;
+    expect(first).toEqual([{ id: "speed", seconds: 30 }]);
+
+    engine.step(1 / 60, input()); // still rounds up to 30s — no new array
+    expect(engine.getSnapshot().activeEffects).toBe(first);
+
+    run(engine, 1.5); // cross a whole-second boundary
+    const later = engine.getSnapshot().activeEffects;
+    expect(later).not.toBe(first);
+    expect(later[0].seconds).toBeLessThan(30);
   });
 });

@@ -40,6 +40,27 @@ export const SPRINT_BLOCKS_PER_HUNGER = 100;
 export const WALK_BLOCKS_PER_HUNGER = 300;
 export const JUMPS_PER_HUNGER = 50;
 
+// Status effects — timed buffs drunk from potions (Speed/Strength/Regeneration/
+// Fire Resistance/Water Breathing) plus Poison, a never-lethal hazard from eating
+// rotten flesh. Durations are seconds; re-drinking refreshes to the longer of the
+// two remaining times. Single-level effects (no tiers). All values are tunable.
+export const EFFECT_SPEED_DURATION = 180;
+export const EFFECT_SPEED_MULTIPLIER = 1.2; // ×movement speed while active
+export const EFFECT_STRENGTH_DURATION = 180;
+export const EFFECT_STRENGTH_BONUS = 3; // +melee damage per hit while active
+export const EFFECT_REGEN_DURATION = 45;
+export const EFFECT_REGEN_INTERVAL = 1.5; // heal cadence — its OWN accumulator, not the hunger-gated regen
+export const EFFECT_REGEN_HP = 1; // HP restored each interval (regardless of hunger)
+export const EFFECT_FIRE_RESIST_DURATION = 180;
+export const EFFECT_WATER_BREATHING_DURATION = 180;
+// Poison: ticks armor-bypassing damage but floors at POISON_FLOOR_HP so it can
+// chip you down to half a heart yet never deliver the killing blow.
+export const POISON_DURATION = 8;
+export const POISON_INTERVAL = 1.25;
+export const POISON_HP = 1;
+export const POISON_FLOOR_HP = 1; // poison never drops hearts below this
+export const ROTTEN_FLESH_POISON_CHANCE = 0.8; // odds eating rotten flesh poisons you
+
 // Inventory
 export const HOTBAR_SLOTS = 9;
 export const INVENTORY_SLOTS = 36;
@@ -213,9 +234,9 @@ export const SAVE_KEY = "minecraft_save_v7";
 // lakes; v8 added shallow coal ore. Each world records the WORLDGEN_VERSION it
 // was generated under; a world whose recorded version differs from this constant
 // has its block-diffs discarded and is rebooted from its stored seed
-// (lib/game/worlds.ts). The save *schema* (SaveData) is independent and stays at
-// version 5 — lighting is a derived cache and lava is worldgen, so neither is
-// persisted.
+// (lib/game/worlds.ts). The save *schema* (SaveData, currently v6) is independent
+// of this — lighting is a derived cache and lava is worldgen, so neither is
+// persisted, and additive schema bumps (like v6's status effects) don't touch it.
 export const WORLDGEN_VERSION = 8;
 
 // Rendering

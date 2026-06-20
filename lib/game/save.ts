@@ -1,6 +1,19 @@
 import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
-import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SavedContainer, SavedSlot, InventorySlot } from "@/lib/game/types";
+import type {
+  EffectId,
+  EquippedArmor,
+  SaveData,
+  SaveDataV1,
+  SaveDataV2,
+  SaveDataV3,
+  SaveDataV4,
+  SaveDataV5,
+  SavedContainer,
+  SavedEffect,
+  SavedSlot,
+  InventorySlot
+} from "@/lib/game/types";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
@@ -67,8 +80,16 @@ export function migrateSaveV3toV4(save: SaveDataV3): SaveDataV4 {
  * practice the SAVE_KEY bump to v6 discards pre-dungeon saves, but the
  * migration keeps the version chain complete and the readers total.)
  */
-export function migrateSaveV4toV5(save: SaveDataV4): SaveData {
+export function migrateSaveV4toV5(save: SaveDataV4): SaveDataV5 {
   return { ...save, version: 5 };
+}
+
+/**
+ * Migrates a v5 save to v6 — a pure version bump. `effects` (active status
+ * effects) is optional, so a pre-effect save simply loads with none active.
+ */
+export function migrateSaveV5toV6(save: SaveDataV5): SaveData {
+  return { ...save, version: 6 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -76,13 +97,14 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveData | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
+    const parsed = JSON.parse(raw) as SaveData | SaveDataV5 | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
     if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
-    if (migrated.version !== 5) return null;
+    if (migrated.version === 5) migrated = migrateSaveV5toV6(migrated);
+    if (migrated.version !== 6) return null;
     return migrated;
   } catch {
     return null;
@@ -137,6 +159,38 @@ export function serializeLootedChests(looted: Set<number>): number[] {
 export function readLootedChests(save: SaveData): number[] {
   if (!Array.isArray(save.lootedChests)) return [];
   return save.lootedChests.filter((value) => Number.isFinite(value));
+}
+
+// Every known status-effect id, as a Record keyed by EffectId so adding an
+// effect without listing it here is a compile error (keeps the reader total).
+const VALID_EFFECT_IDS: Record<EffectId, true> = {
+  speed: true,
+  strength: true,
+  regeneration: true,
+  fire_resistance: true,
+  water_breathing: true,
+  poison: true
+};
+
+/** Snapshots the active status effects (id + remaining seconds) for persistence. */
+export function serializeEffects(effects: Map<EffectId, number>): SavedEffect[] {
+  const out: SavedEffect[] = [];
+  for (const [id, remaining] of effects) {
+    if (remaining > 0) out.push({ id, remaining });
+  }
+  return out;
+}
+
+/** Reads active effects from a save, dropping unknown ids and non-positive/garbage durations. */
+export function restoreEffects(save: SaveData): SavedEffect[] {
+  if (!Array.isArray(save.effects)) return [];
+  const out: SavedEffect[] = [];
+  for (const entry of save.effects) {
+    if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_EFFECT_IDS, entry.id)) continue;
+    if (!Number.isFinite(entry.remaining) || entry.remaining <= 0) continue;
+    out.push({ id: entry.id, remaining: entry.remaining });
+  }
+  return out;
 }
 
 /**
