@@ -43,6 +43,7 @@ import {
   restoreHungerLevel,
   restoreEffects,
   restoreInventorySlots,
+  restorePlayerPosition,
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
@@ -214,7 +215,8 @@ export class GameEngine {
         this.state.daylight = daylightAt(savedClock);
         this.state.daylightPercent = Math.round(this.state.daylight * 100);
       }
-      if (save.player) this.state.player.position.set(save.player.x, save.player.y, save.player.z);
+      const pos = restorePlayerPosition(save);
+      if (pos) this.state.player.position.set(pos.x, pos.y, pos.z);
     }
 
     // Safety check: if stuck after load, relocate to a plain.

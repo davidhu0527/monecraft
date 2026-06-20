@@ -109,6 +109,19 @@ describe("boot", () => {
     expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
+  test("a corrupt save with non-finite player coords loads onto safe ground, not NaN", () => {
+    // A single bad byte in localStorage shouldn't load a NaN world — and NaN would
+    // slip past the `position.y < 2` unstuck net, since NaN comparisons are false.
+    const save = makeEngine().serialize();
+    const engine = makeEngine({ ...save, player: { x: Number.NaN, y: Number.NaN, z: Number.NaN } });
+    const { position } = engine.state.player;
+    expect(Number.isFinite(position.x)).toBe(true);
+    expect(Number.isFinite(position.y)).toBe(true);
+    expect(Number.isFinite(position.z)).toBe(true);
+    expect(position.y).toBeGreaterThan(2);
+    expect(collidesAt(engine.state.world, position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
+  });
+
   test("the player settles onto the ground under gravity and stays put", () => {
     const engine = makeEngine();
     // Combat-free: with the rebalanced worldgen a hostile can spawn next to

@@ -17,6 +17,7 @@ import {
   restoreHearts,
   restoreHungerLevel,
   restoreInventorySlots,
+  restorePlayerPosition,
   restoreSpawnPoint,
   restoreXp,
   serializeContainers,
@@ -464,6 +465,14 @@ describe("stat restoration helpers", () => {
   test("spawnPoint floors coordinates and rejects malformed points", () => {
     expect(restoreSpawnPoint({ ...base, spawnPoint: { x: 5.9, y: 40.2, z: 20.7 } })).toEqual({ x: 5, y: 40, z: 20 });
     expect(restoreSpawnPoint({ ...base, spawnPoint: null })).toBeNull();
+  });
+
+  test("player position is preserved as floats and rejects non-finite coords", () => {
+    // Unlike the floored spawn point, the player position keeps its fractional part.
+    expect(restorePlayerPosition(base)).toEqual({ x: 100.5, y: 48, z: 200.25 });
+    expect(restorePlayerPosition({ ...base, player: { x: 1, y: Number.NaN, z: 3 } })).toBeNull();
+    expect(restorePlayerPosition({ ...base, player: { x: 1, y: Number.POSITIVE_INFINITY, z: 3 } })).toBeNull();
+    expect(restorePlayerPosition({ ...base, player: undefined as unknown as SaveData["player"] })).toBeNull();
   });
 });
 

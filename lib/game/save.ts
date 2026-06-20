@@ -328,3 +328,15 @@ export function restoreSpawnPoint(save: SaveData): { x: number; y: number; z: nu
   if (!sp || !Number.isFinite(sp.x) || !Number.isFinite(sp.y) || !Number.isFinite(sp.z)) return null;
   return { x: Math.floor(sp.x), y: Math.floor(sp.y), z: Math.floor(sp.z) };
 }
+
+/**
+ * Restores the player's position; null when absent or non-finite. A corrupt save
+ * with NaN/Infinity coords would otherwise load a broken world — and slip past the
+ * `position.y < 2` unstuck net, since any comparison with NaN is false. Coords stay
+ * floats (the player isn't grid-aligned), unlike the floored spawn point.
+ */
+export function restorePlayerPosition(save: SaveData): { x: number; y: number; z: number } | null {
+  const p = save.player;
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return null;
+  return { x: p.x, y: p.y, z: p.z };
+}
