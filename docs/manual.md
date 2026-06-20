@@ -235,6 +235,12 @@ Building, Food, Materials, then the station-gated Smelting, Brewing, and Trades 
 and within each section the recipes you can make **right now** float to the top, so
 what's craftable is easy to spot among the dimmed entries.
 
+A dimmed recipe is no dead end: **hover it** to see exactly what's holding you back.
+The tooltip lists each ingredient as **have / need** (with how many more you're
+short), and for every missing item adds a **"how to obtain it"** hint — craft,
+mine, hunt a mob, fish, or loot a dungeon. Station-gated recipes you can't reach
+yet show **"Requires Furnace / Brewing Stand / Villager"** the same way.
+
 The basic recipe grid is always available. **Smelting** recipes (cooking raw meat)
 require a **furnace**: craft one from 8 cobble, place it, and right-click it to open
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and

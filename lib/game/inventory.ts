@@ -120,6 +120,18 @@ export function consumeEquippedArmorDurability(slots: InventorySlot[], equipped:
   return changed ? next : null;
 }
 
+/** How much of an ingredient the player holds versus the recipe's requirement. */
+export type IngredientStatus = { slotId: string; have: number; need: number };
+
+/**
+ * Per-ingredient have-vs-need for a recipe, in cost order (`have < need` ⇒ short).
+ * Drives the recipe-book tooltip that shows what an unaffordable recipe is missing.
+ */
+export function ingredientStatus(slots: InventorySlot[], recipe: Recipe): IngredientStatus[] {
+  const byId = countsById(slots);
+  return recipe.cost.map((cost) => ({ slotId: cost.slotId, have: byId.get(cost.slotId) ?? 0, need: cost.count }));
+}
+
 export function canCraft(slots: InventorySlot[], recipe: Recipe): boolean {
   const byId = countsById(slots);
   const hasCost = recipe.cost.every((cost) => (byId.get(cost.slotId) ?? 0) >= cost.count);

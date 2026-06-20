@@ -463,16 +463,19 @@
   border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
 }
 
-.recipe-entry:hover:not(:disabled) {
+.recipe-entry:hover:not(.is-disabled) {
   background: var(--mc-tile-well), #a3a3a3;
 }
 
-.recipe-entry:disabled {
+/* Unaffordable/station-locked recipes stay hoverable (so the tooltip can explain
+   what's missing); `is-disabled` carries the grayed-out look the native
+   `:disabled` attribute used to. */
+.recipe-entry.is-disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.recipe-entry:disabled img {
+.recipe-entry.is-disabled img {
   filter: grayscale(0.9);
 }
 
