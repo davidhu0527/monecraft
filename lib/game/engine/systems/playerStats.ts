@@ -100,8 +100,14 @@ export function tickWaterExposure(state: GameState, dt: number, applyDamage: (am
  * at once and keeps burning for LAVA_BURN_SECONDS after escaping. Lava is solid,
  * so "contact" means the block at the feet, just under them, or at body height.
  */
-export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amount: number) => void, fireImmune = false): void {
   const { player, timers, world } = state;
+  // Fire Resistance fully negates lava burn — no damage, no lingering burn timer.
+  if (fireImmune) {
+    timers.lavaBurnTimer = 0;
+    timers.lavaDamageTimer = 0;
+    return;
+  }
   const x = Math.floor(player.position.x);
   const z = Math.floor(player.position.z);
   const py = player.position.y;
@@ -135,8 +141,14 @@ export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amo
  * so wading chest-deep never drowns you — distinct from the body-keyed 60s
  * water-exposure timer, which still runs in parallel.
  */
-export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
+export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: number) => void, waterBreathing = false): void {
   const { player, timers, world } = state;
+  // Water Breathing keeps the lungs full and immune to drowning.
+  if (waterBreathing) {
+    state.oxygen = MAX_OXYGEN;
+    timers.drownTimer = 0;
+    return;
+  }
   const x = Math.floor(player.position.x);
   const headY = Math.floor(player.position.y + EYE_HEIGHT);
   const z = Math.floor(player.position.z);

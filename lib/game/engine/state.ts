@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
-import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
+import type { EffectId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -121,6 +121,10 @@ export type GameTimers = {
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
+  /** Regeneration-effect heal accumulator — independent of the hunger-gated regenTimer. */
+  effectRegenTimer: number;
+  /** Poison-effect damage accumulator. */
+  effectPoisonTimer: number;
   stuckTimer: number;
   hostileSpawnTimer: number;
   spawnerTimer: number;
@@ -147,6 +151,8 @@ export type GameState = {
   hunger: number;
   /** Remaining breath, 0..MAX_OXYGEN. Session-only; refills out of water. */
   oxygen: number;
+  /** Active status effects → remaining seconds. Persisted (save v6); cleared on death. */
+  effects: Map<EffectId, number>;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
@@ -209,6 +215,8 @@ export function createTimers(): GameTimers {
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,
+    effectRegenTimer: 0,
+    effectPoisonTimer: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
     spawnerTimer: 0,
@@ -285,6 +293,8 @@ export type GameEvent =
   | { type: "blockPlaced"; blockId: BlockId; x: number; y: number; z: number }
   | { type: "playerHurt" }
   | { type: "ateFood" }
+  | { type: "drankPotion" }
+  | { type: "effectExpired"; effect: EffectId }
   | { type: "jumped" }
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }

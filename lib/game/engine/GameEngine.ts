@@ -19,6 +19,7 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   RENDER_RADIUS,
@@ -51,9 +52,10 @@ import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
-import { applyDamageWithArmor, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
+import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
+import { clearEffects, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -138,6 +140,7 @@ export class GameEngine {
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
+      effects: new Map(),
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -252,9 +255,11 @@ export class GameEngine {
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
+    // Status effects tick here so the fire-resist / water-breathing gates below are current.
+    tickStatusEffects(state, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
-    tickLavaExposure(state, dt, this.applyEnvironmentalDamage);
-    tickOxygen(state, dt, this.applyEnvironmentalDamage);
+    tickLavaExposure(state, dt, this.applyEnvironmentalDamage, hasEffect(state, "fire_resistance"));
+    tickOxygen(state, dt, this.applyEnvironmentalDamage, hasEffect(state, "water_breathing"));
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
@@ -351,7 +356,7 @@ export class GameEngine {
           tryFireBow(state, this.emit);
           break;
         }
-        const hitKind = tryAttackMob(state, weaponDamage(state), this.removeMobAt, weaponReach(state));
+        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state), this.removeMobAt, weaponReach(state));
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
@@ -490,6 +495,7 @@ export class GameEngine {
     const died = applyDamageWithArmor(this.state, amount);
     this.syncEquippedArmor();
     if (died) {
+      clearEffects(this.state);
       resetMining(this.state);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
@@ -501,11 +507,17 @@ export class GameEngine {
     const heartsBefore = this.state.hearts;
     const died = applyUnmitigatedDamage(this.state, amount);
     if (died) {
+      clearEffects(this.state);
       resetMining(this.state);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
       this.emit({ type: "playerHurt" });
     }
+  };
+
+  /** Poison damage: armor-bypassing but never lethal (floors at half a heart). */
+  private applyPoisonDamage = (amount: number): void => {
+    if (applyNonLethalDamage(this.state, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
   };
 
   private removeMobAt = (index: number): void => {
@@ -578,6 +590,7 @@ export class GameEngine {
     }
     state.player.velocity.set(0, 0, 0);
     state.player.pitch = 0;
+    clearEffects(state);
     resetMining(state);
     state.thrownSpears = [];
     state.fishing = null;

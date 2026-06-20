@@ -5,6 +5,9 @@ export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "materia
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
 export type EquippedArmor = Record<ArmorSlot, string | null>;
 
+/** A timed status effect on the player. Positive effects come from potions; poison is a hazard. */
+export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "poison";
+
 export type ItemDef = {
   id: string;
   label: string;

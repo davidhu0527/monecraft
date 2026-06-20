@@ -13,6 +13,7 @@ import {
 } from "@/lib/game/config";
 import type { FrameInput, GameState } from "../state";
 import { speedScaleFromHunger } from "./playerStats";
+import { speedMultiplier } from "./statusEffects";
 
 export type MoveTickResult = {
   didSprint: boolean;
@@ -77,7 +78,8 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   const speedScale = speedScaleFromHunger(state.hunger);
   const canSprint = state.hunger > SPRINT_MIN_HUNGER;
   const sprinting = canSprint && forwardInput > 0 && keys.has("KeyW") && input.capsActive && !crouching;
-  const speed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
+  const baseSpeed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
+  const speed = baseSpeed * speedMultiplier(state);
 
   player.velocity.x = scratchMoveDir.x * speed;
   player.velocity.z = scratchMoveDir.z * speed;
