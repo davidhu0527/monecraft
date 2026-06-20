@@ -117,17 +117,29 @@ export type SaveDataV4 = Omit<SaveDataV3, "version"> & {
 };
 
 /**
- * Current save shape (v5): v4 plus the set of dungeon loot-chest voxel indices
- * the player has already opened or broken. Dungeon chests are filled lazily on
- * first access and this set — not the chest's emptiness — is what prevents a
- * re-roll on reload (an emptied chest is dropped from `blockEntities`). The
- * field is optional so the v4→v5 migration is a pure version bump. Note
- * `SAVE_KEY` is bumped to v6 alongside this because the dungeon worldgen
- * changed the deterministic block-diff baseline.
+ * v5 save shape: v4 plus the set of dungeon loot-chest voxel indices the player
+ * has already opened or broken. Dungeon chests are filled lazily on first access
+ * and this set — not the chest's emptiness — is what prevents a re-roll on reload
+ * (an emptied chest is dropped from `blockEntities`). The field is optional so
+ * the v4→v5 migration is a pure version bump.
  */
-export type SaveData = Omit<SaveDataV4, "version"> & {
+export type SaveDataV5 = Omit<SaveDataV4, "version"> & {
   version: 5;
   lootedChests?: number[];
   /** Generation preset; absent ⇒ "default" (pre-feature and legacy saves). Like `seed`, fixed for the world's life. */
   worldType?: WorldType;
+};
+
+/** One persisted status effect: its id and the seconds remaining when saved. */
+export type SavedEffect = { id: EffectId; remaining: number };
+
+/**
+ * Current save shape (v6): v5 plus the active status effects (with their
+ * remaining seconds). The field is optional so the v5→v6 migration is a pure
+ * version bump and pre-effect saves load with none. Effects are cleared on
+ * death, so a saved-then-reloaded world restores whatever was active at save.
+ */
+export type SaveData = Omit<SaveDataV5, "version"> & {
+  version: 6;
+  effects?: SavedEffect[];
 };

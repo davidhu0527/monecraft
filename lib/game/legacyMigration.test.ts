@@ -22,7 +22,8 @@ function fakeStorage(initial: Record<string, string> = {}): Storage {
   };
 }
 
-const LEGACY_SAVE: SaveData = { version: 5, seed: 12345, changes: [[7, 3]], player: { x: 1, y: 2, z: 3 } } as SaveData;
+// A pre-multi-world blob under the legacy SAVE_KEY (readSave migrates it forward).
+const LEGACY_SAVE = { version: 5, seed: 12345, changes: [[7, 3]], player: { x: 1, y: 2, z: 3 } } as unknown as SaveData;
 
 /** Deterministic ids so the profile and world get distinct, predictable keys. */
 function seqDeps(storage: Storage) {

@@ -38,10 +38,12 @@ import {
   restoreEquippedArmor,
   restoreHearts,
   restoreHungerLevel,
+  restoreEffects,
   restoreInventorySlots,
   restoreSelectedSlot,
   restoreSpawnPoint,
   serializeContainers,
+  serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
@@ -188,6 +190,8 @@ export class GameEngine {
       this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
       this.state.spawnPoint = restoreSpawnPoint(save);
       this.state.lootedDungeonChests = new Set(readLootedChests(save));
+      // Restore any active effects (cleared on death, so a live save carries them).
+      for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
@@ -435,7 +439,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 5,
+      version: 6,
       seed: state.world.seed,
       worldType: this.worldType,
       changes: state.blockChanges.changes(),
@@ -452,7 +456,8 @@ export class GameEngine {
       hunger: state.hunger,
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
-      lootedChests: serializeLootedChests(state.lootedDungeonChests)
+      lootedChests: serializeLootedChests(state.lootedDungeonChests),
+      effects: serializeEffects(state.effects)
     };
   }
 

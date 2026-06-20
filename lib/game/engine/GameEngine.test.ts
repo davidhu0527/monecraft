@@ -1325,14 +1325,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 5 and carries clock, stats, and spawn point", () => {
+  test("save format is version 6 and carries clock, stats, and spawn point", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(5);
+    expect(save.version).toBe(6);
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);
@@ -1341,6 +1341,16 @@ describe("persistence", () => {
     expect(restored.state.spawnPoint).toEqual({ x: 12, y: 40, z: 8 });
     // Daylight is re-derived from the restored clock, not left at dawn.
     expect(restored.state.daylight).toBeCloseTo(daylightAt(123), 5);
+  });
+
+  test("active status effects round-trip through serialize and restore", () => {
+    const engine = makeEngine();
+    engine.state.effects.set("speed", 25);
+    engine.state.effects.set("regeneration", 10);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.effects.get("speed")).toBe(25);
+    expect(restored.state.effects.get("regeneration")).toBe(10);
   });
 });
 

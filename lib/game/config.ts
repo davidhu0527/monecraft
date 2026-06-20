@@ -234,9 +234,9 @@ export const SAVE_KEY = "minecraft_save_v7";
 // lakes; v8 added shallow coal ore. Each world records the WORLDGEN_VERSION it
 // was generated under; a world whose recorded version differs from this constant
 // has its block-diffs discarded and is rebooted from its stored seed
-// (lib/game/worlds.ts). The save *schema* (SaveData) is independent and stays at
-// version 5 — lighting is a derived cache and lava is worldgen, so neither is
-// persisted.
+// (lib/game/worlds.ts). The save *schema* (SaveData, currently v6) is independent
+// of this — lighting is a derived cache and lava is worldgen, so neither is
+// persisted, and additive schema bumps (like v6's status effects) don't touch it.
 export const WORLDGEN_VERSION = 8;
 
 // Rendering
