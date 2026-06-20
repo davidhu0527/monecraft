@@ -2148,4 +2148,21 @@ describe("drinking potions", () => {
     expect(state.effects.size).toBe(0);
     expect(state.hunger).toBeGreaterThan(5);
   });
+
+  test("the HUD effects projection is ref-stable until the rounded countdown changes", () => {
+    const engine = makeEngine();
+    engine.state.effects.set("speed", 30);
+
+    engine.step(1 / 60, input());
+    const first = engine.getSnapshot().activeEffects;
+    expect(first).toEqual([{ id: "speed", seconds: 30 }]);
+
+    engine.step(1 / 60, input()); // still rounds up to 30s — no new array
+    expect(engine.getSnapshot().activeEffects).toBe(first);
+
+    run(engine, 1.5); // cross a whole-second boundary
+    const later = engine.getSnapshot().activeEffects;
+    expect(later).not.toBe(first);
+    expect(later[0].seconds).toBeLessThan(30);
+  });
 });

@@ -51,7 +51,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   craftingStation: null,
   container: null,
   boss: null,
-  victory: false
+  victory: false,
+  activeEffects: []
 };
 
 const noopSubscribe = () => () => {};
@@ -335,6 +336,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     container: snapshot.container,
     boss: snapshot.boss,
     victory: snapshot.victory,
+    activeEffects: snapshot.activeEffects,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,

@@ -283,6 +283,8 @@ export type GameSnapshot = {
   boss: ({ hpPercent: number } & BossTracking) | null;
   /** True after the boss is defeated — drives the victory screen. */
   victory: boolean;
+  /** Active status effects (id + rounded seconds left) — drives the HUD effects readout. Ref-stable between content changes. */
+  activeEffects: Array<{ id: EffectId; seconds: number }>;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */

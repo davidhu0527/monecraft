@@ -55,7 +55,7 @@ import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
-import { addEffect, clearEffects, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
+import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -98,6 +98,11 @@ export class GameEngine {
   // Navigation values are rounded, so the ref-equality snapshot diff updates
   // the HUD responsively without forcing a React render for sub-block movement.
   private lastBoss: ({ hpPercent: number } & BossTracking) | null = null;
+  // The effects HUD projection is rebuilt only when its content (ids / rounded
+  // seconds) changes, so the snapshot ref stays stable frame-to-frame and the
+  // countdown re-renders at most ~once per second instead of every frame.
+  private lastEffectsKey = "";
+  private lastEffects: GameSnapshot["activeEffects"] = [];
 
   constructor(options: GameEngineOptions = {}) {
     const save = options.save ?? null;
@@ -665,6 +670,25 @@ export class GameEngine {
     return this.lastBoss;
   }
 
+  /**
+   * Active effects as a ref-stable array, rebuilt only when the visible content
+   * (ids or rounded seconds) changes — `Math.ceil(remaining)` only moves on
+   * integer-second boundaries, so the HUD countdown re-renders ~1 Hz, not 60 Hz.
+   */
+  private effectsProjection(): GameSnapshot["activeEffects"] {
+    const next: GameSnapshot["activeEffects"] = [];
+    for (const id of EFFECT_ORDER) {
+      const remaining = this.state.effects.get(id);
+      if (remaining && remaining > 0) next.push({ id, seconds: Math.ceil(remaining) });
+    }
+    const key = next.map((entry) => `${entry.id}:${entry.seconds}`).join(",");
+    if (key !== this.lastEffectsKey) {
+      this.lastEffectsKey = key;
+      this.lastEffects = next;
+    }
+    return this.lastEffects;
+  }
+
   private buildSnapshot(): GameSnapshot {
     const state = this.state;
     return {
@@ -690,7 +714,8 @@ export class GameEngine {
       craftingStation: state.craftingStation,
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
-      victory: state.victory
+      victory: state.victory,
+      activeEffects: this.effectsProjection()
     };
   }
 

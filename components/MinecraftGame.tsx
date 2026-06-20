@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import ActiveEffects from "@/components/game/ActiveEffects";
 import BossHealthBar from "@/components/game/BossHealthBar";
 import DeathScreen from "@/components/game/DeathScreen";
 import DebugOverlay from "@/components/game/DebugOverlay";
@@ -48,6 +49,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     container,
     boss,
     victory,
+    activeEffects,
     debugOpen,
     debug,
     saveMessage,
@@ -102,6 +104,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
       {showClickHint ? <div className="click-hint">Double-click to play</div> : null}
 
       <BossHealthBar boss={boss} />
+
+      <ActiveEffects effects={activeEffects} />
 
       {saveMessage && !paused ? (
         <div className="hud-toast" role="status">
