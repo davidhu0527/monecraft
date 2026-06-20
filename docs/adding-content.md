@@ -111,6 +111,15 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - Drop tables are pure data + a roll function: copy the `{ itemId, min, max, chance? }` shape and the `clampUnit` roll loop from `lib/game/mobLoot.ts` / `lib/game/dungeonLoot.ts`. Add a `*.test.ts` asserting every `itemId` exists in `ITEM_DEFS` and that rolls are deterministic under an injected rng.
 - To fill a **worldgen-placed** block-entity (a dungeon chest) whose contents can't live in the block-diff baseline: fill it lazily on first access, seeded from `world.seed ^ voxelIndex` (`dungeonLoot.seededRng`), and persist a set of _accessed_ indices (additive save field) — gate the fill on that set, **not** on whether the container is currently non-empty, or an emptied-then-reloaded entity re-rolls. `lib/game/engine/systems/dungeon.ts` (`fillDungeonChestIfUnlooted`), shared by the open and break paths, is the reference; see the exploit-guard test in `GameEngine.test.ts`.
 
+## A status effect (timed buff / hazard)
+
+- Effects live in `state.effects: Map<EffectId, number>` (id → remaining seconds), driven by `lib/game/engine/systems/statusEffects.ts`. Add an id to the `EffectId` union (`lib/game/types.ts`) and to `EFFECT_ORDER` + the `clearEffects`/helper logic; durations/strengths go in `config.ts`.
+- **Apply it at one seam.** Each existing effect reads at exactly one place: Speed multiplies `playerMotion.ts` speed (`speedMultiplier`), Strength adds to the melee dispatch in `GameEngine.ts` (`strengthBonus`), Fire Resistance / Water Breathing are booleans passed into `tickLavaExposure`/`tickOxygen` (`playerStats.ts`), and Regeneration/Poison run inside `tickStatusEffects` on their **own** accumulators. Prefer a gate/modifier over a new tick; `tickStatusEffects` already runs after `tickHealthRegen` and before the environmental ticks, so its gates are current.
+- **Damage that shouldn't kill** uses `applyNonLethalDamage` (`playerLife.ts`), not `applyUnmitigatedDamage` — poison floors at `POISON_FLOOR_HP`.
+- **Grant it.** A drinkable potion is a `material` item with an `effect: { id, durationSeconds }` (`ItemDef`/`InventorySlot`); the `drinkPotion` command and the `F` key apply it via `addEffect`. A brewed potion is a `station: "brewing"` recipe (see "A new item or recipe"). A hazard source just calls `addEffect` (e.g. the rotten-flesh roll in the `eatFood` case, using the injected `this.rng`).
+- **Show it.** Add a `HudIconName` + grid in `hudPixels.ts`; the cached `effectsProjection` in `GameEngine` feeds `GameSnapshot.activeEffects`, which `ActiveEffects.tsx` renders — keep the projection ref-stable (rebuild only when rounded seconds change) so the HUD doesn't thrash.
+- **Persist it.** Effects are an **additive save bump** — see [save-format.md](save-format.md) (v6); they're cleared on death and `restoreEffects` validates them on load.
+
 ## A new mechanic
 
 Add a system module under `lib/game/engine/systems/` (a function over `GameState`), give it a slot in the `GameEngine.step` sequence, and put its tunables in `lib/game/config.ts`. If the UI triggers it, add a `Command` variant. Write its headless test next to it.

@@ -64,7 +64,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | Right-click or `E` | Place/interact, or throw a selected spear                           |
 | `1`–`9`            | Select a hotbar slot                                                |
 | `I`                | Open / close inventory & crafting                                   |
-| `F`                | Eat the selected food                                               |
+| `F`                | Eat the selected food, or drink a selected potion                   |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front |
 | `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)               |
 | `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
@@ -128,6 +128,11 @@ Hunger gates two things:
 So eat before a fight. Press **`F`** to eat the selected food. Different foods
 restore different amounts — cooked meat fills far more than raw (see the
 [food table](reference.md#food)).
+
+**Watch the rotten flesh.** A zombie's drop fills a little hunger, but eating it
+has a high chance to **poison** you — you'll take steady damage for a few seconds.
+Poison **can't kill** (it floors at half a heart), so it's a survivable gamble
+when you're starving, but cook real meat when you can.
 
 ### Combat
 
@@ -226,16 +231,38 @@ is refused if there's no room rather than destroying the overflow). Stacks hold 
 to **99** items; tools, weapons, and armor take one slot each and show durability.
 
 The recipe book is **grouped into labeled sections** — Tools, Weapons, Armor,
-Building, Food, Materials, then the station-gated Smelting and Trades — and within
-each section the recipes you can make **right now** float to the top, so what's
-craftable is easy to spot among the dimmed entries.
+Building, Food, Materials, then the station-gated Smelting, Brewing, and Trades —
+and within each section the recipes you can make **right now** float to the top, so
+what's craftable is easy to spot among the dimmed entries.
 
 The basic recipe grid is always available. **Smelting** recipes (cooking raw meat)
 require a **furnace**: craft one from 8 cobble, place it, and right-click it to open
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **54 recipes** in the [reference](reference.md#recipes).
+See the full list of **65 recipes** in the [reference](reference.md#recipes).
+
+## Brewing and potions
+
+Once you've gathered some gold, craft a **brewing stand** (3 cobble + 1 gold ore),
+place it, and right-click it to open the panel in **brewing** mode — just like a
+furnace, the potion recipes unlock while the stand is open.
+
+Every potion starts with a **glass bottle** (3 glass → 3 bottles, on the basic
+grid). Add one reagent at the stand to brew a potion:
+
+| Potion          | Reagent   | While active                          |
+| --------------- | --------- | ------------------------------------- |
+| Swiftness       | Feather   | Move noticeably faster                |
+| Strength        | Gunpowder | Hit harder in melee                   |
+| Regeneration    | Wheat     | Steadily heal, even on an empty belly |
+| Fire Resistance | Coal      | Wade through lava unharmed            |
+| Water Breathing | Raw Fish  | Stay underwater without drowning      |
+
+**Drink** a potion the same way you eat — select it and press `F`. Its icon and a
+countdown appear top-left while it lasts. Effects survive a save and reload but
+are **cleared when you die**, and re-drinking the same potion just tops the timer
+back up. Full numbers are in the [reference](reference.md#status-effects).
 
 ## Doors
 
