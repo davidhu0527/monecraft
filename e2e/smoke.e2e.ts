@@ -173,6 +173,31 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   expect(restoredId).toBe("grass");
 });
 
+test("inventory edits persist across a plain reload, with no explicit save", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await page.waitForTimeout(500); // let the world settle
+
+  // Rearrange the inventory through the normal command, then reload WITHOUT
+  // pressing Save — only the app's save-before-leaving should persist it. (The
+  // 15s autosave can't have fired yet, so this isolates the leave save.)
+  const moved = await page.evaluate(() => {
+    const engine = window.__monecraft!.engine;
+    engine.dispatch({ type: "moveStack", from: 0, to: 20 });
+    const slot = engine.state.inventory[20];
+    return { id: slot.id, count: slot.count };
+  });
+  expect(moved.id).not.toBeNull();
+
+  await page.reload();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  const after = await page.evaluate(() => {
+    const slot = window.__monecraft!.engine.state.inventory[20];
+    return { id: slot.id, count: slot.count };
+  });
+  expect(after).toEqual(moved);
+});
+
 test("V cycles the camera views and the scene keeps rendering", async ({ gamePage: page }) => {
   await calmDaytime(page);
   const cameraMode = () => page.evaluate(() => window.__monecraft!.engine.state.cameraMode);
