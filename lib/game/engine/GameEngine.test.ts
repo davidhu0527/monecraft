@@ -1650,6 +1650,43 @@ describe("furnace and cooking", () => {
     expect(engine.state.inventoryOpen).toBe(false);
     expect(engine.state.craftingStation).toBeNull();
   });
+
+  test("right-clicking a brewing stand opens the inventory in brewing mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.BrewingStand);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "brewing")).toBe(true);
+    expect(state.inventoryOpen).toBe(true);
+    expect(state.craftingStation).toBe("brewing");
+  });
+
+  test("a potion only brews with the brewing stand open", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    giveItem(engine, "empty_bottle", 1);
+    giveItem(engine, "feather", 1);
+
+    engine.dispatch({ type: "craft", recipeId: "potion_speed" }); // no station open
+    expect(countsById(state.inventory).get("potion_speed")).toBeUndefined();
+    expect(countsById(state.inventory).get("empty_bottle")).toBe(1); // ingredients untouched
+
+    state.craftingStation = "brewing";
+    engine.dispatch({ type: "craft", recipeId: "potion_speed" });
+    expect(countsById(state.inventory).get("potion_speed")).toBe(1);
+    expect(countsById(state.inventory).get("empty_bottle")).toBeUndefined();
+  });
 });
 
 describe("animal breeding", () => {

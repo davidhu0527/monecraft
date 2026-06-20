@@ -56,9 +56,10 @@ export type Recipe = {
   result: { slotId: string; count: number };
   /**
    * Station required for this recipe; omitted means the basic crafting grid.
-   * "furnace" smelts; "villager" is a trade offer, unlocked while trading with a villager.
+   * "furnace" smelts; "villager" is a trade offer, unlocked while trading with a
+   * villager; "brewing" is a potion recipe, unlocked at a brewing stand.
    */
-  station?: "furnace" | "villager";
+  station?: "furnace" | "villager" | "brewing";
 };
 
 export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";

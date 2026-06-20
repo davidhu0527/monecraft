@@ -157,7 +157,7 @@ export type GameState = {
   respawnTimer: number;
   inventoryOpen: boolean;
   /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
-  craftingStation: "furnace" | "villager" | null;
+  craftingStation: "furnace" | "villager" | "brewing" | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
   /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
@@ -276,7 +276,7 @@ export type GameSnapshot = {
   /** True during the sleep fade — drives the fade-to-black overlay. */
   sleeping: boolean;
   /** Open crafting station (gates smelting recipes in the inventory panel). */
-  craftingStation: "furnace" | "villager" | null;
+  craftingStation: "furnace" | "villager" | "brewing" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
@@ -320,7 +320,7 @@ export type GameEvent =
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
-  | { type: "openedStation"; station: "furnace" | "villager" }
+  | { type: "openedStation"; station: "furnace" | "villager" | "brewing" }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }

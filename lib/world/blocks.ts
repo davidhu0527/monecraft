@@ -64,7 +64,10 @@ export const enum BlockId {
   Tnt = 49,
   // A young tree: plant on grass/dirt, grows into a tree over time (random ticks)
   // or instantly with bone meal. A solid cube like wheat (see atlas.ts).
-  Sapling = 50
+  Sapling = 50,
+  // A crafted station: right-click to open its brewing recipes (potions). Like
+  // the furnace, it gates `station: "brewing"` recipes (see interact.ts).
+  BrewingStand = 51
 }
 
 export enum BiomeId {
@@ -102,7 +105,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.DoorNorthLower]: 0xa8753f,
   [BlockId.Torch]: 0xffab40,
   [BlockId.Tnt]: 0xc0392b,
-  [BlockId.Sapling]: 0x5ea74a
+  [BlockId.Sapling]: 0x5ea74a,
+  [BlockId.BrewingStand]: 0x9a86b6
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -163,5 +167,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.Lava]: [0.85, 0.3, 0.08],
   [BlockId.Tnt]: [0.8, 0.22, 0.16],
   // A leafy green sprout with a hint of stem (painted in atlas.ts).
-  [BlockId.Sapling]: [0.28, 0.52, 0.22]
+  [BlockId.Sapling]: [0.28, 0.52, 0.22],
+  // A purple-grey stone base with a glowing rod (painted in atlas.ts).
+  [BlockId.BrewingStand]: [0.5, 0.46, 0.58]
 };
