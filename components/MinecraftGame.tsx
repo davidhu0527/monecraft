@@ -11,6 +11,7 @@ import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import VictoryScreen from "@/components/game/VictoryScreen";
+import XpBar from "@/components/game/XpBar";
 import type { Profile } from "@/lib/game/profiles";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import type { WorldMeta } from "@/lib/game/worlds";
@@ -50,6 +51,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     boss,
     victory,
     activeEffects,
+    xpLevel,
+    xpProgress,
     debugOpen,
     debug,
     saveMessage,
@@ -125,6 +128,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           oxygen={oxygen}
           maxOxygen={maxOxygen}
         />
+        <XpBar level={xpLevel} progress={xpProgress} />
         <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
       </div>
 

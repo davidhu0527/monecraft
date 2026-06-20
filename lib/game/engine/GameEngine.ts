@@ -60,7 +60,7 @@ import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tic
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
-import { awardXp } from "./systems/xp";
+import { awardXp, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
@@ -732,7 +732,9 @@ export class GameEngine {
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
       victory: state.victory,
-      activeEffects: this.effectsProjection()
+      activeEffects: this.effectsProjection(),
+      xpLevel: xpLevel(state.xp),
+      xpProgress: xpProgress(state.xp)
     };
   }
 

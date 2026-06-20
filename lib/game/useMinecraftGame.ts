@@ -52,7 +52,9 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   container: null,
   boss: null,
   victory: false,
-  activeEffects: []
+  activeEffects: [],
+  xpLevel: 0,
+  xpProgress: 0
 };
 
 const noopSubscribe = () => () => {};
@@ -337,6 +339,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     boss: snapshot.boss,
     victory: snapshot.victory,
     activeEffects: snapshot.activeEffects,
+    xpLevel: snapshot.xpLevel,
+    xpProgress: snapshot.xpProgress,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,

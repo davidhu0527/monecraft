@@ -287,6 +287,9 @@ export type GameSnapshot = {
   victory: boolean;
   /** Active status effects (id + rounded seconds left) — drives the HUD effects readout. Ref-stable between content changes. */
   activeEffects: Array<{ id: EffectId; seconds: number }>;
+  /** Current XP level and progress (0–1) toward the next — drives the HUD XP bar. */
+  xpLevel: number;
+  xpProgress: number;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
