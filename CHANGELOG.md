@@ -38,6 +38,8 @@ All notable changes to this project are documented in this file.
 
 - **A corrupt save no longer loads a broken world**: the player position is validated on load (`restorePlayerPosition` in `lib/game/save.ts`) — a missing or non-finite (NaN/Infinity) coordinate is rejected, leaving the fresh spawn in place. Previously a bad value was copied straight into the player and also slipped past the `position.y < 2` auto-unstuck net (any comparison with NaN is false), so a single corrupt byte could wedge a save.
 - **The renderer no longer leaks the block-atlas texture**: `GameRenderer.dispose()` now releases the shared world/glass atlas texture (Three.js `Material.dispose()` does not dispose its map), so switching worlds no longer accumulates orphaned GPU textures.
+- **Progress no longer vanishes on a dev hot reload**: the game now persists on component unmount, not only on the 15s autosave timer and `beforeunload`. Turbopack Fast Refresh remounts the game without a page reload (so `beforeunload` never fires), which previously discarded everything collected since the last autosave — most visible as **inventory items disappearing after editing code or rerunning dev**. The unmount save is silent and is deliberately **skipped for Load/Reset**, which intentionally re-read or discard the on-disk save.
+- **No setState or reload after unmount**: the React shell tracks and cancels its flash-message and world-reload `setTimeout`s on unmount, so leaving a world mid-timer can't fire a state update or a stray reload on a torn-down component.
 
 ## [0.9.0] - 2026-06-14
 
