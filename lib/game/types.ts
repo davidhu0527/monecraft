@@ -81,7 +81,7 @@ export type MobModel = {
 };
 
 /** A persisted inventory/container slot: just enough to rebuild it on load. */
-export type SavedSlot = { id: string | null; count: number; durability?: number };
+export type SavedSlot = { id: string | null; count: number; durability?: number; enchantments?: Enchantment[] };
 
 /** A block-entity: a placed chest's contents, keyed by its voxel index. */
 export type SavedContainer = { index: number; slots: SavedSlot[] };
@@ -142,12 +142,23 @@ export type SaveDataV5 = Omit<SaveDataV4, "version"> & {
 export type SavedEffect = { id: EffectId; remaining: number };
 
 /**
- * Current save shape (v6): v5 plus the active status effects (with their
- * remaining seconds). The field is optional so the v5→v6 migration is a pure
- * version bump and pre-effect saves load with none. Effects are cleared on
- * death, so a saved-then-reloaded world restores whatever was active at save.
+ * v6 save shape: v5 plus the active status effects (with their remaining
+ * seconds). The field is optional so the v5→v6 migration is a pure version bump
+ * and pre-effect saves load with none. Effects are cleared on death, so a
+ * saved-then-reloaded world restores whatever was active at save.
  */
-export type SaveData = Omit<SaveDataV5, "version"> & {
+export type SaveDataV6 = Omit<SaveDataV5, "version"> & {
   version: 6;
   effects?: SavedEffect[];
+};
+
+/**
+ * Current save shape (v7): v6 plus banked XP (`xp`). Enchantments ride inside
+ * each `SavedSlot` (additive). Both are optional, so the v6→v7 migration is a
+ * pure version bump and pre-XP saves load with `xp` 0 and no enchantments.
+ * Unlike effects, XP is a long-term currency and is NOT cleared on death.
+ */
+export type SaveData = Omit<SaveDataV6, "version"> & {
+  version: 7;
+  xp?: number;
 };

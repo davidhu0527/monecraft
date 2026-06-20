@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { INVENTORY_SLOTS } from "@/lib/game/config";
+import { ENCHANT_MAX_LEVEL, INVENTORY_SLOTS } from "@/lib/game/config";
 import { MAX_HEARTS, MAX_HUNGER } from "@/lib/game/config";
 import {
   inventorySlotsSnapshot,
@@ -8,6 +8,7 @@ import {
   migrateSaveV3toV4,
   migrateSaveV4toV5,
   migrateSaveV5toV6,
+  migrateSaveV6toV7,
   readContainers,
   readLootedChests,
   readSave,
@@ -15,14 +16,16 @@ import {
   restoreEffects,
   restoreHearts,
   restoreHungerLevel,
+  restoreInventorySlots,
   restoreSpawnPoint,
+  restoreXp,
   serializeContainers,
   serializeEffects,
   serializeLootedChests,
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5 } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5, SaveDataV6 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -42,7 +45,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 6,
+    version: 7,
     seed: 1337,
     changes: [
       [42, 0],
@@ -83,7 +86,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(6);
+    expect(parsed!.version).toBe(7);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -105,7 +108,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(6); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6
+    expect(parsed!.version).toBe(7); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -194,11 +197,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v6", () => {
+  test("readSave migrates a v2 save through to v7", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(6);
+    expect(parsed!.version).toBe(7);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -235,7 +238,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -310,7 +313,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -355,8 +358,55 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(restoreEffects(parsed)).toEqual([]);
+  });
+
+  test("migrateSaveV6toV7 is a pure version bump leaving xp absent", () => {
+    const v6: SaveDataV6 = { ...v5Save(), version: 6 };
+    const migrated = migrateSaveV6toV7(v6);
+    expect(migrated.version).toBe(7);
+    expect(migrated.xp).toBeUndefined();
+  });
+
+  test("restoreXp clamps to a non-negative integer; absent/garbage → 0", () => {
+    expect(restoreXp({ ...sampleSave(), xp: 42.9 })).toBe(42);
+    expect(restoreXp({ ...sampleSave(), xp: -5 })).toBe(0);
+    expect(restoreXp({ ...sampleSave(), xp: Number.NaN })).toBe(0);
+    expect(restoreXp({ ...sampleSave(), xp: undefined })).toBe(0);
+  });
+
+  test("xp and per-slot enchantments survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    const save: SaveData = {
+      ...sampleSave(),
+      xp: 57,
+      inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, enchantments: [{ id: "sharpness", level: 2 }] }]
+    };
+    writeSave(KEY, save, storage);
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.xp).toBe(57);
+    expect(parsed.inventorySlots?.[0].enchantments).toEqual([{ id: "sharpness", level: 2 }]);
+  });
+
+  test("restoreInventorySlots drops unknown enchant ids and clamps levels; non-durable items carry none", () => {
+    const dirty: SaveData = {
+      ...sampleSave(),
+      inventorySlots: [
+        {
+          id: "diamond_sword",
+          count: 1,
+          durability: 700,
+          enchantments: [
+            { id: "sharpness", level: 9 }, // over the cap → clamped
+            { id: "not_real", level: 1 }, // unknown → dropped
+            { id: "efficiency", level: 0 } // non-positive → dropped
+          ] as never
+        }
+      ]
+    };
+    const slots = restoreInventorySlots(dirty)!;
+    expect(slots[0].enchantments).toEqual([{ id: "sharpness", level: ENCHANT_MAX_LEVEL }]);
   });
 
   test("serializeEffects / restoreEffects round-trip the active effects", () => {
@@ -427,7 +477,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 7 };
+    const save = { ...sampleSave(), version: 8 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
@@ -451,11 +501,11 @@ describe("inventorySlotsSnapshot", () => {
   test("keeps only the persisted fields", () => {
     const snapshot = inventorySlotsSnapshot([createSlot("wood_pickaxe", 1), createSlot("dirt", 9), createEmptySlot()]);
     expect(snapshot).toEqual([
-      { id: "wood_pickaxe", count: 1, durability: 70 },
-      { id: "dirt", count: 9, durability: undefined },
-      { id: null, count: 0, durability: undefined }
+      { id: "wood_pickaxe", count: 1, durability: 70, enchantments: undefined },
+      { id: "dirt", count: 9, durability: undefined, enchantments: undefined },
+      { id: null, count: 0, durability: undefined, enchantments: undefined }
     ]);
     // Definition-derived fields (label, attack, minePower…) must not be persisted.
-    expect(Object.keys(snapshot[0]).sort()).toEqual(["count", "durability", "id"]);
+    expect(Object.keys(snapshot[0]).sort()).toEqual(["count", "durability", "enchantments", "id"]);
   });
 });

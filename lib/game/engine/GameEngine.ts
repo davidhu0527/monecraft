@@ -45,6 +45,7 @@ import {
   restoreInventorySlots,
   restoreSelectedSlot,
   restoreSpawnPoint,
+  restoreXp,
   serializeContainers,
   serializeEffects,
   serializeLootedChests
@@ -199,6 +200,8 @@ export class GameEngine {
       this.state.lootedDungeonChests = new Set(readLootedChests(save));
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
+      this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
+
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
@@ -464,7 +467,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 6,
+      version: 7,
       seed: state.world.seed,
       worldType: this.worldType,
       changes: state.blockChanges.changes(),
@@ -482,7 +485,8 @@ export class GameEngine {
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedDungeonChests),
-      effects: serializeEffects(state.effects)
+      effects: serializeEffects(state.effects),
+      xp: state.xp
     };
   }
 
