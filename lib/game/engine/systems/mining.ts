@@ -4,6 +4,7 @@ import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE,
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
+import { efficiencyMultiplier } from "@/lib/game/enchantments";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
@@ -34,7 +35,7 @@ export function canMineBlock(block: BlockId, toolTier: number): boolean {
 }
 
 export function miningSpeed(tool: InventorySlot | null): number {
-  return tool?.minePower ?? BARE_HAND_MINE_POWER;
+  return (tool?.minePower ?? BARE_HAND_MINE_POWER) * efficiencyMultiplier(tool);
 }
 
 export function resetMining(state: GameState): void {
@@ -131,7 +132,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
   }
-  if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+  if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
   addBlockDrop(state, targetBlock as BlockId, rng);
   awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
   state.worldMeshDirty = true;

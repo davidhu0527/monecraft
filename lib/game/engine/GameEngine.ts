@@ -62,6 +62,7 @@ import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tick
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
+import { sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -364,7 +365,7 @@ export class GameEngine {
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         // Spears consume the right-click/E action before all world interaction.
-        if (tryThrowSelectedSpear(state, this.emit)) break;
+        if (tryThrowSelectedSpear(state, this.emit, this.rng)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
@@ -383,13 +384,14 @@ export class GameEngine {
         // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
         // cooldown or with no arrows, but the swing animation still plays.
         if (isBow(state.inventory[state.selectedSlot])) {
-          tryFireBow(state, this.emit);
+          tryFireBow(state, this.emit, this.rng);
           break;
         }
-        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state), this.removeMobAt, weaponReach(state));
+        const heldWeapon = state.inventory[state.selectedSlot];
+        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state) + sharpnessBonus(heldWeapon), this.removeMobAt, weaponReach(state));
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
-          state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+          state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
           resetMining(state);
         }
         break;
@@ -523,7 +525,7 @@ export class GameEngine {
 
   private applyDamage = (amount: number): void => {
     const heartsBefore = this.state.hearts;
-    const died = applyDamageWithArmor(this.state, amount);
+    const died = applyDamageWithArmor(this.state, amount, this.rng);
     this.syncEquippedArmor();
     if (died) {
       clearEffects(this.state);

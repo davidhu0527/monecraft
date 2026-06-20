@@ -96,7 +96,7 @@ export function isBow(slot: InventorySlot | undefined): boolean {
  * false (no shot) when the bow is on cooldown or the player has no arrows — the
  * caller has already confirmed a bow is held via isBow, so a bow never melees.
  */
-export function tryFireBow(state: GameState, emit: EmitGameEvent): boolean {
+export function tryFireBow(state: GameState, emit: EmitGameEvent, rng?: () => number): boolean {
   const slot = state.inventory[state.selectedSlot];
   if (!isBow(slot)) return false;
   if (state.timers.bowCooldownTimer > 0) return false;
@@ -114,7 +114,7 @@ export function tryFireBow(state: GameState, emit: EmitGameEvent): boolean {
   });
 
   state.inventory = adjustSlotCount(state.inventory, "arrow", -1) ?? state.inventory;
-  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, BOW_DURABILITY_PER_SHOT) ?? state.inventory;
+  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, BOW_DURABILITY_PER_SHOT, rng) ?? state.inventory;
   state.timers.bowCooldownTimer = BOW_COOLDOWN_SECONDS;
   emit({ type: "bowFired" });
   return true;

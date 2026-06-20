@@ -1223,6 +1223,32 @@ describe("gameplay events", () => {
     expect(state.xp).toBe(1); // unchanged
   });
 
+  test("a Sharpness enchant makes the held weapon hit harder", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    state.mobs = [];
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.selectedSlot = 0;
+
+    spawnTestMob(engine, "sheep", false, { x: 0, y: EYE_HEIGHT, z: -2 });
+    const mob = state.mobs[state.mobs.length - 1];
+
+    state.inventory[0] = createSlot("stone_sword", 1);
+    mob.hp = 100;
+    engine.dispatch({ type: "attack" });
+    const plainDamage = 100 - mob.hp;
+
+    state.inventory[0] = { ...createSlot("stone_sword", 1), enchantments: [{ id: "sharpness", level: 2 }] };
+    mob.hp = 100;
+    engine.dispatch({ type: "attack" });
+    const enchantedDamage = 100 - mob.hp;
+
+    expect(enchantedDamage).toBeGreaterThan(plainDamage);
+  });
+
   test("spears hit farther than ordinary melee weapons", () => {
     const engine = makeEngine();
     calmDaytime(engine);

@@ -43,7 +43,7 @@ export function tryFish(state: GameState, emit: EmitGameEvent, rng: () => number
       for (const drop of items) {
         state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
       }
-      state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+      state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
       awardXp(state, FISHING_XP, emit);
       emit({ type: "fishingCaught", items, x, y, z });
     } else {

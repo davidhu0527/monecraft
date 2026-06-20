@@ -237,7 +237,7 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
   if (isHoe) {
     if (block !== BlockId.Grass && block !== BlockId.Dirt) return false;
     state.blockChanges.set(x, y, z, BlockId.Farmland);
-    state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+    state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
     state.worldMeshDirty = true;
     emit({ type: "tilledSoil" });
     return true;

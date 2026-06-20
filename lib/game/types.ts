@@ -11,6 +11,12 @@ export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance"
 /** The effect a drinkable potion applies, with how long it lasts. */
 export type ItemEffect = { id: EffectId; durationSeconds: number };
 
+/** A gear enchantment applied at the enchanting table; each maps to one combat/mining/durability seam. */
+export type EnchantmentId = "sharpness" | "protection" | "efficiency" | "unbreaking";
+
+/** A per-item-instance enchantment and its level. */
+export type Enchantment = { id: EnchantmentId; level: number };
+
 export type ItemDef = {
   id: string;
   label: string;
@@ -47,6 +53,8 @@ export type InventorySlot = {
   maxDurability?: number;
   hunger?: number;
   effect?: ItemEffect;
+  /** Per-instance enchantments (durable gear only) — applied at the enchanting table. */
+  enchantments?: Enchantment[];
 };
 
 export type Recipe = {
