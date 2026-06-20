@@ -894,6 +894,25 @@ export const EAT_SOUND: SoundDef = {
   minRetriggerMs: 150
 };
 
+// A liquid "glug" — softer and more tonal than chewing, with a downward swallow.
+export const DRINK_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.1,
+    frequency: 150,
+    sustain: 0.06,
+    release: 0.09,
+    shape: 0,
+    slide: -2,
+    repeatTime: 0.12,
+    noise: 0.2,
+    sustainVolume: 0.6,
+    decay: 0.04,
+    filter: -500
+  }),
+  minRetriggerMs: 200
+};
+
 export const DEATH_SOUND: SoundDef = {
   params: zz({
     volume: 0.8,

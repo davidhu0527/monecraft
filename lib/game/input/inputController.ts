@@ -100,7 +100,9 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
     }
     if (evt.code === "KeyF") {
       evt.preventDefault();
-      engine.dispatch({ type: "eatFood" });
+      // One key for consumables: a held potion is drunk for its effect, anything else is eaten.
+      const held = engine.state.inventory[engine.state.selectedSlot];
+      engine.dispatch({ type: held?.effect ? "drinkPotion" : "eatFood" });
     }
 
     input.keys.add(evt.code);

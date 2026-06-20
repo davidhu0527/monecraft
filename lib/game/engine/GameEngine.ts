@@ -55,7 +55,7 @@ import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
-import { clearEffects, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
+import { addEffect, clearEffects, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -329,6 +329,17 @@ export class GameEngine {
         state.inventory = next;
         state.hunger = restoreHunger(state.hunger, slot.hunger);
         this.emit({ type: "ateFood" });
+        break;
+      }
+      case "drinkPotion": {
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        const slot = state.inventory[state.selectedSlot];
+        if (!slot?.id || !slot.effect || slot.count <= 0) break;
+        const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
+        if (!next) break;
+        state.inventory = next;
+        addEffect(state, slot.effect.id, slot.effect.durationSeconds);
+        this.emit({ type: "drankPotion" });
         break;
       }
       case "placeBlock": {

@@ -706,6 +706,34 @@ const SUMMONER_PALETTE: PixelPalette = {
 };
 const DRAGON_HEART_PALETTE: PixelPalette = { m: [196, 60, 168], M: [120, 30, 104], l: [236, 150, 230], w: [255, 240, 255] };
 
+// A round flask: dark outline (o), cork (C), glass neck (g) and an `L`/`h`
+// liquid fill recolored per potion. Empty bottles reuse a glass tint for L/h.
+const BOTTLE_GRID = [
+  "................",
+  "......oooo......",
+  "......oCCo......",
+  "......oCCo......",
+  ".......gg.......",
+  ".......gg.......",
+  "......oggo......",
+  ".....oLLLLo.....",
+  "....oLLLLLLo....",
+  "...oLLLLLLLLo...",
+  "...oLhLLLLLLo...",
+  "...oLLLLLLLLo...",
+  "...oLLLLLLLLo...",
+  "....oLLLLLLo....",
+  ".....oLLLLo.....",
+  "......oooo......"
+];
+const POTION_GLASS: PixelPalette = { o: [40, 40, 52], C: [120, 80, 46], g: [176, 210, 224] };
+const POTION_SPEED_PALETTE: PixelPalette = { ...POTION_GLASS, L: [124, 205, 238], h: [190, 235, 250] };
+const POTION_STRENGTH_PALETTE: PixelPalette = { ...POTION_GLASS, L: [209, 72, 72], h: [240, 140, 140] };
+const POTION_REGEN_PALETTE: PixelPalette = { ...POTION_GLASS, L: [225, 90, 170], h: [245, 170, 215] };
+const POTION_FIRE_RESIST_PALETTE: PixelPalette = { ...POTION_GLASS, L: [230, 140, 40], h: [250, 195, 120] };
+const POTION_WATER_BREATHING_PALETTE: PixelPalette = { ...POTION_GLASS, L: [60, 150, 200], h: [150, 210, 235] };
+const EMPTY_BOTTLE_PALETTE: PixelPalette = { ...POTION_GLASS, L: [150, 190, 205], h: [205, 230, 240] };
+
 /**
  * Pixel grids for non-block, non-gear items (materials, food). Keyed by item id
  * so adding an item only needs an entry here plus its ITEM_DEFS row. The render
@@ -742,7 +770,13 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   bow: { grid: BOW_GRID, palette: BOW_PALETTE },
   arrow: { grid: ARROW_GRID, palette: ARROW_PALETTE },
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
-  dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE }
+  dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },
+  empty_bottle: { grid: BOTTLE_GRID, palette: EMPTY_BOTTLE_PALETTE },
+  potion_speed: { grid: BOTTLE_GRID, palette: POTION_SPEED_PALETTE },
+  potion_strength: { grid: BOTTLE_GRID, palette: POTION_STRENGTH_PALETTE },
+  potion_regeneration: { grid: BOTTLE_GRID, palette: POTION_REGEN_PALETTE },
+  potion_fire_resistance: { grid: BOTTLE_GRID, palette: POTION_FIRE_RESIST_PALETTE },
+  potion_water_breathing: { grid: BOTTLE_GRID, palette: POTION_WATER_BREATHING_PALETTE }
 };
 
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).

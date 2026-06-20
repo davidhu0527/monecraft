@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
 import {
   DAY_CYCLE_SECONDS,
+  EFFECT_SPEED_DURATION,
   EYE_HEIGHT,
   MAX_HUNGER,
   MAX_HEARTS,
@@ -2072,5 +2073,42 @@ describe("fishing", () => {
     expect(state.fishing).toBeNull();
     expect(state.inventory[state.selectedSlot].durability).toBe(state.inventory[state.selectedSlot].maxDurability);
     expect(engine.consumeEvents().some((e) => e.type === "fishingReeledEmpty")).toBe(true);
+  });
+});
+
+describe("drinking potions", () => {
+  test("drinking a potion applies its effect, consumes one, and emits drankPotion", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[state.selectedSlot] = createSlot("potion_speed", 2);
+
+    engine.dispatch({ type: "drinkPotion" });
+
+    expect(state.effects.get("speed")).toBe(EFFECT_SPEED_DURATION);
+    expect(state.inventory[state.selectedSlot].count).toBe(1);
+    expect(engine.consumeEvents().some((e) => e.type === "drankPotion")).toBe(true);
+  });
+
+  test("drinkPotion is a no-op on a non-potion item (eat handles food)", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[state.selectedSlot] = createSlot("bread", 1);
+
+    engine.dispatch({ type: "drinkPotion" });
+
+    expect(state.effects.size).toBe(0);
+    expect(state.inventory[state.selectedSlot].count).toBe(1); // not consumed
+  });
+
+  test("eating food never grants an effect", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.hunger = 5;
+    state.inventory[state.selectedSlot] = createSlot("bread", 1);
+
+    engine.dispatch({ type: "eatFood" });
+
+    expect(state.effects.size).toBe(0);
+    expect(state.hunger).toBeGreaterThan(5);
   });
 });

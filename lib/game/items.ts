@@ -1,5 +1,10 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
 import {
+  EFFECT_FIRE_RESIST_DURATION,
+  EFFECT_REGEN_DURATION,
+  EFFECT_SPEED_DURATION,
+  EFFECT_STRENGTH_DURATION,
+  EFFECT_WATER_BREATHING_DURATION,
   FISHING_ROD_DURABILITY,
   GRASS_SEED_DROP_CHANCE,
   INVENTORY_SLOTS,
@@ -117,6 +122,25 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "tnt", label: "TNT", kind: "block", blockId: BlockId.Tnt },
   // Trade currency: earn emeralds by selling materials to a villager, spend them on goods.
   { id: "emerald", label: "Emerald", kind: "material" },
+  // Brewing — a glass bottle is the base for every potion; each potion drinks
+  // (via the eat key) to grant its timed status effect. Potions are `material`
+  // so they carry no hunger; drinking consumes the whole item (no bottle back).
+  { id: "empty_bottle", label: "Glass Bottle", kind: "material" },
+  { id: "potion_speed", label: "Potion of Swiftness", kind: "material", effect: { id: "speed", durationSeconds: EFFECT_SPEED_DURATION } },
+  { id: "potion_strength", label: "Potion of Strength", kind: "material", effect: { id: "strength", durationSeconds: EFFECT_STRENGTH_DURATION } },
+  { id: "potion_regeneration", label: "Potion of Regeneration", kind: "material", effect: { id: "regeneration", durationSeconds: EFFECT_REGEN_DURATION } },
+  {
+    id: "potion_fire_resistance",
+    label: "Potion of Fire Resistance",
+    kind: "material",
+    effect: { id: "fire_resistance", durationSeconds: EFFECT_FIRE_RESIST_DURATION }
+  },
+  {
+    id: "potion_water_breathing",
+    label: "Potion of Water Breathing",
+    kind: "material",
+    effect: { id: "water_breathing", durationSeconds: EFFECT_WATER_BREATHING_DURATION }
+  },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },

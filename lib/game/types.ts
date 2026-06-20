@@ -8,6 +8,9 @@ export type EquippedArmor = Record<ArmorSlot, string | null>;
 /** A timed status effect on the player. Positive effects come from potions; poison is a hazard. */
 export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "poison";
 
+/** The effect a drinkable potion applies, with how long it lasts. */
+export type ItemEffect = { id: EffectId; durationSeconds: number };
+
 export type ItemDef = {
   id: string;
   label: string;
@@ -23,6 +26,8 @@ export type ItemDef = {
   maxDurability?: number;
   /** Hunger points restored when eaten (food items only). */
   hunger?: number;
+  /** The status effect this potion applies when drunk (potion items only). */
+  effect?: ItemEffect;
 };
 
 export type InventorySlot = {
@@ -41,6 +46,7 @@ export type InventorySlot = {
   durability?: number;
   maxDurability?: number;
   hunger?: number;
+  effect?: ItemEffect;
 };
 
 export type Recipe = {
