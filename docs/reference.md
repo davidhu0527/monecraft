@@ -157,11 +157,11 @@ Source: `lib/game/engine/systems/xp.ts`, `lib/game/mobXp.ts`, `lib/game/enchantm
 
 ### XP sources
 
-| Source        | XP                                                   |
-| ------------- | ---------------------------------------------------- |
-| Mob kill      | passives 1–2, hostiles 5, **boss 200** (babies: 0)   |
-| Mining ore    | coal 1, sliver 2, ruby/gold 4, sapphire 6, diamond 8 |
-| Fishing catch | 2                                                    |
+| Source        | XP                                                       |
+| ------------- | -------------------------------------------------------- |
+| Mob kill      | passives 1–2, hostiles 5, **boss 200**; babies give none |
+| Mining ore    | coal 1, sliver 2, ruby/gold 4, sapphire 6, diamond 8     |
+| Fishing catch | 2                                                        |
 
 ### Enchantments
 
