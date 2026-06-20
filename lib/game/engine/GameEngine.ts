@@ -15,6 +15,7 @@ import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
+  ENCHANT_COST_LEVELS,
   HOTBAR_SLOTS,
   MAX_HUNGER,
   MAX_HEARTS,
@@ -44,6 +45,7 @@ import {
   restoreInventorySlots,
   restoreSelectedSlot,
   restoreSpawnPoint,
+  restoreXp,
   serializeContainers,
   serializeEffects,
   serializeLootedChests
@@ -60,6 +62,9 @@ import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tic
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
+import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
+import { xpForMob } from "@/lib/game/mobXp";
+import { applyEnchant, canEnchant, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -150,6 +155,7 @@ export class GameEngine {
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
       effects: new Map(),
+      xp: 0,
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -194,6 +200,8 @@ export class GameEngine {
       this.state.lootedDungeonChests = new Set(readLootedChests(save));
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
+      this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
+
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
@@ -358,10 +366,22 @@ export class GameEngine {
         this.emit({ type: "drankPotion" });
         break;
       }
+      case "enchant": {
+        // Only at an open enchanting table; applies to the selected item instance.
+        if (state.isDead || state.craftingStation !== "enchanting") break;
+        const slot = state.inventory[state.selectedSlot];
+        if (!canEnchant(slot, command.enchant)) break;
+        if (!spendXpLevels(state, ENCHANT_COST_LEVELS)) break; // too few levels
+        const next = [...state.inventory];
+        next[state.selectedSlot] = applyEnchant(slot, command.enchant);
+        state.inventory = next;
+        this.emit({ type: "enchanted", enchant: command.enchant });
+        break;
+      }
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
         // Spears consume the right-click/E action before all world interaction.
-        if (tryThrowSelectedSpear(state, this.emit)) break;
+        if (tryThrowSelectedSpear(state, this.emit, this.rng)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
@@ -380,13 +400,14 @@ export class GameEngine {
         // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
         // cooldown or with no arrows, but the swing animation still plays.
         if (isBow(state.inventory[state.selectedSlot])) {
-          tryFireBow(state, this.emit);
+          tryFireBow(state, this.emit, this.rng);
           break;
         }
-        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state), this.removeMobAt, weaponReach(state));
+        const heldWeapon = state.inventory[state.selectedSlot];
+        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state) + sharpnessBonus(heldWeapon), this.removeMobAt, weaponReach(state));
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
-          state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+          state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
           resetMining(state);
         }
         break;
@@ -446,7 +467,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 6,
+      version: 7,
       seed: state.world.seed,
       worldType: this.worldType,
       changes: state.blockChanges.changes(),
@@ -464,7 +485,8 @@ export class GameEngine {
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedDungeonChests),
-      effects: serializeEffects(state.effects)
+      effects: serializeEffects(state.effects),
+      xp: state.xp
     };
   }
 
@@ -520,7 +542,7 @@ export class GameEngine {
 
   private applyDamage = (amount: number): void => {
     const heartsBefore = this.state.hearts;
-    const died = applyDamageWithArmor(this.state, amount);
+    const died = applyDamageWithArmor(this.state, amount, this.rng);
     this.syncEquippedArmor();
     if (died) {
       clearEffects(this.state);
@@ -557,6 +579,8 @@ export class GameEngine {
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
+    // XP on kill, baby-gated like drops; the boss pays a jackpot.
+    if (mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
@@ -727,7 +751,9 @@ export class GameEngine {
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
       victory: state.victory,
-      activeEffects: this.effectsProjection()
+      activeEffects: this.effectsProjection(),
+      xpLevel: xpLevel(state.xp),
+      xpProgress: xpProgress(state.xp)
     };
   }
 

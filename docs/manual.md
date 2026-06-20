@@ -264,6 +264,28 @@ countdown appear top-left while it lasts. Effects survive a save and reload but
 are **cleared when you die**, and re-drinking the same potion just tops the timer
 back up. Full numbers are in the [reference](reference.md#status-effects).
 
+## Experience and enchanting
+
+Playing earns **XP**, shown as a green bar above the hotbar with your **level**
+over it. You gain XP for **killing mobs** (tougher mobs give more — the boss is a
+big payout), **mining ores** (rarer ores give more), and **reeling in fish**. XP
+is a currency, so unlike potion effects it **stays with you when you die**.
+
+Spend it at an **enchanting table** (craft one from **2 diamond ore + 4 cobble**).
+Place it, right-click to open the enchanting panel, then **select** the tool,
+weapon, or armor you want to improve in your hotbar — the panel shows the
+enchantments it can take. Each costs **3 levels** and can be applied up to **three
+times**:
+
+- **Sharpness** (weapons) — hit harder in melee
+- **Protection** (armor) — take less damage
+- **Efficiency** (tools) — mine faster
+- **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
+
+Buttons grey out when you can't afford the cost or the enchant is maxed.
+Enchantments are part of the item, so they're kept in chests and across reloads.
+Full numbers are in the [reference](reference.md#xp--enchanting).
+
 ## Doors
 
 Craft a **wood door** from **6 planks** and place it on a solid floor with two

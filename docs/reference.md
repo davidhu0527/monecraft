@@ -23,7 +23,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**65 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**66 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the nine **furnace** smelting
 recipes (need an open furnace) and the five **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -34,21 +34,22 @@ recipes you can currently afford first within each section.
 
 ### Building & materials
 
-| Result          | Ingredients           |
-| --------------- | --------------------- |
-| 4 Planks        | 2 Wood                |
-| 2 Glass         | 4 Sand                |
-| 2 Brick         | 2 Dirt + 2 Stone      |
-| 1 Furnace       | 8 Cobble              |
-| 1 Chest         | 8 Planks              |
-| 1 Brewing Stand | 3 Cobble + 1 Gold Ore |
-| 1 Wood Door     | 6 Planks              |
-| 4 Torch         | 1 Coal + 1 Wood       |
-| 1 Bed           | 3 Wool + 3 Planks     |
-| 1 Wool          | 4 String              |
-| 1 TNT           | 4 Gunpowder + 1 Sand  |
-| 3 Bone Meal     | 1 Bone                |
-| 3 Glass Bottle  | 3 Glass               |
+| Result             | Ingredients              |
+| ------------------ | ------------------------ |
+| 4 Planks           | 2 Wood                   |
+| 2 Glass            | 4 Sand                   |
+| 2 Brick            | 2 Dirt + 2 Stone         |
+| 1 Furnace          | 8 Cobble                 |
+| 1 Chest            | 8 Planks                 |
+| 1 Brewing Stand    | 3 Cobble + 1 Gold Ore    |
+| 1 Enchanting Table | 2 Diamond Ore + 4 Cobble |
+| 1 Wood Door        | 6 Planks                 |
+| 4 Torch            | 1 Coal + 1 Wood          |
+| 1 Bed              | 3 Wool + 3 Planks        |
+| 1 Wool             | 4 String                 |
+| 1 TNT              | 4 Gunpowder + 1 Sand     |
+| 3 Bone Meal        | 1 Bone                   |
+| 3 Glass Bottle     | 3 Glass                  |
 
 ### Tools
 
@@ -148,9 +149,36 @@ remaining time; **all clear on death** but otherwise persist across a reload.
 | Water Breathing | 3:00     | Potion (raw fish)   | Lungs stay full; no drowning                           |
 | Poison          | 0:08     | Eating rotten flesh | 1 HP / 1.25 s, but **never kills** (floors at ½ heart) |
 
+## XP & enchanting
+
+XP banks as points (`XP_PER_LEVEL` = 10 points per level) and is spent at an
+**enchanting table** to enchant the selected gear. XP is **kept across death**.
+Source: `lib/game/engine/systems/xp.ts`, `lib/game/mobXp.ts`, `lib/game/enchantments.ts`.
+
+### XP sources
+
+| Source        | XP                                                       |
+| ------------- | -------------------------------------------------------- |
+| Mob kill      | passives 1–2, hostiles 5, **boss 200**; babies give none |
+| Mining ore    | coal 1, sliver 2, ruby/gold 4, sapphire 6, diamond 8     |
+| Fishing catch | 2                                                        |
+
+### Enchantments
+
+Each costs **3 XP levels** per application, up to **level 3**, applied at the
+enchanting table to the selected tool/weapon/armor. Enchantments are per-item and
+survive a save.
+
+| Enchantment | Applies to          | Per level                          |
+| ----------- | ------------------- | ---------------------------------- |
+| Sharpness   | weapons             | +2 melee damage                    |
+| Protection  | armor               | +2 defense (more damage reduction) |
+| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed    |
+| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear  |
+
 ## Blocks
 
-**34 block types** (plus air). Hardness is relative break time — higher is slower.
+**35 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
@@ -170,6 +198,7 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                         |
 | Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                              |
 | Brewing Stand     | 4        | any             | **Interactive** — opens brewing recipes (potions). Crafted from 3 cobble + 1 gold ore                                 |
+| Enchanting Table  | 6        | any             | **Interactive** — opens the enchanting panel (spend XP levels). Crafted from 2 diamond ore + 4 cobble                 |
 | Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full)         |
 | Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                   |
 | Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                            |

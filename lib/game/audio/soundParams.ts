@@ -913,6 +913,39 @@ export const DRINK_SOUND: SoundDef = {
   minRetriggerMs: 200
 };
 
+// A bright upward "orb pickup" blip when XP is gained.
+export const XP_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.35,
+    randomness: 0.05,
+    frequency: 660,
+    sustain: 0.02,
+    release: 0.09,
+    shape: 1,
+    pitchJump: 240,
+    pitchJumpTime: 0.04,
+    decay: 0.02
+  }),
+  minRetriggerMs: 60
+};
+
+// A magical rising shimmer when an enchantment is applied.
+export const ENCHANT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.4,
+    frequency: 740,
+    sustain: 0.04,
+    release: 0.22,
+    shape: 1,
+    pitchJump: 420,
+    pitchJumpTime: 0.09,
+    repeatTime: 0.07,
+    tremolo: 0.3,
+    decay: 0.05
+  }),
+  minRetriggerMs: 200
+};
+
 export const DEATH_SOUND: SoundDef = {
   params: zz({
     volume: 0.8,

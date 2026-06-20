@@ -15,7 +15,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
-import type { Recipe } from "@/lib/game/types";
+import type { EnchantmentId, Recipe } from "@/lib/game/types";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
 
 /**
@@ -52,7 +52,9 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   container: null,
   boss: null,
   victory: false,
-  activeEffects: []
+  activeEffects: [],
+  xpLevel: 0,
+  xpProgress: 0
 };
 
 const noopSubscribe = () => () => {};
@@ -337,6 +339,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     boss: snapshot.boss,
     victory: snapshot.victory,
     activeEffects: snapshot.activeEffects,
+    xpLevel: snapshot.xpLevel,
+    xpProgress: snapshot.xpProgress,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
@@ -351,6 +355,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     maxOxygen: MAX_OXYGEN,
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
+    enchant: (id: EnchantmentId) => engine?.dispatch({ type: "enchant", enchant: id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     moveStack: (from: number, to: number) => engine?.dispatch({ type: "moveStack", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),

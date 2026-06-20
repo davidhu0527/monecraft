@@ -64,6 +64,7 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Furnace]: 5,
   [BlockId.Chest]: 3,
   [BlockId.BrewingStand]: 4,
+  [BlockId.EnchantingTable]: 6,
   [BlockId.MossyCobblestone]: 5,
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
@@ -93,6 +94,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
   { id: "brewing_stand", label: "Brewing Stand", kind: "block", blockId: BlockId.BrewingStand },
+  { id: "enchanting_table", label: "Enchanting Table", kind: "block", blockId: BlockId.EnchantingTable },
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
   { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
@@ -313,6 +315,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Furnace]: "furnace",
   [BlockId.Chest]: "chest",
   [BlockId.BrewingStand]: "brewing_stand",
+  [BlockId.EnchantingTable]: "enchanting_table",
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",

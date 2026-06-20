@@ -219,6 +219,20 @@ export const FISHING_BITE_WINDOW_SECONDS = 1.2;
 export const FISHING_TETHER_DISTANCE = 12;
 export const FISHING_ROD_DURABILITY = 64;
 
+// XP & enchanting. XP accrues from kills, ore mining, and fishing (the per-mob
+// and per-ore tables live in mobXp.ts / systems/xp.ts, like mobLoot.ts), banked
+// as points; XP_PER_LEVEL points make one level. Levels are spent at an
+// enchanting table — ENCHANT_COST_LEVELS per application, up to ENCHANT_MAX_LEVEL.
+// Each enchant is a flat per-level modifier at one existing seam.
+export const XP_PER_LEVEL = 10;
+export const FISHING_XP = 2;
+export const ENCHANT_MAX_LEVEL = 3;
+export const ENCHANT_COST_LEVELS = 3; // XP levels per enchant application
+export const SHARPNESS_DAMAGE_PER_LEVEL = 2; // +melee damage per level
+export const PROTECTION_DEFENSE_PER_LEVEL = 2; // +defense points per level (feeds armorReduction)
+export const EFFICIENCY_SPEED_PER_LEVEL = 0.3; // mining speed ×(1 + level × this)
+export const UNBREAKING_SKIP_PER_LEVEL = 0.2; // chance per level to skip durability wear
+
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;

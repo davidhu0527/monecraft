@@ -90,6 +90,25 @@ never kill; eating rotten flesh inflicts it with probability
 costs are balanced in `recipes.ts`, not here. Lengthen the buffs or cut the poison
 odds to make the system gentler; the reagent map is the economic dial.
 
+## XP & enchanting
+
+`XP_PER_LEVEL`, `FISHING_XP`, `ENCHANT_MAX_LEVEL`, `ENCHANT_COST_LEVELS`,
+`SHARPNESS_DAMAGE_PER_LEVEL`, `PROTECTION_DEFENSE_PER_LEVEL`,
+`EFFICIENCY_SPEED_PER_LEVEL`, `UNBREAKING_SKIP_PER_LEVEL`.
+
+XP banks as points; `XP_PER_LEVEL` (10) points make one level. The per-mob and
+per-ore XP tables live in `mobXp.ts` / `systems/xp.ts` (not here, like
+`mobLoot.ts`); `FISHING_XP` (2) is the per-catch reward. Enchanting costs
+`ENCHANT_COST_LEVELS` (3) levels per application, up to `ENCHANT_MAX_LEVEL` (3).
+Each enchant is a flat per-level modifier read at one seam:
+Sharpness `+SHARPNESS_DAMAGE_PER_LEVEL` (2) melee damage (`combat.ts` dispatch),
+Protection `+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
+`armorReduction`), Efficiency `×(1 + EFFICIENCY_SPEED_PER_LEVEL × level)` mining
+speed (`miningSpeed`), and Unbreaking a `UNBREAKING_SKIP_PER_LEVEL` (0.2)
+skip-chance per level (`consumeToolDurability`/`consumeEquippedArmorDurability`).
+Lower the costs or raise the magnitudes for faster progression; the XP-source
+tables are the earning dial.
+
 ## Danger — day-night & the mob director
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,

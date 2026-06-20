@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import EnchantingColumn from "@/components/game/EnchantingColumn";
 import ItemIcon from "@/components/game/ItemIcon";
 import { itemTooltipFor, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
@@ -6,7 +7,7 @@ import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot } from "@/lib/game/items";
 import { groupRecipes } from "@/lib/game/recipes";
 import { itemIconUrl } from "@/lib/ui/sprites";
-import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
+import type { EnchantmentId, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 type InventoryPanelProps = {
   inventory: InventorySlot[];
@@ -14,15 +15,19 @@ type InventoryPanelProps = {
   selectedHotbarSlot: number;
   hotbarSlots: number;
   recipes: Recipe[];
-  craftingStation: "furnace" | "villager" | "brewing" | null;
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
+  /** Current XP level + per-enchant cost, for the enchanting panel. */
+  xpLevel: number;
+  enchantCost: number;
   canCraft: (recipe: Recipe) => boolean;
   onSwapSlots: (fromIndex: number, toIndex: number) => void;
   /** Moves a slot across the inventory/chest boundary (chest indices offset by CONTAINER_SLOT_BASE). */
   onMoveStack: (fromIndex: number, toIndex: number) => void;
   onToggleEquipArmor: (index: number) => void;
   onCraft: (recipe: Recipe) => void;
+  onEnchant: (id: EnchantmentId) => void;
 };
 
 const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
@@ -45,11 +50,14 @@ export default function InventoryPanel({
   recipes,
   craftingStation,
   container,
+  xpLevel,
+  enchantCost,
   canCraft,
   onSwapSlots,
   onMoveStack,
   onToggleEquipArmor,
-  onCraft
+  onCraft,
+  onEnchant
 }: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const { tooltip, bind } = useItemTooltip();
@@ -184,19 +192,23 @@ export default function InventoryPanel({
           </div>
         </div>
 
-        <div className="recipe-book">
-          <div className="inventory-heading">{craftingStation === "villager" ? "Trading" : craftingStation === "brewing" ? "Brewing" : "Crafting"}</div>
-          <div className="recipe-list">
-            {recipeGroups.map((group) => (
-              <Fragment key={group.category}>
-                <div className="recipe-category" role="presentation">
-                  {group.category}
-                </div>
-                {group.recipes.map(renderRecipe)}
-              </Fragment>
-            ))}
+        {craftingStation === "enchanting" ? (
+          <EnchantingColumn item={inventory[selectedHotbarSlot]} xpLevel={xpLevel} cost={enchantCost} onEnchant={onEnchant} />
+        ) : (
+          <div className="recipe-book">
+            <div className="inventory-heading">{craftingStation === "villager" ? "Trading" : craftingStation === "brewing" ? "Brewing" : "Crafting"}</div>
+            <div className="recipe-list">
+              {recipeGroups.map((group) => (
+                <Fragment key={group.category}>
+                  <div className="recipe-category" role="presentation">
+                    {group.category}
+                  </div>
+                  {group.recipes.map(renderRecipe)}
+                </Fragment>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {tooltip}
     </div>

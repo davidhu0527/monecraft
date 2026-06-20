@@ -23,13 +23,16 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     selectedHotbarSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
-    craftingStation: null as "furnace" | null,
+    craftingStation: null as "furnace" | "enchanting" | null,
     container: null as InventorySlot[] | null,
+    xpLevel: 0,
+    enchantCost: 3,
     canCraft: () => true,
     onSwapSlots: mock(),
     onMoveStack: mock(),
     onToggleEquipArmor: mock(),
     onCraft: mock(),
+    onEnchant: mock(),
     ...overrides
   };
   render(<InventoryPanel {...props} />);

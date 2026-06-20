@@ -1,7 +1,9 @@
-import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { CHEST_SLOTS, ENCHANT_MAX_LEVEL, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type {
   EffectId,
+  Enchantment,
+  EnchantmentId,
   EquippedArmor,
   SaveData,
   SaveDataV1,
@@ -9,6 +11,7 @@ import type {
   SaveDataV3,
   SaveDataV4,
   SaveDataV5,
+  SaveDataV6,
   SavedContainer,
   SavedEffect,
   SavedSlot,
@@ -88,8 +91,17 @@ export function migrateSaveV4toV5(save: SaveDataV4): SaveDataV5 {
  * Migrates a v5 save to v6 — a pure version bump. `effects` (active status
  * effects) is optional, so a pre-effect save simply loads with none active.
  */
-export function migrateSaveV5toV6(save: SaveDataV5): SaveData {
+export function migrateSaveV5toV6(save: SaveDataV5): SaveDataV6 {
   return { ...save, version: 6 };
+}
+
+/**
+ * Migrates a v6 save to v7 — a pure version bump. `xp` (and per-slot
+ * `enchantments`) are optional, so a pre-XP save simply loads with `xp` 0 and no
+ * enchantments.
+ */
+export function migrateSaveV6toV7(save: SaveDataV6): SaveData {
+  return { ...save, version: 7 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -97,14 +109,15 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveData | SaveDataV5 | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
+    const parsed = JSON.parse(raw) as SaveData | SaveDataV6 | SaveDataV5 | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
     if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
     if (migrated.version === 5) migrated = migrateSaveV5toV6(migrated);
-    if (migrated.version !== 6) return null;
+    if (migrated.version === 6) migrated = migrateSaveV6toV7(migrated);
+    if (migrated.version !== 7) return null;
     return migrated;
   } catch {
     return null;
@@ -116,7 +129,27 @@ export function writeSave(saveKey: string, data: SaveData, storage: Storage = lo
 }
 
 export function inventorySlotsSnapshot(inventory: InventorySlot[]): SavedSlot[] {
-  return inventory.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability }));
+  return inventory.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability, enchantments: slot.enchantments }));
+}
+
+// Every known enchantment id, keyed so a new enchantment can't be forgotten here.
+const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
+  sharpness: true,
+  protection: true,
+  efficiency: true,
+  unbreaking: true
+};
+
+/** Validates persisted enchantments: known ids and integer levels clamped to 1..max; undefined when none survive. */
+function restoreEnchantments(saved: SavedSlot["enchantments"]): Enchantment[] | undefined {
+  if (!Array.isArray(saved)) return undefined;
+  const out: Enchantment[] = [];
+  for (const entry of saved) {
+    if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_ENCHANT_IDS, entry.id)) continue;
+    if (!Number.isFinite(entry.level) || Math.floor(entry.level) < 1) continue;
+    out.push({ id: entry.id, level: Math.min(ENCHANT_MAX_LEVEL, Math.floor(entry.level)) });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -136,6 +169,9 @@ function restoreSlot(saved: SavedSlot | undefined): InventorySlot {
     } else {
       slot.durability = slot.maxDurability;
     }
+    // Enchantments live only on durable gear; validated against the known set.
+    const enchantments = restoreEnchantments(saved.enchantments);
+    if (enchantments) slot.enchantments = enchantments;
   }
   return slot;
 }
@@ -278,6 +314,12 @@ export function restoreHearts(save: SaveData): number | null {
 export function restoreHungerLevel(save: SaveData): number | null {
   if (typeof save.hunger !== "number" || !Number.isFinite(save.hunger)) return null;
   return Math.max(0, Math.min(MAX_HUNGER, Math.floor(save.hunger)));
+}
+
+/** Restores banked XP (finite, ≥ 0); 0 when absent or invalid. */
+export function restoreXp(save: SaveData): number {
+  if (typeof save.xp !== "number" || !Number.isFinite(save.xp) || save.xp < 0) return 0;
+  return Math.floor(save.xp);
 }
 
 /** Restores the bed respawn point; null if absent or explicitly cleared. */

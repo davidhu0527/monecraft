@@ -40,6 +40,41 @@
   filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.45));
 }
 
+/* --- XP bar: a thin green track above the hotbar with the level over it --- */
+
+.xp-bar {
+  position: relative;
+  width: 182px;
+  display: flex;
+  justify-content: center;
+}
+
+.xp-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid #1c2b1c;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(to bottom, #93f24a, #57b524);
+}
+
+.xp-bar-level {
+  position: absolute;
+  top: -11px;
+  color: #9bff52;
+  font-size: 13px;
+  text-shadow:
+    1px 1px 0 #1a1a1a,
+    -1px 1px 0 #1a1a1a,
+    1px -1px 0 #1a1a1a,
+    -1px -1px 0 #1a1a1a;
+  pointer-events: none;
+}
+
 /* --- Active status effects: a stacked top-left column of icon + countdown --- */
 
 .active-effects {
@@ -439,6 +474,69 @@
 
 .recipe-entry:disabled img {
   filter: grayscale(0.9);
+}
+
+/* --- Enchanting panel (replaces the recipe book at an enchanting table) --- */
+
+.enchanting-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  gap: 8px;
+  border-left: 2px solid #9a9a9a;
+  padding-left: 12px;
+}
+
+.enchanting-hint {
+  color: #5a5a5a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.enchanting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.enchanting-cost {
+  color: #2c6e2c;
+  font-size: 11px;
+}
+
+.enchanting-list {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.enchant-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--mc-tile-well), var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+}
+
+.enchant-entry:hover:not(:disabled) {
+  background: var(--mc-tile-well), #a3a3a3;
+}
+
+.enchant-entry:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.enchant-cost {
+  color: #2c6e2c;
+  font-weight: 700;
 }
 
 .recipe-ingredients {
