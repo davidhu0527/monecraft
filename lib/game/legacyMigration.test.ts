@@ -6,7 +6,7 @@ import { getActiveProfile, PROFILES_KEY, readProfiles } from "./profiles";
 import { readSave } from "./save";
 import { SKIN_SETTINGS_KEY } from "./skinSettings";
 import { readWorlds, worldSaveKey, worldsForProfile } from "./worlds";
-import type { SaveData } from "./types";
+import type { SaveDataV5 } from "./types";
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
   const map = new Map(Object.entries(initial));
@@ -22,8 +22,8 @@ function fakeStorage(initial: Record<string, string> = {}): Storage {
   };
 }
 
-// A pre-multi-world blob under the legacy SAVE_KEY (readSave migrates it forward).
-const LEGACY_SAVE = { version: 5, seed: 12345, changes: [[7, 3]], player: { x: 1, y: 2, z: 3 } } as unknown as SaveData;
+// A pre-multi-world v5 blob under the legacy SAVE_KEY (readSave migrates it forward).
+const LEGACY_SAVE = { version: 5, seed: 12345, changes: [[7, 3]], player: { x: 1, y: 2, z: 3 } } as SaveDataV5;
 
 /** Deterministic ids so the profile and world get distinct, predictable keys. */
 function seqDeps(storage: Storage) {

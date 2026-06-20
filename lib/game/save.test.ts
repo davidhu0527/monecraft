@@ -376,6 +376,7 @@ describe("v5 to v6 migration & status effects", () => {
     const dirty = [
       { id: "speed", remaining: 30 },
       { id: "not_an_effect", remaining: 10 },
+      { id: "toString", remaining: 5 }, // a prototype key must not slip through
       { id: "poison", remaining: 0 },
       { id: "strength", remaining: Number.NaN }
     ] as never;

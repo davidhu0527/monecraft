@@ -186,7 +186,7 @@ export function restoreEffects(save: SaveData): SavedEffect[] {
   if (!Array.isArray(save.effects)) return [];
   const out: SavedEffect[] = [];
   for (const entry of save.effects) {
-    if (!entry || typeof entry.id !== "string" || !(entry.id in VALID_EFFECT_IDS)) continue;
+    if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_EFFECT_IDS, entry.id)) continue;
     if (!Number.isFinite(entry.remaining) || entry.remaining <= 0) continue;
     out.push({ id: entry.id, remaining: entry.remaining });
   }
