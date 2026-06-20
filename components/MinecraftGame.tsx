@@ -12,6 +12,7 @@ import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import VictoryScreen from "@/components/game/VictoryScreen";
 import XpBar from "@/components/game/XpBar";
+import { ENCHANT_COST_LEVELS } from "@/lib/game/config";
 import type { Profile } from "@/lib/game/profiles";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import type { WorldMeta } from "@/lib/game/worlds";
@@ -67,6 +68,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     maxOxygen,
     canCraft,
     craft,
+    enchant,
     swapInventorySlots,
     moveStack,
     toggleEquipArmor,
@@ -143,11 +145,14 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           recipes={recipes}
           craftingStation={craftingStation}
           container={container}
+          xpLevel={xpLevel}
+          enchantCost={ENCHANT_COST_LEVELS}
           canCraft={canCraft}
           onSwapSlots={swapInventorySlots}
           onMoveStack={moveStack}
           onToggleEquipArmor={toggleEquipArmor}
           onCraft={craft}
+          onEnchant={enchant}
         />
       ) : null}
 

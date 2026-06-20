@@ -929,6 +929,23 @@ export const XP_SOUND: SoundDef = {
   minRetriggerMs: 60
 };
 
+// A magical rising shimmer when an enchantment is applied.
+export const ENCHANT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.4,
+    frequency: 740,
+    sustain: 0.04,
+    release: 0.22,
+    shape: 1,
+    pitchJump: 420,
+    pitchJumpTime: 0.09,
+    repeatTime: 0.07,
+    tremolo: 0.3,
+    decay: 0.05
+  }),
+  minRetriggerMs: 200
+};
+
 export const DEATH_SOUND: SoundDef = {
   params: zz({
     volume: 0.8,

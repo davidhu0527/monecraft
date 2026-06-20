@@ -142,6 +142,18 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
             c = tone([0.52, 0.46, 0.62], 0.85 + n * 0.25); // purple-tinted body
           }
         }
+        if (block === BlockId.EnchantingTable) {
+          // A dark obsidian plinth with a glowing arcane book floating on top.
+          if (face === "top") {
+            const onBook = Math.abs(x - 7.5) < 4 && Math.abs(y - 7.5) < 3;
+            c = onBook ? tone([0.86, 0.3, 0.86], 0.85 + n * 0.4) : tone([0.12, 0.1, 0.2], 0.9 + n * 0.2);
+          } else if (y <= 4) {
+            c = tone([0.78, 0.32, 0.86], 0.8 + n * 0.5); // the glowing book band near the top
+          } else {
+            c = tone([0.14, 0.11, 0.24], 0.85 + n * 0.3); // obsidian base
+            if (n > 0.85) c = tone([0.5, 0.4, 0.85], 1); // faint arcane sparkle
+          }
+        }
         if (isDoorBlock(block)) {
           const state = doorState(block)!;
           const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;

@@ -3,6 +3,8 @@
  * controller goes through GameEngine.dispatch with one of these — the single
  * auditable entry point into the simulation.
  */
+import type { EnchantmentId } from "@/lib/game/types";
+
 /**
  * Slot indices passed to `moveStack` at or above this base address the open
  * chest (local index = value - base); below it they address the player
@@ -19,6 +21,7 @@ export type Command =
   | { type: "toggleEquipArmor"; index: number }
   | { type: "eatFood" }
   | { type: "drinkPotion" }
+  | { type: "enchant"; enchant: EnchantmentId }
   | { type: "placeBlock" }
   | { type: "attack" }
   | { type: "unstuck" }

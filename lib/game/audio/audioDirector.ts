@@ -16,6 +16,7 @@ import {
   DRINK_SOUND,
   EAT_SOUND,
   XP_SOUND,
+  ENCHANT_SOUND,
   FOOTSTEP_SOUNDS,
   HIT_TICK_SOUNDS,
   HURT_SOUND,
@@ -211,6 +212,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "xpGained":
           backend.play(XP_SOUND);
+          break;
+        case "enchanted":
+          backend.play(ENCHANT_SOUND);
           break;
         case "jumped":
           backend.play(JUMP_SOUND);

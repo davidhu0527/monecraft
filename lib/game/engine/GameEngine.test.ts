@@ -4,9 +4,11 @@ import { BlockId, collidesAt } from "@/lib/world";
 import {
   DAY_CYCLE_SECONDS,
   EFFECT_SPEED_DURATION,
+  ENCHANT_COST_LEVELS,
   EYE_HEIGHT,
   MAX_HUNGER,
   POISON_DURATION,
+  XP_PER_LEVEL,
   MAX_HEARTS,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
@@ -21,6 +23,8 @@ import {
 import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { enchantLevel } from "@/lib/game/enchantments";
+import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
@@ -1753,6 +1757,55 @@ describe("furnace and cooking", () => {
     engine.dispatch({ type: "craft", recipeId: "potion_speed" });
     expect(countsById(state.inventory).get("potion_speed")).toBe(1);
     expect(countsById(state.inventory).get("empty_bottle")).toBeUndefined();
+  });
+
+  test("right-clicking an enchanting table opens the inventory in enchanting mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.EnchantingTable);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "enchanting")).toBe(true);
+    expect(state.craftingStation).toBe("enchanting");
+  });
+
+  test("enchant applies to the held item, spends XP levels, and is refused when invalid", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[state.selectedSlot] = createSlot("diamond_sword", 1);
+    state.xp = XP_PER_LEVEL * 10; // 10 levels
+
+    // Refused away from a table.
+    engine.dispatch({ type: "enchant", enchant: "sharpness" });
+    expect(enchantLevel(state.inventory[state.selectedSlot], "sharpness")).toBe(0);
+
+    state.craftingStation = "enchanting";
+    engine.consumeEvents();
+    engine.dispatch({ type: "enchant", enchant: "sharpness" });
+    expect(enchantLevel(state.inventory[state.selectedSlot], "sharpness")).toBe(1);
+    expect(xpLevel(state.xp)).toBe(10 - ENCHANT_COST_LEVELS);
+    expect(engine.consumeEvents().some((e) => e.type === "enchanted")).toBe(true);
+
+    // Wrong kind for the item (Efficiency is tools-only) — refused, no XP spent.
+    const before = state.xp;
+    engine.dispatch({ type: "enchant", enchant: "efficiency" });
+    expect(enchantLevel(state.inventory[state.selectedSlot], "efficiency")).toBe(0);
+    expect(state.xp).toBe(before);
+
+    // Too poor — refused.
+    state.xp = 0;
+    engine.dispatch({ type: "enchant", enchant: "sharpness" });
+    expect(enchantLevel(state.inventory[state.selectedSlot], "sharpness")).toBe(1); // unchanged
   });
 });
 

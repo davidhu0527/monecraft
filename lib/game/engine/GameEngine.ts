@@ -15,6 +15,7 @@ import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
+  ENCHANT_COST_LEVELS,
   HOTBAR_SLOTS,
   MAX_HUNGER,
   MAX_HEARTS,
@@ -60,9 +61,9 @@ import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tic
 import { tickPlayerMotion } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
-import { awardXp, xpLevel, xpProgress } from "./systems/xp";
+import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
-import { sharpnessBonus } from "@/lib/game/enchantments";
+import { applyEnchant, canEnchant, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -360,6 +361,18 @@ export class GameEngine {
         state.inventory = next;
         addEffect(state, slot.effect.id, slot.effect.durationSeconds);
         this.emit({ type: "drankPotion" });
+        break;
+      }
+      case "enchant": {
+        // Only at an open enchanting table; applies to the selected item instance.
+        if (state.isDead || state.craftingStation !== "enchanting") break;
+        const slot = state.inventory[state.selectedSlot];
+        if (!canEnchant(slot, command.enchant)) break;
+        if (!spendXpLevels(state, ENCHANT_COST_LEVELS)) break; // too few levels
+        const next = [...state.inventory];
+        next[state.selectedSlot] = applyEnchant(slot, command.enchant);
+        state.inventory = next;
+        this.emit({ type: "enchanted", enchant: command.enchant });
         break;
       }
       case "placeBlock": {

@@ -476,6 +476,69 @@
   filter: grayscale(0.9);
 }
 
+/* --- Enchanting panel (replaces the recipe book at an enchanting table) --- */
+
+.enchanting-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  gap: 8px;
+  border-left: 2px solid #9a9a9a;
+  padding-left: 12px;
+}
+
+.enchanting-hint {
+  color: #5a5a5a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.enchanting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.enchanting-cost {
+  color: #2c6e2c;
+  font-size: 11px;
+}
+
+.enchanting-list {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.enchant-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--mc-tile-well), var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+}
+
+.enchant-entry:hover:not(:disabled) {
+  background: var(--mc-tile-well), #a3a3a3;
+}
+
+.enchant-entry:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.enchant-cost {
+  color: #2c6e2c;
+  font-weight: 700;
+}
+
 .recipe-ingredients {
   display: flex;
   align-items: center;

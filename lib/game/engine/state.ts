@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
-import type { EffectId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -158,8 +158,8 @@ export type GameState = {
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
-  /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
-  craftingStation: "furnace" | "villager" | "brewing" | null;
+  /** Crafting station whose recipes (or the enchanting panel) are unlocked while the inventory is open, or null. */
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
   /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
@@ -277,8 +277,8 @@ export type GameSnapshot = {
   capsActive: boolean;
   /** True during the sleep fade — drives the fade-to-black overlay. */
   sleeping: boolean;
-  /** Open crafting station (gates smelting recipes in the inventory panel). */
-  craftingStation: "furnace" | "villager" | "brewing" | null;
+  /** Open crafting station (gates smelting recipes, or opens the enchanting panel). */
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
@@ -328,7 +328,8 @@ export type GameEvent =
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
-  | { type: "openedStation"; station: "furnace" | "villager" | "brewing" }
+  | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" }
+  | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }

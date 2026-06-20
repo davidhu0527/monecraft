@@ -52,6 +52,11 @@ describe("recipe categories", () => {
     expect(recipe("empty_bottle").station).toBeUndefined();
   });
 
+  test("the enchanting table is a plain Building recipe (enchanting isn't recipe-gated)", () => {
+    expect(recipe("enchanting_table").station).toBeUndefined();
+    expect(recipeCategory(recipe("enchanting_table"))).toBe("Building");
+  });
+
   test("groupRecipes returns non-empty categories in the fixed display order", () => {
     const groups = groupRecipes(RECIPES, () => false);
     const positions = groups.map((g) => RECIPE_CATEGORY_ORDER.indexOf(g.category));
