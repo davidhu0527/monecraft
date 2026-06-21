@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { BlockId, type WorldType } from "@/lib/world";
+import type { GameMode } from "./gameModes";
 
 export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
@@ -153,12 +154,23 @@ export type SaveDataV6 = Omit<SaveDataV5, "version"> & {
 };
 
 /**
- * Current save shape (v7): v6 plus banked XP (`xp`). Enchantments ride inside
- * each `SavedSlot` (additive). Both are optional, so the v6→v7 migration is a
- * pure version bump and pre-XP saves load with `xp` 0 and no enchantments.
- * Unlike effects, XP is a long-term currency and is NOT cleared on death.
+ * v7 save shape: v6 plus banked XP (`xp`). Enchantments ride inside each
+ * `SavedSlot` (additive). Both are optional, so the v6→v7 migration is a pure
+ * version bump and pre-XP saves load with `xp` 0 and no enchantments. Unlike
+ * effects, XP is a long-term currency and is NOT cleared on death.
  */
-export type SaveData = Omit<SaveDataV6, "version"> & {
+export type SaveDataV7 = Omit<SaveDataV6, "version"> & {
   version: 7;
   xp?: number;
+};
+
+/**
+ * Current save shape (v8): v7 plus the player's game mode (`gameMode`). The
+ * field is optional, so the v7→v8 migration is a pure version bump and pre-mode
+ * saves load as "survival". Unlike `worldType` (fixed for the world's life),
+ * `gameMode` is switchable in-game, so the saved value is the *current* mode.
+ */
+export type SaveData = Omit<SaveDataV7, "version"> & {
+  version: 8;
+  gameMode?: GameMode;
 };

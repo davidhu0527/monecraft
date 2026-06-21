@@ -153,4 +153,17 @@ describe("worlds manifest", () => {
     });
     expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].worldType).toBe("default"); // unknown -> default
   });
+
+  test("stores the chosen game mode, defaulting and sanitizing", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "Creative", "1", { storage, uid: () => "wc", gameMode: "creative" }).gameMode).toBe("creative");
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wp" }).gameMode).toBe("survival"); // omitted -> survival
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, gameMode: "bogus", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].gameMode).toBe("survival"); // unknown -> survival
+  });
 });

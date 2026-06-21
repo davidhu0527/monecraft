@@ -44,6 +44,7 @@ import {
   restoreEffects,
   restoreInventorySlots,
   restorePlayerPosition,
+  restoreGameMode,
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
@@ -51,6 +52,7 @@ import {
   serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
+import type { GameMode } from "@/lib/game/gameModes";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { InventorySlot, SaveData } from "@/lib/game/types";
@@ -85,6 +87,8 @@ export type GameEngineOptions = {
   seed?: number;
   /** Generation preset; the save's own worldType wins when restoring. Defaults to "default". */
   worldType?: WorldType;
+  /** Initial game mode for a fresh world; the save's own gameMode wins when restoring. Defaults to "survival". */
+  gameMode?: GameMode;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -139,6 +143,10 @@ export class GameEngine {
     this.surfaceYAt = createSurfaceYAt(world);
 
     const firstSpawn = findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
+    // A restored save's own (possibly switched) mode wins; a fresh world takes
+    // the requested mode, defaulting to survival. isFlying is session-only and
+    // is reconciled to the mode by the motion tick (Spectator always flies).
+    const gameMode = save ? restoreGameMode(save) : (options.gameMode ?? "survival");
     this.state = {
       world,
       blockChanges,
@@ -152,6 +160,8 @@ export class GameEngine {
       inventory: createInitialInventory(),
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
+      gameMode,
+      isFlying: false,
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
@@ -469,9 +479,10 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 7,
+      version: 8,
       seed: state.world.seed,
       worldType: this.worldType,
+      gameMode: state.gameMode,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
       equippedArmor: { ...state.equippedArmor },
@@ -734,6 +745,8 @@ export class GameEngine {
       inventory: state.inventory,
       equippedArmor: state.equippedArmor,
       selectedSlot: state.selectedSlot,
+      gameMode: state.gameMode,
+      isFlying: state.isFlying,
       hearts: state.hearts,
       hunger: state.hunger,
       oxygen: state.oxygen,

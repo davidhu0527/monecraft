@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
+import type { GameMode } from "@/lib/game/gameModes";
 import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
@@ -147,6 +148,10 @@ export type GameState = {
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
   selectedSlot: number;
+  /** Current game mode. Persisted (save v8); switchable in-game via setGameMode. */
+  gameMode: GameMode;
+  /** True while flying (Creative toggle, always on for Spectator). Session-only, never serialized. */
+  isFlying: boolean;
   hearts: number;
   hunger: number;
   /** Remaining breath, 0..MAX_OXYGEN. Session-only; refills out of water. */
@@ -259,6 +264,10 @@ export type GameSnapshot = {
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
   selectedSlot: number;
+  /** Current game mode — drives mode-specific HUD (hidden bars, palette, flying indicator). */
+  gameMode: GameMode;
+  /** True while flying — drives the flight indicator. */
+  isFlying: boolean;
   hearts: number;
   hunger: number;
   /** Remaining breath, 0..MAX_OXYGEN — drives the bubble bar (hidden when full). */

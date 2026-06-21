@@ -12,6 +12,7 @@
  */
 
 import { isWorldType, type WorldType } from "@/lib/world";
+import { isGameMode, type GameMode } from "./gameModes";
 import { WORLDGEN_VERSION } from "./config";
 import { readManifestRaw, resolveDeps, sanitizeName, writeManifest, type ManifestDeps } from "./manifest";
 import { getProfile } from "./profiles";
@@ -22,6 +23,8 @@ export type WorldMeta = {
   name: string;
   seed: number;
   worldType: WorldType;
+  /** Initial game mode, chosen at creation. The *current* mode (switchable in-game) lives in the save blob. */
+  gameMode: GameMode;
   worldgenVersion: number;
   createdAt: number;
   lastPlayedAt: number;
@@ -90,6 +93,7 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
     name: sanitizeName(entry.name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: Math.floor(entry.seed),
     worldType: isWorldType(entry.worldType) ? entry.worldType : "default",
+    gameMode: isGameMode(entry.gameMode) ? entry.gameMode : "survival",
     worldgenVersion: num(entry.worldgenVersion, WORLDGEN_VERSION),
     createdAt: num(entry.createdAt, 0),
     lastPlayedAt: num(entry.lastPlayedAt, 0)
@@ -116,12 +120,12 @@ export function worldsForProfile(profileId: string, storage: Storage = localStor
     .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt || b.createdAt - a.createdAt);
 }
 
-/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds; `deps.worldType` picks the generation preset. */
+/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds; `deps.worldType` picks the generation preset; `deps.gameMode` picks the initial game mode. */
 export function createWorld(
   profileId: string,
   name: string,
   seedInput: string | null,
-  deps: ManifestDeps & { rng?: () => number; worldType?: WorldType } = {}
+  deps: ManifestDeps & { rng?: () => number; worldType?: WorldType; gameMode?: GameMode } = {}
 ): WorldMeta {
   const { storage, now, uid } = resolveDeps(deps);
   // Worlds must belong to a real profile — refuse to persist an orphan record.
@@ -133,6 +137,7 @@ export function createWorld(
     name: sanitizeName(name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: resolveSeed(seedInput, deps.rng ?? Math.random),
     worldType: isWorldType(deps.worldType) ? deps.worldType : "default",
+    gameMode: isGameMode(deps.gameMode) ? deps.gameMode : "survival",
     worldgenVersion: WORLDGEN_VERSION,
     createdAt,
     lastPlayedAt: createdAt
