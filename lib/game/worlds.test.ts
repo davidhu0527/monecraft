@@ -166,4 +166,17 @@ describe("worlds manifest", () => {
     });
     expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].gameMode).toBe("survival"); // unknown -> survival
   });
+
+  test("stores the chosen difficulty, defaulting and sanitizing", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "Hard", "1", { storage, uid: () => "wh", difficulty: "hard" }).difficulty).toBe("hard");
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wp" }).difficulty).toBe("normal"); // omitted -> normal
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, difficulty: "bogus", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].difficulty).toBe("normal"); // unknown -> normal
+  });
 });

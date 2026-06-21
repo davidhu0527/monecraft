@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BlockId, type WorldType } from "@/lib/world";
 import type { GameMode } from "./gameModes";
+import type { Difficulty } from "./difficulties";
 
 export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
@@ -165,12 +166,23 @@ export type SaveDataV7 = Omit<SaveDataV6, "version"> & {
 };
 
 /**
- * Current save shape (v8): v7 plus the player's game mode (`gameMode`). The
- * field is optional, so the v7→v8 migration is a pure version bump and pre-mode
- * saves load as "survival". Unlike `worldType` (fixed for the world's life),
+ * v8 save shape: v7 plus the player's game mode (`gameMode`). The field is
+ * optional, so the v7→v8 migration is a pure version bump and pre-mode saves
+ * load as "survival". Unlike `worldType` (fixed for the world's life),
  * `gameMode` is switchable in-game, so the saved value is the *current* mode.
  */
-export type SaveData = Omit<SaveDataV7, "version"> & {
+export type SaveDataV8 = Omit<SaveDataV7, "version"> & {
   version: 8;
   gameMode?: GameMode;
+};
+
+/**
+ * Current save shape (v9): v8 plus the player's difficulty (`difficulty`). The
+ * field is optional, so the v8→v9 migration is a pure version bump and pre-v9
+ * saves load as "normal". Like `gameMode`, difficulty is switchable in-game, so
+ * the saved value is the *current* difficulty.
+ */
+export type SaveData = Omit<SaveDataV8, "version"> & {
+  version: 9;
+  difficulty?: Difficulty;
 };
