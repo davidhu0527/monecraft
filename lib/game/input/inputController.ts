@@ -1,5 +1,6 @@
 import type { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
+import { FLY_DOUBLE_TAP_WINDOW_SECONDS } from "@/lib/game/config";
 
 const MOUSE_SENSITIVITY = 0.0021;
 
@@ -42,6 +43,9 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
   };
 
   const uiBlocked = () => engine.state.inventoryOpen || engine.state.isDead || engine.state.paused;
+
+  // Timestamp (ms) of the last discrete Space press, for double-tap-to-fly detection.
+  let lastSpaceTapAt = -Infinity;
 
   const onMouseMove = (evt: MouseEvent) => {
     if (!input.pointerLocked) return;
@@ -103,6 +107,19 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       // One key for consumables: a held potion is drunk for its effect, anything else is eaten.
       const held = engine.state.inventory[engine.state.selectedSlot];
       engine.dispatch({ type: held?.effect ? "drinkPotion" : "eatFood" });
+    }
+
+    // Double-tap Space toggles flight (Creative/Spectator). Ignore auto-repeat
+    // (held key) so only distinct presses count; the engine no-ops in modes
+    // that can't fly.
+    if (evt.code === "Space" && !evt.repeat) {
+      const now = performance.now();
+      if (now - lastSpaceTapAt <= FLY_DOUBLE_TAP_WINDOW_SECONDS * 1000) {
+        engine.dispatch({ type: "toggleFlight" });
+        lastSpaceTapAt = -Infinity; // consume the pair so a third tap starts fresh
+      } else {
+        lastSpaceTapAt = now;
+      }
     }
 
     input.keys.add(evt.code);

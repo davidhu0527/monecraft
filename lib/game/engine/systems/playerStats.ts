@@ -21,6 +21,7 @@ import {
   WALK_BLOCKS_PER_HUNGER
 } from "@/lib/game/config";
 import { BlockId } from "@/lib/world";
+import { takesDamage } from "@/lib/game/gameModes";
 import type { GameState } from "../state";
 import type { MoveTickResult } from "./playerMotion";
 
@@ -30,8 +31,9 @@ export function speedScaleFromHunger(hunger: number): number {
   return 0.62 + ratio * 0.38 + (ratio >= 0.99 ? 0.08 : 0);
 }
 
-/** Drains hunger from accumulated sprint/walk distance and jumps. */
+/** Drains hunger from accumulated sprint/walk distance and jumps. Creative/Spectator never hunger. */
 export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
+  if (!takesDamage(state.gameMode)) return;
   const { timers } = state;
   let drain = 0;
 
@@ -59,8 +61,13 @@ export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
   if (drain > 0) state.hunger = Math.max(0, state.hunger - drain);
 }
 
-/** Regenerates half a heart every interval while alive, hurt, and fed enough. */
+/** Regenerates half a heart every interval while alive, hurt, and fed enough. Creative/Spectator stay topped up. */
 export function tickHealthRegen(state: GameState, dt: number): void {
+  if (!takesDamage(state.gameMode)) {
+    state.hearts = MAX_HEARTS;
+    state.timers.regenTimer = 0;
+    return;
+  }
   if (!state.isDead && state.hearts < MAX_HEARTS && state.hunger >= REGEN_MIN_HUNGER) {
     state.timers.regenTimer += dt;
     if (state.timers.regenTimer >= HEALTH_REGEN_INTERVAL_SECONDS) {
@@ -143,6 +150,12 @@ export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amo
  */
 export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: number) => void, waterBreathing = false): void {
   const { player, timers, world } = state;
+  // Creative/Spectator never drown — keep the lungs full so the bubble bar hides.
+  if (!takesDamage(state.gameMode)) {
+    state.oxygen = MAX_OXYGEN;
+    timers.drownTimer = 0;
+    return;
+  }
   // Water Breathing keeps the lungs full and immune to drowning.
   if (waterBreathing) {
     state.oxygen = MAX_OXYGEN;

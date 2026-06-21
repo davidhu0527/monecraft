@@ -52,7 +52,7 @@ import {
   serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
-import type { GameMode } from "@/lib/game/gameModes";
+import { canFly, type GameMode } from "@/lib/game/gameModes";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { InventorySlot, SaveData } from "@/lib/game/types";
@@ -422,6 +422,12 @@ export class GameEngine {
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
           resetMining(state);
         }
+        break;
+      }
+      case "toggleFlight": {
+        // Creative/Spectator only; a no-op in survival/adventure or while dead/in menus.
+        if (!canFly(state.gameMode) || state.isDead || state.inventoryOpen) break;
+        state.isFlying = !state.isFlying;
         break;
       }
       case "unstuck": {

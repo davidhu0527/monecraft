@@ -24,6 +24,7 @@ export type Command =
   | { type: "enchant"; enchant: EnchantmentId }
   | { type: "placeBlock" }
   | { type: "attack" }
+  | { type: "toggleFlight" }
   | { type: "unstuck" }
   | { type: "pause" }
   | { type: "resume" }

@@ -1,13 +1,15 @@
 import { MAX_HEARTS, MAX_HUNGER, RESPAWN_SECONDS } from "@/lib/game/config";
+import { takesDamage } from "@/lib/game/gameModes";
 import { armorReduction, consumeEquippedArmorDurability } from "@/lib/game/inventory";
 import type { GameState } from "../state";
 
 /**
  * Applies armor-mitigated damage (always at least 1) and wears equipped armor.
  * Returns true when the hit was lethal — the engine emits the death event.
+ * Creative/Spectator are invulnerable, so every damage source no-ops here.
  */
 export function applyDamageWithArmor(state: GameState, amount: number, rng?: () => number): boolean {
-  if (state.isDead) return false;
+  if (state.isDead || !takesDamage(state.gameMode)) return false;
   const value = Math.max(0, Math.floor(amount));
   if (value <= 0) return false;
 
@@ -25,7 +27,7 @@ export function applyDamageWithArmor(state: GameState, amount: number, rng?: () 
 
 /** Applies environmental damage exactly, bypassing armor and durability wear. */
 export function applyUnmitigatedDamage(state: GameState, amount: number): boolean {
-  if (state.isDead) return false;
+  if (state.isDead || !takesDamage(state.gameMode)) return false;
   const value = Math.max(0, Math.floor(amount));
   if (value <= 0) return false;
 
@@ -43,7 +45,7 @@ export function applyUnmitigatedDamage(state: GameState, amount: number): boolea
  * heart yet never deliver the killing blow. Returns true when any damage landed.
  */
 export function applyNonLethalDamage(state: GameState, amount: number, floorHp = 1): boolean {
-  if (state.isDead) return false;
+  if (state.isDead || !takesDamage(state.gameMode)) return false;
   const value = Math.max(0, Math.floor(amount));
   if (value <= 0 || state.hearts <= floorHp) return false;
   state.hearts = Math.max(floorHp, state.hearts - value);

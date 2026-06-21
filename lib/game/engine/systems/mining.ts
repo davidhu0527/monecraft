@@ -3,6 +3,7 @@ import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlo
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
+import { freeBuild } from "@/lib/game/gameModes";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { efficiencyMultiplier } from "@/lib/game/enchantments";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
@@ -99,8 +100,10 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   const targetBlock = world.get(bx, by, bz);
   const tool = selectedTool(state);
   const tier = tool?.mineTier ?? 0;
+  // Creative breaks anything (bar bedrock) instantly, regardless of tool tier.
+  const creative = freeBuild(state.gameMode);
 
-  if (targetBlock === BlockId.Bedrock || targetBlock === BlockId.Air || !canMineBlock(targetBlock as BlockId, tier)) {
+  if (targetBlock === BlockId.Bedrock || targetBlock === BlockId.Air || (!creative && !canMineBlock(targetBlock as BlockId, tier))) {
     resetMining(state);
     return;
   }
@@ -111,9 +114,11 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
     mining.progress = 0;
   }
 
-  const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
-  mining.progress += dt * miningSpeed(tool) * MINING_RATE;
-  if (mining.progress < hardness) return;
+  if (!creative) {
+    const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
+    mining.progress += dt * miningSpeed(tool) * MINING_RATE;
+    if (mining.progress < hardness) return;
+  }
 
   // Breaking a chest empties it into the inventory first; if it does not all
   // fit, refuse the break so nothing is lost (the chest stays intact).
@@ -132,9 +137,12 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
   }
-  if (tool) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
-  addBlockDrop(state, targetBlock as BlockId, rng);
-  awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
+  // Creative breaks for free: no tool wear, no drops, no XP.
+  if (tool && !creative) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
+  if (!creative) {
+    addBlockDrop(state, targetBlock as BlockId, rng);
+    awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
+  }
   state.worldMeshDirty = true;
   resetMining(state);
   emit({ type: "blockBroken", blockId: targetBlock as BlockId, x: bx, y: by, z: bz });
@@ -159,15 +167,19 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   if (!slot || !slot.id || slot.kind !== "block" || slot.count <= 0 || slot.blockId === undefined) return;
   if (slot.blockId === BlockId.Bedrock) return;
 
-  const afterTake = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
-  if (!afterTake) return;
-  state.inventory = afterTake;
+  // Creative builds without spending the held stack (so no take, no refund).
+  const consume = !freeBuild(state.gameMode);
+  if (consume) {
+    const afterTake = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
+    if (!afterTake) return;
+    state.inventory = afterTake;
+  }
   let replacedUpper: BlockId | null = null;
   if (slot.id === "door") {
     const support = world.get(tx, ty - 1, tz);
     replacedUpper = world.get(tx, ty + 1, tz) as BlockId;
     if (ty + 1 >= world.sizeY || (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
-      state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
+      if (consume) state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
       return;
     }
     const facing = doorFacingFromYaw(state.player.yaw);
@@ -179,7 +191,7 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   if (collidesAt(world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
     state.blockChanges.set(tx, ty, tz, replacedBlock as BlockId);
     if (replacedUpper !== null) state.blockChanges.set(tx, ty + 1, tz, replacedUpper);
-    state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
+    if (consume) state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
     return;
   }
 

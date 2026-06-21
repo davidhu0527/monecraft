@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { collidesAt, hasSupportUnderPlayer } from "@/lib/world";
 import {
   CROUCH_SPEED,
+  FLY_SPEED,
   GRAVITY,
   JUMP_VELOCITY,
   PLAYER_HALF_WIDTH,
@@ -85,12 +86,20 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   player.velocity.z = scratchMoveDir.z * speed;
 
   const wasGrounded = player.onGround;
-  player.velocity.y -= GRAVITY * dt;
   let didJump = false;
-  if (wantsJump && player.onGround && !crouching) {
-    player.velocity.y = JUMP_VELOCITY;
-    player.onGround = false;
-    didJump = true;
+  if (state.isFlying) {
+    // Creative/Spectator flight: direct vertical control, no gravity. Space
+    // ascends, crouch descends, neither (or both) hovers. Collision still
+    // applies in Creative; Spectator's noclip is handled in stepAxis.
+    const ascend = (wantsJump ? 1 : 0) - (crouching ? 1 : 0);
+    player.velocity.y = ascend * FLY_SPEED;
+  } else {
+    player.velocity.y -= GRAVITY * dt;
+    if (wantsJump && player.onGround && !crouching) {
+      player.velocity.y = JUMP_VELOCITY;
+      player.onGround = false;
+      didJump = true;
+    }
   }
 
   const vyBeforeMove = player.velocity.y;
@@ -112,7 +121,8 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
     }
   }
 
-  if (crouching && (player.onGround || wasGrounded) && !hasSupportUnderPlayer(world, player.position, PLAYER_HALF_WIDTH + 0.12)) {
+  // While flying, crouch means "descend" — don't snap the player back from edges.
+  if (!state.isFlying && crouching && (player.onGround || wasGrounded) && !hasSupportUnderPlayer(world, player.position, PLAYER_HALF_WIDTH + 0.12)) {
     player.position.x = prevX;
     player.position.z = prevZ;
     player.velocity.x = 0;
