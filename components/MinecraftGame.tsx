@@ -143,6 +143,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
               armorPoints={armorPoints}
               oxygen={oxygen}
               maxOxygen={maxOxygen}
+              hardcore={hardcore}
             />
             <XpBar level={xpLevel} progress={xpProgress} />
           </>
