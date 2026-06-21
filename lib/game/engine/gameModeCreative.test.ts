@@ -150,6 +150,27 @@ describe("creative free build", () => {
     expect(e.state.world.get(px + 2, ey, pz)).toBe(BlockId.Dirt); // placed onto the wall face
     expect(e.state.inventory[0].count).toBe(10); // stack untouched in creative
   });
+
+  test("breaking a chest is a free, dropless break — no spill, no full-inventory refusal", () => {
+    const e = makeEngine("creative");
+    calmDaytime(e);
+    e.state.player.velocity.set(0, 0, 0);
+    e.state.player.pitch = -Math.PI / 2 + 0.01; // look straight down
+    const hit = aimedHit(e);
+    expect(hit).not.toBeNull();
+    const { x, y, z } = hit!.hit;
+    const idx = e.state.world.index(x, y, z);
+    // Make the targeted floor block a chest holding loot.
+    e.state.blockChanges.set(x, y, z, BlockId.Chest);
+    e.state.containers.set(idx, [createSlot("diamond_ore", 5)]);
+    const before = countsById(e.state.inventory);
+
+    e.step(1 / 60, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    expect(e.state.world.get(x, y, z)).toBe(BlockId.Air); // broken instantly
+    expect(e.state.containers.has(idx)).toBe(false); // contents vanished, not spilled into the inventory
+    expect(countsById(e.state.inventory)).toEqual(before); // nothing added
+  });
 });
 
 describe("creative palette give", () => {

@@ -28,7 +28,8 @@ const CONTROLS: Array<[string, string]> = [
   ["Inventory", "I"],
   ["Eat food", "F"],
   ["Hotbar", "1-9"],
-  ["Fly (Creative / Spectator)", "Double-tap Space"],
+  ["Toggle flight (Creative)", "Double-tap Space"],
+  ["Fly up / down", "Space / C (while flying)"],
   ["Camera view", "V"],
   ["Debug overlay", "F3"],
   ["Emergency unstuck", "Shift + U"]

@@ -126,10 +126,15 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   }
 
   // Breaking a chest empties it into the inventory first; if it does not all
-  // fit, refuse the break so nothing is lost (the chest stays intact).
-  if (targetBlock === BlockId.Chest && !spillChestOnBreak(state, world.index(bx, by, bz), emit)) {
-    resetMining(state);
-    return;
+  // fit, refuse the break so nothing is lost (the chest stays intact). Creative
+  // breaks for free — the chest and its contents just vanish (no spill, no refusal).
+  const chestIndex = targetBlock === BlockId.Chest ? world.index(bx, by, bz) : null;
+  if (chestIndex !== null) {
+    if (creative) state.containers.delete(chestIndex);
+    else if (!spillChestOnBreak(state, chestIndex, emit)) {
+      resetMining(state);
+      return;
+    }
   }
 
   if (isDoorBlock(targetBlock)) {

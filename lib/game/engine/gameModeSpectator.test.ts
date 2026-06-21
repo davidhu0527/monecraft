@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
 import { EYE_HEIGHT, MINE_REACH } from "@/lib/game/config";
+import { createSlot } from "@/lib/game/items";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { lookDirection } from "@/lib/game/engine/systems/playerMotion";
 import { applyDamageWithArmor } from "@/lib/game/engine/systems/playerLife";
@@ -71,6 +72,32 @@ describe("spectator", () => {
     const { x, y, z } = hit!.hit;
     for (let i = 0; i < 30; i += 1) e.step(1 / 60, input({ leftMouseHeld: true, pointerLocked: true }));
     expect(e.state.world.get(x, y, z)).not.toBe(BlockId.Air); // never mined
+  });
+
+  test("inventory commands (swap) are no-ops", () => {
+    const e = makeEngine("spectator");
+    e.state.inventory[0] = createSlot("dirt", 5);
+    e.state.inventory[1] = createSlot("stone", 3);
+    e.dispatch({ type: "swapSlots", from: 0, to: 1 });
+    expect(e.state.inventory[0].id).toBe("dirt"); // untouched — Spectator has no inventory
+    expect(e.state.inventory[1].id).toBe("stone");
+  });
+
+  test("a saved spectator buried in terrain loads where it was (no auto-unstuck)", () => {
+    const e = makeEngine("spectator");
+    const p = e.state.player.position;
+    const px = Math.floor(p.x);
+    const py = Math.floor(p.y);
+    const pz = Math.floor(p.z);
+    for (let dx = -1; dx <= 1; dx += 1)
+      for (let dy = 0; dy <= 2; dy += 1) for (let dz = -1; dz <= 1; dz += 1) e.state.blockChanges.set(px + dx, py + dy, pz + dz, BlockId.Stone);
+    const before = { x: p.x, y: p.y, z: p.z };
+
+    const restored = new GameEngine({ save: e.serialize(), rng: mulberry32(1), worldSize: { x: 64, y: 150, z: 64 } });
+
+    expect(restored.state.player.position.x).toBeCloseTo(before.x, 5);
+    expect(restored.state.player.position.y).toBeCloseTo(before.y, 5);
+    expect(restored.state.player.position.z).toBeCloseTo(before.z, 5);
   });
 });
 

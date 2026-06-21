@@ -229,8 +229,12 @@ export class GameEngine {
       if (pos) this.state.player.position.set(pos.x, pos.y, pos.z);
     }
 
-    // Safety check: if stuck after load, relocate to a plain.
-    if (collidesAt(world, this.state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || this.state.player.position.y < 2) {
+    // Safety check: if stuck after load, relocate to a plain — but never for a
+    // Spectator, who legitimately loads inside terrain (or low) while noclipping.
+    if (
+      !isNoclip(this.state.gameMode) &&
+      (collidesAt(world, this.state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || this.state.player.position.y < 2)
+    ) {
       this.forceUnstuck();
     }
 
@@ -333,7 +337,7 @@ export class GameEngine {
       }
       case "craft": {
         const recipe = RECIPES.find((entry) => entry.id === command.recipeId);
-        if (!recipe || state.isDead) break;
+        if (!recipe || state.isDead || !canInteract(state.gameMode)) break;
         // Station recipes (e.g. furnace smelting) require that station to be open.
         // The UI gates these too, but dispatch is the spoofable surface to guard.
         if (recipe.station && recipe.station !== state.craftingStation) break;
@@ -344,14 +348,17 @@ export class GameEngine {
         break;
       }
       case "swapSlots": {
+        if (!canInteract(state.gameMode)) break;
         state.inventory = inv.swapSlots(state.inventory, command.from, command.to) ?? state.inventory;
         break;
       }
       case "moveStack": {
+        if (!canInteract(state.gameMode)) break;
         this.applyMoveStack(command.from, command.to);
         break;
       }
       case "toggleEquipArmor": {
+        if (!canInteract(state.gameMode)) break;
         state.equippedArmor = inv.toggleEquipArmor(state.inventory, state.equippedArmor, command.index) ?? state.equippedArmor;
         break;
       }
@@ -384,7 +391,7 @@ export class GameEngine {
       }
       case "enchant": {
         // Only at an open enchanting table; applies to the selected item instance.
-        if (state.isDead || state.craftingStation !== "enchanting") break;
+        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "enchanting") break;
         const slot = state.inventory[state.selectedSlot];
         if (!canEnchant(slot, command.enchant)) break;
         if (!spendXpLevels(state, ENCHANT_COST_LEVELS)) break; // too few levels
@@ -684,7 +691,7 @@ export class GameEngine {
     state.craftingStation = null;
     state.openContainerIndex = null;
 
-    if (!isNoclip(next) && collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+    if (!isNoclip(next) && (collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2)) {
       this.forceUnstuck();
     }
   }

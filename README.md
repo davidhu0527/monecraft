@@ -22,7 +22,7 @@ The game opens to a menu: pick or create a **profile** (your name and look), the
 
 - `W A S D`: Move · `Space`: Jump · `C`: Crouch
 - `W + CapsLock`: Sprint (drains hunger)
-- Double-tap `Space`: Toggle flight (Creative / Spectator); then `Space` / `C` to rise / descend
+- Double-tap `Space`: Toggle flight in Creative (Spectator always flies); then `Space` / `C` to rise / descend
 - `Mouse`: Look around (double-click the game first to lock the pointer)
 - `Left click` (hold): Break block / attack mobs
 - `Right click` or `E`: Place/interact, or throw a selected spear

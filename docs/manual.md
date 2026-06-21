@@ -53,23 +53,23 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                                  |
-| `Space`            | Jump                                                                                  |
-| `C`                | Crouch (slower, careful movement)                                                     |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                    |
-| Double-tap `Space` | Toggle flight (Creative / Spectator); then `Space` / `C` rise/descend                 |
-| Mouse              | Look around (double-click the game first to lock the pointer)                         |
-| Left-click (hold)  | Break the targeted block / attack a mob                                               |
-| Right-click or `E` | Place/interact, or throw a selected spear                                             |
-| `1`–`9`            | Select a hotbar slot                                                                  |
-| `I`                | Open / close inventory & crafting                                                     |
-| `F`                | Eat the selected food, or drink a selected potion                                     |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front                   |
-| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                 |
-| `Esc`              | Pause menu (save / load / reset, **Game Mode** switcher, volume sliders, skin picker) |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                   |
+| Key / input        | Action                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                                        |
+| `Space`            | Jump                                                                                        |
+| `C`                | Crouch (slower, careful movement)                                                           |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                          |
+| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying |
+| Mouse              | Look around (double-click the game first to lock the pointer)                               |
+| Left-click (hold)  | Break the targeted block / attack a mob                                                     |
+| Right-click or `E` | Place/interact, or throw a selected spear                                                   |
+| `1`–`9`            | Select a hotbar slot                                                                        |
+| `I`                | Open / close inventory & crafting                                                           |
+| `F`                | Eat the selected food, or drink a selected potion                                           |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front                         |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                       |
+| `Esc`              | Pause menu (save / load / reset, **Game Mode** switcher, volume sliders, skin picker)       |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                         |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
