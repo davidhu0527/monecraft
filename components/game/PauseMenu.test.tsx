@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import PauseMenu from "@/components/game/PauseMenu";
 import { DEFAULT_AUDIO_SETTINGS } from "@/lib/game/audio/audioDirector";
 import type { GameMode } from "@/lib/game/gameModes";
+import type { Difficulty } from "@/lib/game/difficulties";
 import { DEFAULT_SKIN_ID, SKIN_PRESETS } from "@/lib/game/playerSkins";
 
 function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
@@ -13,6 +14,8 @@ function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
     onAudioSettingsChange: mock(),
     gameMode: "survival" as GameMode,
     onGameModeChange: mock(),
+    difficulty: "normal" as Difficulty,
+    onDifficultyChange: mock(),
     skinId: DEFAULT_SKIN_ID,
     onSkinChange: mock(),
     onBack: mock(),
@@ -69,6 +72,14 @@ describe("PauseMenu", () => {
     expect(screen.getByRole("button", { name: "Survival mode" }).getAttribute("aria-pressed")).toBe("true");
     await user.click(screen.getByRole("button", { name: "Creative mode" }));
     expect(props.onGameModeChange).toHaveBeenCalledWith("creative");
+  });
+
+  test("the difficulty buttons switch difficulty", async () => {
+    const user = userEvent.setup();
+    const props = renderMenu({ difficulty: "normal" });
+    expect(screen.getByRole("button", { name: "Normal difficulty" }).getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Peaceful difficulty" }));
+    expect(props.onDifficultyChange).toHaveBeenCalledWith("peaceful");
   });
 
   test("volume sliders report normalized values", () => {

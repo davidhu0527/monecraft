@@ -17,6 +17,7 @@ import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/m
 import { readSave, writeSave } from "@/lib/game/save";
 import type { EnchantmentId, Recipe } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
+import type { Difficulty } from "@/lib/game/difficulties";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
 
 /**
@@ -104,6 +105,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const worldSeedRef = useRef(opts.world.seed);
   const worldTypeRef = useRef(opts.world.worldType);
   const worldModeRef = useRef(opts.world.gameMode);
+  const worldDifficultyRef = useRef(opts.world.difficulty);
   const [ctx, setCtx] = useState<GameContext | null>(null);
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -162,14 +164,15 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setCtx(null);
       return;
     }
-    // A saved blob carries its own seed + type + mode (engine prefers them); a
-    // fresh world (no blob yet) boots from the world's stored seed, type, and mode.
+    // A saved blob carries its own seed + type + mode + difficulty (engine prefers
+    // them); a fresh world (no blob yet) boots from the world's stored values.
     setCtx({
       engine: new GameEngine({
         save: readSave(saveKeyRef.current),
         seed: worldSeedRef.current,
         worldType: worldTypeRef.current,
-        gameMode: worldModeRef.current
+        gameMode: worldModeRef.current,
+        difficulty: worldDifficultyRef.current
       }),
       node
     });
@@ -367,8 +370,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     locked,
     rendererError,
     gameMode: snapshot.gameMode,
+    difficulty: snapshot.difficulty,
     giveCreativeItem: (itemId: string) => engine?.dispatch({ type: "creativeGiveItem", itemId }),
     setGameMode: (mode: GameMode) => engine?.dispatch({ type: "setGameMode", mode }),
+    setDifficulty: (difficulty: Difficulty) => engine?.dispatch({ type: "setDifficulty", difficulty }),
     selectedSlot: snapshot.selectedSlot,
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,
