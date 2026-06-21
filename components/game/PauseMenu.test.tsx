@@ -73,6 +73,7 @@ describe("PauseMenu", () => {
 
   test("volume sliders report normalized values", () => {
     const props = renderMenu({ audioSettings: { master: 0.8, music: 0.6, muted: false } });
+    fireEvent.click(screen.getByRole("button", { name: "Options" }));
     const master = screen.getByLabelText("Sound volume") as HTMLInputElement;
     expect(master.value).toBe("80");
     fireEvent.change(master, { target: { value: "35" } });
@@ -84,12 +85,14 @@ describe("PauseMenu", () => {
   test("the mute button toggles by current state", async () => {
     const user = userEvent.setup();
     const props = renderMenu({ audioSettings: { master: 1, music: 1, muted: true } });
+    await user.click(screen.getByRole("button", { name: "Options" }));
     await user.click(screen.getByRole("button", { name: "Unmute Sound" }));
     expect(props.onAudioSettingsChange).toHaveBeenCalledWith({ muted: false });
   });
 
   test("shows every skin preset with only the active one pressed", () => {
     renderMenu({ skinId: "knight" });
+    fireEvent.click(screen.getByRole("button", { name: "Options" }));
     const swatches = screen.getAllByRole("button", { name: /skin$/ });
     expect(swatches).toHaveLength(SKIN_PRESETS.length);
     for (const swatch of swatches) {
@@ -101,8 +104,25 @@ describe("PauseMenu", () => {
   test("clicking a skin swatch reports its preset id", async () => {
     const user = userEvent.setup();
     const props = renderMenu();
+    await user.click(screen.getByRole("button", { name: "Options" }));
     await user.click(screen.getByRole("button", { name: "Robot skin" }));
     expect(props.onSkinChange).toHaveBeenCalledTimes(1);
     expect(props.onSkinChange).toHaveBeenCalledWith("robot");
+  });
+
+  test("tabs switch the visible section", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    // Game is the default tab: actions show, Options/Controls content is absent.
+    expect(screen.getByRole("button", { name: "Save Game" })).toBeTruthy();
+    expect(screen.queryByLabelText("Sound volume")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Options" }));
+    expect(screen.getByLabelText("Sound volume")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save Game" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Controls" }));
+    expect(screen.getByText("Inventory")).toBeTruthy();
+    expect(screen.queryByLabelText("Sound volume")).toBeNull();
   });
 });

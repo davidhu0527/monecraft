@@ -13,6 +13,10 @@ All notable changes to this project are documented in this file.
   - **Switching** modes mid-game (pause menu) refills your bars and clears any pending hazard damage, sets flight to match the mode, and lifts you out of a wall when leaving Spectator — so it's always safe to flip between them
   - **Architecture**: a new `lib/game/gameModes.ts` holds the `GameMode` union plus **intent predicates** (`takesDamage`, `canEditBlocks`, `freeBuild`, `canInteract`, `canFly`, `isNoclip`, `usesInventory`, `mobsThreaten`) that each system gates on, rather than comparing the raw id — so the four modes share one set of seams (the damage chokepoints in `playerLife.ts`, the block edits in `mining.ts`, aggro in `mobAI.ts`, flight/noclip in `playerMotion.ts`). `gameMode` rides the existing per-world `worldType` plumbing (`WorldMeta` + a v8 `SaveData` field + `migrateSaveV7toV8`); unlike `worldType` it's the _current_, switchable value, and the transient `isFlying` is never serialized. New `setGameMode`/`toggleFlight`/`creativeGiveItem` commands; new `FLY_SPEED`/`FLY_DOUBLE_TAP_WINDOW_SECONDS` tunables
 
+### Changed
+
+- **Pause menu reorganized into tabs**: the Esc menu had grown into one long scrolling column (action buttons, the game-mode grid, volume sliders, the skin picker, and a 12-row controls list). It's now split into **Game** (save / load / reset / quit + game mode), **Options** (sound + appearance), and **Controls** (the key reference), with **Back to Game** pinned on top. Pure presentation — no save-format, worldgen, or behavior change (`components/game/PauseMenu.tsx`).
+
 ## [0.10.0] - 2026-06-21
 
 ### Added

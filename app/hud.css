@@ -42,6 +42,29 @@
   margin-bottom: 10px;
 }
 
+/* Tabbed pause menu: a Game / Options / Controls selector over a single panel. */
+.pause-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.pause-tab {
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.pause-tab[aria-pressed="true"] {
+  border-color: #f0be3c;
+  outline: 1px solid rgba(240, 190, 60, 0.6);
+}
+
+.pause-panel {
+  display: grid;
+  gap: 8px;
+}
+
 .mc-button {
   padding: 9px 16px;
   font-family: inherit;

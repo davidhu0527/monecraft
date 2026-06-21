@@ -29,7 +29,7 @@ The game opens to a menu: pick or create a **profile** (your name and look), the
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `Shift+U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)
-- `Esc`: Pause menu (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** switcher, sound/music volume sliders, and the Appearance skin picker live there) · `F3`: Debug overlay
+- `Esc`: Pause menu — three tabs: **Game** (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** switcher), **Options** (sound/music volume, Appearance skins), and **Controls** · `F3`: Debug overlay
 
 New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more.
 
