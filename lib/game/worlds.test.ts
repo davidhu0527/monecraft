@@ -179,4 +179,17 @@ describe("worlds manifest", () => {
     });
     expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].difficulty).toBe("normal"); // unknown -> normal
   });
+
+  test("stores the hardcore flag, defaulting and sanitizing to false", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "HC", "1", { storage, uid: () => "whc", hardcore: true }).hardcore).toBe(true);
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wp" }).hardcore).toBe(false); // omitted -> false
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, hardcore: "yes", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].hardcore).toBe(false); // non-boolean -> false
+  });
 });
