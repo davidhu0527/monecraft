@@ -25,6 +25,7 @@ export type Command =
   | { type: "placeBlock" }
   | { type: "attack" }
   | { type: "toggleFlight" }
+  | { type: "creativeGiveItem"; itemId: string }
   | { type: "unstuck" }
   | { type: "pause" }
   | { type: "resume" }

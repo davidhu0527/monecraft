@@ -30,7 +30,7 @@ import {
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
 import { bossTracking, type BossTracking } from "@/lib/game/bossTracking";
-import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import {
@@ -428,6 +428,13 @@ export class GameEngine {
         // Creative/Spectator only; a no-op in survival/adventure or while dead/in menus.
         if (!canFly(state.gameMode) || state.isDead || state.inventoryOpen) break;
         state.isFlying = !state.isFlying;
+        break;
+      }
+      case "creativeGiveItem": {
+        // Pulls a full stack from the creative palette into the inventory
+        // (lowest empty slot first, so it lands on the hotbar). Creative only.
+        if (state.gameMode !== "creative" || !ITEM_DEF_BY_ID[command.itemId]) break;
+        state.inventory = inv.adjustSlotCount(state.inventory, command.itemId, maxStackSizeForItem(command.itemId), state.selectedSlot) ?? state.inventory;
         break;
       }
       case "unstuck": {

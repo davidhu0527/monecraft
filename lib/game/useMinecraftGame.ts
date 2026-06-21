@@ -364,6 +364,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     attachMinimap,
     locked,
     rendererError,
+    gameMode: snapshot.gameMode,
+    giveCreativeItem: (itemId: string) => engine?.dispatch({ type: "creativeGiveItem", itemId }),
     selectedSlot: snapshot.selectedSlot,
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,

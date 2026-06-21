@@ -151,3 +151,22 @@ describe("creative free build", () => {
     expect(e.state.inventory[0].count).toBe(10); // stack untouched in creative
   });
 });
+
+describe("creative palette give", () => {
+  test("creativeGiveItem inserts a stack in creative and no-ops elsewhere", () => {
+    const creative = makeEngine("creative");
+    creative.dispatch({ type: "creativeGiveItem", itemId: "diamond_ore" });
+    expect(countsById(creative.state.inventory).get("diamond_ore") ?? 0).toBeGreaterThan(0);
+
+    const survival = makeEngine("survival");
+    survival.dispatch({ type: "creativeGiveItem", itemId: "diamond_ore" });
+    expect(countsById(survival.state.inventory).get("diamond_ore") ?? 0).toBe(0);
+  });
+
+  test("creativeGiveItem ignores an unknown item id", () => {
+    const e = makeEngine("creative");
+    const before = countsById(e.state.inventory);
+    e.dispatch({ type: "creativeGiveItem", itemId: "not_a_real_item" });
+    expect(countsById(e.state.inventory)).toEqual(before);
+  });
+});

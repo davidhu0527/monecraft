@@ -31,6 +31,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     attachMinimap,
     locked,
     rendererError,
+    gameMode,
+    giveCreativeItem,
     selectedSlot,
     setSelectedSlot,
     capsActive,
@@ -144,6 +146,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           hotbarSlots={hotbarSlots}
           recipes={recipes}
           craftingStation={craftingStation}
+          gameMode={gameMode}
           container={container}
           xpLevel={xpLevel}
           enchantCost={ENCHANT_COST_LEVELS}
@@ -153,6 +156,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           onToggleEquipArmor={toggleEquipArmor}
           onCraft={craft}
           onEnchant={enchant}
+          onGiveItem={giveCreativeItem}
         />
       ) : null}
 
