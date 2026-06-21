@@ -381,9 +381,9 @@ export function restoreHardcore(save: SaveData): boolean {
   return save.hardcore === true;
 }
 
-/** Restores the permadeath game-over flag; false when absent or non-boolean. Only meaningful with hardcore. */
+/** Restores the permadeath game-over flag — only ever true on a hardcore save, so a stray flag on a non-hardcore (corrupt) save can't lock it into spectator. */
 export function restoreGameOver(save: SaveData): boolean {
-  return save.gameOver === true;
+  return save.hardcore === true && save.gameOver === true;
 }
 
 /** Restores the bed respawn point; null if absent or explicitly cleared. */

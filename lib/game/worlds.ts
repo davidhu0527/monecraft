@@ -92,15 +92,18 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
   if (typeof entry.profileId !== "string" || entry.profileId.length === 0) return null;
   if (typeof entry.seed !== "number" || !Number.isFinite(entry.seed)) return null;
   const num = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
+  // Hardcore is the source of truth — keep the persisted mode/difficulty consistent
+  // with it (the engine forces them at runtime, but the meta drives the UI/card too).
+  const hardcore = entry.hardcore === true;
   return {
     id: entry.id,
     profileId: entry.profileId,
     name: sanitizeName(entry.name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: Math.floor(entry.seed),
     worldType: isWorldType(entry.worldType) ? entry.worldType : "default",
-    gameMode: isGameMode(entry.gameMode) ? entry.gameMode : "survival",
-    difficulty: isDifficulty(entry.difficulty) ? entry.difficulty : "normal",
-    hardcore: entry.hardcore === true,
+    gameMode: hardcore ? "survival" : isGameMode(entry.gameMode) ? entry.gameMode : "survival",
+    difficulty: hardcore ? "hard" : isDifficulty(entry.difficulty) ? entry.difficulty : "normal",
+    hardcore,
     worldgenVersion: num(entry.worldgenVersion, WORLDGEN_VERSION),
     createdAt: num(entry.createdAt, 0),
     lastPlayedAt: num(entry.lastPlayedAt, 0)
@@ -138,15 +141,17 @@ export function createWorld(
   // Worlds must belong to a real profile — refuse to persist an orphan record.
   if (!getProfile(profileId, storage)) throw new Error(`createWorld: unknown profile "${profileId}"`);
   const createdAt = now();
+  // Hardcore forces Survival + Hard, so the persisted meta is consistent from birth.
+  const hardcore = deps.hardcore === true;
   const world: WorldMeta = {
     id: uid(),
     profileId,
     name: sanitizeName(name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: resolveSeed(seedInput, deps.rng ?? Math.random),
     worldType: isWorldType(deps.worldType) ? deps.worldType : "default",
-    gameMode: isGameMode(deps.gameMode) ? deps.gameMode : "survival",
-    difficulty: isDifficulty(deps.difficulty) ? deps.difficulty : "normal",
-    hardcore: deps.hardcore === true,
+    gameMode: hardcore ? "survival" : isGameMode(deps.gameMode) ? deps.gameMode : "survival",
+    difficulty: hardcore ? "hard" : isDifficulty(deps.difficulty) ? deps.difficulty : "normal",
+    hardcore,
     worldgenVersion: WORLDGEN_VERSION,
     createdAt,
     lastPlayedAt: createdAt

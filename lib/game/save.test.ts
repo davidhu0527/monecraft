@@ -466,8 +466,11 @@ describe("v5 to v6 migration & status effects", () => {
     expect(restoreHardcore({ ...sampleSave(), hardcore: true })).toBe(true);
     expect(restoreHardcore({ ...sampleSave(), hardcore: undefined })).toBe(false);
     expect(restoreHardcore({ ...sampleSave(), hardcore: 1 as never })).toBe(false);
-    expect(restoreGameOver({ ...sampleSave(), gameOver: true })).toBe(true);
+    expect(restoreGameOver({ ...sampleSave(), hardcore: true, gameOver: true })).toBe(true);
     expect(restoreGameOver({ ...sampleSave(), gameOver: undefined })).toBe(false);
+    // gameOver only ever lands on a hardcore save — a stray flag on a non-hardcore
+    // (corrupt) save must not lock it into spectator.
+    expect(restoreGameOver({ ...sampleSave(), hardcore: false, gameOver: true })).toBe(false);
   });
 
   test("hardcore + gameOver survive a full save round-trip", () => {
