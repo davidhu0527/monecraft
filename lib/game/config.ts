@@ -11,6 +11,11 @@ export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
 export const WORLD_BORDER_PADDING = 1.2;
 
+// Game modes / flight — Creative & Spectator fly with direct vertical control
+// (Space ascends, crouch descends); a double-tap of Space toggles flight.
+export const FLY_SPEED = 11; // blocks/sec vertical while flying
+export const FLY_DOUBLE_TAP_WINDOW_SECONDS = 0.3; // max gap between Space taps to toggle flight
+
 // Player stats — Minecraft ranges: 20 HP shown as 10 hearts, 20 hunger as 10 drumsticks.
 export const MAX_HEARTS = 20;
 export const MAX_HUNGER = 20;

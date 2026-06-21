@@ -15,6 +15,7 @@ import XpBar from "@/components/game/XpBar";
 import { ENCHANT_COST_LEVELS } from "@/lib/game/config";
 import type { Profile } from "@/lib/game/profiles";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
+import { takesDamage, usesInventory } from "@/lib/game/gameModes";
 import type { WorldMeta } from "@/lib/game/worlds";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
@@ -31,6 +32,9 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     attachMinimap,
     locked,
     rendererError,
+    gameMode,
+    giveCreativeItem,
+    setGameMode,
     selectedSlot,
     setSelectedSlot,
     capsActive,
@@ -121,17 +125,22 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
       <div ref={attachMinimap} className="minimap" data-testid="minimap" />
 
       <div className="hud-bottom">
-        <StatusBars
-          hearts={hearts}
-          maxHearts={maxHearts}
-          hunger={hunger}
-          maxHunger={maxHunger}
-          armorPoints={armorPoints}
-          oxygen={oxygen}
-          maxOxygen={maxOxygen}
-        />
-        <XpBar level={xpLevel} progress={xpProgress} />
-        <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} />
+        {/* Creative/Spectator take no damage — hide the survival bars; Spectator has no hotbar. */}
+        {takesDamage(gameMode) ? (
+          <>
+            <StatusBars
+              hearts={hearts}
+              maxHearts={maxHearts}
+              hunger={hunger}
+              maxHunger={maxHunger}
+              armorPoints={armorPoints}
+              oxygen={oxygen}
+              maxOxygen={maxOxygen}
+            />
+            <XpBar level={xpLevel} progress={xpProgress} />
+          </>
+        ) : null}
+        {usesInventory(gameMode) ? <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} /> : null}
       </div>
 
       {inventoryOpen || paused ? <div className="menu-backdrop" /> : null}
@@ -144,6 +153,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           hotbarSlots={hotbarSlots}
           recipes={recipes}
           craftingStation={craftingStation}
+          gameMode={gameMode}
           container={container}
           xpLevel={xpLevel}
           enchantCost={ENCHANT_COST_LEVELS}
@@ -153,6 +163,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           onToggleEquipArmor={toggleEquipArmor}
           onCraft={craft}
           onEnchant={enchant}
+          onGiveItem={giveCreativeItem}
         />
       ) : null}
 
@@ -161,6 +172,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           saveMessage={saveMessage}
           audioSettings={audioSettings}
           onAudioSettingsChange={updateAudioSettings}
+          gameMode={gameMode}
+          onGameModeChange={setGameMode}
           skinId={skinId}
           onSkinChange={updateSkin}
           onBack={resumeNow}

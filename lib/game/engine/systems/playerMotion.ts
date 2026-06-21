@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { collidesAt, hasSupportUnderPlayer } from "@/lib/world";
+import { canFly, isNoclip } from "@/lib/game/gameModes";
 import {
   CROUCH_SPEED,
+  FLY_SPEED,
   GRAVITY,
   JUMP_VELOCITY,
   PLAYER_HALF_WIDTH,
@@ -46,8 +48,16 @@ export function lookDirection(yaw: number, pitch: number, out: THREE.Vector3): T
 export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number, applyDamage: (amount: number) => void): MoveTickResult {
   const { world, player, timers } = state;
   const keys = input.keys;
+  // Spectator phases through terrain (noclip); Creative/Spectator fly with direct
+  // vertical control instead of gravity.
+  const noclip = isNoclip(state.gameMode);
+  const flying = noclip || (state.isFlying && canFly(state.gameMode));
 
   const stepAxis = (axis: "x" | "y" | "z", amount: number) => {
+    if (noclip) {
+      player.position[axis] += amount; // pass straight through blocks
+      return;
+    }
     const stepSize = 0.05 * Math.sign(amount);
     let remaining = amount;
     while (Math.abs(remaining) > 1e-6) {
@@ -85,12 +95,20 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   player.velocity.z = scratchMoveDir.z * speed;
 
   const wasGrounded = player.onGround;
-  player.velocity.y -= GRAVITY * dt;
   let didJump = false;
-  if (wantsJump && player.onGround && !crouching) {
-    player.velocity.y = JUMP_VELOCITY;
-    player.onGround = false;
-    didJump = true;
+  if (flying) {
+    // Flight: direct vertical control, no gravity. Space ascends, crouch
+    // descends, neither (or both) hovers. Collision still applies in Creative;
+    // Spectator's noclip is handled in stepAxis.
+    const ascend = (wantsJump ? 1 : 0) - (crouching ? 1 : 0);
+    player.velocity.y = ascend * FLY_SPEED;
+  } else {
+    player.velocity.y -= GRAVITY * dt;
+    if (wantsJump && player.onGround && !crouching) {
+      player.velocity.y = JUMP_VELOCITY;
+      player.onGround = false;
+      didJump = true;
+    }
   }
 
   const vyBeforeMove = player.velocity.y;
@@ -104,15 +122,16 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   stepAxis("z", player.velocity.z * dt);
   stepAxis("y", player.velocity.y * dt);
 
-  // Depenetration: if still colliding after movement, nudge up
-  if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+  // Depenetration: if still colliding after movement, nudge up (skipped in noclip).
+  if (!noclip && collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
     for (let i = 0; i < 5; i += 1) {
       player.position.y += 0.2;
       if (!collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) break;
     }
   }
 
-  if (crouching && (player.onGround || wasGrounded) && !hasSupportUnderPlayer(world, player.position, PLAYER_HALF_WIDTH + 0.12)) {
+  // While flying, crouch means "descend" — don't snap the player back from edges.
+  if (!flying && crouching && (player.onGround || wasGrounded) && !hasSupportUnderPlayer(world, player.position, PLAYER_HALF_WIDTH + 0.12)) {
     player.position.x = prevX;
     player.position.z = prevZ;
     player.velocity.x = 0;

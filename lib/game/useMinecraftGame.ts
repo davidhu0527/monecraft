@@ -16,6 +16,7 @@ import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
 import type { EnchantmentId, Recipe } from "@/lib/game/types";
+import type { GameMode } from "@/lib/game/gameModes";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
 
 /**
@@ -33,6 +34,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   inventory: createInitialInventory(),
   equippedArmor: createEmptyArmorEquipment(),
   selectedSlot: 0,
+  gameMode: "survival",
+  isFlying: false,
   hearts: MAX_HEARTS,
   hunger: MAX_HUNGER,
   oxygen: MAX_OXYGEN,
@@ -99,6 +102,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const saveKeyRef = useRef(worldSaveKey(opts.world.id));
   const worldSeedRef = useRef(opts.world.seed);
   const worldTypeRef = useRef(opts.world.worldType);
+  const worldModeRef = useRef(opts.world.gameMode);
   const [ctx, setCtx] = useState<GameContext | null>(null);
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -157,10 +161,15 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setCtx(null);
       return;
     }
-    // A saved blob carries its own seed + type (engine prefers them); a fresh
-    // world (no blob yet) boots from the world's stored seed and type.
+    // A saved blob carries its own seed + type + mode (engine prefers them); a
+    // fresh world (no blob yet) boots from the world's stored seed, type, and mode.
     setCtx({
-      engine: new GameEngine({ save: readSave(saveKeyRef.current), seed: worldSeedRef.current, worldType: worldTypeRef.current }),
+      engine: new GameEngine({
+        save: readSave(saveKeyRef.current),
+        seed: worldSeedRef.current,
+        worldType: worldTypeRef.current,
+        gameMode: worldModeRef.current
+      }),
       node
     });
   }, []);
@@ -356,6 +365,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     attachMinimap,
     locked,
     rendererError,
+    gameMode: snapshot.gameMode,
+    giveCreativeItem: (itemId: string) => engine?.dispatch({ type: "creativeGiveItem", itemId }),
+    setGameMode: (mode: GameMode) => engine?.dispatch({ type: "setGameMode", mode }),
     selectedSlot: snapshot.selectedSlot,
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,

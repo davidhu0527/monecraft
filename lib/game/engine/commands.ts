@@ -4,6 +4,7 @@
  * auditable entry point into the simulation.
  */
 import type { EnchantmentId } from "@/lib/game/types";
+import type { GameMode } from "@/lib/game/gameModes";
 
 /**
  * Slot indices passed to `moveStack` at or above this base address the open
@@ -24,6 +25,9 @@ export type Command =
   | { type: "enchant"; enchant: EnchantmentId }
   | { type: "placeBlock" }
   | { type: "attack" }
+  | { type: "toggleFlight" }
+  | { type: "creativeGiveItem"; itemId: string }
+  | { type: "setGameMode"; mode: GameMode }
   | { type: "unstuck" }
   | { type: "pause" }
   | { type: "resume" }

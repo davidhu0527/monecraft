@@ -2,12 +2,18 @@ import { useState } from "react";
 import CreateWorldForm from "@/components/menu/CreateWorldForm";
 import MenuScreen from "@/components/menu/MenuScreen";
 import type { Profile } from "@/lib/game/profiles";
+import { GAME_MODE_PRESETS, type GameMode } from "@/lib/game/gameModes";
 import { createWorld, deleteWorld, MAX_WORLD_NAME, renameWorld, WORLD_TYPE_PRESETS, worldsForProfile } from "@/lib/game/worlds";
 import type { WorldType } from "@/lib/world";
 
 /** Short label for a world type (the default type is left unlabelled on cards). */
 function worldTypeLabel(id: WorldType): string {
   return WORLD_TYPE_PRESETS.find((preset) => preset.id === id)?.label ?? id;
+}
+
+/** Short label for a game mode (survival is left unlabelled on cards). */
+function gameModeLabel(id: GameMode): string {
+  return GAME_MODE_PRESETS.find((preset) => preset.id === id)?.label ?? id;
 }
 
 type WorldSelectProps = {
@@ -29,8 +35,8 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
     return (
       <MenuScreen title={`${profile.name} — New World`}>
         <CreateWorldForm
-          onCreate={(name, seed, worldType) => {
-            const world = createWorld(profile.id, name, seed, { worldType });
+          onCreate={(name, seed, worldType, gameMode) => {
+            const world = createWorld(profile.id, name, seed, { worldType, gameMode });
             setCreating(false);
             onPlay(world.id); // straight into the freshly created world
           }}
@@ -97,6 +103,7 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
                   <button className="menu-card-play" data-testid={`world-${world.id}`} onClick={() => onPlay(world.id)}>
                     <span className="menu-card-name">{world.name}</span>
                     <span className="menu-card-sub">
+                      {world.gameMode !== "survival" ? `${gameModeLabel(world.gameMode)} · ` : ""}
                       {world.worldType !== "default" ? `${worldTypeLabel(world.worldType)} · ` : ""}Seed {world.seed}
                     </span>
                   </button>

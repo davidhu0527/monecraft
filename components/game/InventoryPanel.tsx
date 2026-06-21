@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import CreativeInventoryTab from "@/components/game/CreativeInventoryTab";
 import EnchantingColumn from "@/components/game/EnchantingColumn";
 import ItemIcon from "@/components/game/ItemIcon";
 import { itemTooltipFor, type TooltipContent, useItemTooltip } from "@/components/game/ItemTooltip";
@@ -9,6 +10,7 @@ import { itemSourceHint } from "@/lib/game/itemSources";
 import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { groupRecipes } from "@/lib/game/recipes";
 import { itemIconUrl } from "@/lib/ui/sprites";
+import type { GameMode } from "@/lib/game/gameModes";
 import type { EnchantmentId, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 type InventoryPanelProps = {
@@ -18,6 +20,8 @@ type InventoryPanelProps = {
   hotbarSlots: number;
   recipes: Recipe[];
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
+  /** Current game mode — Creative swaps the recipe book for the item palette. */
+  gameMode: GameMode;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Current XP level + per-enchant cost, for the enchanting panel. */
@@ -30,6 +34,8 @@ type InventoryPanelProps = {
   onToggleEquipArmor: (index: number) => void;
   onCraft: (recipe: Recipe) => void;
   onEnchant: (id: EnchantmentId) => void;
+  /** Pulls a full stack of an item from the Creative palette into the inventory. */
+  onGiveItem: (itemId: string) => void;
 };
 
 const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
@@ -73,6 +79,7 @@ export default function InventoryPanel({
   hotbarSlots,
   recipes,
   craftingStation,
+  gameMode,
   container,
   xpLevel,
   enchantCost,
@@ -81,7 +88,8 @@ export default function InventoryPanel({
   onMoveStack,
   onToggleEquipArmor,
   onCraft,
-  onEnchant
+  onEnchant,
+  onGiveItem
 }: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const { tooltip, bind } = useItemTooltip();
@@ -223,6 +231,8 @@ export default function InventoryPanel({
 
         {craftingStation === "enchanting" ? (
           <EnchantingColumn item={inventory[selectedHotbarSlot]} xpLevel={xpLevel} cost={enchantCost} onEnchant={onEnchant} />
+        ) : gameMode === "creative" ? (
+          <CreativeInventoryTab onGiveItem={onGiveItem} />
         ) : (
           <div className="recipe-book">
             <div className="inventory-heading">{craftingStation === "villager" ? "Trading" : craftingStation === "brewing" ? "Brewing" : "Crafting"}</div>

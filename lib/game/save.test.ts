@@ -9,11 +9,13 @@ import {
   migrateSaveV4toV5,
   migrateSaveV5toV6,
   migrateSaveV6toV7,
+  migrateSaveV7toV8,
   readContainers,
   readLootedChests,
   readSave,
   restoreDayClock,
   restoreEffects,
+  restoreGameMode,
   restoreHearts,
   restoreHungerLevel,
   restoreInventorySlots,
@@ -26,7 +28,7 @@ import {
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5, SaveDataV6 } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5, SaveDataV6, SaveDataV7 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -46,7 +48,8 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 7,
+    version: 8,
+    gameMode: "creative",
     seed: 1337,
     changes: [
       [42, 0],
@@ -87,7 +90,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(7);
+    expect(parsed!.version).toBe(8);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -109,7 +112,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(7); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7
+    expect(parsed!.version).toBe(8); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -202,7 +205,7 @@ describe("v2 to v3 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(7);
+    expect(parsed!.version).toBe(8);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -239,7 +242,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(7);
+    expect(parsed.version).toBe(8);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -314,7 +317,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(7);
+    expect(parsed.version).toBe(8);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -359,7 +362,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(7);
+    expect(parsed.version).toBe(8);
     expect(restoreEffects(parsed)).toEqual([]);
   });
 
@@ -368,6 +371,33 @@ describe("v5 to v6 migration & status effects", () => {
     const migrated = migrateSaveV6toV7(v6);
     expect(migrated.version).toBe(7);
     expect(migrated.xp).toBeUndefined();
+  });
+
+  test("migrateSaveV7toV8 is a pure version bump leaving gameMode absent", () => {
+    const v7: SaveDataV7 = { ...v5Save(), version: 7 };
+    const migrated = migrateSaveV7toV8(v7);
+    expect(migrated.version).toBe(8);
+    expect(migrated.gameMode).toBeUndefined();
+  });
+
+  test("a pre-mode (v7) save loads as survival", () => {
+    const v7: SaveDataV7 = { ...v5Save(), version: 7 };
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(8);
+    expect(restoreGameMode(parsed)).toBe("survival");
+  });
+
+  test("restoreGameMode reads a valid mode and rejects garbage", () => {
+    expect(restoreGameMode({ ...sampleSave(), gameMode: "spectator" })).toBe("spectator");
+    expect(restoreGameMode({ ...sampleSave(), gameMode: "bogus" as never })).toBe("survival");
+    expect(restoreGameMode({ ...sampleSave(), gameMode: undefined })).toBe("survival");
+  });
+
+  test("gameMode survives a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, { ...sampleSave(), gameMode: "adventure" }, storage);
+    expect(readSave(KEY, storage)!.gameMode).toBe("adventure");
   });
 
   test("restoreXp clamps to a non-negative integer; absent/garbage → 0", () => {
@@ -486,7 +516,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 8 };
+    const save = { ...sampleSave(), version: 9 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 

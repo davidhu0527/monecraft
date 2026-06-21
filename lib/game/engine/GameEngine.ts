@@ -30,7 +30,7 @@ import {
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
 import { bossTracking, type BossTracking } from "@/lib/game/bossTracking";
-import { createEmptyArmorEquipment, createInitialInventory } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import {
@@ -44,6 +44,7 @@ import {
   restoreEffects,
   restoreInventorySlots,
   restorePlayerPosition,
+  restoreGameMode,
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
@@ -51,6 +52,7 @@ import {
   serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
+import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { InventorySlot, SaveData } from "@/lib/game/types";
@@ -85,6 +87,8 @@ export type GameEngineOptions = {
   seed?: number;
   /** Generation preset; the save's own worldType wins when restoring. Defaults to "default". */
   worldType?: WorldType;
+  /** Initial game mode for a fresh world; the save's own gameMode wins when restoring. Defaults to "survival". */
+  gameMode?: GameMode;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -139,6 +143,10 @@ export class GameEngine {
     this.surfaceYAt = createSurfaceYAt(world);
 
     const firstSpawn = findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
+    // A restored save's own (possibly switched) mode wins; a fresh world takes
+    // the requested mode, defaulting to survival. isFlying is session-only and
+    // is reconciled to the mode by the motion tick (Spectator always flies).
+    const gameMode = save ? restoreGameMode(save) : (options.gameMode ?? "survival");
     this.state = {
       world,
       blockChanges,
@@ -152,6 +160,8 @@ export class GameEngine {
       inventory: createInitialInventory(),
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
+      gameMode,
+      isFlying: gameMode === "spectator", // Spectator is always airborne
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
@@ -219,8 +229,12 @@ export class GameEngine {
       if (pos) this.state.player.position.set(pos.x, pos.y, pos.z);
     }
 
-    // Safety check: if stuck after load, relocate to a plain.
-    if (collidesAt(world, this.state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || this.state.player.position.y < 2) {
+    // Safety check: if stuck after load, relocate to a plain — but never for a
+    // Spectator, who legitimately loads inside terrain (or low) while noclipping.
+    if (
+      !isNoclip(this.state.gameMode) &&
+      (collidesAt(world, this.state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || this.state.player.position.y < 2)
+    ) {
       this.forceUnstuck();
     }
 
@@ -241,12 +255,15 @@ export class GameEngine {
     }
     state.capsActive = input.capsActive;
 
-    // Stuck detection / auto-unstuck.
-    const inBadState = collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2;
-    state.timers.stuckTimer = inBadState ? state.timers.stuckTimer + dt : 0;
-    if (state.timers.stuckTimer > STUCK_RESET_SECONDS) {
-      this.forceUnstuck();
-      state.timers.stuckTimer = 0;
+    // Stuck detection / auto-unstuck — skipped for Spectator, which legitimately
+    // sits inside terrain while noclipping and must never be teleported out.
+    if (!isNoclip(state.gameMode)) {
+      const inBadState = collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2;
+      state.timers.stuckTimer = inBadState ? state.timers.stuckTimer + dt : 0;
+      if (state.timers.stuckTimer > STUCK_RESET_SECONDS) {
+        this.forceUnstuck();
+        state.timers.stuckTimer = 0;
+      }
     }
 
     // Death: only mobs and the respawn countdown tick while dead.
@@ -310,6 +327,7 @@ export class GameEngine {
         break;
       }
       case "toggleInventory": {
+        if (!canInteract(state.gameMode)) break; // Spectator has no inventory
         state.inventoryOpen = !state.inventoryOpen;
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
@@ -319,7 +337,7 @@ export class GameEngine {
       }
       case "craft": {
         const recipe = RECIPES.find((entry) => entry.id === command.recipeId);
-        if (!recipe || state.isDead) break;
+        if (!recipe || state.isDead || !canInteract(state.gameMode)) break;
         // Station recipes (e.g. furnace smelting) require that station to be open.
         // The UI gates these too, but dispatch is the spoofable surface to guard.
         if (recipe.station && recipe.station !== state.craftingStation) break;
@@ -330,19 +348,22 @@ export class GameEngine {
         break;
       }
       case "swapSlots": {
+        if (!canInteract(state.gameMode)) break;
         state.inventory = inv.swapSlots(state.inventory, command.from, command.to) ?? state.inventory;
         break;
       }
       case "moveStack": {
+        if (!canInteract(state.gameMode)) break;
         this.applyMoveStack(command.from, command.to);
         break;
       }
       case "toggleEquipArmor": {
+        if (!canInteract(state.gameMode)) break;
         state.equippedArmor = inv.toggleEquipArmor(state.inventory, state.equippedArmor, command.index) ?? state.equippedArmor;
         break;
       }
       case "eatFood": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         const slot = state.inventory[state.selectedSlot];
         if (!slot?.id || slot.kind !== "food" || !slot.hunger || slot.count <= 0) break;
         const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
@@ -358,7 +379,7 @@ export class GameEngine {
         break;
       }
       case "drinkPotion": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         const slot = state.inventory[state.selectedSlot];
         if (!slot?.id || !slot.effect || slot.count <= 0) break;
         const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
@@ -370,7 +391,7 @@ export class GameEngine {
       }
       case "enchant": {
         // Only at an open enchanting table; applies to the selected item instance.
-        if (state.isDead || state.craftingStation !== "enchanting") break;
+        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "enchanting") break;
         const slot = state.inventory[state.selectedSlot];
         if (!canEnchant(slot, command.enchant)) break;
         if (!spendXpLevels(state, ENCHANT_COST_LEVELS)) break; // too few levels
@@ -381,7 +402,7 @@ export class GameEngine {
         break;
       }
       case "placeBlock": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         // Spears consume the right-click/E action before all world interaction.
         if (tryThrowSelectedSpear(state, this.emit, this.rng)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
@@ -397,7 +418,7 @@ export class GameEngine {
         break;
       }
       case "attack": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         this.emit({ type: "attackSwung" });
         // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
         // cooldown or with no arrows, but the swing animation still plays.
@@ -412,6 +433,23 @@ export class GameEngine {
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
           resetMining(state);
         }
+        break;
+      }
+      case "toggleFlight": {
+        // Creative only — Spectator is permanently airborne, survival can't fly.
+        if (state.gameMode !== "creative" || state.isDead || state.inventoryOpen) break;
+        state.isFlying = !state.isFlying;
+        break;
+      }
+      case "creativeGiveItem": {
+        // Pulls a full stack from the creative palette into the inventory
+        // (lowest empty slot first, so it lands on the hotbar). Creative only.
+        if (state.gameMode !== "creative" || !ITEM_DEF_BY_ID[command.itemId]) break;
+        state.inventory = inv.adjustSlotCount(state.inventory, command.itemId, maxStackSizeForItem(command.itemId), state.selectedSlot) ?? state.inventory;
+        break;
+      }
+      case "setGameMode": {
+        this.switchGameMode(command.mode);
         break;
       }
       case "unstuck": {
@@ -469,9 +507,10 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 7,
+      version: 8,
       seed: state.world.seed,
       worldType: this.worldType,
+      gameMode: state.gameMode,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
       equippedArmor: { ...state.equippedArmor },
@@ -623,6 +662,40 @@ export class GameEngine {
     };
   }
 
+  /**
+   * Switches the live game mode (from the pause menu), resetting transient state
+   * so nothing leaks across: queued hazard damage is cleared, the bars refill
+   * (hidden anyway in no-damage modes), flight matches the mode (Spectator
+   * always airborne), open panels close, and leaving noclip lifts the player out
+   * of any wall they were sitting in.
+   */
+  private switchGameMode(next: GameMode): void {
+    const state = this.state;
+    if (!isGameMode(next) || next === state.gameMode || state.isDead) return;
+    state.gameMode = next;
+
+    const t = state.timers;
+    t.lavaBurnTimer = 0;
+    t.lavaDamageTimer = 0;
+    t.voidTimer = 0;
+    t.waterExposureTimer = 0;
+    t.waterDamageTimer = 0;
+    t.drownTimer = 0;
+    state.hearts = MAX_HEARTS;
+    state.hunger = MAX_HUNGER;
+    state.oxygen = MAX_OXYGEN;
+
+    state.isFlying = next === "spectator";
+    resetMining(state);
+    state.inventoryOpen = false;
+    state.craftingStation = null;
+    state.openContainerIndex = null;
+
+    if (!isNoclip(next) && (collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2)) {
+      this.forceUnstuck();
+    }
+  }
+
   private forceUnstuck(): void {
     const state = this.state;
     const safe = findSpawnOnLand(state.world, state.player.position.x, state.player.position.z, true);
@@ -734,6 +807,8 @@ export class GameEngine {
       inventory: state.inventory,
       equippedArmor: state.equippedArmor,
       selectedSlot: state.selectedSlot,
+      gameMode: state.gameMode,
+      isFlying: state.isFlying,
       hearts: state.hearts,
       hunger: state.hunger,
       oxygen: state.oxygen,

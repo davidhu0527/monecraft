@@ -12,11 +12,13 @@ import type {
   SaveDataV4,
   SaveDataV5,
   SaveDataV6,
+  SaveDataV7,
   SavedContainer,
   SavedEffect,
   SavedSlot,
   InventorySlot
 } from "@/lib/game/types";
+import { isGameMode, type GameMode } from "@/lib/game/gameModes";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
@@ -100,8 +102,16 @@ export function migrateSaveV5toV6(save: SaveDataV5): SaveDataV6 {
  * `enchantments`) are optional, so a pre-XP save simply loads with `xp` 0 and no
  * enchantments.
  */
-export function migrateSaveV6toV7(save: SaveDataV6): SaveData {
+export function migrateSaveV6toV7(save: SaveDataV6): SaveDataV7 {
   return { ...save, version: 7 };
+}
+
+/**
+ * Migrates a v7 save to v8 — a pure version bump. `gameMode` is optional, so a
+ * pre-mode save simply loads as "survival" (see restoreGameMode).
+ */
+export function migrateSaveV7toV8(save: SaveDataV7): SaveData {
+  return { ...save, version: 8 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -109,15 +119,17 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveData | SaveDataV6 | SaveDataV5 | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
+    const parsed = JSON.parse(raw) as SaveData | SaveDataV7 | SaveDataV6 | SaveDataV5 | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveData =
+      parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
     if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
     if (migrated.version === 5) migrated = migrateSaveV5toV6(migrated);
     if (migrated.version === 6) migrated = migrateSaveV6toV7(migrated);
-    if (migrated.version !== 7) return null;
+    if (migrated.version === 7) migrated = migrateSaveV7toV8(migrated);
+    if (migrated.version !== 8) return null;
     return migrated;
   } catch {
     return null;
@@ -320,6 +332,11 @@ export function restoreHungerLevel(save: SaveData): number | null {
 export function restoreXp(save: SaveData): number {
   if (typeof save.xp !== "number" || !Number.isFinite(save.xp) || save.xp < 0) return 0;
   return Math.floor(save.xp);
+}
+
+/** Restores the saved game mode; "survival" when absent or invalid (pre-v8 saves). */
+export function restoreGameMode(save: SaveData): GameMode {
+  return isGameMode(save.gameMode) ? save.gameMode : "survival";
 }
 
 /** Restores the bed respawn point; null if absent or explicitly cleared. */

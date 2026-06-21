@@ -6,6 +6,7 @@ import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS } from "@/lib/game/config";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
+import type { GameMode } from "@/lib/game/gameModes";
 import type { InventorySlot } from "@/lib/game/types";
 
 function makeInventory(...items: Array<[string, number] | null>): InventorySlot[] {
@@ -24,6 +25,7 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
     craftingStation: null as "furnace" | "enchanting" | null,
+    gameMode: "survival" as GameMode,
     container: null as InventorySlot[] | null,
     xpLevel: 0,
     enchantCost: 3,
@@ -33,6 +35,7 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     onToggleEquipArmor: mock(),
     onCraft: mock(),
     onEnchant: mock(),
+    onGiveItem: mock(),
     ...overrides
   };
   render(<InventoryPanel {...props} />);

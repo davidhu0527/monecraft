@@ -53,25 +53,49 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                              |
-| ------------------ | ------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                |
-| `Space`            | Jump                                                                |
-| `C`                | Crouch (slower, careful movement)                                   |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                  |
-| Mouse              | Look around (double-click the game first to lock the pointer)       |
-| Left-click (hold)  | Break the targeted block / attack a mob                             |
-| Right-click or `E` | Place/interact, or throw a selected spear                           |
-| `1`–`9`            | Select a hotbar slot                                                |
-| `I`                | Open / close inventory & crafting                                   |
-| `F`                | Eat the selected food, or drink a selected potion                   |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front |
-| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)               |
-| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
+| Key / input        | Action                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                                        |
+| `Space`            | Jump                                                                                        |
+| `C`                | Crouch (slower, careful movement)                                                           |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                          |
+| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying |
+| Mouse              | Look around (double-click the game first to lock the pointer)                               |
+| Left-click (hold)  | Break the targeted block / attack a mob                                                     |
+| Right-click or `E` | Place/interact, or throw a selected spear                                                   |
+| `1`–`9`            | Select a hotbar slot                                                                        |
+| `I`                | Open / close inventory & crafting                                                           |
+| `F`                | Eat the selected food, or drink a selected potion                                           |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front                         |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                       |
+| `Esc`              | Pause menu (save / load / reset, **Game Mode** switcher, volume sliders, skin picker)       |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                         |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
+
+## Game modes
+
+Pick a mode when you create a world (next to the name, world type, and seed), and
+switch it any time from the **pause menu** (`Esc` → Game Mode). It's saved with the
+world. Modes are independent of the world type.
+
+- **Survival** — the standard game: gather, craft, fight, and manage health and
+  hunger. You can die.
+- **Creative** — build freely. You fly (double-tap `Space`, then `Space` / `C` to
+  rise and descend), take no damage and never hunger, break any block instantly,
+  and place blocks without using them up. The recipe book is replaced by a
+  searchable **palette of every item** — click one to drop a stack into your
+  inventory.
+- **Adventure** — survival in every way (damage, hunger, mobs, combat,
+  doors/chests/trading) **except you can't break or place blocks**, so a built
+  world stays as-is.
+- **Spectator** — a free camera: you fly through walls (noclip), are invisible and
+  invulnerable, and can't interact with anything. Mobs ignore you entirely. There's
+  no hotbar or status bars — just look around.
+
+Switching modes refills your bars and clears any pending hazard damage, so it's
+always safe to flip between them.
 
 ## Survival
 

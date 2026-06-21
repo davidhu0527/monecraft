@@ -28,6 +28,7 @@ import type { EffectId } from "@/lib/game/types";
 function makeState(overrides: Partial<GameState> = {}): GameState {
   return {
     player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+    gameMode: "survival",
     hearts: MAX_HEARTS,
     hunger: 20,
     oxygen: MAX_OXYGEN,
