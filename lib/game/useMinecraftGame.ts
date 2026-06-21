@@ -16,6 +16,7 @@ import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
 import type { EnchantmentId, Recipe } from "@/lib/game/types";
+import type { GameMode } from "@/lib/game/gameModes";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
 
 /**
@@ -366,6 +367,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     rendererError,
     gameMode: snapshot.gameMode,
     giveCreativeItem: (itemId: string) => engine?.dispatch({ type: "creativeGiveItem", itemId }),
+    setGameMode: (mode: GameMode) => engine?.dispatch({ type: "setGameMode", mode }),
     selectedSlot: snapshot.selectedSlot,
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,

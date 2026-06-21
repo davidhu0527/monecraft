@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AudioSettings } from "@/lib/game/audio/audioDirector";
+import { GAME_MODE_PRESETS, type GameMode } from "@/lib/game/gameModes";
 import { SKIN_PRESETS, type SkinId } from "@/lib/game/playerSkins";
 import { skinPortraitUrl } from "@/lib/ui/sprites";
 import PixelImg from "./PixelImg";
@@ -8,6 +9,8 @@ type PauseMenuProps = {
   saveMessage: string;
   audioSettings: AudioSettings;
   onAudioSettingsChange: (partial: Partial<AudioSettings>) => void;
+  gameMode: GameMode;
+  onGameModeChange: (mode: GameMode) => void;
   skinId: SkinId;
   onSkinChange: (id: SkinId) => void;
   onBack: () => void;
@@ -25,6 +28,7 @@ const CONTROLS: Array<[string, string]> = [
   ["Inventory", "I"],
   ["Eat food", "F"],
   ["Hotbar", "1-9"],
+  ["Fly (Creative / Spectator)", "Double-tap Space"],
   ["Camera view", "V"],
   ["Debug overlay", "F3"],
   ["Emergency unstuck", "Shift + U"]
@@ -38,6 +42,8 @@ export default function PauseMenu({
   saveMessage,
   audioSettings,
   onAudioSettingsChange,
+  gameMode,
+  onGameModeChange,
   skinId,
   onSkinChange,
   onBack,
@@ -93,6 +99,22 @@ export default function PauseMenu({
         <button className="mc-button" onClick={onQuitToWorlds}>
           Save &amp; Quit to Worlds
         </button>
+        <div className="pause-modes">
+          <div className="pause-skins-title">Game Mode</div>
+          <div className="pause-modes-grid">
+            {GAME_MODE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                className="mc-button mode-option"
+                aria-pressed={preset.id === gameMode}
+                aria-label={`${preset.label} mode`}
+                onClick={() => onGameModeChange(preset.id)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="pause-sound">
           {volumeSlider("Sound", audioSettings.master, (volume) => onAudioSettingsChange({ master: volume }))}
           {volumeSlider("Music", audioSettings.music, (volume) => onAudioSettingsChange({ music: volume }))}

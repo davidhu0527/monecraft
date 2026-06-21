@@ -34,6 +34,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     rendererError,
     gameMode,
     giveCreativeItem,
+    setGameMode,
     selectedSlot,
     setSelectedSlot,
     capsActive,
@@ -171,6 +172,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           saveMessage={saveMessage}
           audioSettings={audioSettings}
           onAudioSettingsChange={updateAudioSettings}
+          gameMode={gameMode}
+          onGameModeChange={setGameMode}
           skinId={skinId}
           onSkinChange={updateSkin}
           onBack={resumeNow}

@@ -52,7 +52,7 @@ import {
   serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
-import { canInteract, isNoclip, type GameMode } from "@/lib/game/gameModes";
+import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { InventorySlot, SaveData } from "@/lib/game/types";
@@ -441,6 +441,10 @@ export class GameEngine {
         state.inventory = inv.adjustSlotCount(state.inventory, command.itemId, maxStackSizeForItem(command.itemId), state.selectedSlot) ?? state.inventory;
         break;
       }
+      case "setGameMode": {
+        this.switchGameMode(command.mode);
+        break;
+      }
       case "unstuck": {
         if (state.isDead) break;
         this.forceUnstuck();
@@ -649,6 +653,40 @@ export class GameEngine {
       rng: this.rng,
       emit: this.emit
     };
+  }
+
+  /**
+   * Switches the live game mode (from the pause menu), resetting transient state
+   * so nothing leaks across: queued hazard damage is cleared, the bars refill
+   * (hidden anyway in no-damage modes), flight matches the mode (Spectator
+   * always airborne), open panels close, and leaving noclip lifts the player out
+   * of any wall they were sitting in.
+   */
+  private switchGameMode(next: GameMode): void {
+    const state = this.state;
+    if (!isGameMode(next) || next === state.gameMode || state.isDead) return;
+    state.gameMode = next;
+
+    const t = state.timers;
+    t.lavaBurnTimer = 0;
+    t.lavaDamageTimer = 0;
+    t.voidTimer = 0;
+    t.waterExposureTimer = 0;
+    t.waterDamageTimer = 0;
+    t.drownTimer = 0;
+    state.hearts = MAX_HEARTS;
+    state.hunger = MAX_HUNGER;
+    state.oxygen = MAX_OXYGEN;
+
+    state.isFlying = next === "spectator";
+    resetMining(state);
+    state.inventoryOpen = false;
+    state.craftingStation = null;
+    state.openContainerIndex = null;
+
+    if (!isNoclip(next) && collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+      this.forceUnstuck();
+    }
   }
 
   private forceUnstuck(): void {

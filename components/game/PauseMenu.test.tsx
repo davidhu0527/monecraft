@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PauseMenu from "@/components/game/PauseMenu";
 import { DEFAULT_AUDIO_SETTINGS } from "@/lib/game/audio/audioDirector";
+import type { GameMode } from "@/lib/game/gameModes";
 import { DEFAULT_SKIN_ID, SKIN_PRESETS } from "@/lib/game/playerSkins";
 
 function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
@@ -10,6 +11,8 @@ function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
     saveMessage: "",
     audioSettings: DEFAULT_AUDIO_SETTINGS,
     onAudioSettingsChange: mock(),
+    gameMode: "survival" as GameMode,
+    onGameModeChange: mock(),
     skinId: DEFAULT_SKIN_ID,
     onSkinChange: mock(),
     onBack: mock(),
@@ -58,6 +61,14 @@ describe("PauseMenu", () => {
   test("shows the transient save message", () => {
     renderMenu({ saveMessage: "Saved" });
     expect(screen.getByText("Saved")).toBeTruthy();
+  });
+
+  test("the game-mode buttons switch mode", async () => {
+    const user = userEvent.setup();
+    const props = renderMenu({ gameMode: "survival" });
+    expect(screen.getByRole("button", { name: "Survival mode" }).getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Creative mode" }));
+    expect(props.onGameModeChange).toHaveBeenCalledWith("creative");
   });
 
   test("volume sliders report normalized values", () => {

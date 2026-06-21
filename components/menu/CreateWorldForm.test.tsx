@@ -14,7 +14,7 @@ describe("CreateWorldForm", () => {
     await user.click(screen.getByRole("button", { name: "Create World" }));
 
     expect(onCreate).toHaveBeenCalledTimes(1);
-    expect(onCreate).toHaveBeenCalledWith("Survival", "42", "default"); // default type unless chosen
+    expect(onCreate).toHaveBeenCalledWith("Survival", "42", "default", "survival"); // defaults unless chosen
   });
 
   test("a blank seed is allowed (random world)", async () => {
@@ -25,7 +25,7 @@ describe("CreateWorldForm", () => {
     await user.type(screen.getByLabelText("World name"), "Random");
     await user.click(screen.getByRole("button", { name: "Create World" }));
 
-    expect(onCreate).toHaveBeenCalledWith("Random", "", "default");
+    expect(onCreate).toHaveBeenCalledWith("Random", "", "default", "survival");
   });
 
   test("picking a world type passes it through", async () => {
@@ -37,7 +37,19 @@ describe("CreateWorldForm", () => {
     await user.click(screen.getByRole("button", { name: "Amplified world type" }));
     await user.click(screen.getByRole("button", { name: "Create World" }));
 
-    expect(onCreate).toHaveBeenCalledWith("Sky", "", "amplified");
+    expect(onCreate).toHaveBeenCalledWith("Sky", "", "amplified", "survival");
+  });
+
+  test("picking a game mode passes it through", async () => {
+    const user = userEvent.setup();
+    const onCreate = mock();
+    render(<CreateWorldForm onCreate={onCreate} onCancel={mock()} />);
+
+    await user.type(screen.getByLabelText("World name"), "Builder");
+    await user.click(screen.getByRole("button", { name: "Creative mode" }));
+    await user.click(screen.getByRole("button", { name: "Create World" }));
+
+    expect(onCreate).toHaveBeenCalledWith("Builder", "", "default", "creative");
   });
 
   test("cancel fires its callback", async () => {

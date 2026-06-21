@@ -148,6 +148,22 @@
   outline: 1px solid rgba(240, 190, 60, 0.6);
 }
 
+.pause-modes {
+  margin-bottom: 6px;
+}
+
+.pause-modes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.mode-option[aria-pressed="true"] {
+  border-color: #f0be3c;
+  outline: 1px solid rgba(240, 190, 60, 0.6);
+}
+
 .mc-slider {
   appearance: none;
   width: 100%;
