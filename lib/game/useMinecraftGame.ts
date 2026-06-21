@@ -35,6 +35,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   equippedArmor: createEmptyArmorEquipment(),
   selectedSlot: 0,
   gameMode: "survival",
+  difficulty: "normal",
   isFlying: false,
   hearts: MAX_HEARTS,
   hunger: MAX_HUNGER,

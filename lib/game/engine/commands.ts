@@ -5,6 +5,7 @@
  */
 import type { EnchantmentId } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
+import type { Difficulty } from "@/lib/game/difficulties";
 
 /**
  * Slot indices passed to `moveStack` at or above this base address the open
@@ -28,6 +29,7 @@ export type Command =
   | { type: "toggleFlight" }
   | { type: "creativeGiveItem"; itemId: string }
   | { type: "setGameMode"; mode: GameMode }
+  | { type: "setDifficulty"; difficulty: Difficulty }
   | { type: "unstuck" }
   | { type: "pause" }
   | { type: "resume" }

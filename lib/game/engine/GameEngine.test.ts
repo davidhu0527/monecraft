@@ -1408,6 +1408,7 @@ describe("persistence", () => {
     const save = engine.serialize();
     expect(save.version).toBe(9);
     expect(save.gameMode).toBe("survival");
+    expect(save.difficulty).toBe("normal");
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);

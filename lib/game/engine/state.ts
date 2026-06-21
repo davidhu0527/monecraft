@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
+import type { Difficulty } from "@/lib/game/difficulties";
 import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
@@ -119,6 +120,8 @@ export type GameTimers = {
   lavaDamageTimer: number;
   /** Accumulates drowning damage once oxygen is exhausted. */
   drownTimer: number;
+  /** Accumulates starvation damage while hunger sits at 0 (difficulty-gated). */
+  starvationTimer: number;
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
@@ -150,6 +153,8 @@ export type GameState = {
   selectedSlot: number;
   /** Current game mode. Persisted (save v8); switchable in-game via setGameMode. */
   gameMode: GameMode;
+  /** Current difficulty. Persisted (save v9); switchable in-game via setDifficulty. */
+  difficulty: Difficulty;
   /** True while flying (Creative toggle, always on for Spectator). Session-only, never serialized. */
   isFlying: boolean;
   hearts: number;
@@ -219,6 +224,7 @@ export function createTimers(): GameTimers {
     lavaBurnTimer: 0,
     lavaDamageTimer: 0,
     drownTimer: 0,
+    starvationTimer: 0,
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,
@@ -266,6 +272,8 @@ export type GameSnapshot = {
   selectedSlot: number;
   /** Current game mode — drives mode-specific HUD (hidden bars, palette, flying indicator). */
   gameMode: GameMode;
+  /** Current difficulty — drives the pause-menu picker's active state. */
+  difficulty: Difficulty;
   /** True while flying — drives the flight indicator. */
   isFlying: boolean;
   hearts: number;

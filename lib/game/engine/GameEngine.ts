@@ -45,6 +45,7 @@ import {
   restoreInventorySlots,
   restorePlayerPosition,
   restoreGameMode,
+  restoreDifficulty,
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
@@ -53,6 +54,7 @@ import {
   serializeLootedChests
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
+import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { InventorySlot, SaveData } from "@/lib/game/types";
@@ -89,6 +91,8 @@ export type GameEngineOptions = {
   worldType?: WorldType;
   /** Initial game mode for a fresh world; the save's own gameMode wins when restoring. Defaults to "survival". */
   gameMode?: GameMode;
+  /** Initial difficulty for a fresh world; the save's own difficulty wins when restoring. Defaults to "normal". */
+  difficulty?: Difficulty;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -147,6 +151,9 @@ export class GameEngine {
     // the requested mode, defaulting to survival. isFlying is session-only and
     // is reconciled to the mode by the motion tick (Spectator always flies).
     const gameMode = save ? restoreGameMode(save) : (options.gameMode ?? "survival");
+    // Orthogonal to the mode: a restored save's own (possibly switched) difficulty
+    // wins; a fresh world takes the requested level, defaulting to "normal".
+    const difficulty = save ? restoreDifficulty(save) : (options.difficulty ?? "normal");
     this.state = {
       world,
       blockChanges,
@@ -161,6 +168,7 @@ export class GameEngine {
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
       gameMode,
+      difficulty,
       isFlying: gameMode === "spectator", // Spectator is always airborne
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
@@ -452,6 +460,10 @@ export class GameEngine {
         this.switchGameMode(command.mode);
         break;
       }
+      case "setDifficulty": {
+        this.switchDifficulty(command.difficulty);
+        break;
+      }
       case "unstuck": {
         if (state.isDead) break;
         this.forceUnstuck();
@@ -511,6 +523,7 @@ export class GameEngine {
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
+      difficulty: state.difficulty,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
       equippedArmor: { ...state.equippedArmor },
@@ -696,6 +709,37 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Switches the live difficulty (from the pause menu). The spawn directors and
+   * mob AI read state.difficulty every tick, so raising/lowering just changes the
+   * numbers they use next tick — the one thing needing action here is dropping to
+   * Peaceful, which must clear the hostiles already on the field (the directors
+   * only govern *new* spawns). Resetting the starvation accumulator stops a stale
+   * timer from biting right after a Peaceful→Hard flip. Unlike switchGameMode this
+   * has no respawn-coupled state to guard, so it is allowed even while dead — a
+   * player should be able to flip to Peaceful to stop a hostile pile-on.
+   */
+  private switchDifficulty(next: Difficulty): void {
+    const state = this.state;
+    if (!isDifficulty(next) || next === state.difficulty) return;
+    state.difficulty = next;
+    state.timers.starvationTimer = 0;
+    if (!hostilesSpawn(next)) this.despawnHostiles();
+  }
+
+  /**
+   * Silently removes every hostile mob (the Peaceful switch). A plain splice — not
+   * removeMobAt — so there is no loot, no XP, and no false boss victory; the
+   * renderer drops the orphaned models when it reconciles state.mobs by id.
+   * Descends so the splices don't shift the indices still to be visited.
+   */
+  private despawnHostiles(): void {
+    const mobs = this.state.mobs;
+    for (let i = mobs.length - 1; i >= 0; i -= 1) {
+      if (mobs[i].hostile) mobs.splice(i, 1);
+    }
+  }
+
   private forceUnstuck(): void {
     const state = this.state;
     const safe = findSpawnOnLand(state.world, state.player.position.x, state.player.position.z, true);
@@ -808,6 +852,7 @@ export class GameEngine {
       equippedArmor: state.equippedArmor,
       selectedSlot: state.selectedSlot,
       gameMode: state.gameMode,
+      difficulty: state.difficulty,
       isFlying: state.isFlying,
       hearts: state.hearts,
       hunger: state.hunger,
