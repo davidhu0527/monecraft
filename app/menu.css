@@ -204,6 +204,18 @@
   outline: 1px solid rgba(240, 190, 60, 0.6);
 }
 
+/* Locked picker (e.g. Hardcore forces Survival + Hard): dimmed and non-interactive,
+   but the forced choice still reads as pressed. */
+.world-type-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.world-type-option:disabled:hover {
+  background: var(--mc-tile-button), var(--mc-button);
+  border-color: #a8a8a8 #2c2c2c #2c2c2c #a8a8a8;
+}
+
 .world-type-label {
   font-size: 13px;
   font-weight: 700;

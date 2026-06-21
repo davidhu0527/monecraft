@@ -5,6 +5,7 @@ import ActiveEffects from "@/components/game/ActiveEffects";
 import BossHealthBar from "@/components/game/BossHealthBar";
 import DeathScreen from "@/components/game/DeathScreen";
 import DebugOverlay from "@/components/game/DebugOverlay";
+import GameOverScreen from "@/components/game/GameOverScreen";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
@@ -23,10 +24,12 @@ type MinecraftGameProps = {
   world: WorldMeta;
   profile: Profile;
   onQuitToWorlds: () => void;
+  /** Hardcore Game Over: erase the dead world and return to the world list. */
+  onDeleteWorld: () => void;
   onReloadWorld: () => void;
 };
 
-export default function MinecraftGame({ world, profile, onQuitToWorlds, onReloadWorld }: MinecraftGameProps) {
+export default function MinecraftGame({ world, profile, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -34,6 +37,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     rendererError,
     gameMode,
     difficulty,
+    hardcore,
+    gameOver,
     giveCreativeItem,
     setGameMode,
     setDifficulty,
@@ -178,6 +183,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           onGameModeChange={setGameMode}
           difficulty={difficulty}
           onDifficultyChange={setDifficulty}
+          hardcore={hardcore}
           skinId={skinId}
           onSkinChange={updateSkin}
           onBack={resumeNow}
@@ -191,6 +197,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
       <DeathScreen seconds={respawnSeconds} onRespawn={respawnNow} />
 
       <VictoryScreen show={victory} onDismiss={dismissVictory} />
+
+      <GameOverScreen show={gameOver} onQuitToWorlds={quitToWorlds} onDeleteWorld={onDeleteWorld} />
 
       <SleepOverlay sleeping={sleeping} />
 
