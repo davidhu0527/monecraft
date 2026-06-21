@@ -8,6 +8,19 @@ stats. For how it all fits together, read the [player manual](manual.md).
 > `lib/game/mobs.ts`, and `lib/game/mobLoot.ts`. If a number here disagrees with
 > the game, the code wins — and this page needs an update.
 
+## Game modes
+
+Chosen at world creation and switchable any time from the pause menu; saved with
+the world and independent of the world type. Source: `lib/game/gameModes.ts` (the
+`GameMode` union + predicates each system gates on).
+
+| Mode      | Damage / hunger | Break / place blocks   | Flight       | Interact (combat, doors, eat) | Mobs       | Inventory         |
+| --------- | --------------- | ---------------------- | ------------ | ----------------------------- | ---------- | ----------------- |
+| Survival  | Yes             | Yes                    | No           | Yes                           | Hostile    | Normal            |
+| Creative  | No (invincible) | Instant, free (no use) | Yes          | Yes                           | Ignore you | All-items palette |
+| Adventure | Yes             | **No**                 | No           | Yes                           | Hostile    | Normal            |
+| Spectator | No (invincible) | No                     | Yes (noclip) | **No**                        | Ignore you | Hidden            |
+
 ## World types
 
 Chosen when you create a world (alongside the name and seed) and fixed for its

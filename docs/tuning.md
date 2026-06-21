@@ -24,6 +24,18 @@ above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what bu
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
 changing them affects which gaps the player fits through.
 
+## Game modes — flight
+
+`FLY_SPEED`, `FLY_DOUBLE_TAP_WINDOW_SECONDS`.
+
+Used by the flight path in `systems/playerMotion.ts` and the double-tap detector
+in `input/inputController.ts`. `FLY_SPEED` is the vertical climb/descend speed
+while flying (Creative and Spectator); horizontal speed still comes from
+`WALK_SPEED`/`SPRINT_SPEED`. `FLY_DOUBLE_TAP_WINDOW_SECONDS` is how close two
+`Space` presses must be to toggle flight — raise it if a double-tap feels hard to
+trigger, lower it if flight toggles by accident while bunny-hopping. (The modes
+themselves and their gates live in `lib/game/gameModes.ts`, not `config.ts`.)
+
 ## Survival pressure — the main difficulty dial
 
 `MAX_HEARTS`, `MAX_HUNGER`, `RESPAWN_SECONDS`, `HEALTH_REGEN_INTERVAL_SECONDS`,

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Game modes**: the game gains Minecraft's four ways to play — **Survival** (the original), **Creative**, **Adventure**, and **Spectator** — as a single per-player axis you pick at world creation and can switch any time from the pause menu, all on **zero new assets**. The save schema bumps **v7 → v8** (additive), with **no worldgen change**
+  - **Creative**: fly (double-tap **Space**, then Space/crouch to rise/descend), take no damage and never hunger, break any block instantly, and place blocks without consuming them. The recipe book is replaced by a searchable **palette of every item** — click one to pull a stack into your inventory. The survival HUD bars hide
+  - **Adventure**: survival in every respect (damage, hunger, mobs, combat, doors/chests/trading) **except you can't break or place blocks**, so a built world stays intact
+  - **Spectator**: a free camera — fly through terrain (noclip), invisible and invulnerable, with no interaction at all; hostiles ignore you entirely and the HUD/hotbar hide
+  - **Switching** modes mid-game (pause menu) refills your bars and clears any pending hazard damage, sets flight to match the mode, and lifts you out of a wall when leaving Spectator — so it's always safe to flip between them
+  - **Architecture**: a new `lib/game/gameModes.ts` holds the `GameMode` union plus **intent predicates** (`takesDamage`, `canEditBlocks`, `freeBuild`, `canInteract`, `canFly`, `isNoclip`, `usesInventory`, `mobsThreaten`) that each system gates on, rather than comparing the raw id — so the four modes share one set of seams (the damage chokepoints in `playerLife.ts`, the block edits in `mining.ts`, aggro in `mobAI.ts`, flight/noclip in `playerMotion.ts`). `gameMode` rides the existing per-world `worldType` plumbing (`WorldMeta` + a v8 `SaveData` field + `migrateSaveV7toV8`); unlike `worldType` it's the _current_, switchable value, and the transient `isFlying` is never serialized. New `setGameMode`/`toggleFlight`/`creativeGiveItem` commands; new `FLY_SPEED`/`FLY_DOUBLE_TAP_WINDOW_SECONDS` tunables
+
 ## [0.10.0] - 2026-06-21
 
 ### Added
