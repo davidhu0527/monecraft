@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-21
+
 ### Added
 
 - **XP & enchanting**: the game gains its first progression currency and a way to spend it, all on **zero new assets** (a procedural XP bar + effect-coloured table sprite, synthesized blip/shimmer). The save schema bumps **v6 → v7** (additive), with **no worldgen change**
