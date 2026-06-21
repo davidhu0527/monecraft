@@ -38,6 +38,7 @@ function makeState(mobs: MobState[]): GameState {
     blockChanges: createBlockChangeTracker(world),
     primedTnt: new Map<number, number>(),
     worldMeshDirty: false,
+    gameMode: "survival", // hostiles only threaten survival/adventure players
     mobs,
     projectiles: [],
     nextProjectileId: 1,

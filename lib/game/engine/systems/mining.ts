@@ -3,7 +3,7 @@ import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlo
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
-import { freeBuild } from "@/lib/game/gameModes";
+import { canEditBlocks, freeBuild } from "@/lib/game/gameModes";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { efficiencyMultiplier } from "@/lib/game/enchantments";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
@@ -84,6 +84,11 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
     return;
   }
   if (state.inventoryOpen || state.isDead || !input.pointerLocked) return;
+  // Adventure and Spectator can't break terrain.
+  if (!canEditBlocks(state.gameMode)) {
+    resetMining(state);
+    return;
+  }
 
   const { world, mining } = state;
   const origin = eyePosition(state, scratchEye);
@@ -150,6 +155,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
 
 /** Places the selected block against the targeted face, refusing self-entombment. */
 export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void {
+  if (!canEditBlocks(state.gameMode)) return; // Adventure and Spectator can't place
   const { world } = state;
   const origin = eyePosition(state, scratchEye);
   const direction = lookDirection(state.player.yaw, state.player.pitch, scratchDir);

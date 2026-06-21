@@ -52,7 +52,7 @@ import {
   serializeEffects,
   serializeLootedChests
 } from "@/lib/game/save";
-import { canFly, type GameMode } from "@/lib/game/gameModes";
+import { canInteract, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import type { InventorySlot, SaveData } from "@/lib/game/types";
@@ -161,7 +161,7 @@ export class GameEngine {
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
       gameMode,
-      isFlying: false,
+      isFlying: gameMode === "spectator", // Spectator is always airborne
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
@@ -251,12 +251,15 @@ export class GameEngine {
     }
     state.capsActive = input.capsActive;
 
-    // Stuck detection / auto-unstuck.
-    const inBadState = collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2;
-    state.timers.stuckTimer = inBadState ? state.timers.stuckTimer + dt : 0;
-    if (state.timers.stuckTimer > STUCK_RESET_SECONDS) {
-      this.forceUnstuck();
-      state.timers.stuckTimer = 0;
+    // Stuck detection / auto-unstuck — skipped for Spectator, which legitimately
+    // sits inside terrain while noclipping and must never be teleported out.
+    if (!isNoclip(state.gameMode)) {
+      const inBadState = collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2;
+      state.timers.stuckTimer = inBadState ? state.timers.stuckTimer + dt : 0;
+      if (state.timers.stuckTimer > STUCK_RESET_SECONDS) {
+        this.forceUnstuck();
+        state.timers.stuckTimer = 0;
+      }
     }
 
     // Death: only mobs and the respawn countdown tick while dead.
@@ -320,6 +323,7 @@ export class GameEngine {
         break;
       }
       case "toggleInventory": {
+        if (!canInteract(state.gameMode)) break; // Spectator has no inventory
         state.inventoryOpen = !state.inventoryOpen;
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
@@ -352,7 +356,7 @@ export class GameEngine {
         break;
       }
       case "eatFood": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         const slot = state.inventory[state.selectedSlot];
         if (!slot?.id || slot.kind !== "food" || !slot.hunger || slot.count <= 0) break;
         const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
@@ -368,7 +372,7 @@ export class GameEngine {
         break;
       }
       case "drinkPotion": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         const slot = state.inventory[state.selectedSlot];
         if (!slot?.id || !slot.effect || slot.count <= 0) break;
         const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
@@ -391,7 +395,7 @@ export class GameEngine {
         break;
       }
       case "placeBlock": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         // Spears consume the right-click/E action before all world interaction.
         if (tryThrowSelectedSpear(state, this.emit, this.rng)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
@@ -407,7 +411,7 @@ export class GameEngine {
         break;
       }
       case "attack": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0) break;
+        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         this.emit({ type: "attackSwung" });
         // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
         // cooldown or with no arrows, but the swing animation still plays.
@@ -425,8 +429,8 @@ export class GameEngine {
         break;
       }
       case "toggleFlight": {
-        // Creative/Spectator only; a no-op in survival/adventure or while dead/in menus.
-        if (!canFly(state.gameMode) || state.isDead || state.inventoryOpen) break;
+        // Creative only — Spectator is permanently airborne, survival can't fly.
+        if (state.gameMode !== "creative" || state.isDead || state.inventoryOpen) break;
         state.isFlying = !state.isFlying;
         break;
       }

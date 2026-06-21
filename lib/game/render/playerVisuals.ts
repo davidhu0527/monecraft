@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { WALK_SPEED } from "@/lib/game/config";
+import type { GameMode } from "@/lib/game/gameModes";
 import type { CameraMode, FishingState } from "@/lib/game/engine/state";
 import type { InventorySlot } from "@/lib/game/types";
 import type { PlayerPalette } from "@/lib/game/playerSkins";
@@ -10,6 +11,7 @@ import { computePlayerPose } from "./playerPose";
 /** The slice of GameState the player body needs — narrow so tests stay light. */
 export type PlayerVisualsState = {
   cameraMode: CameraMode;
+  gameMode: GameMode;
   isDead: boolean;
   player: {
     position: THREE.Vector3;
@@ -78,7 +80,8 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
 
   return {
     sync(state, timeMs) {
-      const visible = state.cameraMode !== "first" && !state.isDead;
+      // Spectator is unseen — the body stays hidden even in third-person.
+      const visible = state.cameraMode !== "first" && !state.isDead && state.gameMode !== "spectator";
       model.group.visible = visible;
       if (!visible) {
         // Don't replay stale one-shots when the body next becomes visible.

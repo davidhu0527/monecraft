@@ -7,6 +7,7 @@ import { getSkinPreset } from "@/lib/game/playerSkins";
 function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsState {
   return {
     cameraMode: "third-rear",
+    gameMode: "survival",
     isDead: false,
     player: {
       position: new THREE.Vector3(10, 20, 30),

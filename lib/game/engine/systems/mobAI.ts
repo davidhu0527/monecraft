@@ -25,6 +25,7 @@ import {
   SPIDER_AGGRO_BELOW_DAYLIGHT
 } from "@/lib/game/config";
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
+import { mobsThreaten } from "@/lib/game/gameModes";
 import type { EmitGameEvent, GameState, MobState } from "../state";
 import { spawnArrow } from "../projectiles";
 import { explode } from "./explosion";
@@ -127,6 +128,9 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
   const { world, daylight, mobs, isDead } = state;
   const playerPosition = state.player.position;
   const playerVelocity = state.player.velocity;
+  // Creative/Spectator players aren't a threat target — hostiles ignore them
+  // entirely (no aggro, attacks, fuses, or summons), so they just wander.
+  const threatened = mobsThreaten(state.gameMode);
 
   for (let i = 0; i < mobs.length; i += 1) {
     const mob = mobs[i];
@@ -135,7 +139,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     if (mob.hp <= 0) continue;
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
-    const activeHostile = mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
+    const activeHostile = threatened && mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
 
     scratchToPlayer.copy(playerPosition).sub(mob.position).setY(0);
     const distanceToPlayer = scratchToPlayer.length();
