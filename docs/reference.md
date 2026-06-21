@@ -34,6 +34,15 @@ the pause menu, and saved with the world. Sets how hard survival is. Source:
 | Normal   | Yes                        | ×1.0       | baseline / cap 16 | Stops at ½ heart      |
 | Hard     | Yes                        | ×1.5       | faster / cap 24   | Kills you             |
 
+## Hardcore
+
+A per-world toggle (immutable, chosen at creation) for permadeath. Forces **Survival**
+mode and **Hard** difficulty and locks both switchers. On death the run ends: the
+world flips to a spectator "dead world" with a Game Over screen (Spectate / Back to
+Worlds / Delete World), and the dead state persists across reloads. Hearts render in
+a withered dark-red variant. Source: the `hardcore`/`gameOver` flags in
+`lib/game/types.ts` + `GameEngine.triggerGameOver`.
+
 ## World types
 
 Chosen when you create a world (alongside the name and seed) and fixed for its

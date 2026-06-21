@@ -82,7 +82,9 @@ never mutated), and `systems/playerStats.ts` (faster Peaceful regen + the
 starvation floor). **Peaceful** also despawns existing hostiles the moment you
 switch to it (`GameEngine.switchDifficulty`). Note these dials are independent of
 game mode: Peaceful stops hostile _spawns_ regardless of mode, while damage/threat
-still gate on the mode (Creative is invulnerable at any difficulty).
+still gate on the mode (Creative is invulnerable at any difficulty). The **Hardcore**
+flag (a per-world boolean, not a tunable) forces this dial to Hard and locks it — see
+`docs/architecture.md` for the permadeath/game-over flow.
 
 ## Cave hazards — lava & drowning
 
