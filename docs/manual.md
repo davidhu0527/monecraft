@@ -68,7 +68,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `F`                | Eat the selected food, or drink a selected potion                                           |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front                         |
 | `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                       |
-| `Esc`              | Pause menu (save / load / reset, **Game Mode** switcher, volume sliders, skin picker)       |
+| `Esc`              | Pause menu — Game (save / load / reset, Game Mode), Options (volume, skins), Controls tabs  |
 | `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                         |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
