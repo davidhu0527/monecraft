@@ -110,6 +110,9 @@ const BUBBLE_PALETTE: PixelPalette = {
 
 // Containers reuse the same shapes as dark sunken outlines.
 const HEART_CONTAINER_PALETTE: PixelPalette = { o: [30, 6, 6], m: [62, 26, 26], l: [80, 38, 38] };
+// Hardcore hearts: a withered, desaturated dark red signalling permadeath.
+const HARDCORE_HEART_PALETTE: PixelPalette = { o: [36, 14, 14], m: [150, 54, 54], l: [190, 104, 104] };
+const HARDCORE_HEART_CONTAINER_PALETTE: PixelPalette = { o: [22, 8, 8], m: [52, 28, 28], l: [68, 38, 38] };
 const DRUMSTICK_CONTAINER_PALETTE: PixelPalette = { o: [34, 20, 8], m: [66, 44, 24], l: [80, 56, 32], b: [70, 58, 40], w: [78, 66, 48] };
 const ARMOR_CONTAINER_PALETTE: PixelPalette = { o: [22, 23, 26], m: [58, 61, 68], l: [74, 78, 86] };
 const BUBBLE_CONTAINER_PALETTE: PixelPalette = { o: [16, 30, 38], m: [40, 70, 84], l: [60, 96, 110] };
@@ -258,6 +261,9 @@ export type HudIconName =
   | "heart_full"
   | "heart_half"
   | "heart_container"
+  | "heart_hardcore_full"
+  | "heart_hardcore_half"
+  | "heart_hardcore_container"
   | "hunger_full"
   | "hunger_half"
   | "hunger_container"
@@ -282,6 +288,12 @@ export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
       return paintGrid(HEART_GRID, HEART_CONTAINER_PALETTE);
     case "heart_half":
       return halfIcon(paintGrid(HEART_GRID, HEART_PALETTE), paintGrid(HEART_GRID, HEART_CONTAINER_PALETTE));
+    case "heart_hardcore_full":
+      return paintGrid(HEART_GRID, HARDCORE_HEART_PALETTE);
+    case "heart_hardcore_container":
+      return paintGrid(HEART_GRID, HARDCORE_HEART_CONTAINER_PALETTE);
+    case "heart_hardcore_half":
+      return halfIcon(paintGrid(HEART_GRID, HARDCORE_HEART_PALETTE), paintGrid(HEART_GRID, HARDCORE_HEART_CONTAINER_PALETTE));
     case "hunger_full":
       return paintGrid(DRUMSTICK_GRID, DRUMSTICK_PALETTE);
     case "hunger_container":

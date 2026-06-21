@@ -14,6 +14,8 @@ type PauseMenuProps = {
   onGameModeChange: (mode: GameMode) => void;
   difficulty: Difficulty;
   onDifficultyChange: (difficulty: Difficulty) => void;
+  /** Hardcore worlds lock the mode + difficulty to Survival + Hard — the switchers render disabled. */
+  hardcore: boolean;
   skinId: SkinId;
   onSkinChange: (id: SkinId) => void;
   onBack: () => void;
@@ -61,6 +63,7 @@ export default function PauseMenu({
   onGameModeChange,
   difficulty,
   onDifficultyChange,
+  hardcore,
   skinId,
   onSkinChange,
   onBack,
@@ -130,7 +133,7 @@ export default function PauseMenu({
                 Save &amp; Quit to Worlds
               </button>
               <div className="pause-modes">
-                <div className="pause-skins-title">Game Mode</div>
+                <div className="pause-skins-title">Game Mode{hardcore ? " — locked (Hardcore)" : ""}</div>
                 <div className="pause-modes-grid">
                   {GAME_MODE_PRESETS.map((preset) => (
                     <button
@@ -138,6 +141,7 @@ export default function PauseMenu({
                       className="mc-button mode-option"
                       aria-pressed={preset.id === gameMode}
                       aria-label={`${preset.label} mode`}
+                      disabled={hardcore}
                       onClick={() => onGameModeChange(preset.id)}
                     >
                       {preset.label}
@@ -146,7 +150,7 @@ export default function PauseMenu({
                 </div>
               </div>
               <div className="pause-modes">
-                <div className="pause-skins-title">Difficulty</div>
+                <div className="pause-skins-title">Difficulty{hardcore ? " — locked (Hardcore)" : ""}</div>
                 <div className="pause-modes-grid">
                   {DIFFICULTY_PRESETS.map((preset) => (
                     <button
@@ -154,6 +158,7 @@ export default function PauseMenu({
                       className="mc-button mode-option"
                       aria-pressed={preset.id === difficulty}
                       aria-label={`${preset.label} difficulty`}
+                      disabled={hardcore}
                       onClick={() => onDifficultyChange(preset.id)}
                     >
                       {preset.label}

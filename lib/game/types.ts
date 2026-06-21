@@ -177,12 +177,25 @@ export type SaveDataV8 = Omit<SaveDataV7, "version"> & {
 };
 
 /**
- * Current save shape (v9): v8 plus the player's difficulty (`difficulty`). The
- * field is optional, so the v8→v9 migration is a pure version bump and pre-v9
- * saves load as "normal". Like `gameMode`, difficulty is switchable in-game, so
- * the saved value is the *current* difficulty.
+ * v9 save shape: v8 plus the player's difficulty (`difficulty`). The field is
+ * optional, so the v8→v9 migration is a pure version bump and pre-v9 saves load
+ * as "normal". Like `gameMode`, difficulty is switchable in-game, so the saved
+ * value is the *current* difficulty.
  */
-export type SaveData = Omit<SaveDataV8, "version"> & {
+export type SaveDataV9 = Omit<SaveDataV8, "version"> & {
   version: 9;
   difficulty?: Difficulty;
+};
+
+/**
+ * Current save shape (v10): v9 plus the Hardcore flag (`hardcore`, immutable for
+ * the world's life) and the permadeath `gameOver` flag (set once a hardcore run
+ * has ended). Both are optional, so the v9→v10 migration is a pure version bump
+ * and pre-v10 saves load as a normal, non-hardcore world. A persisted `gameOver`
+ * reloads straight into the spectator "dead world" state, never a playable one.
+ */
+export type SaveData = Omit<SaveDataV9, "version"> & {
+  version: 10;
+  hardcore?: boolean;
+  gameOver?: boolean;
 };

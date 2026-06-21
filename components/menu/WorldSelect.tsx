@@ -41,8 +41,8 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
     return (
       <MenuScreen title={`${profile.name} — New World`}>
         <CreateWorldForm
-          onCreate={(name, seed, worldType, gameMode, difficulty) => {
-            const world = createWorld(profile.id, name, seed, { worldType, gameMode, difficulty });
+          onCreate={(name, seed, worldType, gameMode, difficulty, hardcore) => {
+            const world = createWorld(profile.id, name, seed, { worldType, gameMode, difficulty, hardcore });
             setCreating(false);
             onPlay(world.id); // straight into the freshly created world
           }}
@@ -109,8 +109,9 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
                   <button className="menu-card-play" data-testid={`world-${world.id}`} onClick={() => onPlay(world.id)}>
                     <span className="menu-card-name">{world.name}</span>
                     <span className="menu-card-sub">
+                      {world.hardcore ? `Hardcore · ` : ""}
                       {world.gameMode !== "survival" ? `${gameModeLabel(world.gameMode)} · ` : ""}
-                      {world.difficulty !== "normal" ? `${difficultyLabel(world.difficulty)} · ` : ""}
+                      {!world.hardcore && world.difficulty !== "normal" ? `${difficultyLabel(world.difficulty)} · ` : ""}
                       {world.worldType !== "default" ? `${worldTypeLabel(world.worldType)} · ` : ""}Seed {world.seed}
                     </span>
                   </button>

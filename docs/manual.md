@@ -117,6 +117,20 @@ whether an empty hunger bar can kill you.
 Flipping to Peaceful mid-fight is a safe panic button — every hostile (even the
 boss) vanishes at once.
 
+## Hardcore
+
+A toggle on the new-world form for players who want the ultimate stakes. A Hardcore
+world is **locked to Survival + Hard** — you can't switch game mode or lower the
+difficulty (the pause-menu switchers are greyed out), so there's no escape hatch.
+Its hearts are drawn in a darker, withered red so you always know you're in it.
+
+The defining rule: **death is permanent.** There's no respawn. When you die the run
+is over — the world becomes a **dead world** you can only spectate: a free camera
+that flies through everything while a **Game Over** screen offers to _Spectate_
+(roam your dead world), go _Back to Worlds_, or _Delete World_. Reloading a dead
+world drops you back into that same spectating state; it can never be played again.
+Choose Hardcore knowing every fall, creeper, and empty hunger bar could be the last.
+
 ## Survival
 
 ### Health and death

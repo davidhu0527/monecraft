@@ -616,6 +616,66 @@
   min-width: 220px;
 }
 
+/* --- Hardcore Game Over (permadeath) --- */
+
+.gameover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 3, 3, 0.74);
+  z-index: 9; /* above the death/victory overlays (8); pause is blocked in game-over */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gameover-content {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  max-width: 360px;
+  padding: 0 16px;
+}
+
+.gameover-title {
+  font-size: 44px;
+  font-weight: 700;
+  color: #c75450; /* the withered hardcore-heart red */
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+
+.gameover-sub {
+  font-size: 14px;
+  color: #e6cccc;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.gameover-content .mc-button {
+  min-width: 220px;
+}
+
+.gameover-delete-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Minimized badge shown while spectating the dead world — re-opens the menu. */
+.gameover-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-weight: 700;
+  color: #f3dcdc;
+  background: rgba(16, 3, 3, 0.8);
+  border: 2px solid #c75450;
+  cursor: pointer;
+  text-shadow: var(--mc-text-shadow);
+}
+
 /* --- Boss health bar --- */
 
 .boss-bar {

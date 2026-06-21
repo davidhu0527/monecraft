@@ -46,6 +46,8 @@ import {
   restorePlayerPosition,
   restoreGameMode,
   restoreDifficulty,
+  restoreHardcore,
+  restoreGameOver,
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
@@ -93,6 +95,8 @@ export type GameEngineOptions = {
   gameMode?: GameMode;
   /** Initial difficulty for a fresh world; the save's own difficulty wins when restoring. Defaults to "normal". */
   difficulty?: Difficulty;
+  /** Hardcore flag for a fresh world; the save's own wins when restoring. Forces Survival + Hard + permadeath. Defaults to false. */
+  hardcore?: boolean;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -147,13 +151,17 @@ export class GameEngine {
     this.surfaceYAt = createSurfaceYAt(world);
 
     const firstSpawn = findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
-    // A restored save's own (possibly switched) mode wins; a fresh world takes
-    // the requested mode, defaulting to survival. isFlying is session-only and
-    // is reconciled to the mode by the motion tick (Spectator always flies).
-    const gameMode = save ? restoreGameMode(save) : (options.gameMode ?? "survival");
-    // Orthogonal to the mode: a restored save's own (possibly switched) difficulty
-    // wins; a fresh world takes the requested level, defaulting to "normal".
-    const difficulty = save ? restoreDifficulty(save) : (options.difficulty ?? "normal");
+    // Hardcore is resolved first because it OVERRIDES mode/difficulty: a hardcore
+    // world is locked to Survival + Hard. A persisted gameOver (the run already
+    // ended in death) boots straight into Spectator so the dead world is roamable,
+    // not playable. isFlying = (gameMode === "spectator") then yields a free camera.
+    const hardcore = save ? restoreHardcore(save) : (options.hardcore ?? false);
+    const gameOver = save ? restoreGameOver(save) : false;
+    // A restored save's own (possibly switched) difficulty wins; hardcore forces Hard.
+    const difficulty = hardcore ? "hard" : save ? restoreDifficulty(save) : (options.difficulty ?? "normal");
+    // A restored save's own (possibly switched) mode wins; hardcore forces Survival,
+    // except after game-over, where the player spectates their dead world.
+    const gameMode = gameOver ? "spectator" : hardcore ? "survival" : save ? restoreGameMode(save) : (options.gameMode ?? "survival");
     this.state = {
       world,
       blockChanges,
@@ -169,6 +177,8 @@ export class GameEngine {
       selectedSlot: 0,
       gameMode,
       difficulty,
+      hardcore,
+      gameOver,
       isFlying: gameMode === "spectator", // Spectator is always airborne
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
@@ -477,7 +487,7 @@ export class GameEngine {
         // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
         // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
         // would stall the sleep timer (step early-returns on paused before sleep).
-        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory) break;
+        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
         state.paused = true;
         state.craftingStation = null;
         state.openContainerIndex = null;
@@ -522,11 +532,13 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 9,
+      version: 10,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
       difficulty: state.difficulty,
+      hardcore: state.hardcore,
+      gameOver: state.gameOver,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
       equippedArmor: { ...state.equippedArmor },
@@ -602,6 +614,7 @@ export class GameEngine {
     const died = applyDamageWithArmor(this.state, amount, this.rng);
     this.syncEquippedArmor();
     if (died) {
+      if (this.state.hardcore) return void this.triggerGameOver();
       clearEffects(this.state);
       resetMining(this.state);
       this.emit({ type: "died" });
@@ -614,6 +627,7 @@ export class GameEngine {
     const heartsBefore = this.state.hearts;
     const died = applyUnmitigatedDamage(this.state, amount);
     if (died) {
+      if (this.state.hardcore) return void this.triggerGameOver();
       clearEffects(this.state);
       resetMining(this.state);
       this.emit({ type: "died" });
@@ -621,6 +635,31 @@ export class GameEngine {
       this.emit({ type: "playerHurt" });
     }
   };
+
+  /**
+   * Hardcore permadeath. The run is over: instead of the respawn countdown the
+   * player is dropped into a Spectator free-cam over their dead world and a
+   * persisted gameOver flag fires the Game Over screen. We deliberately leave
+   * isDead/respawnTimer cleared so the respawn DeathScreen never shows, and set
+   * the mode DIRECTLY (not via the now-locked switchGameMode). The shell saves
+   * on the {type:"gameOver"} event so closing the tab still resumes the dead world.
+   */
+  private triggerGameOver(): void {
+    const state = this.state;
+    state.gameOver = true;
+    state.gameMode = "spectator"; // free-cam roam; takesDamage=false → fully inert
+    state.isFlying = true;
+    state.isDead = false;
+    state.respawnTimer = 0;
+    state.hearts = 0; // the run's final state (bars are hidden in spectator anyway)
+    clearEffects(state);
+    resetMining(state);
+    state.inventoryOpen = false;
+    state.craftingStation = null;
+    state.openContainerIndex = null;
+    state.paused = false;
+    this.emit({ type: "gameOver" });
+  }
 
   /** Poison damage: armor-bypassing but never lethal (floors at half a heart). */
   private applyPoisonDamage = (amount: number): void => {
@@ -692,6 +731,7 @@ export class GameEngine {
    */
   private switchGameMode(next: GameMode): void {
     const state = this.state;
+    if (state.hardcore) return; // locked to Survival (Spectator after game-over); the death transition sets the mode directly
     if (!isGameMode(next) || next === state.gameMode || state.isDead) return;
     state.gameMode = next;
 
@@ -729,6 +769,7 @@ export class GameEngine {
    */
   private switchDifficulty(next: Difficulty): void {
     const state = this.state;
+    if (state.hardcore) return; // locked to Hard for the world's life
     if (!isDifficulty(next) || next === state.difficulty) return;
     state.difficulty = next;
     state.timers.starvationTimer = 0;
@@ -861,6 +902,8 @@ export class GameEngine {
       selectedSlot: state.selectedSlot,
       gameMode: state.gameMode,
       difficulty: state.difficulty,
+      hardcore: state.hardcore,
+      gameOver: state.gameOver,
       isFlying: state.isFlying,
       hearts: state.hearts,
       hunger: state.hunger,

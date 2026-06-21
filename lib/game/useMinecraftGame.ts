@@ -37,6 +37,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   selectedSlot: 0,
   gameMode: "survival",
   difficulty: "normal",
+  hardcore: false,
+  gameOver: false,
   isFlying: false,
   hearts: MAX_HEARTS,
   hunger: MAX_HUNGER,
@@ -106,6 +108,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const worldTypeRef = useRef(opts.world.worldType);
   const worldModeRef = useRef(opts.world.gameMode);
   const worldDifficultyRef = useRef(opts.world.difficulty);
+  const worldHardcoreRef = useRef(opts.world.hardcore);
   const [ctx, setCtx] = useState<GameContext | null>(null);
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -172,7 +175,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         seed: worldSeedRef.current,
         worldType: worldTypeRef.current,
         gameMode: worldModeRef.current,
-        difficulty: worldDifficultyRef.current
+        difficulty: worldDifficultyRef.current,
+        hardcore: worldHardcoreRef.current
       }),
       node
     });
@@ -287,12 +291,15 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       }
 
       for (const event of gameEngine.consumeEvents()) {
-        if (event.type === "died" || event.type === "bossDefeated") {
-          // Free the cursor so the death/victory button is clickable; the pause
-          // command ignores both states, so the lock-loss won't open the menu too.
+        if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
+          // Free the cursor so the death/victory/game-over button is clickable; the
+          // pause command ignores those states, so the lock-loss won't open the menu too.
           input.clearKeys();
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         }
+        // Hardcore permadeath is permanent — persist it now so closing the tab right
+        // after death still reloads the dead world spectating (not a fresh run).
+        if (event.type === "gameOver") persistGame(gameEngine, saveKey, () => {});
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -371,6 +378,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     rendererError,
     gameMode: snapshot.gameMode,
     difficulty: snapshot.difficulty,
+    hardcore: snapshot.hardcore,
+    gameOver: snapshot.gameOver,
     giveCreativeItem: (itemId: string) => engine?.dispatch({ type: "creativeGiveItem", itemId }),
     setGameMode: (mode: GameMode) => engine?.dispatch({ type: "setGameMode", mode }),
     setDifficulty: (difficulty: Difficulty) => engine?.dispatch({ type: "setDifficulty", difficulty }),

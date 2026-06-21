@@ -155,6 +155,10 @@ export type GameState = {
   gameMode: GameMode;
   /** Current difficulty. Persisted (save v9); switchable in-game via setDifficulty. */
   difficulty: Difficulty;
+  /** Hardcore world: forces Survival + Hard, locks both switchers, permadeath. Persisted (save v10); immutable. */
+  hardcore: boolean;
+  /** True once a hardcore run has ended in death — drives the spectator dead-world + Game Over screen. Persisted (save v10). */
+  gameOver: boolean;
   /** True while flying (Creative toggle, always on for Spectator). Session-only, never serialized. */
   isFlying: boolean;
   hearts: number;
@@ -274,6 +278,10 @@ export type GameSnapshot = {
   gameMode: GameMode;
   /** Current difficulty — drives the pause-menu picker's active state. */
   difficulty: Difficulty;
+  /** Hardcore world — disables the pause-menu mode/difficulty switchers and drives hardcore chrome (withered hearts). */
+  hardcore: boolean;
+  /** True after a hardcore death — drives the Game Over screen (spectating the dead world). */
+  gameOver: boolean;
   /** True while flying — drives the flight indicator. */
   isFlying: boolean;
   hearts: number;
@@ -312,6 +320,7 @@ export type GameSnapshot = {
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
 export type GameEvent =
   | { type: "died" }
+  | { type: "gameOver" }
   | { type: "respawned" }
   | { type: "blockBroken"; blockId: BlockId; x: number; y: number; z: number }
   | { type: "blockPlaced"; blockId: BlockId; x: number; y: number; z: number }

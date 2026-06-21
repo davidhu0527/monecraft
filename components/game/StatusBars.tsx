@@ -10,11 +10,15 @@ type StatusBarsProps = {
   armorPoints: number;
   oxygen: number;
   maxOxygen: number;
+  /** Hardcore world — draws the hearts in the withered dark-red variant. */
+  hardcore: boolean;
 };
 
 const ICON_SIZE = 18;
 
 type IconKind = "heart" | "hunger" | "armor" | "bubble";
+/** Sprite prefix for an icon row; usually the kind, but hearts switch to the withered variant in hardcore. */
+type IconSprite = IconKind | "heart_hardcore";
 
 /** Icon states for a 10-icon Minecraft bar: each icon covers 2 points. */
 export function iconStates(value: number, max: number): Array<"full" | "half" | "container"> {
@@ -26,8 +30,23 @@ export function iconStates(value: number, max: number): Array<"full" | "half" | 
   });
 }
 
-function IconRow({ kind, value, max, label, reversed }: { kind: IconKind; value: number; max: number; label: string; reversed?: boolean }) {
+function IconRow({
+  kind,
+  value,
+  max,
+  label,
+  reversed,
+  sprite
+}: {
+  kind: IconKind;
+  value: number;
+  max: number;
+  label: string;
+  reversed?: boolean;
+  sprite?: IconSprite;
+}) {
   const states = iconStates(value, max);
+  const spriteKind = sprite ?? kind;
   return (
     <div
       className={reversed ? "status-icon-row reversed" : "status-icon-row"}
@@ -38,8 +57,8 @@ function IconRow({ kind, value, max, label, reversed }: { kind: IconKind; value:
       aria-valuemax={max}
     >
       {states.map((state, i) => (
-        <span key={`${kind}-${i}`} data-icon={`${kind}_${state}`}>
-          <PixelImg src={hudIconUrl(`${kind}_${state}`)} alt="" size={ICON_SIZE} aria-hidden />
+        <span key={`${kind}-${i}`} data-icon={`${spriteKind}_${state}`}>
+          <PixelImg src={hudIconUrl(`${spriteKind}_${state}`)} alt="" size={ICON_SIZE} aria-hidden />
         </span>
       ))}
     </div>
@@ -51,14 +70,14 @@ function IconRow({ kind, value, max, label, reversed }: { kind: IconKind; value:
  * the right (filling right-to-left), and an armor row over the hearts that
  * only appears once something is equipped.
  */
-export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armorPoints, oxygen, maxOxygen }: StatusBarsProps) {
+export default function StatusBars({ hearts, maxHearts, hunger, maxHunger, armorPoints, oxygen, maxOxygen, hardcore }: StatusBarsProps) {
   // Round up so the last sliver of air still shows a bubble until truly empty.
   const oxygenIcons = Math.ceil(Math.max(0, Math.min(oxygen, maxOxygen)));
   return (
     <div className="status-bars">
       <div className="status-bars-left">
         {armorPoints > 0 && <IconRow kind="armor" value={armorPoints} max={20} label="Armor" />}
-        <IconRow kind="heart" value={Math.max(0, Math.round(hearts))} max={maxHearts} label="Health" />
+        <IconRow kind="heart" value={Math.max(0, Math.round(hearts))} max={maxHearts} label="Health" sprite={hardcore ? "heart_hardcore" : "heart"} />
       </div>
       <div className="status-bars-right">
         {oxygen < maxOxygen && <IconRow kind="bubble" value={oxygenIcons} max={maxOxygen} label="Air" reversed />}

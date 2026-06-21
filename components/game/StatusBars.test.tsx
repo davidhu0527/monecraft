@@ -13,6 +13,7 @@ function renderBars(overrides: Partial<Parameters<typeof StatusBars>[0]> = {}) {
       armorPoints={0}
       oxygen={MAX_OXYGEN}
       maxOxygen={MAX_OXYGEN}
+      hardcore={false}
       {...overrides}
     />
   );
@@ -33,6 +34,15 @@ describe("StatusBars", () => {
     expect(icons.slice(0, 6).every((icon) => icon === "heart_full")).toBe(true);
     expect(icons[6]).toBe("heart_half");
     expect(icons.slice(7).every((icon) => icon === "heart_container")).toBe(true);
+  });
+
+  test("hardcore draws the withered heart variant", () => {
+    renderBars({ hearts: 13, hardcore: true });
+    const row = screen.getByLabelText(`Health: 13/${MAX_HEARTS}`);
+    const icons = [...row.querySelectorAll("[data-icon]")].map((el) => el.getAttribute("data-icon"));
+    expect(icons.slice(0, 6).every((icon) => icon === "heart_hardcore_full")).toBe(true);
+    expect(icons[6]).toBe("heart_hardcore_half");
+    expect(icons.slice(7).every((icon) => icon === "heart_hardcore_container")).toBe(true);
   });
 
   test("iconStates covers full, half, and empty boundaries", () => {

@@ -8,7 +8,9 @@
  * - **spectator** — fly through everything, unseen and unable to interact.
  *
  * Difficulty is a separate, orthogonal axis — it lives in lib/game/difficulties.ts
- * (Peaceful/Easy/Normal/Hard). The Hardcore flag remains deferred to a later change.
+ * (Peaceful/Easy/Normal/Hard). The Hardcore flag is a per-world boolean (immutable,
+ * forces Survival + Hard + permadeath) carried in the save/WorldMeta, gated in the
+ * engine — see GameEngine.triggerGameOver and docs/architecture.md.
  *
  * Systems gate on the **predicates** below (intent: "can this mode edit
  * blocks?") rather than comparing the raw id, so a new mode only has to answer

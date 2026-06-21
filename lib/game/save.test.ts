@@ -11,6 +11,7 @@ import {
   migrateSaveV6toV7,
   migrateSaveV7toV8,
   migrateSaveV8toV9,
+  migrateSaveV9toV10,
   readContainers,
   readLootedChests,
   readSave,
@@ -18,6 +19,8 @@ import {
   restoreDifficulty,
   restoreEffects,
   restoreGameMode,
+  restoreGameOver,
+  restoreHardcore,
   restoreHearts,
   restoreHungerLevel,
   restoreInventorySlots,
@@ -30,7 +33,19 @@ import {
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5, SaveDataV6, SaveDataV7, SaveDataV8 } from "@/lib/game/types";
+import type {
+  InventorySlot,
+  SaveData,
+  SaveDataV1,
+  SaveDataV2,
+  SaveDataV3,
+  SaveDataV4,
+  SaveDataV5,
+  SaveDataV6,
+  SaveDataV7,
+  SaveDataV8,
+  SaveDataV9
+} from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -50,7 +65,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 9,
+    version: 10,
     gameMode: "creative",
     difficulty: "hard",
     seed: 1337,
@@ -93,7 +108,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(9);
+    expect(parsed!.version).toBe(10);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -115,7 +130,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(9); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8 -> v9
+    expect(parsed!.version).toBe(10); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8 -> v9 -> v10
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -204,11 +219,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v9", () => {
+  test("readSave migrates a v2 save through to v10", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(9);
+    expect(parsed!.version).toBe(10);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -245,7 +260,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(9);
+    expect(parsed.version).toBe(10);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -320,7 +335,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(9);
+    expect(parsed.version).toBe(10);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -365,7 +380,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(9);
+    expect(parsed.version).toBe(10);
     expect(restoreEffects(parsed)).toEqual([]);
   });
 
@@ -387,7 +402,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(9);
+    expect(parsed.version).toBe(10);
     expect(restoreGameMode(parsed)).toBe("survival");
   });
 
@@ -414,7 +429,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v8: SaveDataV8 = { ...v5Save(), version: 8 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(9);
+    expect(parsed.version).toBe(10);
     expect(restoreDifficulty(parsed)).toBe("normal");
   });
 
@@ -428,6 +443,42 @@ describe("v5 to v6 migration & status effects", () => {
     const storage = memoryStorage();
     writeSave(KEY, { ...sampleSave(), difficulty: "easy" }, storage);
     expect(readSave(KEY, storage)!.difficulty).toBe("easy");
+  });
+
+  test("migrateSaveV9toV10 is a pure version bump leaving hardcore/gameOver absent", () => {
+    const v9: SaveDataV9 = { ...v5Save(), version: 9 };
+    const migrated = migrateSaveV9toV10(v9);
+    expect(migrated.version).toBe(10);
+    expect(migrated.hardcore).toBeUndefined();
+    expect(migrated.gameOver).toBeUndefined();
+  });
+
+  test("a pre-Hardcore (v9) save loads as a normal, non-hardcore world", () => {
+    const v9: SaveDataV9 = { ...v5Save(), version: 9 };
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v9) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(10);
+    expect(restoreHardcore(parsed)).toBe(false);
+    expect(restoreGameOver(parsed)).toBe(false);
+  });
+
+  test("restoreHardcore/restoreGameOver read true and coerce garbage to false", () => {
+    expect(restoreHardcore({ ...sampleSave(), hardcore: true })).toBe(true);
+    expect(restoreHardcore({ ...sampleSave(), hardcore: undefined })).toBe(false);
+    expect(restoreHardcore({ ...sampleSave(), hardcore: 1 as never })).toBe(false);
+    expect(restoreGameOver({ ...sampleSave(), hardcore: true, gameOver: true })).toBe(true);
+    expect(restoreGameOver({ ...sampleSave(), gameOver: undefined })).toBe(false);
+    // gameOver only ever lands on a hardcore save — a stray flag on a non-hardcore
+    // (corrupt) save must not lock it into spectator.
+    expect(restoreGameOver({ ...sampleSave(), hardcore: false, gameOver: true })).toBe(false);
+  });
+
+  test("hardcore + gameOver survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, { ...sampleSave(), hardcore: true, gameOver: true }, storage);
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.hardcore).toBe(true);
+    expect(parsed.gameOver).toBe(true);
   });
 
   test("restoreXp clamps to a non-negative integer; absent/garbage → 0", () => {
@@ -546,7 +597,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 10 };
+    const save = { ...sampleSave(), version: 11 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
