@@ -37,6 +37,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   selectedSlot: 0,
   gameMode: "survival",
   difficulty: "normal",
+  hardcore: false,
+  gameOver: false,
   isFlying: false,
   hearts: MAX_HEARTS,
   hunger: MAX_HUNGER,
