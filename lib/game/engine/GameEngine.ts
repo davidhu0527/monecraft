@@ -65,7 +65,7 @@ import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion } from "./systems/playerMotion";
-import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickWaterExposure } from "./systems/playerStats";
+import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickStarvation, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
@@ -301,6 +301,9 @@ export class GameEngine {
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
+    // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
+    // Hard (floor 0) can kill via the environmental-damage path.
+    tickStarvation(state, dt, this.applyStarvationFloored, this.applyEnvironmentalDamage);
     // Status effects tick here so the fire-resist / water-breathing gates below are current.
     tickStatusEffects(state, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
@@ -622,6 +625,11 @@ export class GameEngine {
   /** Poison damage: armor-bypassing but never lethal (floors at half a heart). */
   private applyPoisonDamage = (amount: number): void => {
     if (applyNonLethalDamage(this.state, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
+  };
+
+  /** Starvation chip on Easy/Normal: armor-bypassing, floored at the difficulty's HP (Hard kills via applyEnvironmentalDamage). */
+  private applyStarvationFloored = (amount: number, floorHp: number): void => {
+    if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
 
   private removeMobAt = (index: number): void => {
