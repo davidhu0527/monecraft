@@ -33,8 +33,10 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
     locked,
     rendererError,
     gameMode,
+    difficulty,
     giveCreativeItem,
     setGameMode,
+    setDifficulty,
     selectedSlot,
     setSelectedSlot,
     capsActive,
@@ -174,6 +176,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onReload
           onAudioSettingsChange={updateAudioSettings}
           gameMode={gameMode}
           onGameModeChange={setGameMode}
+          difficulty={difficulty}
+          onDifficultyChange={setDifficulty}
           skinId={skinId}
           onSkinChange={updateSkin}
           onBack={resumeNow}

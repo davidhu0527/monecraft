@@ -39,6 +39,7 @@ function makeState(mobs: MobState[]): GameState {
     primedTnt: new Map<number, number>(),
     worldMeshDirty: false,
     gameMode: "survival", // hostiles only threaten survival/adventure players
+    difficulty: "normal", // baseline 1× mob-damage multiplier
     mobs,
     projectiles: [],
     nextProjectileId: 1,
@@ -112,6 +113,20 @@ describe("ranged skeletons", () => {
     expect(state.projectiles).toHaveLength(0);
     expect(getDamage()).toBe(3); // melee damage applied
     expect(events.some((e) => e.type === "mobAttacked" && e.kind === "zombie")).toBe(true);
+  });
+
+  test("difficulty scales the melee hit: Easy halves it, Hard amplifies it", () => {
+    const easy = makeState([makeMob("zombie", 24, 30, 21.5)]);
+    easy.difficulty = "easy";
+    const easyDeps = makeDeps();
+    tickMobs(easy, 0.05, easyDeps.deps);
+    expect(easyDeps.getDamage()).toBe(1.5); // 3 × 0.5
+
+    const hard = makeState([makeMob("zombie", 24, 30, 21.5)]);
+    hard.difficulty = "hard";
+    const hardDeps = makeDeps();
+    tickMobs(hard, 0.05, hardDeps.deps);
+    expect(hardDeps.getDamage()).toBe(4.5); // 3 × 1.5
   });
 });
 

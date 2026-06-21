@@ -10,10 +10,12 @@ import {
   migrateSaveV5toV6,
   migrateSaveV6toV7,
   migrateSaveV7toV8,
+  migrateSaveV8toV9,
   readContainers,
   readLootedChests,
   readSave,
   restoreDayClock,
+  restoreDifficulty,
   restoreEffects,
   restoreGameMode,
   restoreHearts,
@@ -28,7 +30,7 @@ import {
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
-import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5, SaveDataV6, SaveDataV7 } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SaveDataV5, SaveDataV6, SaveDataV7, SaveDataV8 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
@@ -48,8 +50,9 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 8,
+    version: 9,
     gameMode: "creative",
+    difficulty: "hard",
     seed: 1337,
     changes: [
       [42, 0],
@@ -90,7 +93,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(8);
+    expect(parsed!.version).toBe(9);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -112,7 +115,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(8); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8
+    expect(parsed!.version).toBe(9); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8 -> v9
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -201,11 +204,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v7", () => {
+  test("readSave migrates a v2 save through to v9", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(8);
+    expect(parsed!.version).toBe(9);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -242,7 +245,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(8);
+    expect(parsed.version).toBe(9);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -317,7 +320,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(8);
+    expect(parsed.version).toBe(9);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -362,7 +365,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(8);
+    expect(parsed.version).toBe(9);
     expect(restoreEffects(parsed)).toEqual([]);
   });
 
@@ -384,7 +387,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(8);
+    expect(parsed.version).toBe(9);
     expect(restoreGameMode(parsed)).toBe("survival");
   });
 
@@ -398,6 +401,33 @@ describe("v5 to v6 migration & status effects", () => {
     const storage = memoryStorage();
     writeSave(KEY, { ...sampleSave(), gameMode: "adventure" }, storage);
     expect(readSave(KEY, storage)!.gameMode).toBe("adventure");
+  });
+
+  test("migrateSaveV8toV9 is a pure version bump leaving difficulty absent", () => {
+    const v8: SaveDataV8 = { ...v5Save(), version: 8 };
+    const migrated = migrateSaveV8toV9(v8);
+    expect(migrated.version).toBe(9);
+    expect(migrated.difficulty).toBeUndefined();
+  });
+
+  test("a pre-difficulty (v8) save loads as normal", () => {
+    const v8: SaveDataV8 = { ...v5Save(), version: 8 };
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(9);
+    expect(restoreDifficulty(parsed)).toBe("normal");
+  });
+
+  test("restoreDifficulty reads a valid level and rejects garbage", () => {
+    expect(restoreDifficulty({ ...sampleSave(), difficulty: "peaceful" })).toBe("peaceful");
+    expect(restoreDifficulty({ ...sampleSave(), difficulty: "bogus" as never })).toBe("normal");
+    expect(restoreDifficulty({ ...sampleSave(), difficulty: undefined })).toBe("normal");
+  });
+
+  test("difficulty survives a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, { ...sampleSave(), difficulty: "easy" }, storage);
+    expect(readSave(KEY, storage)!.difficulty).toBe("easy");
   });
 
   test("restoreXp clamps to a non-negative integer; absent/garbage → 0", () => {
@@ -516,7 +546,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 9 };
+    const save = { ...sampleSave(), version: 10 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 

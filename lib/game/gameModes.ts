@@ -7,8 +7,8 @@
  * - **adventure** — survival, but terrain can't be broken or placed.
  * - **spectator** — fly through everything, unseen and unable to interact.
  *
- * Difficulty (Peaceful) and the Hardcore flag are deliberately *not* modeled
- * here — they're orthogonal axes deferred to a later change.
+ * Difficulty is a separate, orthogonal axis — it lives in lib/game/difficulties.ts
+ * (Peaceful/Easy/Normal/Hard). The Hardcore flag remains deferred to a later change.
  *
  * Systems gate on the **predicates** below (intent: "can this mode edit
  * blocks?") rather than comparing the raw id, so a new mode only has to answer

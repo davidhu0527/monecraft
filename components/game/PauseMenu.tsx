@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AudioSettings } from "@/lib/game/audio/audioDirector";
 import { GAME_MODE_PRESETS, type GameMode } from "@/lib/game/gameModes";
+import { DIFFICULTY_PRESETS, type Difficulty } from "@/lib/game/difficulties";
 import { SKIN_PRESETS, type SkinId } from "@/lib/game/playerSkins";
 import { skinPortraitUrl } from "@/lib/ui/sprites";
 import PixelImg from "./PixelImg";
@@ -11,6 +12,8 @@ type PauseMenuProps = {
   onAudioSettingsChange: (partial: Partial<AudioSettings>) => void;
   gameMode: GameMode;
   onGameModeChange: (mode: GameMode) => void;
+  difficulty: Difficulty;
+  onDifficultyChange: (difficulty: Difficulty) => void;
   skinId: SkinId;
   onSkinChange: (id: SkinId) => void;
   onBack: () => void;
@@ -56,6 +59,8 @@ export default function PauseMenu({
   onAudioSettingsChange,
   gameMode,
   onGameModeChange,
+  difficulty,
+  onDifficultyChange,
   skinId,
   onSkinChange,
   onBack,
@@ -134,6 +139,22 @@ export default function PauseMenu({
                       aria-pressed={preset.id === gameMode}
                       aria-label={`${preset.label} mode`}
                       onClick={() => onGameModeChange(preset.id)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="pause-modes">
+                <div className="pause-skins-title">Difficulty</div>
+                <div className="pause-modes-grid">
+                  {DIFFICULTY_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      className="mc-button mode-option"
+                      aria-pressed={preset.id === difficulty}
+                      aria-label={`${preset.label} difficulty`}
+                      onClick={() => onDifficultyChange(preset.id)}
                     >
                       {preset.label}
                     </button>

@@ -1399,15 +1399,16 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 8 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is version 9 and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(8);
+    expect(save.version).toBe(9);
     expect(save.gameMode).toBe("survival");
+    expect(save.difficulty).toBe("normal");
 
     const restored = makeEngine(save);
     expect(restored.state.dayClock).toBe(123);

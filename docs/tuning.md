@@ -40,8 +40,9 @@ themselves and their gates live in `lib/game/gameModes.ts`, not `config.ts`.)
 
 `MAX_HEARTS`, `MAX_HUNGER`, `RESPAWN_SECONDS`, `HEALTH_REGEN_INTERVAL_SECONDS`,
 `REGEN_MIN_HUNGER`, `SPRINT_MIN_HUNGER`, `SPRINT_BLOCKS_PER_HUNGER`,
-`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`, `WATER_DAMAGE_DELAY_SECONDS`,
-`WATER_DAMAGE_INTERVAL_SECONDS`, `WATER_DAMAGE_HP`.
+`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`, `STARVATION_INTERVAL_SECONDS`,
+`STARVATION_HP`, `WATER_DAMAGE_DELAY_SECONDS`, `WATER_DAMAGE_INTERVAL_SECONDS`,
+`WATER_DAMAGE_HP`.
 
 Read by `systems/playerStats.ts` (drain + regen) and `systems/playerLife.ts`
 (respawn). This group is where "how hard is it to stay alive" is set. The
@@ -54,6 +55,34 @@ Water exposure is continuous body-midpoint immersion: leaving water resets both
 timers. After `WATER_DAMAGE_DELAY_SECONDS` (60), environmental damage bypasses
 armor every `WATER_DAMAGE_INTERVAL_SECONDS` (1) for `WATER_DAMAGE_HP` (3 HP = 1.5
 hearts). These counters are transient and reset on reload/respawn.
+**Starvation** is the consequence of a fully-empty hunger bar: once `hunger` hits
+0, `STARVATION_HP` (1 HP) is lost every `STARVATION_INTERVAL_SECONDS` (4) down to a
+**difficulty-scaled floor** (see below) — these two constants are the cadence; the
+floor is the per-level dial.
+
+## Difficulty — Peaceful / Easy / Normal / Hard
+
+The per-level multipliers live in `lib/game/difficulties.ts` (accessor functions,
+not `config.ts` constants — the _base_ values they bend stay in `config.ts`). It is
+an axis orthogonal to game mode, picked at world creation and switchable in the
+pause menu; the spawn directors and mob AI read `state.difficulty` every tick.
+
+| Dial (accessor)                       | Peaceful | Easy | Normal | Hard |
+| ------------------------------------- | -------- | ---- | ------ | ---- |
+| `hostilesSpawn`                       | no       | yes  | yes    | yes  |
+| `mobDamageMultiplier` (×hit)          | —        | 0.5  | 1      | 1.5  |
+| `hostileSpawnIntervalScale`           | —        | 1.5  | 1      | 0.6  |
+| `hostileCapScale` (×`HOSTILE_CAP` 16) | 0        | 8    | 16     | 24   |
+| `regenIntervalScale` (×regen)         | 0.5      | 1    | 1      | 1    |
+| `starvationFloorHp` (HP floor)        | never    | 10   | 1      | 0    |
+
+Read by `systems/spawnDirector.ts` (the spawn gate + cadence/cap scales),
+`systems/mobAI.ts` (the per-hit damage scale, applied at the strike — templates are
+never mutated), and `systems/playerStats.ts` (faster Peaceful regen + the
+starvation floor). **Peaceful** also despawns existing hostiles the moment you
+switch to it (`GameEngine.switchDifficulty`). Note these dials are independent of
+game mode: Peaceful stops hostile _spawns_ regardless of mode, while damage/threat
+still gate on the mode (Creative is invulnerable at any difficulty).
 
 ## Cave hazards — lava & drowning
 
@@ -135,7 +164,9 @@ invariant** (daylight ranges 0.04–1.0; see architecture.md): hostiles spawn be
 0.28, spiders turn hostile below 0.42, and exposed hostiles burn above 0.72. Keep
 them ordered `spawn ≤ spider_aggro` and `burn` well above both, or mobs will spawn
 into instant sunlight. `HOSTILE_CAP` × `HOSTILE_SPAWN_INTERVAL_SECONDS` bounds how
-crowded a night gets. `HOSTILE_SPAWN_MIN_RADIUS` (16) is the standoff every hostile
+crowded a night gets — but both are **scaled by difficulty** (`hostileCapScale` /
+`hostileSpawnIntervalScale`; Peaceful disables hostile spawning outright — see the
+Difficulty section). `HOSTILE_SPAWN_MIN_RADIUS` (16) is the standoff every hostile
 spawn (initial + night trickle) keeps from the player, so nothing — least of all a
 creeper — can appear point-blank. Tests aim daylight explicitly (a `calmDaytime`
 helper) to avoid first-night aggro.

@@ -15,6 +15,8 @@ import {
   PLAYER_HEIGHT,
   REGEN_MIN_HUNGER,
   SPRINT_BLOCKS_PER_HUNGER,
+  STARVATION_HP,
+  STARVATION_INTERVAL_SECONDS,
   WATER_DAMAGE_DELAY_SECONDS,
   WATER_DAMAGE_HP,
   WATER_DAMAGE_INTERVAL_SECONDS,
@@ -22,6 +24,7 @@ import {
 } from "@/lib/game/config";
 import { BlockId } from "@/lib/world";
 import { takesDamage } from "@/lib/game/gameModes";
+import { regenIntervalScale, starves, starvationFloorHp } from "@/lib/game/difficulties";
 import type { GameState } from "../state";
 import type { MoveTickResult } from "./playerMotion";
 
@@ -61,7 +64,11 @@ export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
   if (drain > 0) state.hunger = Math.max(0, state.hunger - drain);
 }
 
-/** Regenerates half a heart every interval while alive, hurt, and fed enough. Creative/Spectator stay topped up. */
+/**
+ * Regenerates half a heart every interval while alive, hurt, and fed enough.
+ * Creative/Spectator stay topped up. Difficulty scales the cadence — Peaceful
+ * heals twice as fast (regenIntervalScale 0.5) as its build-in-peace mercy.
+ */
 export function tickHealthRegen(state: GameState, dt: number): void {
   if (!takesDamage(state.gameMode)) {
     state.hearts = MAX_HEARTS;
@@ -69,13 +76,42 @@ export function tickHealthRegen(state: GameState, dt: number): void {
     return;
   }
   if (!state.isDead && state.hearts < MAX_HEARTS && state.hunger >= REGEN_MIN_HUNGER) {
+    const interval = HEALTH_REGEN_INTERVAL_SECONDS * regenIntervalScale(state.difficulty);
     state.timers.regenTimer += dt;
-    if (state.timers.regenTimer >= HEALTH_REGEN_INTERVAL_SECONDS) {
+    if (state.timers.regenTimer >= interval) {
       state.hearts = Math.min(MAX_HEARTS, state.hearts + 1);
       state.timers.regenTimer = 0;
     }
   } else {
     state.timers.regenTimer = 0;
+  }
+}
+
+/**
+ * Starvation. While hunger sits at 0 the player loses STARVATION_HP every
+ * interval, down to a difficulty-scaled floor: Easy stops at 10 HP, Normal at
+ * 1 HP (half a heart), Hard goes all the way to 0 — a kill. Peaceful never
+ * starves, and Creative/Spectator can't (their hunger is pinned full anyway).
+ * Mirrors poison's floored chip-damage, but keyed on hunger == 0 rather than a
+ * timed effect: Easy/Normal route through `applyFloored` (never lethal), Hard
+ * (floor 0) through `applyLethal`, which can deliver the killing blow.
+ */
+export function tickStarvation(
+  state: GameState,
+  dt: number,
+  applyFloored: (amount: number, floorHp: number) => void,
+  applyLethal: (amount: number) => void
+): void {
+  if (!takesDamage(state.gameMode) || !starves(state.difficulty) || state.isDead || state.hunger > 0) {
+    state.timers.starvationTimer = 0;
+    return;
+  }
+  const floor = starvationFloorHp(state.difficulty);
+  state.timers.starvationTimer += dt;
+  while (state.timers.starvationTimer >= STARVATION_INTERVAL_SECONDS && !state.isDead) {
+    state.timers.starvationTimer -= STARVATION_INTERVAL_SECONDS;
+    if (floor <= 0) applyLethal(STARVATION_HP);
+    else applyFloored(STARVATION_HP, floor);
   }
 }
 

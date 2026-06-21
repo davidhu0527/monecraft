@@ -21,6 +21,19 @@ the world and independent of the world type. Source: `lib/game/gameModes.ts` (th
 | Adventure | Yes             | **No**                 | No           | Yes                           | Hostile    | Normal            |
 | Spectator | No (invincible) | No                     | Yes (noclip) | **No**                        | Ignore you | Hidden            |
 
+## Difficulty
+
+A separate axis from the game mode — also chosen at world creation, switchable from
+the pause menu, and saved with the world. Sets how hard survival is. Source:
+`lib/game/difficulties.ts` (the `Difficulty` union + accessors each system reads).
+
+| Level    | Hostiles spawn             | Mob damage | Spawn rate / cap  | Starvation            |
+| -------- | -------------------------- | ---------- | ----------------- | --------------------- |
+| Peaceful | No (and despawns existing) | —          | none / 0          | Never (regen ×2 fast) |
+| Easy     | Yes                        | ×0.5       | slower / cap 8    | Stops at 5 hearts     |
+| Normal   | Yes                        | ×1.0       | baseline / cap 16 | Stops at ½ heart      |
+| Hard     | Yes                        | ×1.5       | faster / cap 24   | Kills you             |
+
 ## World types
 
 Chosen when you create a world (alongside the name and seed) and fixed for its

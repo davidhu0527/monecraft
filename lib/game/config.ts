@@ -44,6 +44,12 @@ export const SPRINT_MIN_HUNGER = 6;
 export const SPRINT_BLOCKS_PER_HUNGER = 100;
 export const WALK_BLOCKS_PER_HUNGER = 300;
 export const JUMPS_PER_HUNGER = 50;
+// Starvation: while hunger sits at 0, lose STARVATION_HP every interval, down to a
+// difficulty-scaled floor (lib/game/difficulties.ts: starvationFloorHp — Easy stops
+// at 10 HP, Normal at 1, Hard at 0, Peaceful never starves). Mirrors Minecraft's
+// ~half-a-heart every few seconds; the *floor* is what each difficulty changes.
+export const STARVATION_INTERVAL_SECONDS = 4;
+export const STARVATION_HP = 1; // half a heart per tick
 
 // Status effects — timed buffs drunk from potions (Speed/Strength/Regeneration/
 // Fire Resistance/Water Breathing) plus Poison, a never-lethal hazard from eating

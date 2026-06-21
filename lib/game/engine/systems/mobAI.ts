@@ -26,6 +26,7 @@ import {
 } from "@/lib/game/config";
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
 import { mobsThreaten } from "@/lib/game/gameModes";
+import { mobDamageMultiplier } from "@/lib/game/difficulties";
 import type { EmitGameEvent, GameState, MobState } from "../state";
 import { spawnArrow } from "../projectiles";
 import { explode } from "./explosion";
@@ -68,7 +69,7 @@ function fireMobArrow(state: GameState, mob: MobState, damage: number, speed: nu
 }
 
 /** The boss looses a 3-arrow horizontal spread aimed at the player's chest. */
-function fireBossSpread(state: GameState, mob: MobState, emit: EmitGameEvent): void {
+function fireBossSpread(state: GameState, mob: MobState, dmgScale: number, emit: EmitGameEvent): void {
   const { player } = state;
   const eyeY = mob.position.y + mob.halfHeight * 0.7;
   const baseX = player.position.x - mob.position.x;
@@ -79,7 +80,7 @@ function fireBossSpread(state: GameState, mob: MobState, emit: EmitGameEvent): v
     if (spread !== 0) scratchAim.applyAxisAngle(UP, spread * BOSS_SPREAD);
     spawnArrow(state, mob.position.x, eyeY, mob.position.z, scratchAim, {
       speed: BOSS_ARROW_SPEED,
-      damage: BOSS_ARROW_DAMAGE,
+      damage: BOSS_ARROW_DAMAGE * dmgScale,
       knockback: MOB_ARROW_KNOCKBACK,
       fromPlayer: false,
       ttl: ARROW_TTL
@@ -131,6 +132,9 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
   // Creative/Spectator players aren't a threat target — hostiles ignore them
   // entirely (no aggro, attacks, fuses, or summons), so they just wander.
   const threatened = mobsThreaten(state.gameMode);
+  // Difficulty scales every hit a mob lands (melee + arrows): Easy 0.5×, Hard 1.5×.
+  // Applied here at the strike, never by mutating the per-mob templates.
+  const dmgScale = mobDamageMultiplier(state.difficulty);
 
   for (let i = 0; i < mobs.length; i += 1) {
     const mob = mobs[i];
@@ -221,7 +225,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       const doMelee = meleeReady && (!isRanged || isBoss) && mob.kind !== "creeper";
       if (doMelee) {
         deps.emit({ type: "mobAttacked", kind: mob.kind });
-        deps.applyDamage(isBoss ? BOSS_MELEE_DAMAGE : mob.attackDamage);
+        deps.applyDamage((isBoss ? BOSS_MELEE_DAMAGE : mob.attackDamage) * dmgScale);
         if (distanceToPlayer > 0.001) {
           scratchToPlayer.normalize().multiplyScalar(isBoss ? 6 : 4.2);
           playerVelocity.x += scratchToPlayer.x;
@@ -229,8 +233,8 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
           playerVelocity.y = Math.max(playerVelocity.y, isBoss ? 4.5 : 3.4);
         }
       } else if (fireReady) {
-        if (isBoss) fireBossSpread(state, mob, deps.emit);
-        else fireMobArrow(state, mob, SKELETON_ARROW_DAMAGE, SKELETON_ARROW_SPEED, deps.emit);
+        if (isBoss) fireBossSpread(state, mob, dmgScale, deps.emit);
+        else fireMobArrow(state, mob, SKELETON_ARROW_DAMAGE * dmgScale, SKELETON_ARROW_SPEED, deps.emit);
       }
       mob.attackTimer = mob.attackCooldown;
     }

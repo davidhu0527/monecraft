@@ -135,6 +135,12 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* The form (name + mode + difficulty + type + seed + actions) can grow taller
+     than the panel; scroll it so the Create/Cancel actions are always reachable. */
+  min-height: 0;
+  max-height: 78vh;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .menu-field {
