@@ -53,23 +53,23 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                                              |
-| `Space`            | Jump                                                                                              |
-| `C`                | Crouch (slower, careful movement)                                                                 |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                |
-| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying       |
-| Mouse              | Look around (double-click the game first to lock the pointer)                                     |
-| Left-click (hold)  | Break the targeted block / attack a mob                                                           |
-| Right-click or `E` | Place/interact, or throw a selected spear                                                         |
-| `1`–`9`            | Select a hotbar slot                                                                              |
-| `I`                | Open / close inventory & crafting                                                                 |
-| `F`                | Eat the selected food, or drink a selected potion                                                 |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front                               |
-| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                             |
-| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode), Options (volume, skins), Controls tabs |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                               |
+| Key / input        | Action                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                                                          |
+| `Space`            | Jump                                                                                                          |
+| `C`                | Crouch (slower, careful movement)                                                                             |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                            |
+| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying                   |
+| Mouse              | Look around (double-click the game first to lock the pointer)                                                 |
+| Left-click (hold)  | Break the targeted block / attack a mob                                                                       |
+| Right-click or `E` | Place/interact, or throw a selected spear                                                                     |
+| `1`–`9`            | Select a hotbar slot                                                                                          |
+| `I`                | Open / close inventory & crafting                                                                             |
+| `F`                | Eat the selected food, or drink a selected potion                                                             |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
+| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins), Controls tabs |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                           |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
@@ -96,6 +96,26 @@ world. Modes are independent of the world type.
 
 Switching modes refills your bars and clears any pending hazard damage, so it's
 always safe to flip between them.
+
+## Difficulty
+
+A separate dial from the game mode, picked next to it at world creation and
+switchable any time from the **pause menu** (`Esc` → Difficulty). It's saved with
+the world and sets _how hard_ survival is — monster numbers, how hard they hit, and
+whether an empty hunger bar can kill you.
+
+- **Peaceful** — no monsters spawn (and switching to Peaceful clears any already
+  around), health regenerates twice as fast, and an empty hunger bar never hurts
+  you. Full survival — gather, build, mine — minus the danger.
+- **Easy** — fewer monsters and they hit at half strength; starving stops at 5
+  hearts.
+- **Normal** — the balanced default; starving chips you down to half a heart but no
+  further.
+- **Hard** — monsters spawn thick and hit 1.5× as hard, and **starving can kill
+  you**.
+
+Flipping to Peaceful mid-fight is a safe panic button — every hostile (even the
+boss) vanishes at once.
 
 ## Survival
 
@@ -149,7 +169,9 @@ Hunger gates two things:
 - **Health regeneration** only runs while hunger is **12 or higher**: you heal
   about **+0.5 HP every 3 seconds** when you're fed and hurt.
 
-So eat before a fight. Press **`F`** to eat the selected food. Different foods
+And if the bar empties completely, you **starve**: half a heart every few seconds,
+down to a floor that depends on difficulty (Easy stops at 5 hearts, Normal at half
+a heart, **Hard kills you**; Peaceful never starves). So eat before a fight. Press **`F`** to eat the selected food. Different foods
 restore different amounts — cooked meat fills far more than raw (see the
 [food table](reference.md#food)).
 
