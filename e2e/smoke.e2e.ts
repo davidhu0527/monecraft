@@ -240,6 +240,7 @@ test("the pause menu freezes the game and resumes it", async ({ gamePage: page }
 test("picking a skin persists across a reload", async ({ gamePage: page }) => {
   await calmDaytime(page);
   await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
+  await page.getByRole("button", { name: "Options" }).click(); // skins live under the Options tab
   await page.getByRole("button", { name: "Robot skin" }).click();
 
   // The skin now lives on the active profile, not a global key.
@@ -252,6 +253,7 @@ test("picking a skin persists across a reload", async ({ gamePage: page }) => {
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Options" }).click();
   await expect(page.getByRole("button", { name: "Robot skin" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Steve skin" })).toHaveAttribute("aria-pressed", "false");
 });
