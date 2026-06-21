@@ -76,6 +76,22 @@ describe("tickHostileSpawnDirector", () => {
     tickHostileSpawnDirector(e.state, 0.1, rng, createSurfaceYAt(e.state.world));
     expect(hostileCount(e)).toBe(8); // but Easy is already capped
   });
+
+  test("at cap-1, a rolled 2-pack is clamped so the cap is never overshot", () => {
+    const e = makeEngine("easy"); // cap 8 — the tightest, so the 2-pack edge bites soonest
+    // Sweep seeds so at least one roll is a 2-pack: without the count clamp, that
+    // seed would push 7 → 9 and overshoot; the clamp holds every seed at ≤ 8.
+    for (let seed = 1; seed <= 12; seed += 1) {
+      e.state.mobs = [];
+      const { x, y, z } = e.state.player.position;
+      const seeder = mulberry32(100 + seed);
+      for (let i = 0; i < 7; i += 1) pushMob(e.state, "zombie", true, x + (i % 4), y, z + i, seeder); // cap - 1
+      e.state.daylight = 0.1;
+      e.state.timers.hostileSpawnTimer = 1000;
+      tickHostileSpawnDirector(e.state, 0.1, mulberry32(seed), createSurfaceYAt(e.state.world));
+      expect(hostileCount(e)).toBeLessThanOrEqual(8);
+    }
+  });
 });
 
 describe("tickSpawnerDirector", () => {

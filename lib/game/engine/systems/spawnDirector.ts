@@ -119,12 +119,14 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
 
   const spawnKinds: Array<"zombie" | "skeleton" | "spider" | "creeper"> = ["zombie", "skeleton", "spider", "creeper"];
   const kind = spawnKinds[Math.floor(rng() * spawnKinds.length)];
+  // A wave is 1–2 mobs, but never more than the slots left under the cap — so a
+  // 2-pack rolled at cap-1 can't overshoot (especially Easy's tighter cap of 8).
   spawnMobGroup(
     state,
     {
       kind,
       hostile: true,
-      count: 1 + (rng() > 0.7 ? 1 : 0),
+      count: Math.min(cap - livingHostiles, 1 + (rng() > 0.7 ? 1 : 0)),
       centerX: state.player.position.x,
       centerZ: state.player.position.z,
       radius: Math.max(26, RENDER_RADIUS * 0.85),
