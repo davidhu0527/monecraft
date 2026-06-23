@@ -12,6 +12,7 @@ import {
   SPAWNER_LOCAL_CAP
 } from "@/lib/game/config";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import { hostileCapScale, hostileSpawnIntervalScale, hostilesSpawn } from "@/lib/game/difficulties";
 import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState, MobState } from "../state";
@@ -94,30 +95,38 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     ["spider", true, 6, hostileRadius],
     ["creeper", true, 4, hostileRadius]
   ];
+  // Peaceful spawns no hostiles at all — only the passive groups populate the world.
+  const spawnHostiles = hostilesSpawn(state.difficulty);
   for (const [kind, hostile, count, radius] of groups) {
+    if (hostile && !spawnHostiles) continue;
     // Hostiles keep a minimum standoff so nothing (notably a creeper) starts the
     // game point-blank; passives may roam right up to the spawn area.
     spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius, minRadius: hostile ? HOSTILE_SPAWN_MIN_RADIUS : 0 }, rng, surfaceYAt);
   }
 }
 
-/** Trickles hostile mobs in around the player at night, up to the cap. */
+/** Trickles hostile mobs in around the player at night, up to the cap. Difficulty scales the cadence and cap; Peaceful spawns none. */
 export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
+  if (!hostilesSpawn(state.difficulty)) return;
   state.timers.hostileSpawnTimer += dt;
-  if (state.daylight >= HOSTILE_SPAWN_BELOW_DAYLIGHT || state.timers.hostileSpawnTimer < HOSTILE_SPAWN_INTERVAL_SECONDS) return;
+  const interval = HOSTILE_SPAWN_INTERVAL_SECONDS * hostileSpawnIntervalScale(state.difficulty);
+  if (state.daylight >= HOSTILE_SPAWN_BELOW_DAYLIGHT || state.timers.hostileSpawnTimer < interval) return;
   state.timers.hostileSpawnTimer = 0;
 
+  const cap = Math.round(HOSTILE_CAP * hostileCapScale(state.difficulty));
   const livingHostiles = state.mobs.filter((mob) => mob.hostile).length;
-  if (livingHostiles >= HOSTILE_CAP) return;
+  if (livingHostiles >= cap) return;
 
   const spawnKinds: Array<"zombie" | "skeleton" | "spider" | "creeper"> = ["zombie", "skeleton", "spider", "creeper"];
   const kind = spawnKinds[Math.floor(rng() * spawnKinds.length)];
+  // A wave is 1–2 mobs, but never more than the slots left under the cap — so a
+  // 2-pack rolled at cap-1 can't overshoot (especially Easy's tighter cap of 8).
   spawnMobGroup(
     state,
     {
       kind,
       hostile: true,
-      count: 1 + (rng() > 0.7 ? 1 : 0),
+      count: Math.min(cap - livingHostiles, 1 + (rng() > 0.7 ? 1 : 0)),
       centerX: state.player.position.x,
       centerZ: state.player.position.z,
       radius: Math.max(26, RENDER_RADIUS * 0.85),
@@ -139,13 +148,15 @@ const SPAWNER_KINDS: ReadonlyArray<"zombie" | "skeleton" | "spider"> = ["zombie"
  * mining out a spawner block stops it (the world.get check below).
  */
 export function tickSpawnerDirector(state: GameState, dt: number, rng: () => number, emit: EmitGameEvent): void {
+  if (!hostilesSpawn(state.difficulty)) return; // Peaceful keeps even dungeon spawners inert
   if (state.dungeonSpawnerIndices.size === 0) return;
   state.timers.spawnerTimer += dt;
   if (state.timers.spawnerTimer < SPAWNER_INTERVAL_SECONDS) return;
   state.timers.spawnerTimer = 0;
 
+  const cap = Math.round(HOSTILE_CAP * hostileCapScale(state.difficulty));
   const countHostiles = () => state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0);
-  if (countHostiles() >= HOSTILE_CAP) return;
+  if (countHostiles() >= cap) return;
 
   const { player, world } = state;
   const layer = world.sizeX * world.sizeZ;
@@ -156,7 +167,7 @@ export function tickSpawnerDirector(state: GameState, dt: number, rng: () => num
     const sx = rem - sz * world.sizeX;
     if (world.get(sx, sy, sz) !== BlockId.Spawner) continue; // mined out → inert
     if (Math.hypot(player.position.x - (sx + 0.5), player.position.y - (sy + 0.5), player.position.z - (sz + 0.5)) > SPAWNER_ACTIVATION_RADIUS) continue;
-    if (countHostiles() >= HOSTILE_CAP) break;
+    if (countHostiles() >= cap) break;
 
     const nearby = state.mobs.reduce(
       (acc, mob) => acc + (mob.hostile && Math.hypot(mob.position.x - (sx + 0.5), mob.position.z - (sz + 0.5)) <= SPAWNER_ACTIVATION_RADIUS ? 1 : 0),

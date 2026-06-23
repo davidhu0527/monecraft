@@ -24,12 +24,25 @@ above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what bu
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
 changing them affects which gaps the player fits through.
 
+## Game modes — flight
+
+`FLY_SPEED`, `FLY_DOUBLE_TAP_WINDOW_SECONDS`.
+
+Used by the flight path in `systems/playerMotion.ts` and the double-tap detector
+in `input/inputController.ts`. `FLY_SPEED` is the vertical climb/descend speed
+while flying (Creative and Spectator); horizontal speed still comes from
+`WALK_SPEED`/`SPRINT_SPEED`. `FLY_DOUBLE_TAP_WINDOW_SECONDS` is how close two
+`Space` presses must be to toggle flight — raise it if a double-tap feels hard to
+trigger, lower it if flight toggles by accident while bunny-hopping. (The modes
+themselves and their gates live in `lib/game/gameModes.ts`, not `config.ts`.)
+
 ## Survival pressure — the main difficulty dial
 
 `MAX_HEARTS`, `MAX_HUNGER`, `RESPAWN_SECONDS`, `HEALTH_REGEN_INTERVAL_SECONDS`,
 `REGEN_MIN_HUNGER`, `SPRINT_MIN_HUNGER`, `SPRINT_BLOCKS_PER_HUNGER`,
-`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`, `WATER_DAMAGE_DELAY_SECONDS`,
-`WATER_DAMAGE_INTERVAL_SECONDS`, `WATER_DAMAGE_HP`.
+`WALK_BLOCKS_PER_HUNGER`, `JUMPS_PER_HUNGER`, `STARVATION_INTERVAL_SECONDS`,
+`STARVATION_HP`, `WATER_DAMAGE_DELAY_SECONDS`, `WATER_DAMAGE_INTERVAL_SECONDS`,
+`WATER_DAMAGE_HP`.
 
 Read by `systems/playerStats.ts` (drain + regen) and `systems/playerLife.ts`
 (respawn). This group is where "how hard is it to stay alive" is set. The
@@ -42,6 +55,36 @@ Water exposure is continuous body-midpoint immersion: leaving water resets both
 timers. After `WATER_DAMAGE_DELAY_SECONDS` (60), environmental damage bypasses
 armor every `WATER_DAMAGE_INTERVAL_SECONDS` (1) for `WATER_DAMAGE_HP` (3 HP = 1.5
 hearts). These counters are transient and reset on reload/respawn.
+**Starvation** is the consequence of a fully-empty hunger bar: once `hunger` hits
+0, `STARVATION_HP` (1 HP) is lost every `STARVATION_INTERVAL_SECONDS` (4) down to a
+**difficulty-scaled floor** (see below) — these two constants are the cadence; the
+floor is the per-level dial.
+
+## Difficulty — Peaceful / Easy / Normal / Hard
+
+The per-level multipliers live in `lib/game/difficulties.ts` (accessor functions,
+not `config.ts` constants — the _base_ values they bend stay in `config.ts`). It is
+an axis orthogonal to game mode, picked at world creation and switchable in the
+pause menu; the spawn directors and mob AI read `state.difficulty` every tick.
+
+| Dial (accessor)                       | Peaceful | Easy | Normal | Hard |
+| ------------------------------------- | -------- | ---- | ------ | ---- |
+| `hostilesSpawn`                       | no       | yes  | yes    | yes  |
+| `mobDamageMultiplier` (×hit)          | —        | 0.5  | 1      | 1.5  |
+| `hostileSpawnIntervalScale`           | —        | 1.5  | 1      | 0.6  |
+| `hostileCapScale` (×`HOSTILE_CAP` 16) | 0        | 8    | 16     | 24   |
+| `regenIntervalScale` (×regen)         | 0.5      | 1    | 1      | 1    |
+| `starvationFloorHp` (HP floor)        | never    | 10   | 1      | 0    |
+
+Read by `systems/spawnDirector.ts` (the spawn gate + cadence/cap scales),
+`systems/mobAI.ts` (the per-hit damage scale, applied at the strike — templates are
+never mutated), and `systems/playerStats.ts` (faster Peaceful regen + the
+starvation floor). **Peaceful** also despawns existing hostiles the moment you
+switch to it (`GameEngine.switchDifficulty`). Note these dials are independent of
+game mode: Peaceful stops hostile _spawns_ regardless of mode, while damage/threat
+still gate on the mode (Creative is invulnerable at any difficulty). The **Hardcore**
+flag (a per-world boolean, not a tunable) forces this dial to Hard and locks it — see
+`docs/architecture.md` for the permadeath/game-over flow.
 
 ## Cave hazards — lava & drowning
 
@@ -67,6 +110,48 @@ the 0–15 levels), and the cave-darkness floor + torch tint are shader constant
 [`GameRenderer.ts`](../lib/game/render/GameRenderer.ts) (`SKY_LIGHT_FLOOR`,
 `TORCH_TINT`).
 
+## Status effects & potions
+
+`EFFECT_SPEED_DURATION`/`EFFECT_SPEED_MULTIPLIER`,
+`EFFECT_STRENGTH_DURATION`/`EFFECT_STRENGTH_BONUS`,
+`EFFECT_REGEN_DURATION`/`EFFECT_REGEN_INTERVAL`/`EFFECT_REGEN_HP`,
+`EFFECT_FIRE_RESIST_DURATION`, `EFFECT_WATER_BREATHING_DURATION`,
+`POISON_DURATION`/`POISON_INTERVAL`/`POISON_HP`/`POISON_FLOOR_HP`,
+`ROTTEN_FLESH_POISON_CHANCE`.
+
+Read by `systems/statusEffects.ts` (and the seams it feeds: `playerMotion.ts`
+for speed, the melee dispatch in `GameEngine.ts` for strength, and the gated
+`tickLavaExposure`/`tickOxygen` for fire-resist/water-breathing). The
+`*_DURATION` values are how long a drunk potion lasts (default Minecraft-ish:
+buffs 3:00, Regeneration 0:45). **Strength** adds `EFFECT_STRENGTH_BONUS` (3) flat
+melee damage; **Speed** multiplies movement by `EFFECT_SPEED_MULTIPLIER` (1.2);
+**Regeneration** heals `EFFECT_REGEN_HP` (1) every `EFFECT_REGEN_INTERVAL` (1.5 s)
+on its **own** accumulator, ignoring the hunger gate. **Poison** ticks `POISON_HP`
+(1) every `POISON_INTERVAL` (1.25 s) but floors at `POISON_FLOOR_HP` (1) so it can
+never kill; eating rotten flesh inflicts it with probability
+`ROTTEN_FLESH_POISON_CHANCE` (0.8) for `POISON_DURATION` (8 s). Brewing reagent
+costs are balanced in `recipes.ts`, not here. Lengthen the buffs or cut the poison
+odds to make the system gentler; the reagent map is the economic dial.
+
+## XP & enchanting
+
+`XP_PER_LEVEL`, `FISHING_XP`, `ENCHANT_MAX_LEVEL`, `ENCHANT_COST_LEVELS`,
+`SHARPNESS_DAMAGE_PER_LEVEL`, `PROTECTION_DEFENSE_PER_LEVEL`,
+`EFFICIENCY_SPEED_PER_LEVEL`, `UNBREAKING_SKIP_PER_LEVEL`.
+
+XP banks as points; `XP_PER_LEVEL` (10) points make one level. The per-mob and
+per-ore XP tables live in `mobXp.ts` / `systems/xp.ts` (not here, like
+`mobLoot.ts`); `FISHING_XP` (2) is the per-catch reward. Enchanting costs
+`ENCHANT_COST_LEVELS` (3) levels per application, up to `ENCHANT_MAX_LEVEL` (3).
+Each enchant is a flat per-level modifier read at one seam:
+Sharpness `+SHARPNESS_DAMAGE_PER_LEVEL` (2) melee damage (`combat.ts` dispatch),
+Protection `+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
+`armorReduction`), Efficiency `×(1 + EFFICIENCY_SPEED_PER_LEVEL × level)` mining
+speed (`miningSpeed`), and Unbreaking a `UNBREAKING_SKIP_PER_LEVEL` (0.2)
+skip-chance per level (`consumeToolDurability`/`consumeEquippedArmorDurability`).
+Lower the costs or raise the magnitudes for faster progression; the XP-source
+tables are the earning dial.
+
 ## Danger — day-night & the mob director
 
 `DAY_CYCLE_SECONDS`, `HOSTILE_SPAWN_BELOW_DAYLIGHT`, `SPIDER_AGGRO_BELOW_DAYLIGHT`,
@@ -81,7 +166,9 @@ invariant** (daylight ranges 0.04–1.0; see architecture.md): hostiles spawn be
 0.28, spiders turn hostile below 0.42, and exposed hostiles burn above 0.72. Keep
 them ordered `spawn ≤ spider_aggro` and `burn` well above both, or mobs will spawn
 into instant sunlight. `HOSTILE_CAP` × `HOSTILE_SPAWN_INTERVAL_SECONDS` bounds how
-crowded a night gets. `HOSTILE_SPAWN_MIN_RADIUS` (16) is the standoff every hostile
+crowded a night gets — but both are **scaled by difficulty** (`hostileCapScale` /
+`hostileSpawnIntervalScale`; Peaceful disables hostile spawning outright — see the
+Difficulty section). `HOSTILE_SPAWN_MIN_RADIUS` (16) is the standoff every hostile
 spawn (initial + night trickle) keeps from the player, so nothing — least of all a
 creeper — can appear point-blank. Tests aim daylight explicitly (a `calmDaytime`
 helper) to avoid first-night aggro.

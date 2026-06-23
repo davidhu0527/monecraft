@@ -69,7 +69,7 @@ describe("recipes", () => {
   });
 
   test("station recipes name a known station", () => {
-    const stations = ["furnace", "villager"];
+    const stations = ["furnace", "villager", "brewing"];
     for (const recipe of RECIPES) {
       if (recipe.station) expect(stations).toContain(recipe.station);
     }

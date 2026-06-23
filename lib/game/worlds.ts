@@ -12,6 +12,8 @@
  */
 
 import { isWorldType, type WorldType } from "@/lib/world";
+import { isGameMode, type GameMode } from "./gameModes";
+import { isDifficulty, type Difficulty } from "./difficulties";
 import { WORLDGEN_VERSION } from "./config";
 import { readManifestRaw, resolveDeps, sanitizeName, writeManifest, type ManifestDeps } from "./manifest";
 import { getProfile } from "./profiles";
@@ -22,6 +24,12 @@ export type WorldMeta = {
   name: string;
   seed: number;
   worldType: WorldType;
+  /** Initial game mode, chosen at creation. The *current* mode (switchable in-game) lives in the save blob. */
+  gameMode: GameMode;
+  /** Initial difficulty, chosen at creation. The *current* difficulty (switchable in-game) lives in the save blob. */
+  difficulty: Difficulty;
+  /** Hardcore world: forces Survival + Hard and permadeath. Immutable for the world's life (unlike gameMode/difficulty). */
+  hardcore: boolean;
   worldgenVersion: number;
   createdAt: number;
   lastPlayedAt: number;
@@ -84,12 +92,18 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
   if (typeof entry.profileId !== "string" || entry.profileId.length === 0) return null;
   if (typeof entry.seed !== "number" || !Number.isFinite(entry.seed)) return null;
   const num = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
+  // Hardcore is the source of truth — keep the persisted mode/difficulty consistent
+  // with it (the engine forces them at runtime, but the meta drives the UI/card too).
+  const hardcore = entry.hardcore === true;
   return {
     id: entry.id,
     profileId: entry.profileId,
     name: sanitizeName(entry.name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: Math.floor(entry.seed),
     worldType: isWorldType(entry.worldType) ? entry.worldType : "default",
+    gameMode: hardcore ? "survival" : isGameMode(entry.gameMode) ? entry.gameMode : "survival",
+    difficulty: hardcore ? "hard" : isDifficulty(entry.difficulty) ? entry.difficulty : "normal",
+    hardcore,
     worldgenVersion: num(entry.worldgenVersion, WORLDGEN_VERSION),
     createdAt: num(entry.createdAt, 0),
     lastPlayedAt: num(entry.lastPlayedAt, 0)
@@ -116,23 +130,28 @@ export function worldsForProfile(profileId: string, storage: Storage = localStor
     .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt || b.createdAt - a.createdAt);
 }
 
-/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds; `deps.worldType` picks the generation preset. */
+/** Creates a world for an existing profile, persists it, and returns it (throws on an unknown profile). `deps.rng` seeds blank-input worlds; `deps.worldType` picks the generation preset; `deps.gameMode`/`deps.difficulty` pick the initial mode/difficulty; `deps.hardcore` flags a permadeath world. */
 export function createWorld(
   profileId: string,
   name: string,
   seedInput: string | null,
-  deps: ManifestDeps & { rng?: () => number; worldType?: WorldType } = {}
+  deps: ManifestDeps & { rng?: () => number; worldType?: WorldType; gameMode?: GameMode; difficulty?: Difficulty; hardcore?: boolean } = {}
 ): WorldMeta {
   const { storage, now, uid } = resolveDeps(deps);
   // Worlds must belong to a real profile — refuse to persist an orphan record.
   if (!getProfile(profileId, storage)) throw new Error(`createWorld: unknown profile "${profileId}"`);
   const createdAt = now();
+  // Hardcore forces Survival + Hard, so the persisted meta is consistent from birth.
+  const hardcore = deps.hardcore === true;
   const world: WorldMeta = {
     id: uid(),
     profileId,
     name: sanitizeName(name, DEFAULT_WORLD_NAME, MAX_WORLD_NAME),
     seed: resolveSeed(seedInput, deps.rng ?? Math.random),
     worldType: isWorldType(deps.worldType) ? deps.worldType : "default",
+    gameMode: hardcore ? "survival" : isGameMode(deps.gameMode) ? deps.gameMode : "survival",
+    difficulty: hardcore ? "hard" : isDifficulty(deps.difficulty) ? deps.difficulty : "normal",
+    hardcore,
     worldgenVersion: WORLDGEN_VERSION,
     createdAt,
     lastPlayedAt: createdAt

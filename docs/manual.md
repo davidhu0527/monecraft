@@ -53,25 +53,83 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                              |
-| ------------------ | ------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                |
-| `Space`            | Jump                                                                |
-| `C`                | Crouch (slower, careful movement)                                   |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                  |
-| Mouse              | Look around (double-click the game first to lock the pointer)       |
-| Left-click (hold)  | Break the targeted block / attack a mob                             |
-| Right-click or `E` | Place/interact, or throw a selected spear                           |
-| `1`–`9`            | Select a hotbar slot                                                |
-| `I`                | Open / close inventory & crafting                                   |
-| `F`                | Eat the selected food                                               |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front |
-| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)               |
-| `Esc`              | Pause menu (save / load / reset, volume sliders, skin picker)       |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                 |
+| Key / input        | Action                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                                                          |
+| `Space`            | Jump                                                                                                          |
+| `C`                | Crouch (slower, careful movement)                                                                             |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                            |
+| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying                   |
+| Mouse              | Look around (double-click the game first to lock the pointer)                                                 |
+| Left-click (hold)  | Break the targeted block / attack a mob                                                                       |
+| Right-click or `E` | Place/interact, or throw a selected spear                                                                     |
+| `1`–`9`            | Select a hotbar slot                                                                                          |
+| `I`                | Open / close inventory & crafting                                                                             |
+| `F`                | Eat the selected food, or drink a selected potion                                                             |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
+| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins), Controls tabs |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                           |
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
+
+## Game modes
+
+Pick a mode when you create a world (next to the name, world type, and seed), and
+switch it any time from the **pause menu** (`Esc` → Game Mode). It's saved with the
+world. Modes are independent of the world type.
+
+- **Survival** — the standard game: gather, craft, fight, and manage health and
+  hunger. You can die.
+- **Creative** — build freely. You fly (double-tap `Space`, then `Space` / `C` to
+  rise and descend), take no damage and never hunger, break any block instantly,
+  and place blocks without using them up. The recipe book is replaced by a
+  searchable **palette of every item** — click one to drop a stack into your
+  inventory.
+- **Adventure** — survival in every way (damage, hunger, mobs, combat,
+  doors/chests/trading) **except you can't break or place blocks**, so a built
+  world stays as-is.
+- **Spectator** — a free camera: you fly through walls (noclip), are invisible and
+  invulnerable, and can't interact with anything. Mobs ignore you entirely. There's
+  no hotbar or status bars — just look around.
+
+Switching modes refills your bars and clears any pending hazard damage, so it's
+always safe to flip between them.
+
+## Difficulty
+
+A separate dial from the game mode, picked next to it at world creation and
+switchable any time from the **pause menu** (`Esc` → Difficulty). It's saved with
+the world and sets _how hard_ survival is — monster numbers, how hard they hit, and
+whether an empty hunger bar can kill you.
+
+- **Peaceful** — no monsters spawn (and switching to Peaceful clears any already
+  around), health regenerates twice as fast, and an empty hunger bar never hurts
+  you. Full survival — gather, build, mine — minus the danger.
+- **Easy** — fewer monsters and they hit at half strength; starving stops at 5
+  hearts.
+- **Normal** — the balanced default; starving chips you down to half a heart but no
+  further.
+- **Hard** — monsters spawn thick and hit 1.5× as hard, and **starving can kill
+  you**.
+
+Flipping to Peaceful mid-fight is a safe panic button — every hostile (even the
+boss) vanishes at once.
+
+## Hardcore
+
+A toggle on the new-world form for players who want the ultimate stakes. A Hardcore
+world is **locked to Survival + Hard** — you can't switch game mode or lower the
+difficulty (the pause-menu switchers are greyed out), so there's no escape hatch.
+Its hearts are drawn in a darker, withered red so you always know you're in it.
+
+The defining rule: **death is permanent.** There's no respawn. When you die the run
+is over — the world becomes a **dead world** you can only spectate: a free camera
+that flies through everything while a **Game Over** screen offers to _Spectate_
+(roam your dead world), go _Back to Worlds_, or _Delete World_. Reloading a dead
+world drops you back into that same spectating state; it can never be played again.
+Choose Hardcore knowing every fall, creeper, and empty hunger bar could be the last.
 
 ## Survival
 
@@ -125,9 +183,16 @@ Hunger gates two things:
 - **Health regeneration** only runs while hunger is **12 or higher**: you heal
   about **+0.5 HP every 3 seconds** when you're fed and hurt.
 
-So eat before a fight. Press **`F`** to eat the selected food. Different foods
+And if the bar empties completely, you **starve**: half a heart every few seconds,
+down to a floor that depends on difficulty (Easy stops at 5 hearts, Normal at half
+a heart, **Hard kills you**; Peaceful never starves). So eat before a fight. Press **`F`** to eat the selected food. Different foods
 restore different amounts — cooked meat fills far more than raw (see the
 [food table](reference.md#food)).
+
+**Watch the rotten flesh.** A zombie's drop fills a little hunger, but eating it
+has a high chance to **poison** you — you'll take steady damage for a few seconds.
+Poison **can't kill** (it floors at half a heart), so it's a survivable gamble
+when you're starving, but cook real meat when you can.
 
 ### Combat
 
@@ -226,16 +291,66 @@ is refused if there's no room rather than destroying the overflow). Stacks hold 
 to **99** items; tools, weapons, and armor take one slot each and show durability.
 
 The recipe book is **grouped into labeled sections** — Tools, Weapons, Armor,
-Building, Food, Materials, then the station-gated Smelting and Trades — and within
-each section the recipes you can make **right now** float to the top, so what's
-craftable is easy to spot among the dimmed entries.
+Building, Food, Materials, then the station-gated Smelting, Brewing, and Trades —
+and within each section the recipes you can make **right now** float to the top, so
+what's craftable is easy to spot among the dimmed entries.
+
+A dimmed recipe is no dead end: **hover it** to see exactly what's holding you back.
+The tooltip lists each ingredient as **have / need** (with how many more you're
+short), and for every missing item adds a **"how to obtain it"** hint — craft,
+mine, hunt a mob, fish, or loot a dungeon. Station-gated recipes you can't reach
+yet show **"Requires Furnace / Brewing Stand / Villager"** the same way.
 
 The basic recipe grid is always available. **Smelting** recipes (cooking raw meat)
 require a **furnace**: craft one from 8 cobble, place it, and right-click it to open
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **54 recipes** in the [reference](reference.md#recipes).
+See the full list of **65 recipes** in the [reference](reference.md#recipes).
+
+## Brewing and potions
+
+Once you've gathered some gold, craft a **brewing stand** (3 cobble + 1 gold ore),
+place it, and right-click it to open the panel in **brewing** mode — just like a
+furnace, the potion recipes unlock while the stand is open.
+
+Every potion starts with a **glass bottle** (3 glass → 3 bottles, on the basic
+grid). Add one reagent at the stand to brew a potion:
+
+| Potion          | Reagent   | While active                          |
+| --------------- | --------- | ------------------------------------- |
+| Swiftness       | Feather   | Move noticeably faster                |
+| Strength        | Gunpowder | Hit harder in melee                   |
+| Regeneration    | Wheat     | Steadily heal, even on an empty belly |
+| Fire Resistance | Coal      | Wade through lava unharmed            |
+| Water Breathing | Raw Fish  | Stay underwater without drowning      |
+
+**Drink** a potion the same way you eat — select it and press `F`. Its icon and a
+countdown appear top-left while it lasts. Effects survive a save and reload but
+are **cleared when you die**, and re-drinking the same potion just tops the timer
+back up. Full numbers are in the [reference](reference.md#status-effects).
+
+## Experience and enchanting
+
+Playing earns **XP**, shown as a green bar above the hotbar with your **level**
+over it. You gain XP for **killing mobs** (tougher mobs give more — the boss is a
+big payout), **mining ores** (rarer ores give more), and **reeling in fish**. XP
+is a currency, so unlike potion effects it **stays with you when you die**.
+
+Spend it at an **enchanting table** (craft one from **2 diamond ore + 4 cobble**).
+Place it, right-click to open the enchanting panel, then **select** the tool,
+weapon, or armor you want to improve in your hotbar — the panel shows the
+enchantments it can take. Each costs **3 levels** and can be applied up to **three
+times**:
+
+- **Sharpness** (weapons) — hit harder in melee
+- **Protection** (armor) — take less damage
+- **Efficiency** (tools) — mine faster
+- **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
+
+Buttons grey out when you can't afford the cost or the enchant is maxed.
+Enchantments are part of the item, so they're kept in chests and across reloads.
+Full numbers are in the [reference](reference.md#xp--enchanting).
 
 ## Doors
 

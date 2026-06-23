@@ -42,6 +42,21 @@ describe("recipe categories", () => {
     expect(recipeCategory(trade)).toBe("Trades");
   });
 
+  test("brewing recipes group under Brewing; the stand and bottle are plain crafting", () => {
+    const brewing = RECIPES.filter((r) => r.station === "brewing");
+    expect(brewing.length).toBeGreaterThanOrEqual(5);
+    for (const r of brewing) expect(recipeCategory(r)).toBe("Brewing");
+    // The stand and the glass bottle are crafted on the grid, not at a station.
+    expect(recipe("brewing_stand").station).toBeUndefined();
+    expect(recipeCategory(recipe("brewing_stand"))).toBe("Building");
+    expect(recipe("empty_bottle").station).toBeUndefined();
+  });
+
+  test("the enchanting table is a plain Building recipe (enchanting isn't recipe-gated)", () => {
+    expect(recipe("enchanting_table").station).toBeUndefined();
+    expect(recipeCategory(recipe("enchanting_table"))).toBe("Building");
+  });
+
   test("groupRecipes returns non-empty categories in the fixed display order", () => {
     const groups = groupRecipes(RECIPES, () => false);
     const positions = groups.map((g) => RECIPE_CATEGORY_ORDER.indexOf(g.category));

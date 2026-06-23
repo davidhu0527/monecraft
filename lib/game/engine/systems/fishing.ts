@@ -6,12 +6,14 @@ import {
   FISHING_BITE_MIN_SECONDS,
   FISHING_BITE_WINDOW_SECONDS,
   FISHING_REACH,
-  FISHING_TETHER_DISTANCE
+  FISHING_TETHER_DISTANCE,
+  FISHING_XP
 } from "@/lib/game/config";
 import { rollFishingCatch } from "@/lib/game/fishingLoot";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
 import type { EmitGameEvent, GameState } from "../state";
 import { lookDirection } from "./playerMotion";
+import { awardXp } from "./xp";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
@@ -41,7 +43,8 @@ export function tryFish(state: GameState, emit: EmitGameEvent, rng: () => number
       for (const drop of items) {
         state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
       }
-      state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+      state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
+      awardXp(state, FISHING_XP, emit);
       emit({ type: "fishingCaught", items, x, y, z });
     } else {
       emit({ type: "fishingReeledEmpty" });

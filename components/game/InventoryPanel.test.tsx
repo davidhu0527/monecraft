@@ -6,6 +6,7 @@ import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS } from "@/lib/game/config";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
+import type { GameMode } from "@/lib/game/gameModes";
 import type { InventorySlot } from "@/lib/game/types";
 
 function makeInventory(...items: Array<[string, number] | null>): InventorySlot[] {
@@ -23,13 +24,18 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     selectedHotbarSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
-    craftingStation: null as "furnace" | null,
+    craftingStation: null as "furnace" | "enchanting" | null,
+    gameMode: "survival" as GameMode,
     container: null as InventorySlot[] | null,
+    xpLevel: 0,
+    enchantCost: 3,
     canCraft: () => true,
     onSwapSlots: mock(),
     onMoveStack: mock(),
     onToggleEquipArmor: mock(),
     onCraft: mock(),
+    onEnchant: mock(),
+    onGiveItem: mock(),
     ...overrides
   };
   render(<InventoryPanel {...props} />);
@@ -136,26 +142,32 @@ describe("InventoryPanel", () => {
     expect(props.onToggleEquipArmor).not.toHaveBeenCalled();
   });
 
-  test("craft buttons are disabled per canCraft and click through onCraft", async () => {
+  test("unaffordable recipes are aria-disabled and swallow the craft click; affordable ones fire", async () => {
     const user = userEvent.setup();
     const planks = RECIPES.find((recipe) => recipe.id === "planks")!;
     const props = renderPanel({ canCraft: (recipe) => recipe.id === "planks" });
 
+    // Not the native `disabled` attribute (it would suppress the hover tooltip);
+    // the row stays a live button but the handler no-ops when unaffordable.
     const planksButton = screen.getByRole("button", { name: planks.label }) as HTMLButtonElement;
     const glassButton = screen.getByRole("button", { name: "4 Sand -> 2 Glass" }) as HTMLButtonElement;
     expect(planksButton.disabled).toBe(false);
-    expect(glassButton.disabled).toBe(true);
+    expect(planksButton.getAttribute("aria-disabled")).toBe("false");
+    expect(glassButton.getAttribute("aria-disabled")).toBe("true");
+    expect(glassButton.className).toContain("is-disabled");
 
     await user.click(planksButton);
     expect(props.onCraft).toHaveBeenCalledWith(planks);
+    await user.click(glassButton); // unaffordable → guarded
+    expect(props.onCraft).toHaveBeenCalledTimes(1);
   });
 
-  test("a furnace recipe is locked with no station open", async () => {
+  test("a furnace recipe is locked (aria-disabled) with no station open", async () => {
     const user = userEvent.setup();
     const cook = RECIPES.find((recipe) => recipe.id === "cook_chicken")!;
     const props = renderPanel({ craftingStation: null });
-    const button = screen.getByRole("button", { name: cook.label }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    const button = screen.getByRole("button", { name: cook.label });
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     await user.click(button);
     expect(props.onCraft).not.toHaveBeenCalled();
   });
@@ -164,10 +176,30 @@ describe("InventoryPanel", () => {
     const user = userEvent.setup();
     const cook = RECIPES.find((recipe) => recipe.id === "cook_chicken")!;
     const props = renderPanel({ craftingStation: "furnace" });
-    const button = screen.getByRole("button", { name: cook.label }) as HTMLButtonElement;
-    expect(button.disabled).toBe(false);
+    const button = screen.getByRole("button", { name: cook.label });
+    expect(button.getAttribute("aria-disabled")).toBe("false");
     await user.click(button);
     expect(props.onCraft).toHaveBeenCalledWith(cook);
+  });
+
+  test("hovering an unaffordable recipe shows missing ingredients and how to obtain them", async () => {
+    const user = userEvent.setup();
+    const bed = RECIPES.find((recipe) => recipe.id === "bed")!; // 3 wool + 3 planks
+    // Has the planks but no wool, and nothing is craftable.
+    renderPanel({ inventory: makeInventory(["planks", 3]), canCraft: () => false });
+
+    await user.hover(screen.getByRole("button", { name: bed.label }));
+    expect(screen.getByText(/^Wool\s+0 \/ 3 \(need 3 more\)$/)).toBeTruthy();
+    expect(screen.getByText(/^Planks\s+3 \/ 3 ✓$/)).toBeTruthy();
+    expect(screen.getByText("→ Wool: Hunt a sheep")).toBeTruthy(); // the obtain hint
+  });
+
+  test("hovering a station-locked recipe explains which station it needs", async () => {
+    const user = userEvent.setup();
+    const cook = RECIPES.find((recipe) => recipe.id === "cook_chicken")!;
+    renderPanel({ craftingStation: null });
+    await user.hover(screen.getByRole("button", { name: cook.label }));
+    expect(screen.getByText("Requires Furnace")).toBeTruthy();
   });
 
   test("an open chest renders its grid as an extra row of slots", () => {

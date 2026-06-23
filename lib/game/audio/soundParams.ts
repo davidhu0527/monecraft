@@ -894,6 +894,58 @@ export const EAT_SOUND: SoundDef = {
   minRetriggerMs: 150
 };
 
+// A liquid "glug" — softer and more tonal than chewing, with a downward swallow.
+export const DRINK_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.1,
+    frequency: 150,
+    sustain: 0.06,
+    release: 0.09,
+    shape: 0,
+    slide: -2,
+    repeatTime: 0.12,
+    noise: 0.2,
+    sustainVolume: 0.6,
+    decay: 0.04,
+    filter: -500
+  }),
+  minRetriggerMs: 200
+};
+
+// A bright upward "orb pickup" blip when XP is gained.
+export const XP_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.35,
+    randomness: 0.05,
+    frequency: 660,
+    sustain: 0.02,
+    release: 0.09,
+    shape: 1,
+    pitchJump: 240,
+    pitchJumpTime: 0.04,
+    decay: 0.02
+  }),
+  minRetriggerMs: 60
+};
+
+// A magical rising shimmer when an enchantment is applied.
+export const ENCHANT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.4,
+    frequency: 740,
+    sustain: 0.04,
+    release: 0.22,
+    shape: 1,
+    pitchJump: 420,
+    pitchJumpTime: 0.09,
+    repeatTime: 0.07,
+    tremolo: 0.3,
+    decay: 0.05
+  }),
+  minRetriggerMs: 200
+};
+
 export const DEATH_SOUND: SoundDef = {
   params: zz({
     volume: 0.8,

@@ -1,5 +1,6 @@
 import { MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
+import { protectionDefense, unbreakingSkips } from "@/lib/game/enchantments";
 import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 /**
@@ -74,13 +75,18 @@ export function adjustSlotCount(slots: InventorySlot[], slotId: string, delta: n
   return next;
 }
 
-/** Wears the tool/weapon at `index` by `amount`; the slot empties at zero durability. */
-export function consumeToolDurability(slots: InventorySlot[], index: number, amount = 1): InventorySlot[] | null {
+/**
+ * Wears the tool/weapon at `index` by `amount`; the slot empties at zero
+ * durability. When `rng` is supplied, an Unbreaking enchant may skip the wear
+ * (returning null — no change — like an inapplicable op).
+ */
+export function consumeToolDurability(slots: InventorySlot[], index: number, amount = 1, rng?: () => number): InventorySlot[] | null {
   if (amount <= 0) return null;
   if (index < 0 || index >= slots.length) return null;
   const next = cloneSlots(slots);
   const slot = next[index];
   if ((slot.kind !== "tool" && slot.kind !== "weapon") || !slot.id || slot.count <= 0 || !slot.maxDurability) return null;
+  if (rng && unbreakingSkips(slot, rng)) return null; // Unbreaking saved a point of wear
   const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
   if (nextDurability <= 0) {
     next[index] = createEmptySlot();
@@ -90,8 +96,11 @@ export function consumeToolDurability(slots: InventorySlot[], index: number, amo
   return next;
 }
 
-/** Wears every equipped armor piece by `amount`; broken pieces disappear. */
-export function consumeEquippedArmorDurability(slots: InventorySlot[], equipped: EquippedArmor, amount = 1): InventorySlot[] | null {
+/**
+ * Wears every equipped armor piece by `amount`; broken pieces disappear. When
+ * `rng` is supplied, each piece's Unbreaking enchant may skip its wear.
+ */
+export function consumeEquippedArmorDurability(slots: InventorySlot[], equipped: EquippedArmor, amount = 1, rng?: () => number): InventorySlot[] | null {
   if (amount <= 0) return null;
   const next = cloneSlots(slots);
   let changed = false;
@@ -102,12 +111,25 @@ export function consumeEquippedArmorDurability(slots: InventorySlot[], equipped:
     if (idx < 0) continue;
     const slot = next[idx];
     if (!slot.maxDurability) continue;
+    if (rng && unbreakingSkips(slot, rng)) continue; // this piece's Unbreaking saved its wear
     const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
     if (nextDurability <= 0) next[idx] = createEmptySlot();
     else slot.durability = nextDurability;
     changed = true;
   }
   return changed ? next : null;
+}
+
+/** How much of an ingredient the player holds versus the recipe's requirement. */
+export type IngredientStatus = { slotId: string; have: number; need: number };
+
+/**
+ * Per-ingredient have-vs-need for a recipe, in cost order (`have < need` ⇒ short).
+ * Drives the recipe-book tooltip that shows what an unaffordable recipe is missing.
+ */
+export function ingredientStatus(slots: InventorySlot[], recipe: Recipe): IngredientStatus[] {
+  const byId = countsById(slots);
+  return recipe.cost.map((cost) => ({ slotId: cost.slotId, have: byId.get(cost.slotId) ?? 0, need: cost.count }));
 }
 
 export function canCraft(slots: InventorySlot[], recipe: Recipe): boolean {
@@ -276,9 +298,9 @@ export function equippedDefense(slots: InventorySlot[], equipped: EquippedArmor)
     if (!equippedId) continue;
     const def = ITEM_DEF_BY_ID[equippedId];
     if (!def || def.kind !== "armor" || def.armorSlot !== armorSlot) continue;
-    const hasOwnedPiece = slots.some((slot) => slot.id === equippedId && slot.count > 0);
-    if (!hasOwnedPiece) continue;
-    defense += def.defense ?? 0;
+    const piece = slots.find((slot) => slot.id === equippedId && slot.count > 0);
+    if (!piece) continue;
+    defense += (def.defense ?? 0) + protectionDefense(piece); // base defense + Protection enchant
   }
   return defense;
 }

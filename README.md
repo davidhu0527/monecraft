@@ -16,19 +16,20 @@ bun run dev
 
 Then open `http://localhost:3000`.
 
-The game opens to a menu: pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
+The game opens to a menu: pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — a **game mode**, a **difficulty** (Peaceful · Easy · Normal · Hard), an optional **Hardcore** toggle (permadeath, locked to Survival + Hard), and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
 
 ## Controls
 
 - `W A S D`: Move · `Space`: Jump · `C`: Crouch
 - `W + CapsLock`: Sprint (drains hunger)
+- Double-tap `Space`: Toggle flight in Creative (Spectator always flies); then `Space` / `C` to rise / descend
 - `Mouse`: Look around (double-click the game first to lock the pointer)
 - `Left click` (hold): Break block / attack mobs
 - `Right click` or `E`: Place/interact, or throw a selected spear
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `F`: Eat food · `Shift+U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)
-- `Esc`: Pause menu (save / load / reset, **Save & Quit to Worlds**, sound/music volume sliders, and the Appearance skin picker live there) · `F3`: Debug overlay
+- `Esc`: Pause menu — three tabs: **Game** (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** and **Difficulty** switchers), **Options** (sound/music volume, Appearance skins), and **Controls** · `F3`: Debug overlay
 
 New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more.
 

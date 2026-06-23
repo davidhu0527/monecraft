@@ -76,6 +76,9 @@ export class GameRenderer {
   private readonly liveSky = new THREE.Color(0x8bc2ff);
   private readonly worldMaterial: THREE.MeshStandardMaterial;
   private readonly glassMaterial: THREE.MeshStandardMaterial;
+  // Solid + glass terrain share one block atlas; held as a field so dispose() can
+  // release it (THREE.Material.dispose() does not dispose its map texture).
+  private readonly blockAtlasTexture: THREE.Texture;
   private worldMesh: THREE.Mesh;
   private glassMesh: THREE.Mesh;
   private currentRegionX = Number.NaN;
@@ -127,15 +130,16 @@ export class GameRenderer {
     this.sun.position.set(40, 95, 24);
     this.scene.add(this.sun);
 
+    this.blockAtlasTexture = createBlockAtlasTexture();
     this.worldMaterial = new THREE.MeshStandardMaterial({
-      map: createBlockAtlasTexture(),
+      map: this.blockAtlasTexture,
       vertexColors: true,
       roughness: 0.88,
       metalness: 0.02,
       side: THREE.DoubleSide
     });
     this.glassMaterial = new THREE.MeshStandardMaterial({
-      map: this.worldMaterial.map,
+      map: this.blockAtlasTexture,
       vertexColors: true,
       roughness: 0.18,
       metalness: 0.04,
@@ -548,6 +552,7 @@ export class GameRenderer {
     this.glassMesh.geometry.dispose();
     this.worldMaterial.dispose();
     this.glassMaterial.dispose();
+    this.blockAtlasTexture.dispose();
     this.webgl.dispose();
     this.mount.removeChild(this.webgl.domElement);
   }

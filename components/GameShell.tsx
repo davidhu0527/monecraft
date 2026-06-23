@@ -6,7 +6,7 @@ import ProfileSelect from "@/components/menu/ProfileSelect";
 import WorldSelect from "@/components/menu/WorldSelect";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { getProfile, setActiveProfile } from "@/lib/game/profiles";
-import { getWorld, touchWorld } from "@/lib/game/worlds";
+import { deleteWorld, getWorld, touchWorld } from "@/lib/game/worlds";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 /**
@@ -82,6 +82,11 @@ export default function GameShell() {
           world={world}
           profile={profile}
           onQuitToWorlds={() => {
+            writeSessionPointer(null);
+            setScreen({ name: "world-select", profileId: profile.id });
+          }}
+          onDeleteWorld={() => {
+            deleteWorld(world.id); // hardcore Game Over: erase the dead world and leave
             writeSessionPointer(null);
             setScreen({ name: "world-select", profileId: profile.id });
           }}

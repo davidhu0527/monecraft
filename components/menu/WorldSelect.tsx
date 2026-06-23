@@ -2,12 +2,24 @@ import { useState } from "react";
 import CreateWorldForm from "@/components/menu/CreateWorldForm";
 import MenuScreen from "@/components/menu/MenuScreen";
 import type { Profile } from "@/lib/game/profiles";
+import { GAME_MODE_PRESETS, type GameMode } from "@/lib/game/gameModes";
+import { DIFFICULTY_PRESETS, type Difficulty } from "@/lib/game/difficulties";
 import { createWorld, deleteWorld, MAX_WORLD_NAME, renameWorld, WORLD_TYPE_PRESETS, worldsForProfile } from "@/lib/game/worlds";
 import type { WorldType } from "@/lib/world";
 
 /** Short label for a world type (the default type is left unlabelled on cards). */
 function worldTypeLabel(id: WorldType): string {
   return WORLD_TYPE_PRESETS.find((preset) => preset.id === id)?.label ?? id;
+}
+
+/** Short label for a game mode (survival is left unlabelled on cards). */
+function gameModeLabel(id: GameMode): string {
+  return GAME_MODE_PRESETS.find((preset) => preset.id === id)?.label ?? id;
+}
+
+/** Short label for a difficulty (normal is left unlabelled on cards). */
+function difficultyLabel(id: Difficulty): string {
+  return DIFFICULTY_PRESETS.find((preset) => preset.id === id)?.label ?? id;
 }
 
 type WorldSelectProps = {
@@ -29,8 +41,8 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
     return (
       <MenuScreen title={`${profile.name} — New World`}>
         <CreateWorldForm
-          onCreate={(name, seed, worldType) => {
-            const world = createWorld(profile.id, name, seed, { worldType });
+          onCreate={(name, seed, worldType, gameMode, difficulty, hardcore) => {
+            const world = createWorld(profile.id, name, seed, { worldType, gameMode, difficulty, hardcore });
             setCreating(false);
             onPlay(world.id); // straight into the freshly created world
           }}
@@ -97,6 +109,9 @@ export default function WorldSelect({ profile, onPlay, onBack }: WorldSelectProp
                   <button className="menu-card-play" data-testid={`world-${world.id}`} onClick={() => onPlay(world.id)}>
                     <span className="menu-card-name">{world.name}</span>
                     <span className="menu-card-sub">
+                      {world.hardcore ? `Hardcore · ` : ""}
+                      {world.gameMode !== "survival" ? `${gameModeLabel(world.gameMode)} · ` : ""}
+                      {!world.hardcore && world.difficulty !== "normal" ? `${difficultyLabel(world.difficulty)} · ` : ""}
                       {world.worldType !== "default" ? `${worldTypeLabel(world.worldType)} · ` : ""}Seed {world.seed}
                     </span>
                   </button>

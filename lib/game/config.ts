@@ -11,6 +11,11 @@ export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
 export const WORLD_BORDER_PADDING = 1.2;
 
+// Game modes / flight — Creative & Spectator fly with direct vertical control
+// (Space ascends, crouch descends); a double-tap of Space toggles flight.
+export const FLY_SPEED = 11; // blocks/sec vertical while flying
+export const FLY_DOUBLE_TAP_WINDOW_SECONDS = 0.3; // max gap between Space taps to toggle flight
+
 // Player stats — Minecraft ranges: 20 HP shown as 10 hearts, 20 hunger as 10 drumsticks.
 export const MAX_HEARTS = 20;
 export const MAX_HUNGER = 20;
@@ -39,6 +44,33 @@ export const SPRINT_MIN_HUNGER = 6;
 export const SPRINT_BLOCKS_PER_HUNGER = 100;
 export const WALK_BLOCKS_PER_HUNGER = 300;
 export const JUMPS_PER_HUNGER = 50;
+// Starvation: while hunger sits at 0, lose STARVATION_HP every interval, down to a
+// difficulty-scaled floor (lib/game/difficulties.ts: starvationFloorHp — Easy stops
+// at 10 HP, Normal at 1, Hard at 0, Peaceful never starves). Mirrors Minecraft's
+// ~half-a-heart every few seconds; the *floor* is what each difficulty changes.
+export const STARVATION_INTERVAL_SECONDS = 4;
+export const STARVATION_HP = 1; // half a heart per tick
+
+// Status effects — timed buffs drunk from potions (Speed/Strength/Regeneration/
+// Fire Resistance/Water Breathing) plus Poison, a never-lethal hazard from eating
+// rotten flesh. Durations are seconds; re-drinking refreshes to the longer of the
+// two remaining times. Single-level effects (no tiers). All values are tunable.
+export const EFFECT_SPEED_DURATION = 180;
+export const EFFECT_SPEED_MULTIPLIER = 1.2; // ×movement speed while active
+export const EFFECT_STRENGTH_DURATION = 180;
+export const EFFECT_STRENGTH_BONUS = 3; // +melee damage per hit while active
+export const EFFECT_REGEN_DURATION = 45;
+export const EFFECT_REGEN_INTERVAL = 1.5; // heal cadence — its OWN accumulator, not the hunger-gated regen
+export const EFFECT_REGEN_HP = 1; // HP restored each interval (regardless of hunger)
+export const EFFECT_FIRE_RESIST_DURATION = 180;
+export const EFFECT_WATER_BREATHING_DURATION = 180;
+// Poison: ticks armor-bypassing damage but floors at POISON_FLOOR_HP so it can
+// chip you down to half a heart yet never deliver the killing blow.
+export const POISON_DURATION = 8;
+export const POISON_INTERVAL = 1.25;
+export const POISON_HP = 1;
+export const POISON_FLOOR_HP = 1; // poison never drops hearts below this
+export const ROTTEN_FLESH_POISON_CHANCE = 0.8; // odds eating rotten flesh poisons you
 
 // Inventory
 export const HOTBAR_SLOTS = 9;
@@ -198,6 +230,20 @@ export const FISHING_BITE_WINDOW_SECONDS = 1.2;
 export const FISHING_TETHER_DISTANCE = 12;
 export const FISHING_ROD_DURABILITY = 64;
 
+// XP & enchanting. XP accrues from kills, ore mining, and fishing (the per-mob
+// and per-ore tables live in mobXp.ts / systems/xp.ts, like mobLoot.ts), banked
+// as points; XP_PER_LEVEL points make one level. Levels are spent at an
+// enchanting table — ENCHANT_COST_LEVELS per application, up to ENCHANT_MAX_LEVEL.
+// Each enchant is a flat per-level modifier at one existing seam.
+export const XP_PER_LEVEL = 10;
+export const FISHING_XP = 2;
+export const ENCHANT_MAX_LEVEL = 3;
+export const ENCHANT_COST_LEVELS = 3; // XP levels per enchant application
+export const SHARPNESS_DAMAGE_PER_LEVEL = 2; // +melee damage per level
+export const PROTECTION_DEFENSE_PER_LEVEL = 2; // +defense points per level (feeds armorReduction)
+export const EFFICIENCY_SPEED_PER_LEVEL = 0.3; // mining speed ×(1 + level × this)
+export const UNBREAKING_SKIP_PER_LEVEL = 0.2; // chance per level to skip durability wear
+
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
 export const AUTOSAVE_INTERVAL_MS = 15000;
@@ -213,9 +259,9 @@ export const SAVE_KEY = "minecraft_save_v7";
 // lakes; v8 added shallow coal ore. Each world records the WORLDGEN_VERSION it
 // was generated under; a world whose recorded version differs from this constant
 // has its block-diffs discarded and is rebooted from its stored seed
-// (lib/game/worlds.ts). The save *schema* (SaveData) is independent and stays at
-// version 5 — lighting is a derived cache and lava is worldgen, so neither is
-// persisted.
+// (lib/game/worlds.ts). The save *schema* (SaveData, currently v6) is independent
+// of this — lighting is a derived cache and lava is worldgen, so neither is
+// persisted, and additive schema bumps (like v6's status effects) don't touch it.
 export const WORLDGEN_VERSION = 8;
 
 // Rendering

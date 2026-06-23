@@ -18,7 +18,7 @@ const scratchDisplacement = new THREE.Vector3();
 const scratchClosest = new THREE.Vector3();
 const scratchToMob = new THREE.Vector3();
 
-export function tryThrowSelectedSpear(state: GameState, emit: EmitGameEvent): boolean {
+export function tryThrowSelectedSpear(state: GameState, emit: EmitGameEvent, rng?: () => number): boolean {
   const slot = state.inventory[state.selectedSlot];
   if (!slot?.id?.endsWith("_spear") || slot.kind !== "weapon" || !slot.throwDamage) return false;
   if (state.timers.spearThrowCooldown > 0) return true;
@@ -39,7 +39,7 @@ export function tryThrowSelectedSpear(state: GameState, emit: EmitGameEvent): bo
   });
   state.nextThrownSpearId += 1;
   state.timers.spearThrowCooldown = SPEAR_THROW_COOLDOWN_SECONDS;
-  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
   emit({ type: "attackSwung" });
   return true;
 }

@@ -1,5 +1,10 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
 import {
+  EFFECT_FIRE_RESIST_DURATION,
+  EFFECT_REGEN_DURATION,
+  EFFECT_SPEED_DURATION,
+  EFFECT_STRENGTH_DURATION,
+  EFFECT_WATER_BREATHING_DURATION,
   FISHING_ROD_DURABILITY,
   GRASS_SEED_DROP_CHANCE,
   INVENTORY_SLOTS,
@@ -58,6 +63,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.WheatStage3]: 1,
   [BlockId.Furnace]: 5,
   [BlockId.Chest]: 3,
+  [BlockId.BrewingStand]: 4,
+  [BlockId.EnchantingTable]: 6,
   [BlockId.MossyCobblestone]: 5,
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
@@ -86,6 +93,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "bed", label: "Bed", kind: "block", blockId: BlockId.Bed },
   { id: "furnace", label: "Furnace", kind: "block", blockId: BlockId.Furnace },
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
+  { id: "brewing_stand", label: "Brewing Stand", kind: "block", blockId: BlockId.BrewingStand },
+  { id: "enchanting_table", label: "Enchanting Table", kind: "block", blockId: BlockId.EnchantingTable },
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
   { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
@@ -117,6 +126,25 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "tnt", label: "TNT", kind: "block", blockId: BlockId.Tnt },
   // Trade currency: earn emeralds by selling materials to a villager, spend them on goods.
   { id: "emerald", label: "Emerald", kind: "material" },
+  // Brewing — a glass bottle is the base for every potion; each potion drinks
+  // (via the eat key) to grant its timed status effect. Potions are `material`
+  // so they carry no hunger; drinking consumes the whole item (no bottle back).
+  { id: "empty_bottle", label: "Glass Bottle", kind: "material" },
+  { id: "potion_speed", label: "Potion of Swiftness", kind: "material", effect: { id: "speed", durationSeconds: EFFECT_SPEED_DURATION } },
+  { id: "potion_strength", label: "Potion of Strength", kind: "material", effect: { id: "strength", durationSeconds: EFFECT_STRENGTH_DURATION } },
+  { id: "potion_regeneration", label: "Potion of Regeneration", kind: "material", effect: { id: "regeneration", durationSeconds: EFFECT_REGEN_DURATION } },
+  {
+    id: "potion_fire_resistance",
+    label: "Potion of Fire Resistance",
+    kind: "material",
+    effect: { id: "fire_resistance", durationSeconds: EFFECT_FIRE_RESIST_DURATION }
+  },
+  {
+    id: "potion_water_breathing",
+    label: "Potion of Water Breathing",
+    kind: "material",
+    effect: { id: "water_breathing", durationSeconds: EFFECT_WATER_BREATHING_DURATION }
+  },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
@@ -286,6 +314,8 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
   [BlockId.Chest]: "chest",
+  [BlockId.BrewingStand]: "brewing_stand",
+  [BlockId.EnchantingTable]: "enchanting_table",
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",

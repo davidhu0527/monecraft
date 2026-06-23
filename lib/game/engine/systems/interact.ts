@@ -24,11 +24,13 @@ const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace" | "chest" | "door";
+export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
+  [BlockId.BrewingStand]: "brewing",
+  [BlockId.EnchantingTable]: "enchanting",
   [BlockId.Chest]: "chest",
   [BlockId.DoorNorthLower]: "door",
   [BlockId.DoorNorthUpper]: "door",
@@ -69,6 +71,8 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
 
   if (kind === "bed") return interactBed(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "furnace") return interactFurnace(state, emit);
+  if (kind === "brewing") return interactBrewingStand(state, emit);
+  if (kind === "enchanting") return interactEnchantingTable(state, emit);
   if (kind === "chest") return interactChest(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "door") return interactDoor(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
@@ -139,6 +143,22 @@ function interactFurnace(state: GameState, emit: EmitGameEvent): boolean {
   state.inventoryOpen = true;
   state.craftingStation = "furnace";
   emit({ type: "openedStation", station: "furnace" });
+  return true;
+}
+
+/** Opens the inventory in brewing mode so its potion recipes unlock. */
+function interactBrewingStand(state: GameState, emit: EmitGameEvent): boolean {
+  state.inventoryOpen = true;
+  state.craftingStation = "brewing";
+  emit({ type: "openedStation", station: "brewing" });
+  return true;
+}
+
+/** Opens the inventory in enchanting mode so the enchanting panel unlocks. */
+function interactEnchantingTable(state: GameState, emit: EmitGameEvent): boolean {
+  state.inventoryOpen = true;
+  state.craftingStation = "enchanting";
+  emit({ type: "openedStation", station: "enchanting" });
   return true;
 }
 
@@ -227,7 +247,7 @@ export function tryUseHeldItem(state: GameState, emit: EmitGameEvent, rng: () =>
   if (isHoe) {
     if (block !== BlockId.Grass && block !== BlockId.Dirt) return false;
     state.blockChanges.set(x, y, z, BlockId.Farmland);
-    state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1) ?? state.inventory;
+    state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
     state.worldMeshDirty = true;
     emit({ type: "tilledSoil" });
     return true;

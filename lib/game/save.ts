@@ -1,6 +1,27 @@
-import { CHEST_SLOTS, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { CHEST_SLOTS, ENCHANT_MAX_LEVEL, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
-import type { EquippedArmor, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, SavedContainer, SavedSlot, InventorySlot } from "@/lib/game/types";
+import type {
+  EffectId,
+  Enchantment,
+  EnchantmentId,
+  EquippedArmor,
+  SaveData,
+  SaveDataV1,
+  SaveDataV2,
+  SaveDataV3,
+  SaveDataV4,
+  SaveDataV5,
+  SaveDataV6,
+  SaveDataV7,
+  SaveDataV8,
+  SaveDataV9,
+  SavedContainer,
+  SavedEffect,
+  SavedSlot,
+  InventorySlot
+} from "@/lib/game/types";
+import { isGameMode, type GameMode } from "@/lib/game/gameModes";
+import { isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
@@ -67,8 +88,50 @@ export function migrateSaveV3toV4(save: SaveDataV3): SaveDataV4 {
  * practice the SAVE_KEY bump to v6 discards pre-dungeon saves, but the
  * migration keeps the version chain complete and the readers total.)
  */
-export function migrateSaveV4toV5(save: SaveDataV4): SaveData {
+export function migrateSaveV4toV5(save: SaveDataV4): SaveDataV5 {
   return { ...save, version: 5 };
+}
+
+/**
+ * Migrates a v5 save to v6 — a pure version bump. `effects` (active status
+ * effects) is optional, so a pre-effect save simply loads with none active.
+ */
+export function migrateSaveV5toV6(save: SaveDataV5): SaveDataV6 {
+  return { ...save, version: 6 };
+}
+
+/**
+ * Migrates a v6 save to v7 — a pure version bump. `xp` (and per-slot
+ * `enchantments`) are optional, so a pre-XP save simply loads with `xp` 0 and no
+ * enchantments.
+ */
+export function migrateSaveV6toV7(save: SaveDataV6): SaveDataV7 {
+  return { ...save, version: 7 };
+}
+
+/**
+ * Migrates a v7 save to v8 — a pure version bump. `gameMode` is optional, so a
+ * pre-mode save simply loads as "survival" (see restoreGameMode).
+ */
+export function migrateSaveV7toV8(save: SaveDataV7): SaveDataV8 {
+  return { ...save, version: 8 };
+}
+
+/**
+ * Migrates a v8 save to v9 — a pure version bump. `difficulty` is optional, so a
+ * pre-difficulty save simply loads as "normal" (see restoreDifficulty).
+ */
+export function migrateSaveV8toV9(save: SaveDataV8): SaveDataV9 {
+  return { ...save, version: 9 };
+}
+
+/**
+ * Migrates a v9 save to v10 — a pure version bump. `hardcore`/`gameOver` are
+ * optional, so a pre-Hardcore save simply loads as a normal, non-hardcore world
+ * (see restoreHardcore/restoreGameOver).
+ */
+export function migrateSaveV9toV10(save: SaveDataV9): SaveData {
+  return { ...save, version: 10 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -76,13 +139,29 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
   try {
     const raw = storage.getItem(saveKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveData | SaveDataV4 | SaveDataV3 | SaveDataV2 | SaveDataV1;
+    const parsed = JSON.parse(raw) as
+      | SaveData
+      | SaveDataV9
+      | SaveDataV8
+      | SaveDataV7
+      | SaveDataV6
+      | SaveDataV5
+      | SaveDataV4
+      | SaveDataV3
+      | SaveDataV2
+      | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveData =
+      parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
     if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
-    if (migrated.version !== 5) return null;
+    if (migrated.version === 5) migrated = migrateSaveV5toV6(migrated);
+    if (migrated.version === 6) migrated = migrateSaveV6toV7(migrated);
+    if (migrated.version === 7) migrated = migrateSaveV7toV8(migrated);
+    if (migrated.version === 8) migrated = migrateSaveV8toV9(migrated);
+    if (migrated.version === 9) migrated = migrateSaveV9toV10(migrated);
+    if (migrated.version !== 10) return null;
     return migrated;
   } catch {
     return null;
@@ -94,7 +173,27 @@ export function writeSave(saveKey: string, data: SaveData, storage: Storage = lo
 }
 
 export function inventorySlotsSnapshot(inventory: InventorySlot[]): SavedSlot[] {
-  return inventory.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability }));
+  return inventory.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability, enchantments: slot.enchantments }));
+}
+
+// Every known enchantment id, keyed so a new enchantment can't be forgotten here.
+const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
+  sharpness: true,
+  protection: true,
+  efficiency: true,
+  unbreaking: true
+};
+
+/** Validates persisted enchantments: known ids and integer levels clamped to 1..max; undefined when none survive. */
+function restoreEnchantments(saved: SavedSlot["enchantments"]): Enchantment[] | undefined {
+  if (!Array.isArray(saved)) return undefined;
+  const out: Enchantment[] = [];
+  for (const entry of saved) {
+    if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_ENCHANT_IDS, entry.id)) continue;
+    if (!Number.isFinite(entry.level) || Math.floor(entry.level) < 1) continue;
+    out.push({ id: entry.id, level: Math.min(ENCHANT_MAX_LEVEL, Math.floor(entry.level)) });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -114,6 +213,9 @@ function restoreSlot(saved: SavedSlot | undefined): InventorySlot {
     } else {
       slot.durability = slot.maxDurability;
     }
+    // Enchantments live only on durable gear; validated against the known set.
+    const enchantments = restoreEnchantments(saved.enchantments);
+    if (enchantments) slot.enchantments = enchantments;
   }
   return slot;
 }
@@ -137,6 +239,38 @@ export function serializeLootedChests(looted: Set<number>): number[] {
 export function readLootedChests(save: SaveData): number[] {
   if (!Array.isArray(save.lootedChests)) return [];
   return save.lootedChests.filter((value) => Number.isFinite(value));
+}
+
+// Every known status-effect id, as a Record keyed by EffectId so adding an
+// effect without listing it here is a compile error (keeps the reader total).
+const VALID_EFFECT_IDS: Record<EffectId, true> = {
+  speed: true,
+  strength: true,
+  regeneration: true,
+  fire_resistance: true,
+  water_breathing: true,
+  poison: true
+};
+
+/** Snapshots the active status effects (id + remaining seconds) for persistence. */
+export function serializeEffects(effects: Map<EffectId, number>): SavedEffect[] {
+  const out: SavedEffect[] = [];
+  for (const [id, remaining] of effects) {
+    if (remaining > 0) out.push({ id, remaining });
+  }
+  return out;
+}
+
+/** Reads active effects from a save, dropping unknown ids and non-positive/garbage durations. */
+export function restoreEffects(save: SaveData): SavedEffect[] {
+  if (!Array.isArray(save.effects)) return [];
+  const out: SavedEffect[] = [];
+  for (const entry of save.effects) {
+    if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_EFFECT_IDS, entry.id)) continue;
+    if (!Number.isFinite(entry.remaining) || entry.remaining <= 0) continue;
+    out.push({ id: entry.id, remaining: entry.remaining });
+  }
+  return out;
 }
 
 /**
@@ -226,9 +360,47 @@ export function restoreHungerLevel(save: SaveData): number | null {
   return Math.max(0, Math.min(MAX_HUNGER, Math.floor(save.hunger)));
 }
 
+/** Restores banked XP (finite, ≥ 0); 0 when absent or invalid. */
+export function restoreXp(save: SaveData): number {
+  if (typeof save.xp !== "number" || !Number.isFinite(save.xp) || save.xp < 0) return 0;
+  return Math.floor(save.xp);
+}
+
+/** Restores the saved game mode; "survival" when absent or invalid (pre-v8 saves). */
+export function restoreGameMode(save: SaveData): GameMode {
+  return isGameMode(save.gameMode) ? save.gameMode : "survival";
+}
+
+/** Restores the saved difficulty; "normal" when absent or invalid (pre-v9 saves). */
+export function restoreDifficulty(save: SaveData): Difficulty {
+  return isDifficulty(save.difficulty) ? save.difficulty : "normal";
+}
+
+/** Restores the Hardcore flag; false when absent or non-boolean (pre-v10 saves). */
+export function restoreHardcore(save: SaveData): boolean {
+  return save.hardcore === true;
+}
+
+/** Restores the permadeath game-over flag — only ever true on a hardcore save, so a stray flag on a non-hardcore (corrupt) save can't lock it into spectator. */
+export function restoreGameOver(save: SaveData): boolean {
+  return save.hardcore === true && save.gameOver === true;
+}
+
 /** Restores the bed respawn point; null if absent or explicitly cleared. */
 export function restoreSpawnPoint(save: SaveData): { x: number; y: number; z: number } | null {
   const sp = save.spawnPoint;
   if (!sp || !Number.isFinite(sp.x) || !Number.isFinite(sp.y) || !Number.isFinite(sp.z)) return null;
   return { x: Math.floor(sp.x), y: Math.floor(sp.y), z: Math.floor(sp.z) };
+}
+
+/**
+ * Restores the player's position; null when absent or non-finite. A corrupt save
+ * with NaN/Infinity coords would otherwise load a broken world — and slip past the
+ * `position.y < 2` unstuck net, since any comparison with NaN is false. Coords stay
+ * floats (the player isn't grid-aligned), unlike the floored spawn point.
+ */
+export function restorePlayerPosition(save: SaveData): { x: number; y: number; z: number } | null {
+  const p = save.player;
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return null;
+  return { x: p.x, y: p.y, z: p.z };
 }

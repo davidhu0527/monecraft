@@ -11,6 +11,7 @@ import {
   consumeToolDurability,
   countsById,
   craft,
+  ingredientStatus,
   moveStack,
   swapSlots,
   toggleEquipArmor,
@@ -162,6 +163,17 @@ describe("crafting", () => {
     const full = Array.from({ length: INVENTORY_SLOTS }, () => createSlot("stone", MAX_STACK_SIZE));
     full[0] = createSlot("wood", MAX_STACK_SIZE);
     expect(canCraft(full, planksRecipe)).toBe(false);
+  });
+
+  test("ingredientStatus reports have-vs-need per ingredient in cost order", () => {
+    const bed = RECIPES.find((recipe) => recipe.id === "bed")!; // 3 wool + 3 planks
+    const status = ingredientStatus(makeSlots(["wool", 1], ["planks", 5]), bed);
+    expect(status).toEqual([
+      { slotId: "wool", have: 1, need: 3 }, // short by 2
+      { slotId: "planks", have: 5, need: 3 } // surplus still reported
+    ]);
+    // A wholly absent ingredient reads have: 0.
+    expect(ingredientStatus(makeSlots(), bed)[0]).toEqual({ slotId: "wool", have: 0, need: 3 });
   });
 
   test("craft consumes the cost and adds the result", () => {

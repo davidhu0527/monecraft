@@ -40,6 +40,75 @@
   filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.45));
 }
 
+/* --- XP bar: a thin green track above the hotbar with the level over it --- */
+
+.xp-bar {
+  position: relative;
+  width: 182px;
+  display: flex;
+  justify-content: center;
+}
+
+.xp-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid #1c2b1c;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(to bottom, #93f24a, #57b524);
+}
+
+.xp-bar-level {
+  position: absolute;
+  top: -11px;
+  color: #9bff52;
+  font-size: 13px;
+  text-shadow:
+    1px 1px 0 #1a1a1a,
+    -1px 1px 0 #1a1a1a,
+    1px -1px 0 #1a1a1a,
+    -1px -1px 0 #1a1a1a;
+  pointer-events: none;
+}
+
+/* --- Active status effects: a stacked top-left column of icon + countdown --- */
+
+.active-effects {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.active-effect {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 3px 4px;
+  background: rgba(10, 10, 10, 0.45);
+  border: 2px solid;
+  border-color: #6c6c6c #2e2e2e #2e2e2e #6c6c6c;
+}
+
+.active-effect img {
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.45));
+}
+
+.active-effect-time {
+  font-size: 13px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
 .hotbar-area {
   position: relative;
   display: grid;
@@ -382,6 +451,32 @@
   margin-top: 0;
 }
 
+/* Creative item palette — replaces the recipe book in Creative mode. */
+.creative-palette {
+  min-width: 240px;
+}
+
+.creative-search {
+  margin: 4px 0 8px;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 11px;
+  border: 2px solid #9a9a9a;
+  background: #d8d8d8;
+  color: #2b2b2b;
+}
+
+.inv-grid.creative-grid {
+  grid-template-columns: repeat(auto-fill, 40px);
+  margin-bottom: 6px;
+}
+
+.creative-empty {
+  color: #5a5a5a;
+  font-size: 11px;
+  padding: 8px 2px;
+}
+
 .recipe-entry {
   display: flex;
   align-items: center;
@@ -394,17 +489,83 @@
   border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
 }
 
-.recipe-entry:hover:not(:disabled) {
+.recipe-entry:hover:not(.is-disabled) {
   background: var(--mc-tile-well), #a3a3a3;
 }
 
-.recipe-entry:disabled {
+/* Unaffordable/station-locked recipes stay hoverable (so the tooltip can explain
+   what's missing); `is-disabled` carries the grayed-out look the native
+   `:disabled` attribute used to. */
+.recipe-entry.is-disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.recipe-entry:disabled img {
+.recipe-entry.is-disabled img {
   filter: grayscale(0.9);
+}
+
+/* --- Enchanting panel (replaces the recipe book at an enchanting table) --- */
+
+.enchanting-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  gap: 8px;
+  border-left: 2px solid #9a9a9a;
+  padding-left: 12px;
+}
+
+.enchanting-hint {
+  color: #5a5a5a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.enchanting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.enchanting-cost {
+  color: #2c6e2c;
+  font-size: 11px;
+}
+
+.enchanting-list {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.enchant-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--mc-tile-well), var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+}
+
+.enchant-entry:hover:not(:disabled) {
+  background: var(--mc-tile-well), #a3a3a3;
+}
+
+.enchant-entry:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.enchant-cost {
+  color: #2c6e2c;
+  font-weight: 700;
 }
 
 .recipe-ingredients {
@@ -453,6 +614,66 @@
 
 .death-content .mc-button {
   min-width: 220px;
+}
+
+/* --- Hardcore Game Over (permadeath) --- */
+
+.gameover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 3, 3, 0.74);
+  z-index: 9; /* above the death/victory overlays (8); pause is blocked in game-over */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gameover-content {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  max-width: 360px;
+  padding: 0 16px;
+}
+
+.gameover-title {
+  font-size: 44px;
+  font-weight: 700;
+  color: #c75450; /* the withered hardcore-heart red */
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+
+.gameover-sub {
+  font-size: 14px;
+  color: #e6cccc;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.gameover-content .mc-button {
+  min-width: 220px;
+}
+
+.gameover-delete-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Minimized badge shown while spectating the dead world — re-opens the menu. */
+.gameover-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-weight: 700;
+  color: #f3dcdc;
+  background: rgba(16, 3, 3, 0.8);
+  border: 2px solid #c75450;
+  cursor: pointer;
+  text-shadow: var(--mc-text-shadow);
 }
 
 /* --- Boss health bar --- */

@@ -33,6 +33,24 @@ const CRAFTING_RECIPES: Recipe[] = [
   },
   { id: "furnace", label: "8 Cobble -> Furnace", cost: [{ slotId: "cobble", count: 8 }], result: { slotId: "furnace", count: 1 } },
   { id: "chest", label: "8 Planks -> Chest", cost: [{ slotId: "planks", count: 8 }], result: { slotId: "chest", count: 1 } },
+  {
+    id: "brewing_stand",
+    label: "3 Cobble + 1 Gold Ore -> Brewing Stand",
+    cost: [
+      { slotId: "cobble", count: 3 },
+      { slotId: "gold_ore", count: 1 }
+    ],
+    result: { slotId: "brewing_stand", count: 1 }
+  },
+  {
+    id: "enchanting_table",
+    label: "2 Diamond Ore + 4 Cobble -> Enchanting Table",
+    cost: [
+      { slotId: "diamond_ore", count: 2 },
+      { slotId: "cobble", count: 4 }
+    ],
+    result: { slotId: "enchanting_table", count: 1 }
+  },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
   {
     id: "torch",
@@ -158,6 +176,59 @@ const CRAFTING_RECIPES: Recipe[] = [
     station: "furnace"
   },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
+  { id: "empty_bottle", label: "3 Glass -> 3 Glass Bottle", cost: [{ slotId: "glass", count: 3 }], result: { slotId: "empty_bottle", count: 3 } },
+  // Brewing: a glass bottle plus one reagent becomes a potion at a brewing stand.
+  // Reagents are existing drops/crops, so no new worldgen — balance is tunable.
+  {
+    id: "potion_speed",
+    label: "Glass Bottle + Feather -> Potion of Swiftness",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "feather", count: 1 }
+    ],
+    result: { slotId: "potion_speed", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_strength",
+    label: "Glass Bottle + Gunpowder -> Potion of Strength",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "gunpowder", count: 1 }
+    ],
+    result: { slotId: "potion_strength", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_regeneration",
+    label: "Glass Bottle + Wheat -> Potion of Regeneration",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "wheat", count: 1 }
+    ],
+    result: { slotId: "potion_regeneration", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_fire_resistance",
+    label: "Glass Bottle + Coal -> Potion of Fire Resistance",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "potion_fire_resistance", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_water_breathing",
+    label: "Glass Bottle + Raw Fish -> Potion of Water Breathing",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "raw_fish", count: 1 }
+    ],
+    result: { slotId: "potion_water_breathing", count: 1 },
+    station: "brewing"
+  },
   {
     id: "tnt",
     label: "4 Gunpowder + 1 Sand -> TNT",
@@ -488,10 +559,10 @@ export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];
  * own group (a furnace smelts, a villager trades); everything else is grouped by
  * the kind of item it produces.
  */
-export type RecipeCategory = "Tools" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Trades";
+export type RecipeCategory = "Tools" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Brewing" | "Trades";
 
 /** Fixed display order; `groupRecipes` emits sections in this sequence. */
-export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Trades"];
+export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Brewing", "Trades"];
 
 const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   tool: "Tools",
@@ -510,6 +581,7 @@ const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
 export function recipeCategory(recipe: Recipe): RecipeCategory {
   if (recipe.station === "villager") return "Trades";
   if (recipe.station === "furnace") return "Smelting";
+  if (recipe.station === "brewing") return "Brewing";
   const kind = ITEM_DEF_BY_ID[recipe.result.slotId]?.kind;
   return kind ? KIND_TO_CATEGORY[kind] : "Materials";
 }

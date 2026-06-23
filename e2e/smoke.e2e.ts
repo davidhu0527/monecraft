@@ -173,6 +173,31 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   expect(restoredId).toBe("grass");
 });
 
+test("inventory edits persist across a plain reload, with no explicit save", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await page.waitForTimeout(500); // let the world settle
+
+  // Rearrange the inventory through the normal command, then reload WITHOUT
+  // pressing Save — only the app's save-before-leaving should persist it. (The
+  // 15s autosave can't have fired yet, so this isolates the leave save.)
+  const moved = await page.evaluate(() => {
+    const engine = window.__monecraft!.engine;
+    engine.dispatch({ type: "moveStack", from: 0, to: 20 });
+    const slot = engine.state.inventory[20];
+    return { id: slot.id, count: slot.count };
+  });
+  expect(moved.id).not.toBeNull();
+
+  await page.reload();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  const after = await page.evaluate(() => {
+    const slot = window.__monecraft!.engine.state.inventory[20];
+    return { id: slot.id, count: slot.count };
+  });
+  expect(after).toEqual(moved);
+});
+
 test("V cycles the camera views and the scene keeps rendering", async ({ gamePage: page }) => {
   await calmDaytime(page);
   const cameraMode = () => page.evaluate(() => window.__monecraft!.engine.state.cameraMode);
@@ -215,6 +240,7 @@ test("the pause menu freezes the game and resumes it", async ({ gamePage: page }
 test("picking a skin persists across a reload", async ({ gamePage: page }) => {
   await calmDaytime(page);
   await page.keyboard.press("Escape"); // unlocked, so Escape pauses directly
+  await page.getByRole("button", { name: "Options" }).click(); // skins live under the Options tab
   await page.getByRole("button", { name: "Robot skin" }).click();
 
   // The skin now lives on the active profile, not a global key.
@@ -227,6 +253,7 @@ test("picking a skin persists across a reload", async ({ gamePage: page }) => {
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Options" }).click();
   await expect(page.getByRole("button", { name: "Robot skin" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Steve skin" })).toHaveAttribute("aria-pressed", "false");
 });
@@ -244,7 +271,7 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   });
   expect(saved).not.toBeNull();
   expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(5);
+  expect(JSON.parse(saved!).version).toBe(10);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

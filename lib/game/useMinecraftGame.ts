@@ -15,7 +15,9 @@ import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
-import type { Recipe } from "@/lib/game/types";
+import type { EnchantmentId, Recipe } from "@/lib/game/types";
+import type { GameMode } from "@/lib/game/gameModes";
+import type { Difficulty } from "@/lib/game/difficulties";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
 
 /**
@@ -33,6 +35,11 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   inventory: createInitialInventory(),
   equippedArmor: createEmptyArmorEquipment(),
   selectedSlot: 0,
+  gameMode: "survival",
+  difficulty: "normal",
+  hardcore: false,
+  gameOver: false,
+  isFlying: false,
   hearts: MAX_HEARTS,
   hunger: MAX_HUNGER,
   oxygen: MAX_OXYGEN,
@@ -51,7 +58,10 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   craftingStation: null,
   container: null,
   boss: null,
-  victory: false
+  victory: false,
+  activeEffects: [],
+  xpLevel: 0,
+  xpProgress: 0
 };
 
 const noopSubscribe = () => () => {};
@@ -96,6 +106,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const saveKeyRef = useRef(worldSaveKey(opts.world.id));
   const worldSeedRef = useRef(opts.world.seed);
   const worldTypeRef = useRef(opts.world.worldType);
+  const worldModeRef = useRef(opts.world.gameMode);
+  const worldDifficultyRef = useRef(opts.world.difficulty);
+  const worldHardcoreRef = useRef(opts.world.hardcore);
   const [ctx, setCtx] = useState<GameContext | null>(null);
   const [locked, setLocked] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -109,6 +122,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const [skinId, setSkinId] = useState<SkinId>(opts.profile.skinId);
   const skinIdRef = useRef(skinId);
   const rendererRef = useRef<GameRenderer | null>(null);
+  // Pending UI timers (flash messages, world-reload defers) so they can be
+  // cancelled on unmount instead of firing setState/onReloadWorld after teardown.
+  const pendingTimeoutsRef = useRef<Set<number>>(new Set());
+  // Set by Load/Reset before they force a remount: those want to re-read (or
+  // discard) the on-disk save, so the unmount must NOT persist the live state
+  // over it. Consumed once by the cleanup; every other unmount saves.
+  const skipUnmountSaveRef = useRef(false);
 
   // Audio is a global preference loaded after mount: render never touches
   // localStorage (SSR), and the setState hops a microtask like the
@@ -147,10 +167,17 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setCtx(null);
       return;
     }
-    // A saved blob carries its own seed + type (engine prefers them); a fresh
-    // world (no blob yet) boots from the world's stored seed and type.
+    // A saved blob carries its own seed + type + mode + difficulty (engine prefers
+    // them); a fresh world (no blob yet) boots from the world's stored values.
     setCtx({
-      engine: new GameEngine({ save: readSave(saveKeyRef.current), seed: worldSeedRef.current, worldType: worldTypeRef.current }),
+      engine: new GameEngine({
+        save: readSave(saveKeyRef.current),
+        seed: worldSeedRef.current,
+        worldType: worldTypeRef.current,
+        gameMode: worldModeRef.current,
+        difficulty: worldDifficultyRef.current,
+        hardcore: worldHardcoreRef.current
+      }),
       node
     });
   }, []);
@@ -167,10 +194,31 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const getServerSnapshot = useCallback(() => PRE_MOUNT_SNAPSHOT, []);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const flashMessage = useCallback((text: string, durationMs = 1200) => {
-    setSaveMessage(text);
-    window.setTimeout(() => setSaveMessage(""), durationMs);
+  // Tracks each timer so unmount can cancel it; the timer also self-removes when
+  // it fires so the set never grows unbounded.
+  const scheduleTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = window.setTimeout(() => {
+      pendingTimeoutsRef.current.delete(id);
+      fn();
+    }, ms);
+    pendingTimeoutsRef.current.add(id);
   }, []);
+
+  useEffect(
+    () => () => {
+      for (const id of pendingTimeoutsRef.current) window.clearTimeout(id);
+      pendingTimeoutsRef.current.clear();
+    },
+    []
+  );
+
+  const flashMessage = useCallback(
+    (text: string, durationMs = 1200) => {
+      setSaveMessage(text);
+      scheduleTimeout(() => setSaveMessage(""), durationMs);
+    },
+    [scheduleTimeout]
+  );
 
   useEffect(() => {
     if (!ctx) return;
@@ -209,7 +257,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     document.addEventListener("mousedown", unlockAudio);
     document.addEventListener("keydown", unlockAudio);
 
-    const autoSave = () => persistGame(gameEngine, saveKeyRef.current, flashMessage);
+    // The save key is fixed for the mount's life (the shell keys this hook by
+    // world id), so capture it once — also keeps it out of the cleanup's ref read.
+    const saveKey = saveKeyRef.current;
+    const autoSave = () => persistGame(gameEngine, saveKey, flashMessage);
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
@@ -240,12 +291,15 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       }
 
       for (const event of gameEngine.consumeEvents()) {
-        if (event.type === "died" || event.type === "bossDefeated") {
-          // Free the cursor so the death/victory button is clickable; the pause
-          // command ignores both states, so the lock-loss won't open the menu too.
+        if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
+          // Free the cursor so the death/victory/game-over button is clickable; the
+          // pause command ignores those states, so the lock-loss won't open the menu too.
           input.clearKeys();
           if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         }
+        // Hardcore permadeath is permanent — persist it now so closing the tab right
+        // after death still reloads the dead world spectating (not a fresh run).
+        if (event.type === "gameOver") persistGame(gameEngine, saveKey, () => {});
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -286,6 +340,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     animationFrame = requestAnimationFrame(clock);
 
     return () => {
+      // Persist on teardown so progress survives an unmount that fires no
+      // `beforeunload` — most importantly dev Fast Refresh, which remounts the
+      // component (losing everything since the last 15s autosave) without a page
+      // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
+      // intentionally re-read or discard the on-disk save.
+      if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
+      else persistGame(gameEngine, saveKey, () => {});
       delete window.__monecraft;
       canvasRef.current = null;
       rendererRef.current = null;
@@ -315,6 +376,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     attachMinimap,
     locked,
     rendererError,
+    gameMode: snapshot.gameMode,
+    difficulty: snapshot.difficulty,
+    hardcore: snapshot.hardcore,
+    gameOver: snapshot.gameOver,
+    giveCreativeItem: (itemId: string) => engine?.dispatch({ type: "creativeGiveItem", itemId }),
+    setGameMode: (mode: GameMode) => engine?.dispatch({ type: "setGameMode", mode }),
+    setDifficulty: (difficulty: Difficulty) => engine?.dispatch({ type: "setDifficulty", difficulty }),
     selectedSlot: snapshot.selectedSlot,
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,
@@ -335,6 +403,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     container: snapshot.container,
     boss: snapshot.boss,
     victory: snapshot.victory,
+    activeEffects: snapshot.activeEffects,
+    xpLevel: snapshot.xpLevel,
+    xpProgress: snapshot.xpProgress,
     debugOpen: snapshot.debugOpen,
     debug: snapshot.debug,
     saveMessage,
@@ -349,6 +420,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     maxOxygen: MAX_OXYGEN,
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
+    enchant: (id: EnchantmentId) => engine?.dispatch({ type: "enchant", enchant: id }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     moveStack: (from: number, to: number) => engine?.dispatch({ type: "moveStack", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),
@@ -368,14 +440,18 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       }
       flashMessage("Loaded");
       // Remount this world (no page reload) so the engine re-reads the saved blob.
-      window.setTimeout(() => opts.onReloadWorld(), 120);
+      // Suppress the unmount save so it can't overwrite the blob we're reloading.
+      skipUnmountSaveRef.current = true;
+      scheduleTimeout(() => opts.onReloadWorld(), 120);
     },
     resetNow: () => {
       try {
         localStorage.removeItem(saveKeyRef.current);
         setSaveMessage("Resetting...");
         // Remount with no blob: the fresh engine regenerates from the stored seed.
-        window.setTimeout(() => opts.onReloadWorld(), 500);
+        // Suppress the unmount save so it can't rewrite the blob we just removed.
+        skipUnmountSaveRef.current = true;
+        scheduleTimeout(() => opts.onReloadWorld(), 500);
       } catch {
         flashMessage("Reset failed");
       }

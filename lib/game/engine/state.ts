@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
-import type { EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
+import type { GameMode } from "@/lib/game/gameModes";
+import type { Difficulty } from "@/lib/game/difficulties";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -118,9 +120,15 @@ export type GameTimers = {
   lavaDamageTimer: number;
   /** Accumulates drowning damage once oxygen is exhausted. */
   drownTimer: number;
+  /** Accumulates starvation damage while hunger sits at 0 (difficulty-gated). */
+  starvationTimer: number;
   sprintDistanceBudget: number;
   walkDistanceBudget: number;
   jumpBudget: number;
+  /** Regeneration-effect heal accumulator — independent of the hunger-gated regenTimer. */
+  effectRegenTimer: number;
+  /** Poison-effect damage accumulator. */
+  effectPoisonTimer: number;
   stuckTimer: number;
   hostileSpawnTimer: number;
   spawnerTimer: number;
@@ -143,15 +151,29 @@ export type GameState = {
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
   selectedSlot: number;
+  /** Current game mode. Persisted (save v8); switchable in-game via setGameMode. */
+  gameMode: GameMode;
+  /** Current difficulty. Persisted (save v9); switchable in-game via setDifficulty. */
+  difficulty: Difficulty;
+  /** Hardcore world: forces Survival + Hard, locks both switchers, permadeath. Persisted (save v10); immutable. */
+  hardcore: boolean;
+  /** True once a hardcore run has ended in death — drives the spectator dead-world + Game Over screen. Persisted (save v10). */
+  gameOver: boolean;
+  /** True while flying (Creative toggle, always on for Spectator). Session-only, never serialized. */
+  isFlying: boolean;
   hearts: number;
   hunger: number;
   /** Remaining breath, 0..MAX_OXYGEN. Session-only; refills out of water. */
   oxygen: number;
+  /** Active status effects → remaining seconds. Persisted (save v6); cleared on death. */
+  effects: Map<EffectId, number>;
+  /** Banked XP points (XP_PER_LEVEL points = 1 level). Persisted (save v7); NOT cleared on death. */
+  xp: number;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
-  /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
-  craftingStation: "furnace" | "villager" | null;
+  /** Crafting station whose recipes (or the enchanting panel) are unlocked while the inventory is open, or null. */
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
   /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
@@ -206,9 +228,12 @@ export function createTimers(): GameTimers {
     lavaBurnTimer: 0,
     lavaDamageTimer: 0,
     drownTimer: 0,
+    starvationTimer: 0,
     sprintDistanceBudget: 0,
     walkDistanceBudget: 0,
     jumpBudget: 0,
+    effectRegenTimer: 0,
+    effectPoisonTimer: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
     spawnerTimer: 0,
@@ -249,6 +274,16 @@ export type GameSnapshot = {
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
   selectedSlot: number;
+  /** Current game mode — drives mode-specific HUD (hidden bars, palette, flying indicator). */
+  gameMode: GameMode;
+  /** Current difficulty — drives the pause-menu picker's active state. */
+  difficulty: Difficulty;
+  /** Hardcore world — disables the pause-menu mode/difficulty switchers and drives hardcore chrome (withered hearts). */
+  hardcore: boolean;
+  /** True after a hardcore death — drives the Game Over screen (spectating the dead world). */
+  gameOver: boolean;
+  /** True while flying — drives the flight indicator. */
+  isFlying: boolean;
   hearts: number;
   hunger: number;
   /** Remaining breath, 0..MAX_OXYGEN — drives the bubble bar (hidden when full). */
@@ -267,24 +302,33 @@ export type GameSnapshot = {
   capsActive: boolean;
   /** True during the sleep fade — drives the fade-to-black overlay. */
   sleeping: boolean;
-  /** Open crafting station (gates smelting recipes in the inventory panel). */
-  craftingStation: "furnace" | "villager" | null;
+  /** Open crafting station (gates smelting recipes, or opens the enchanting panel). */
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
   boss: ({ hpPercent: number } & BossTracking) | null;
   /** True after the boss is defeated — drives the victory screen. */
   victory: boolean;
+  /** Active status effects (id + rounded seconds left) — drives the HUD effects readout. Ref-stable between content changes. */
+  activeEffects: Array<{ id: EffectId; seconds: number }>;
+  /** Current XP level and progress (0–1) toward the next — drives the HUD XP bar. */
+  xpLevel: number;
+  xpProgress: number;
 };
 
 /** One-shot gameplay events for the shell (death screen, audio, ...). */
 export type GameEvent =
   | { type: "died" }
+  | { type: "gameOver" }
   | { type: "respawned" }
   | { type: "blockBroken"; blockId: BlockId; x: number; y: number; z: number }
   | { type: "blockPlaced"; blockId: BlockId; x: number; y: number; z: number }
   | { type: "playerHurt" }
   | { type: "ateFood" }
+  | { type: "drankPotion" }
+  | { type: "effectExpired"; effect: EffectId }
+  | { type: "xpGained"; amount: number }
   | { type: "jumped" }
   | { type: "landed"; impact: number }
   | { type: "mobAttacked"; kind: MobKind }
@@ -310,7 +354,8 @@ export type GameEvent =
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
-  | { type: "openedStation"; station: "furnace" | "villager" }
+  | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" }
+  | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }

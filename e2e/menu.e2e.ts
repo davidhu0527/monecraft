@@ -89,6 +89,24 @@ test("reloading resumes the world being played", async ({ page }) => {
   await page.waitForFunction(() => window.__monecraft?.engine.state.world.seed === 777, undefined, { timeout: 30000 });
 });
 
+test("a Hardcore world boots locked to Survival + Hard", async ({ page }) => {
+  await page.goto("/");
+  await createProfile(page, "Brave");
+
+  await page.getByTestId("new-world").click();
+  await page.getByLabel("World name").fill("OneLife");
+  await page.getByRole("button", { name: "Hardcore mode" }).click();
+  await page.getByRole("button", { name: "Create World" }).click();
+  await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
+
+  // The flag forces the other two axes regardless of their pickers.
+  const state = await page.evaluate(() => {
+    const s = window.__monecraft!.engine.state;
+    return { hardcore: s.hardcore, difficulty: s.difficulty, gameMode: s.gameMode };
+  });
+  expect(state).toEqual({ hardcore: true, difficulty: "hard", gameMode: "survival" });
+});
+
 test("profiles own separate world lists", async ({ page }) => {
   await page.goto("/");
 

@@ -153,4 +153,71 @@ describe("worlds manifest", () => {
     });
     expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].worldType).toBe("default"); // unknown -> default
   });
+
+  test("stores the chosen game mode, defaulting and sanitizing", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "Creative", "1", { storage, uid: () => "wc", gameMode: "creative" }).gameMode).toBe("creative");
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wp" }).gameMode).toBe("survival"); // omitted -> survival
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, gameMode: "bogus", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].gameMode).toBe("survival"); // unknown -> survival
+  });
+
+  test("stores the chosen difficulty, defaulting and sanitizing", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "Hard", "1", { storage, uid: () => "wh", difficulty: "hard" }).difficulty).toBe("hard");
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wp" }).difficulty).toBe("normal"); // omitted -> normal
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, difficulty: "bogus", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].difficulty).toBe("normal"); // unknown -> normal
+  });
+
+  test("stores the hardcore flag, defaulting and sanitizing to false", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    expect(createWorld("A", "HC", "1", { storage, uid: () => "whc", hardcore: true }).hardcore).toBe(true);
+    expect(createWorld("A", "Plain", "1", { storage, uid: () => "wp" }).hardcore).toBe(false); // omitted -> false
+
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [{ id: "wx", profileId: "A", name: "X", seed: 1, hardcore: "yes", worldgenVersion: 7, createdAt: 1, lastPlayedAt: 1 }]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0].hardcore).toBe(false); // non-boolean -> false
+  });
+
+  test("hardcore normalizes the persisted mode/difficulty to Survival + Hard", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "A");
+    // Even if a caller passes contradictory values, hardcore forces them.
+    const world = createWorld("A", "HC", "1", { storage, uid: () => "whc", hardcore: true, gameMode: "creative", difficulty: "peaceful" });
+    expect(world).toMatchObject({ hardcore: true, gameMode: "survival", difficulty: "hard" });
+
+    // A hand-edited manifest with a contradictory hardcore world is sanitized too.
+    const raw = JSON.stringify({
+      version: 1,
+      worlds: [
+        {
+          id: "wx",
+          profileId: "A",
+          name: "X",
+          seed: 1,
+          hardcore: true,
+          gameMode: "creative",
+          difficulty: "easy",
+          worldgenVersion: 7,
+          createdAt: 1,
+          lastPlayedAt: 1
+        }
+      ]
+    });
+    expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0]).toMatchObject({ hardcore: true, gameMode: "survival", difficulty: "hard" });
+  });
 });
