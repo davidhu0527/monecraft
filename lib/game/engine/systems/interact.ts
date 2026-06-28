@@ -24,13 +24,14 @@ const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting";
+export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
   [BlockId.Furnace]: "furnace",
   [BlockId.BrewingStand]: "brewing",
   [BlockId.EnchantingTable]: "enchanting",
+  [BlockId.Anvil]: "anvil",
   [BlockId.Chest]: "chest",
   [BlockId.DoorNorthLower]: "door",
   [BlockId.DoorNorthUpper]: "door",
@@ -73,6 +74,7 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
   if (kind === "furnace") return interactFurnace(state, emit);
   if (kind === "brewing") return interactBrewingStand(state, emit);
   if (kind === "enchanting") return interactEnchantingTable(state, emit);
+  if (kind === "anvil") return interactAnvil(state, emit);
   if (kind === "chest") return interactChest(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "door") return interactDoor(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
@@ -159,6 +161,14 @@ function interactEnchantingTable(state: GameState, emit: EmitGameEvent): boolean
   state.inventoryOpen = true;
   state.craftingStation = "enchanting";
   emit({ type: "openedStation", station: "enchanting" });
+  return true;
+}
+
+/** Opens the inventory in anvil mode so the repair/combine/rename panel unlocks. */
+function interactAnvil(state: GameState, emit: EmitGameEvent): boolean {
+  state.inventoryOpen = true;
+  state.craftingStation = "anvil";
+  emit({ type: "openedStation", station: "anvil" });
   return true;
 }
 

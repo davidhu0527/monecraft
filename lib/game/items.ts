@@ -65,6 +65,7 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Chest]: 3,
   [BlockId.BrewingStand]: 4,
   [BlockId.EnchantingTable]: 6,
+  [BlockId.Anvil]: 6,
   [BlockId.MossyCobblestone]: 5,
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
@@ -95,6 +96,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
   { id: "brewing_stand", label: "Brewing Stand", kind: "block", blockId: BlockId.BrewingStand },
   { id: "enchanting_table", label: "Enchanting Table", kind: "block", blockId: BlockId.EnchantingTable },
+  { id: "anvil", label: "Anvil", kind: "block", blockId: BlockId.Anvil },
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
   { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
@@ -274,6 +276,52 @@ export function createSlot(itemId: string, count: number): InventorySlot {
   return slot;
 }
 
+/** The name to show for a slot — its player-set anvil name if any, else the item label. */
+export function displayName(slot: InventorySlot): string {
+  return slot.customName ?? slot.label;
+}
+
+/**
+ * The material a piece of durable gear is repaired with at the anvil — its
+ * dominant crafting-tier ingredient. Gear absent from this map (none today) can
+ * still be combined with a duplicate; it just has no material-repair option.
+ */
+export const REPAIR_MATERIAL_BY_ITEM: Record<string, string> = {
+  wood_pickaxe: "planks",
+  wood_sword: "planks",
+  wood_spear: "planks",
+  wood_hoe: "planks",
+  stone_pickaxe: "cobble",
+  stone_sword: "cobble",
+  stone_spear: "cobble",
+  knife: "stone",
+  sliver_pickaxe: "sliver_ore",
+  sliver_sword: "sliver_ore",
+  sliver_spear: "sliver_ore",
+  ruby_pickaxe: "ruby_ore",
+  ruby_sword: "ruby_ore",
+  ruby_spear: "ruby_ore",
+  gold_pickaxe: "gold_ore",
+  gold_sword: "gold_ore",
+  gold_spear: "gold_ore",
+  sapphire_pickaxe: "sapphire_ore",
+  sapphire_sword: "sapphire_ore",
+  sapphire_spear: "sapphire_ore",
+  diamond_pickaxe: "diamond_ore",
+  diamond_sword: "diamond_ore",
+  diamond_spear: "diamond_ore",
+  dragon_sword: "diamond_ore",
+  bow: "string",
+  fishing_rod: "string",
+  // Armor is repaired with its dominant ore.
+  helmet: "sapphire_ore",
+  face_mask: "sapphire_ore",
+  neck_protection: "gold_ore",
+  chestplate: "gold_ore",
+  leggings: "gold_ore",
+  boots: "gold_ore"
+};
+
 export function createInitialInventory(): InventorySlot[] {
   const slots: InventorySlot[] = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
   const starter: Array<{ id: string; count: number }> = [
@@ -316,6 +364,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Chest]: "chest",
   [BlockId.BrewingStand]: "brewing_stand",
   [BlockId.EnchantingTable]: "enchanting_table",
+  [BlockId.Anvil]: "anvil",
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",

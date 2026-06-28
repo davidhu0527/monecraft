@@ -12,6 +12,9 @@ import {
   type WorldType
 } from "@/lib/world";
 import {
+  ANVIL_COMBINE_COST_LEVELS,
+  ANVIL_RENAME_COST_LEVELS,
+  ANVIL_REPAIR_COST_LEVELS,
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
@@ -30,7 +33,17 @@ import {
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
 import { bossTracking, type BossTracking } from "@/lib/game/bossTracking";
-import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createEmptySlot, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
+import {
+  canMaterialRepair,
+  combineSlots,
+  findSacrificeIndex,
+  isAnvilGear,
+  materialRepair,
+  repairMaterialFor,
+  sanitizeCustomName,
+  wouldCombineHelp
+} from "@/lib/game/anvil";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import {
@@ -420,6 +433,51 @@ export class GameEngine {
         next[state.selectedSlot] = applyEnchant(slot, command.enchant);
         state.inventory = next;
         this.emit({ type: "enchanted", enchant: command.enchant });
+        break;
+      }
+      case "anvilCombine": {
+        // Combine a duplicate of the selected gear into it: repair + merge enchants.
+        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "anvil") break;
+        const i = state.selectedSlot;
+        const target = state.inventory[i];
+        if (!isAnvilGear(target)) break;
+        const sacrifice = findSacrificeIndex(state.inventory, i);
+        if (sacrifice < 0 || !wouldCombineHelp(target, state.inventory[sacrifice])) break;
+        if (!spendXpLevels(state, ANVIL_COMBINE_COST_LEVELS)) break;
+        const next = [...state.inventory];
+        next[i] = combineSlots(target, state.inventory[sacrifice]);
+        next[sacrifice] = createEmptySlot();
+        state.inventory = next;
+        this.emit({ type: "anvilCombined" });
+        break;
+      }
+      case "anvilRepair": {
+        // Repair the selected gear by consuming one unit of its tier material.
+        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "anvil") break;
+        const i = state.selectedSlot;
+        const target = state.inventory[i];
+        if (!canMaterialRepair(target, state.inventory)) break;
+        const material = repairMaterialFor(target)!;
+        if (!spendXpLevels(state, ANVIL_REPAIR_COST_LEVELS)) break;
+        const consumed = inv.adjustSlotCount(state.inventory, material, -1);
+        if (!consumed) break; // belt-and-braces: canMaterialRepair already verified stock
+        consumed[i] = materialRepair(target);
+        state.inventory = consumed;
+        this.emit({ type: "anvilRepaired" });
+        break;
+      }
+      case "anvilRename": {
+        // Rename the selected durable item (or clear the name with "").
+        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "anvil") break;
+        const slot = state.inventory[state.selectedSlot];
+        if (!isAnvilGear(slot)) break;
+        const name = sanitizeCustomName(command.name);
+        if ((slot.customName ?? "") === name) break; // no-op: nothing to charge for
+        if (!spendXpLevels(state, ANVIL_RENAME_COST_LEVELS)) break;
+        const next = [...state.inventory];
+        next[state.selectedSlot] = { ...slot, customName: name || undefined };
+        state.inventory = next;
+        this.emit({ type: "anvilRenamed" });
         break;
       }
       case "placeBlock": {

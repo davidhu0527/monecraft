@@ -154,6 +154,17 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
             if (n > 0.85) c = tone([0.5, 0.4, 0.85], 1); // faint arcane sparkle
           }
         }
+        if (block === BlockId.Anvil) {
+          // A dark iron block: a lighter worktop on top and a polished face band near the top.
+          if (face === "top") {
+            c = tone([0.45, 0.46, 0.5], 0.9 + n * 0.2);
+          } else if (y <= 3) {
+            c = tone([0.5, 0.51, 0.55], 0.88 + n * 0.25); // the polished face band
+          } else {
+            c = tone([0.22, 0.23, 0.27], 0.85 + n * 0.3); // dark iron body
+            if (n > 0.88) c = tone([0.4, 0.41, 0.45], 1); // faint metal fleck
+          }
+        }
         if (isDoorBlock(block)) {
           const state = doorState(block)!;
           const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;

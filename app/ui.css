@@ -568,6 +568,68 @@
   font-weight: 700;
 }
 
+.anvil-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  gap: 8px;
+  border-left: 2px solid #9a9a9a;
+  padding-left: 12px;
+}
+
+.anvil-actions {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.anvil-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--mc-tile-well), var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+}
+
+.anvil-action:hover:not(:disabled) {
+  background: var(--mc-tile-well), #a3a3a3;
+}
+
+.anvil-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.anvil-status {
+  color: #5a5a5a;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.anvil-rename-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.anvil-rename-field input {
+  font: inherit;
+  padding: 4px 6px;
+  color: inherit;
+  background: var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+}
+
 .recipe-ingredients {
   display: flex;
   align-items: center;

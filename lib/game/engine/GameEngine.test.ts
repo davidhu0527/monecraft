@@ -20,7 +20,7 @@ import {
   LAVA_DAMAGE_HP,
   MAX_OXYGEN
 } from "@/lib/game/config";
-import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
+import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { enchantLevel } from "@/lib/game/enchantments";
@@ -1836,6 +1836,115 @@ describe("furnace and cooking", () => {
     state.xp = 0;
     engine.dispatch({ type: "enchant", enchant: "sharpness" });
     expect(enchantLevel(state.inventory[state.selectedSlot], "sharpness")).toBe(1); // unchanged
+  });
+});
+
+describe("anvil", () => {
+  test("right-clicking an anvil opens the inventory in anvil mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Anvil);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "anvil")).toBe(true);
+    expect(state.craftingStation).toBe("anvil");
+  });
+
+  test("combine merges a duplicate into the held gear, clears the sacrifice, and conserves item count", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const max = createSlot("diamond_sword", 1).maxDurability!;
+    state.inventory[0] = { ...createSlot("diamond_sword", 1), durability: 300, enchantments: [{ id: "sharpness", level: 2 }] };
+    state.inventory[1] = { ...createSlot("diamond_sword", 1), durability: 200, enchantments: [{ id: "unbreaking", level: 1 }] };
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+
+    // Refused away from an anvil.
+    engine.dispatch({ type: "anvilCombine" });
+    expect(countsById(state.inventory).get("diamond_sword")).toBe(2);
+
+    state.craftingStation = "anvil";
+    engine.consumeEvents();
+    engine.dispatch({ type: "anvilCombine" });
+
+    const result = state.inventory[0];
+    expect(result.durability).toBe(Math.min(max, 300 + 200 + Math.floor(max * 0.12)));
+    expect(enchantLevel(result, "sharpness")).toBe(2);
+    expect(enchantLevel(result, "unbreaking")).toBe(1);
+    expect(state.inventory[1].id).toBeNull(); // sacrifice consumed
+    expect(countsById(state.inventory).get("diamond_sword")).toBe(1); // net −1, never duplicated
+    expect(xpLevel(state.xp)).toBe(10 - ANVIL_COMBINE_COST_LEVELS);
+    expect(engine.consumeEvents().some((e) => e.type === "anvilCombined")).toBe(true);
+  });
+
+  test("combine is refused with no duplicate (no XP spent)", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = { ...createSlot("diamond_sword", 1), durability: 100 };
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+    state.craftingStation = "anvil";
+    engine.dispatch({ type: "anvilCombine" });
+    expect(state.inventory[0].durability).toBe(100); // unchanged
+    expect(xpLevel(state.xp)).toBe(10);
+  });
+
+  test("material repair restores durability, consumes one unit, and spends XP", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const max = createSlot("diamond_sword", 1).maxDurability!;
+    state.inventory[0] = { ...createSlot("diamond_sword", 1), durability: 100 };
+    state.inventory[1] = createSlot("diamond_ore", 3);
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+    state.craftingStation = "anvil";
+
+    engine.dispatch({ type: "anvilRepair" });
+    expect(state.inventory[0].durability).toBe(Math.min(max, 100 + Math.ceil(max * 0.25)));
+    expect(countsById(state.inventory).get("diamond_ore")).toBe(2); // one unit consumed
+    expect(xpLevel(state.xp)).toBe(10 - ANVIL_REPAIR_COST_LEVELS);
+    expect(engine.consumeEvents().some((e) => e.type === "anvilRepaired")).toBe(true);
+
+    // Refused with no material in stock.
+    state.inventory[1] = createEmptySlot();
+    const dur = state.inventory[0].durability;
+    const xp = state.xp;
+    engine.dispatch({ type: "anvilRepair" });
+    expect(state.inventory[0].durability).toBe(dur);
+    expect(state.xp).toBe(xp);
+  });
+
+  test("rename sets a custom name, refuses a no-op, and refuses non-durable items", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = createSlot("diamond_sword", 1);
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+    state.craftingStation = "anvil";
+
+    engine.dispatch({ type: "anvilRename", name: "  Excalibur  " });
+    expect(state.inventory[0].customName).toBe("Excalibur"); // trimmed
+    expect(xpLevel(state.xp)).toBe(10 - ANVIL_RENAME_COST_LEVELS);
+
+    // No-op rename (same name) — no XP spent.
+    const xp = state.xp;
+    engine.dispatch({ type: "anvilRename", name: "Excalibur" });
+    expect(state.xp).toBe(xp);
+
+    // Non-durable item — refused.
+    state.inventory[0] = createSlot("dirt", 10);
+    engine.dispatch({ type: "anvilRename", name: "Fancy Dirt" });
+    expect(state.inventory[0].customName).toBeUndefined();
   });
 });
 

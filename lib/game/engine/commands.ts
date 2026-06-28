@@ -24,6 +24,9 @@ export type Command =
   | { type: "eatFood" }
   | { type: "drinkPotion" }
   | { type: "enchant"; enchant: EnchantmentId }
+  | { type: "anvilCombine" }
+  | { type: "anvilRepair" }
+  | { type: "anvilRename"; name: string }
   | { type: "placeBlock" }
   | { type: "attack" }
   | { type: "toggleFlight" }
