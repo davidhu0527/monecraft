@@ -16,7 +16,7 @@ import {
 import type { FrameInput, GameState } from "../state";
 import { featherFallingReduction } from "@/lib/game/enchantments";
 import { speedScaleFromHunger } from "./playerStats";
-import { speedMultiplier } from "./statusEffects";
+import { jumpBoostBonus, speedMultiplier } from "./statusEffects";
 
 export type MoveTickResult = {
   didSprint: boolean;
@@ -106,7 +106,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   } else {
     player.velocity.y -= GRAVITY * dt;
     if (wantsJump && player.onGround && !crouching) {
-      player.velocity.y = JUMP_VELOCITY;
+      player.velocity.y = JUMP_VELOCITY + jumpBoostBonus(state);
       player.onGround = false;
       didJump = true;
     }

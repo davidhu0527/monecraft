@@ -64,6 +64,12 @@ export const EFFECT_REGEN_INTERVAL = 1.5; // heal cadence — its OWN accumulato
 export const EFFECT_REGEN_HP = 1; // HP restored each interval (regardless of hunger)
 export const EFFECT_FIRE_RESIST_DURATION = 180;
 export const EFFECT_WATER_BREATHING_DURATION = 180;
+export const EFFECT_HASTE_DURATION = 180;
+export const EFFECT_HASTE_MULTIPLIER = 1.4; // ×mining speed while active
+export const EFFECT_RESISTANCE_DURATION = 120;
+export const EFFECT_RESISTANCE_MULTIPLIER = 0.8; // ×incoming armor-mitigated combat damage while active
+export const EFFECT_JUMP_BOOST_DURATION = 180;
+export const EFFECT_JUMP_BOOST_VELOCITY = 2.0; // +jump launch velocity while active (base JUMP_VELOCITY 8.2)
 // Poison: ticks armor-bypassing damage but floors at POISON_FLOOR_HP so it can
 // chip you down to half a heart yet never deliver the killing blow.
 export const POISON_DURATION = 8;

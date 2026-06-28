@@ -116,15 +116,24 @@ the 0–15 levels), and the cave-darkness floor + torch tint are shader constant
 `EFFECT_STRENGTH_DURATION`/`EFFECT_STRENGTH_BONUS`,
 `EFFECT_REGEN_DURATION`/`EFFECT_REGEN_INTERVAL`/`EFFECT_REGEN_HP`,
 `EFFECT_FIRE_RESIST_DURATION`, `EFFECT_WATER_BREATHING_DURATION`,
+`EFFECT_HASTE_DURATION`/`EFFECT_HASTE_MULTIPLIER`,
+`EFFECT_RESISTANCE_DURATION`/`EFFECT_RESISTANCE_MULTIPLIER`,
+`EFFECT_JUMP_BOOST_DURATION`/`EFFECT_JUMP_BOOST_VELOCITY`,
 `POISON_DURATION`/`POISON_INTERVAL`/`POISON_HP`/`POISON_FLOOR_HP`,
 `ROTTEN_FLESH_POISON_CHANCE`.
 
 Read by `systems/statusEffects.ts` (and the seams it feeds: `playerMotion.ts`
-for speed, the melee dispatch in `GameEngine.ts` for strength, and the gated
+for speed and jump-boost, the melee dispatch in `GameEngine.ts` for strength,
+`mining.ts` for haste, `playerLife.ts` for resistance, and the gated
 `tickLavaExposure`/`tickOxygen` for fire-resist/water-breathing). The
 `*_DURATION` values are how long a drunk potion lasts (default Minecraft-ish:
 buffs 3:00, Regeneration 0:45). **Strength** adds `EFFECT_STRENGTH_BONUS` (3) flat
 melee damage; **Speed** multiplies movement by `EFFECT_SPEED_MULTIPLIER` (1.2);
+**Haste** multiplies mining speed by `EFFECT_HASTE_MULTIPLIER` (1.4);
+**Resistance** scales incoming armor-mitigated _combat_ damage by
+`EFFECT_RESISTANCE_MULTIPLIER` (0.8) — environmental/poison damage is untouched;
+**Jump Boost** adds `EFFECT_JUMP_BOOST_VELOCITY` (2.0) to the jump launch (chosen
+to stay under the fall-damage threshold on flat ground);
 **Regeneration** heals `EFFECT_REGEN_HP` (1) every `EFFECT_REGEN_INTERVAL` (1.5 s)
 on its **own** accumulator, ignoring the hunger gate. **Poison** ticks `POISON_HP`
 (1) every `POISON_INTERVAL` (1.25 s) but floors at `POISON_FLOOR_HP` (1) so it can

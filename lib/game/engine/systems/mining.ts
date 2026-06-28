@@ -9,6 +9,7 @@ import { efficiencyMultiplier, fortuneLevel } from "@/lib/game/enchantments";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
+import { hasteMultiplier } from "./statusEffects";
 import type { InventorySlot } from "@/lib/game/types";
 
 const scratchEye = new THREE.Vector3();
@@ -121,7 +122,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
 
   if (!creative) {
     const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
-    mining.progress += dt * miningSpeed(tool) * MINING_RATE;
+    mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(state);
     if (mining.progress < hardness) return;
   }
 

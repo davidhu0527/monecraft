@@ -1,7 +1,10 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
 import {
   EFFECT_FIRE_RESIST_DURATION,
+  EFFECT_HASTE_DURATION,
+  EFFECT_JUMP_BOOST_DURATION,
   EFFECT_REGEN_DURATION,
+  EFFECT_RESISTANCE_DURATION,
   EFFECT_SPEED_DURATION,
   EFFECT_STRENGTH_DURATION,
   EFFECT_WATER_BREATHING_DURATION,
@@ -150,6 +153,9 @@ export const ITEM_DEFS: ItemDef[] = [
     kind: "material",
     effect: { id: "water_breathing", durationSeconds: EFFECT_WATER_BREATHING_DURATION }
   },
+  { id: "potion_haste", label: "Potion of Haste", kind: "material", effect: { id: "haste", durationSeconds: EFFECT_HASTE_DURATION } },
+  { id: "potion_resistance", label: "Potion of Resistance", kind: "material", effect: { id: "resistance", durationSeconds: EFFECT_RESISTANCE_DURATION } },
+  { id: "potion_jump_boost", label: "Potion of Leaping", kind: "material", effect: { id: "jump_boost", durationSeconds: EFFECT_JUMP_BOOST_DURATION } },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },

@@ -1,10 +1,13 @@
 import { MAX_HEARTS, MAX_HUNGER, RESPAWN_SECONDS } from "@/lib/game/config";
 import { takesDamage } from "@/lib/game/gameModes";
 import { armorReduction, consumeEquippedArmorDurability } from "@/lib/game/inventory";
+import { resistanceMultiplier } from "./statusEffects";
 import type { GameState } from "../state";
 
 /**
  * Applies armor-mitigated damage (always at least 1) and wears equipped armor.
+ * The Resistance effect further scales the post-armor amount (combat damage only —
+ * environmental/poison damage uses the unmitigated/non-lethal paths below).
  * Returns true when the hit was lethal — the engine emits the death event.
  * Creative/Spectator are invulnerable, so every damage source no-ops here.
  */
@@ -15,7 +18,7 @@ export function applyDamageWithArmor(state: GameState, amount: number, rng?: () 
 
   state.equippedArmor = consumeEquippedArmorDurability(state.equippedArmor, 1, rng) ?? state.equippedArmor;
   const reduction = armorReduction(state.equippedArmor);
-  const mitigated = Math.max(1, Math.floor(value * (1 - reduction)));
+  const mitigated = Math.max(1, Math.floor(value * (1 - reduction) * resistanceMultiplier(state)));
 
   state.hearts = Math.max(0, state.hearts - mitigated);
   if (state.hearts > 0) return false;

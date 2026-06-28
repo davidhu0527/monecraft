@@ -657,6 +657,17 @@ describe("v5 to v6 migration & status effects", () => {
     writeSave(KEY, { ...sampleSave(), effects: [{ id: "regeneration", remaining: 12 }] }, storage);
     expect(readSave(KEY, storage)!.effects).toEqual([{ id: "regeneration", remaining: 12 }]);
   });
+
+  test("the new haste/resistance/jump_boost effect ids survive a round-trip (additive, no save bump)", () => {
+    const storage = memoryStorage();
+    const effects = [
+      { id: "haste", remaining: 90 },
+      { id: "resistance", remaining: 30 },
+      { id: "jump_boost", remaining: 45 }
+    ] as const;
+    writeSave(KEY, { ...sampleSave(), effects: [...effects] }, storage);
+    expect(readSave(KEY, storage)!.effects).toEqual([...effects]);
+  });
 });
 
 describe("stat restoration helpers", () => {

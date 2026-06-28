@@ -9,7 +9,7 @@ export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate
 export type EquippedArmor = Record<ArmorSlot, InventorySlot | null>;
 
 /** A timed status effect on the player. Positive effects come from potions; poison is a hazard. */
-export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "poison";
+export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "haste" | "resistance" | "jump_boost" | "poison";
 
 /** The effect a drinkable potion applies, with how long it lasts. */
 export type ItemEffect = { id: EffectId; durationSeconds: number };

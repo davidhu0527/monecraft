@@ -325,6 +325,9 @@ const VALID_EFFECT_IDS: Record<EffectId, true> = {
   regeneration: true,
   fire_resistance: true,
   water_breathing: true,
+  haste: true,
+  resistance: true,
+  jump_boost: true,
   poison: true
 };
 

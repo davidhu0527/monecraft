@@ -732,6 +732,9 @@ const POTION_STRENGTH_PALETTE: PixelPalette = { ...POTION_GLASS, L: [209, 72, 72
 const POTION_REGEN_PALETTE: PixelPalette = { ...POTION_GLASS, L: [225, 90, 170], h: [245, 170, 215] };
 const POTION_FIRE_RESIST_PALETTE: PixelPalette = { ...POTION_GLASS, L: [230, 140, 40], h: [250, 195, 120] };
 const POTION_WATER_BREATHING_PALETTE: PixelPalette = { ...POTION_GLASS, L: [60, 150, 200], h: [150, 210, 235] };
+const POTION_HASTE_PALETTE: PixelPalette = { ...POTION_GLASS, L: [240, 200, 40], h: [255, 240, 160] };
+const POTION_RESISTANCE_PALETTE: PixelPalette = { ...POTION_GLASS, L: [120, 140, 180], h: [205, 216, 238] };
+const POTION_JUMP_BOOST_PALETTE: PixelPalette = { ...POTION_GLASS, L: [120, 210, 90], h: [180, 240, 150] };
 const EMPTY_BOTTLE_PALETTE: PixelPalette = { ...POTION_GLASS, L: [150, 190, 205], h: [205, 230, 240] };
 
 /**
@@ -776,7 +779,10 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   potion_strength: { grid: BOTTLE_GRID, palette: POTION_STRENGTH_PALETTE },
   potion_regeneration: { grid: BOTTLE_GRID, palette: POTION_REGEN_PALETTE },
   potion_fire_resistance: { grid: BOTTLE_GRID, palette: POTION_FIRE_RESIST_PALETTE },
-  potion_water_breathing: { grid: BOTTLE_GRID, palette: POTION_WATER_BREATHING_PALETTE }
+  potion_water_breathing: { grid: BOTTLE_GRID, palette: POTION_WATER_BREATHING_PALETTE },
+  potion_haste: { grid: BOTTLE_GRID, palette: POTION_HASTE_PALETTE },
+  potion_resistance: { grid: BOTTLE_GRID, palette: POTION_RESISTANCE_PALETTE },
+  potion_jump_boost: { grid: BOTTLE_GRID, palette: POTION_JUMP_BOOST_PALETTE }
 };
 
 // Ore accent colors sprinkled over the stone cube (mirrors the atlas sparkle).

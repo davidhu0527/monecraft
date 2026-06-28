@@ -248,6 +248,36 @@ const CRAFTING_RECIPES: Recipe[] = [
     station: "brewing"
   },
   {
+    id: "potion_haste",
+    label: "Glass Bottle + Gold Ore -> Potion of Haste",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "gold_ore", count: 1 }
+    ],
+    result: { slotId: "potion_haste", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_resistance",
+    label: "Glass Bottle + Leather -> Potion of Resistance",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "leather", count: 1 }
+    ],
+    result: { slotId: "potion_resistance", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_jump_boost",
+    label: "Glass Bottle + Sliver Ore -> Potion of Leaping",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "sliver_ore", count: 1 }
+    ],
+    result: { slotId: "potion_jump_boost", count: 1 },
+    station: "brewing"
+  },
+  {
     id: "tnt",
     label: "4 Gunpowder + 1 Sand -> TNT",
     cost: [
