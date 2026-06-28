@@ -532,7 +532,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 10,
+      version: 11,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,

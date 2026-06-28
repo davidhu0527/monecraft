@@ -57,6 +57,8 @@ export type InventorySlot = {
   effect?: ItemEffect;
   /** Per-instance enchantments (durable gear only) — applied at the enchanting table. */
   enchantments?: Enchantment[];
+  /** Player-set name from the anvil (durable gear only); falls back to `label` for display. */
+  customName?: string;
 };
 
 export type Recipe = {
@@ -83,7 +85,7 @@ export type MobModel = {
 };
 
 /** A persisted inventory/container slot: just enough to rebuild it on load. */
-export type SavedSlot = { id: string | null; count: number; durability?: number; enchantments?: Enchantment[] };
+export type SavedSlot = { id: string | null; count: number; durability?: number; enchantments?: Enchantment[]; customName?: string };
 
 /** A block-entity: a placed chest's contents, keyed by its voxel index. */
 export type SavedContainer = { index: number; slots: SavedSlot[] };
@@ -188,14 +190,24 @@ export type SaveDataV9 = Omit<SaveDataV8, "version"> & {
 };
 
 /**
- * Current save shape (v10): v9 plus the Hardcore flag (`hardcore`, immutable for
- * the world's life) and the permadeath `gameOver` flag (set once a hardcore run
- * has ended). Both are optional, so the v9→v10 migration is a pure version bump
- * and pre-v10 saves load as a normal, non-hardcore world. A persisted `gameOver`
+ * v10 save shape: v9 plus the Hardcore flag (`hardcore`, immutable for the
+ * world's life) and the permadeath `gameOver` flag (set once a hardcore run has
+ * ended). Both are optional, so the v9→v10 migration is a pure version bump and
+ * pre-v10 saves load as a normal, non-hardcore world. A persisted `gameOver`
  * reloads straight into the spectator "dead world" state, never a playable one.
  */
-export type SaveData = Omit<SaveDataV9, "version"> & {
+export type SaveDataV10 = Omit<SaveDataV9, "version"> & {
   version: 10;
   hardcore?: boolean;
   gameOver?: boolean;
+};
+
+/**
+ * Current save shape (v11): v10 plus a per-item `customName` (the anvil rename),
+ * which rides inside each `SavedSlot` (additive). The Mending enchantment rides
+ * the existing per-slot `enchantments`, so it adds no new field. The v10→v11
+ * migration is a pure version bump and pre-v11 saves load with no custom names.
+ */
+export type SaveData = Omit<SaveDataV10, "version"> & {
+  version: 11;
 };

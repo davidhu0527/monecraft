@@ -1,4 +1,4 @@
-import { CHEST_SLOTS, ENCHANT_MAX_LEVEL, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { CHEST_SLOTS, CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type {
   EffectId,
@@ -15,6 +15,7 @@ import type {
   SaveDataV7,
   SaveDataV8,
   SaveDataV9,
+  SaveDataV10,
   SavedContainer,
   SavedEffect,
   SavedSlot,
@@ -130,8 +131,18 @@ export function migrateSaveV8toV9(save: SaveDataV8): SaveDataV9 {
  * optional, so a pre-Hardcore save simply loads as a normal, non-hardcore world
  * (see restoreHardcore/restoreGameOver).
  */
-export function migrateSaveV9toV10(save: SaveDataV9): SaveData {
+export function migrateSaveV9toV10(save: SaveDataV9): SaveDataV10 {
   return { ...save, version: 10 };
+}
+
+/**
+ * Migrates a v10 save to v11. v11 adds an optional per-item `customName` (the
+ * anvil rename) inside each `SavedSlot`; the Mending enchantment rides the
+ * existing per-slot `enchantments`. Both are additive, so this is a pure version
+ * bump and pre-v11 saves load with no custom names.
+ */
+export function migrateSaveV10toV11(save: SaveDataV10): SaveData {
+  return { ...save, version: 11 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -141,6 +152,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV10
       | SaveDataV9
       | SaveDataV8
       | SaveDataV7
@@ -151,7 +163,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV2
       | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveData =
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveDataV10 | SaveData =
       parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -161,7 +173,8 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 7) migrated = migrateSaveV7toV8(migrated);
     if (migrated.version === 8) migrated = migrateSaveV8toV9(migrated);
     if (migrated.version === 9) migrated = migrateSaveV9toV10(migrated);
-    if (migrated.version !== 10) return null;
+    if (migrated.version === 10) migrated = migrateSaveV10toV11(migrated);
+    if (migrated.version !== 11) return null;
     return migrated;
   } catch {
     return null;
@@ -173,7 +186,13 @@ export function writeSave(saveKey: string, data: SaveData, storage: Storage = lo
 }
 
 export function inventorySlotsSnapshot(inventory: InventorySlot[]): SavedSlot[] {
-  return inventory.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability, enchantments: slot.enchantments }));
+  return inventory.map((slot) => ({
+    id: slot.id,
+    count: slot.count,
+    durability: slot.durability,
+    enchantments: slot.enchantments,
+    customName: slot.customName
+  }));
 }
 
 // Every known enchantment id, keyed so a new enchantment can't be forgotten here.
@@ -217,6 +236,11 @@ function restoreSlot(saved: SavedSlot | undefined): InventorySlot {
     // Enchantments live only on durable gear; validated against the known set.
     const enchantments = restoreEnchantments(saved.enchantments);
     if (enchantments) slot.enchantments = enchantments;
+    // A custom name (anvil rename) also lives only on durable gear; trim and cap it.
+    if (typeof saved.customName === "string") {
+      const name = saved.customName.trim().slice(0, CUSTOM_NAME_MAX_LEN);
+      if (name) slot.customName = name;
+    }
   }
   return slot;
 }

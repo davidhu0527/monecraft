@@ -245,6 +245,7 @@ export const EFFICIENCY_SPEED_PER_LEVEL = 0.3; // mining speed ×(1 + level × t
 export const UNBREAKING_SKIP_PER_LEVEL = 0.2; // chance per level to skip durability wear
 export const MENDING_MAX_LEVEL = 1; // Mending is binary, not tiered
 export const MENDING_REPAIR_PER_XP = 2; // durability points repaired per diverted XP point
+export const CUSTOM_NAME_MAX_LEN = 32; // cap on a per-item custom name (anvil rename), enforced on set and on restore
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;
