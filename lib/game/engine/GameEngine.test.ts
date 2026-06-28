@@ -262,11 +262,9 @@ describe("movement and stats", () => {
     const y = Math.floor(state.player.position.y + PLAYER_HEIGHT * 0.5);
     const z = Math.floor(state.player.position.z);
     state.blockChanges.set(x, y, z, BlockId.Water);
-    const armorSlot = state.inventory.findIndex((slot) => !slot.id);
-    state.inventory = [...state.inventory];
-    state.inventory[armorSlot] = createSlot("chestplate", 1);
-    state.equippedArmor.chestplate = "chestplate";
-    const durability = state.inventory[armorSlot].durability;
+    const chestplate = createSlot("chestplate", 1);
+    state.equippedArmor = { ...state.equippedArmor, chestplate };
+    const durability = chestplate.durability;
     state.timers.waterExposureTimer = WATER_DAMAGE_DELAY_SECONDS - 0.5;
     engine.consumeEvents();
 
@@ -274,7 +272,7 @@ describe("movement and stats", () => {
     expect(state.hearts).toBe(MAX_HEARTS);
     run(engine, 1.2);
     expect(state.hearts).toBe(MAX_HEARTS - WATER_DAMAGE_HP);
-    expect(state.inventory[armorSlot].durability).toBe(durability);
+    expect(state.equippedArmor.chestplate?.durability).toBe(durability); // env damage bypasses armor wear
     expect(engine.consumeEvents().some((event) => event.type === "playerHurt")).toBe(true);
   });
 
@@ -1406,14 +1404,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 11 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is version 12 and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(11);
+    expect(save.version).toBe(12);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -2508,5 +2506,55 @@ describe("drinking potions", () => {
     const later = engine.getSnapshot().activeEffects;
     expect(later).not.toBe(first);
     expect(later[0].seconds).toBeLessThan(30);
+  });
+});
+
+describe("armor equipping (dedicated slots)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+
+  test("equipping moves the piece out of the hotbar, freeing the slot", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = createSlot("helmet", 1);
+    engine.dispatch({ type: "toggleEquipArmor", index: 0 });
+    expect(state.inventory[0].id).toBeNull(); // hotbar slot freed
+    expect(state.equippedArmor.helmet?.id).toBe("helmet"); // now worn
+    expect(countsById(state.inventory).get("helmet") ?? 0).toBe(0); // no longer in the grid
+  });
+
+  test("unequip returns the piece to a free slot; refused when the inventory is full", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory = Array.from({ length: state.inventory.length }, () => createEmptySlot());
+    state.equippedArmor = { ...state.equippedArmor, helmet: createSlot("helmet", 1) };
+    engine.dispatch({ type: "unequipArmor", slot: "helmet" });
+    expect(state.equippedArmor.helmet).toBeNull();
+    expect(countsById(state.inventory).get("helmet")).toBe(1);
+
+    // Worn again with a full inventory → unequip is refused, nothing lost.
+    state.equippedArmor = { ...state.equippedArmor, helmet: createSlot("helmet", 1) };
+    state.inventory = Array.from({ length: state.inventory.length }, () => createSlot("dirt", 1));
+    engine.dispatch({ type: "unequipArmor", slot: "helmet" });
+    expect(state.equippedArmor.helmet?.id).toBe("helmet");
+  });
+
+  test("worn armor (with durability) survives serialize -> reload", () => {
+    const engine = makeEngine();
+    engine.state.equippedArmor = { ...engine.state.equippedArmor, chestplate: { ...createSlot("chestplate", 1), durability: 123 } };
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.equippedArmor.chestplate?.durability).toBe(123);
+  });
+
+  test("worn armor survives death and respawn", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.mobs = [];
+    state.equippedArmor = { ...state.equippedArmor, boots: createSlot("boots", 1) };
+    state.hearts = 1;
+    die(engine);
+    expect(state.isDead).toBe(true);
+    run(engine, 5); // RESPAWN_SECONDS is 3
+    expect(state.isDead).toBe(false);
+    expect(state.equippedArmor.boots?.id).toBe("boots");
   });
 });

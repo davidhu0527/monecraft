@@ -1,5 +1,16 @@
 import * as THREE from "three";
 import { DEFAULT_PLAYER_PALETTE, type PlayerPalette } from "@/lib/game/playerSkins";
+import type { ArmorSlot } from "@/lib/game/types";
+
+/** Per-slot armor shell tint, toward the dominant ore each piece is crafted from. */
+const ARMOR_TINT: Record<ArmorSlot, number> = {
+  helmet: 0x4a90d9, // sapphire
+  face_mask: 0xb8413a, // ruby
+  neck_protection: 0xd9b44a, // gold
+  chestplate: 0xd9b44a, // gold
+  leggings: 0xcaa238, // gold (darker)
+  boots: 0x6f93b0 // steel-blue
+};
 
 /**
  * The player's own body, visible only in third person. Box-mesh humanoid in
@@ -19,6 +30,8 @@ export type PlayerModel = {
   rightLeg: THREE.Group;
   /** Hand anchor inside the right arm — the held item model goes here. */
   itemHolder: THREE.Group;
+  /** Armor overlay shells per slot, hidden until the piece is worn (toggled in playerVisuals). */
+  armor: Record<ArmorSlot, THREE.Mesh[]>;
   /** One material per palette slot, for live recolors; also listed in `materials`. */
   paletteMaterials: Record<keyof PlayerPalette, THREE.MeshStandardMaterial>;
   materials: THREE.Material[];
@@ -124,5 +137,42 @@ export function createPlayerModel(palette: PlayerPalette = DEFAULT_PLAYER_PALETT
   }
   group.add(head);
 
-  return { group, head, leftArm, rightArm, leftLeg, rightLeg, itemHolder, paletteMaterials, materials, geometries };
+  // Armor: slightly oversized box shells over the body parts, parented to the same
+  // pivots so they swing with the limbs. One metallic material per slot (ore-tinted);
+  // all start hidden — playerVisuals shows the slots that are worn.
+  const armorMaterial = (color: number) => {
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.6 });
+    materials.push(mat);
+    return mat;
+  };
+  const shell = (w: number, h: number, d: number, mat: THREE.Material, parent: THREE.Object3D, pos: { x?: number; y?: number; z?: number }) => {
+    const mesh = box(w, h, d, mat);
+    mesh.position.set(pos.x ?? 0, pos.y ?? 0, pos.z ?? 0);
+    mesh.visible = false;
+    parent.add(mesh);
+    return mesh;
+  };
+  const helmetMat = armorMaterial(ARMOR_TINT.helmet);
+  const faceMat = armorMaterial(ARMOR_TINT.face_mask);
+  const neckMat = armorMaterial(ARMOR_TINT.neck_protection);
+  const chestMat = armorMaterial(ARMOR_TINT.chestplate);
+  const legMat = armorMaterial(ARMOR_TINT.leggings);
+  const bootMat = armorMaterial(ARMOR_TINT.boots);
+  const armor: PlayerModel["armor"] = {
+    helmet: [shell(0.46, 0.24, 0.46, helmetMat, head, { y: 0.4 })], // crown cap, leaves the face open
+    face_mask: [shell(0.42, 0.22, 0.05, faceMat, head, { y: 0.22, z: -0.21 })], // visor over the face
+    neck_protection: [shell(0.36, 0.12, 0.3, neckMat, group, { y: 1.3 })], // collar between torso and head
+    chestplate: [
+      shell(0.52, 0.62, 0.3, chestMat, group, { y: 1.02 }),
+      shell(0.22, 0.18, 0.22, chestMat, leftArm, { y: -0.05 }),
+      shell(0.22, 0.18, 0.22, chestMat, rightArm, { y: -0.05 })
+    ],
+    leggings: [shell(0.24, 0.42, 0.24, legMat, leftLeg, { y: -0.26 }), shell(0.24, 0.42, 0.24, legMat, rightLeg, { y: -0.26 })],
+    boots: [shell(0.26, 0.2, 0.28, bootMat, leftLeg, { y: -0.64 }), shell(0.26, 0.2, 0.28, bootMat, rightLeg, { y: -0.64 })]
+  };
+  for (const slot of Object.keys(armor) as ArmorSlot[]) {
+    for (const mesh of armor[slot]) mesh.name = `armor-${slot}`;
+  }
+
+  return { group, head, leftArm, rightArm, leftLeg, rightLeg, itemHolder, armor, paletteMaterials, materials, geometries };
 }

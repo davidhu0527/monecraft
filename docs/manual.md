@@ -208,10 +208,14 @@ for two seconds before disappearing. The spear remains in your inventory until
 its durability runs out. Armor, tools, knives, swords, and spears never stack;
 every durable item occupies its own slot.
 
-**Armor** reduces incoming damage. Equip a helmet, face mask, neck protection,
-chestplate, leggings, and boots from the inventory's armor slots. Each piece adds
-defense and absorbs durability when you're struck — but a hit always deals at
-least **1 damage**, even in a full set.
+**Armor** reduces incoming damage. Click a helmet, face mask, neck protection,
+chestplate, leggings, or boots in your inventory to **equip** it — the piece
+**moves into its dedicated armor slot** (on the left of the inventory), freeing the
+inventory/hotbar slot it came from. Click the armor slot to take it back off (it
+returns to a free inventory slot). Each piece adds defense and absorbs durability
+when you're struck — but a hit always deals at least **1 damage**, even in a full set.
+Worn pieces also **show on your character** in third-person (press **V**), each tinted
+toward the ore it's made from.
 
 **Ranged combat.** Craft a **bow** (3 wood + 3 string) and **arrows** (1 stone +
 1 wood + 1 feather makes 4). With the bow selected, **left-click fires an arrow**

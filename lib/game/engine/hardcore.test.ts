@@ -120,7 +120,7 @@ describe("hardcore persistence", () => {
     e.state.hearts = 1;
     hooks(e).applyDamage(100);
     const save = e.serialize();
-    expect(save.version).toBe(11);
+    expect(save.version).toBe(12);
     expect(save.hardcore).toBe(true);
     expect(save.gameOver).toBe(true);
 

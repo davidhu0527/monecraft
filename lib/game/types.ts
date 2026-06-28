@@ -5,7 +5,8 @@ import type { Difficulty } from "./difficulties";
 
 export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
-export type EquippedArmor = Record<ArmorSlot, string | null>;
+/** The worn armor pieces, one per slot — the actual item instance (or null). Equipping moves the piece here, out of the inventory. */
+export type EquippedArmor = Record<ArmorSlot, InventorySlot | null>;
 
 /** A timed status effect on the player. Positive effects come from potions; poison is a hazard. */
 export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "poison";
@@ -87,6 +88,11 @@ export type MobModel = {
 /** A persisted inventory/container slot: just enough to rebuild it on load. */
 export type SavedSlot = { id: string | null; count: number; durability?: number; enchantments?: Enchantment[]; customName?: string };
 
+/** Legacy persisted armor (v1–v11): a by-id reference into the inventory. */
+export type SavedArmorById = Partial<Record<ArmorSlot, string | null>>;
+/** Persisted armor (v12+): the worn piece itself, stored per slot via the shared SavedSlot shape. */
+export type SavedEquippedArmor = Partial<Record<ArmorSlot, SavedSlot>>;
+
 /** A block-entity: a placed chest's contents, keyed by its voxel index. */
 export type SavedContainer = { index: number; slots: SavedSlot[] };
 
@@ -97,7 +103,7 @@ export type SaveDataV1 = {
   changes: Array<[number, number]>;
   inventoryCounts?: Record<string, number>;
   inventorySlots?: SavedSlot[];
-  equippedArmor?: Partial<EquippedArmor>;
+  equippedArmor?: SavedArmorById;
   selectedSlot: number;
   player: { x: number; y: number; z: number };
 };
@@ -203,11 +209,23 @@ export type SaveDataV10 = Omit<SaveDataV9, "version"> & {
 };
 
 /**
- * Current save shape (v11): v10 plus a per-item `customName` (the anvil rename),
- * which rides inside each `SavedSlot` (additive). The Mending enchantment rides
- * the existing per-slot `enchantments`, so it adds no new field. The v10→v11
- * migration is a pure version bump and pre-v11 saves load with no custom names.
+ * v11 save shape: v10 plus a per-item `customName` (the anvil rename), which rides
+ * inside each `SavedSlot` (additive). The Mending enchantment rides the existing
+ * per-slot `enchantments`, so it adds no new field. The v10→v11 migration is a
+ * pure version bump and pre-v11 saves load with no custom names.
  */
-export type SaveData = Omit<SaveDataV10, "version"> & {
+export type SaveDataV11 = Omit<SaveDataV10, "version"> & {
   version: 11;
+};
+
+/**
+ * Current save shape (v12): armor moves to dedicated storage. `equippedArmor` is no
+ * longer a by-id reference into the inventory (`SavedArmorById`) but the worn pieces
+ * themselves (`SavedEquippedArmor`, per-slot `SavedSlot`). The v11→v12 migration
+ * moves each legacy by-id equip out of `inventorySlots` into the armor record so a
+ * worn piece no longer double-occupies an inventory slot.
+ */
+export type SaveData = Omit<SaveDataV11, "version" | "equippedArmor"> & {
+  version: 12;
+  equippedArmor?: SavedEquippedArmor;
 };

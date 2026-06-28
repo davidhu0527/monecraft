@@ -87,6 +87,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     swapInventorySlots,
     moveStack,
     toggleEquipArmor,
+    unequipArmor,
     resumeNow,
     respawnNow,
     dismissVictory,
@@ -176,6 +177,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
           onSwapSlots={swapInventorySlots}
           onMoveStack={moveStack}
           onToggleEquipArmor={toggleEquipArmor}
+          onUnequipArmor={unequipArmor}
           onCraft={craft}
           onEnchant={enchant}
           onAnvilCombine={anvilCombine}

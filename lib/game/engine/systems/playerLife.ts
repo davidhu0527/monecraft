@@ -13,8 +13,8 @@ export function applyDamageWithArmor(state: GameState, amount: number, rng?: () 
   const value = Math.max(0, Math.floor(amount));
   if (value <= 0) return false;
 
-  state.inventory = consumeEquippedArmorDurability(state.inventory, state.equippedArmor, 1, rng) ?? state.inventory;
-  const reduction = armorReduction(state.inventory, state.equippedArmor);
+  state.equippedArmor = consumeEquippedArmorDurability(state.equippedArmor, 1, rng) ?? state.equippedArmor;
+  const reduction = armorReduction(state.equippedArmor);
   const mitigated = Math.max(1, Math.floor(value * (1 - reduction)));
 
   state.hearts = Math.max(0, state.hearts - mitigated);

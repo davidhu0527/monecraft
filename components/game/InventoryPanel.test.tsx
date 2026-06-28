@@ -36,6 +36,7 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     onSwapSlots: mock(),
     onMoveStack: mock(),
     onToggleEquipArmor: mock(),
+    onUnequipArmor: mock(),
     onCraft: mock(),
     onEnchant: mock(),
     onAnvilCombine: mock(),
@@ -130,15 +131,27 @@ describe("InventoryPanel", () => {
     expect(props.onSwapSlots).not.toHaveBeenCalled();
   });
 
-  test("equipped armor is shown in its armor slot with durability and unequips on click", async () => {
+  test("worn armor is shown in its armor slot with durability and unequips on click", async () => {
     const user = userEvent.setup();
-    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: "helmet" } });
+    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } });
     const helmetSlot = screen.getByRole("button", { name: "Helmet: Helmet" });
     expect(helmetSlot.className).toContain("filled");
     await user.hover(helmetSlot);
     expect(screen.getByText("Durability 260 / 260")).toBeTruthy(); // surfaced in the hover tooltip
     await user.click(helmetSlot);
-    expect(props.onToggleEquipArmor).toHaveBeenCalledWith(2); // the helmet's inventory index
+    expect(props.onUnequipArmor).toHaveBeenCalledWith("helmet");
+  });
+
+  test("unequipping clears a pending grid selection (no stale source left active)", async () => {
+    const user = userEvent.setup();
+    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } });
+    const slots = slotButtons();
+    await user.click(slots[0]); // select a source slot → pending
+    expect(slots[0].className).toContain("pending");
+    await user.click(screen.getByRole("button", { name: "Helmet: Helmet" })); // unequip
+    expect(props.onUnequipArmor).toHaveBeenCalledWith("helmet");
+    expect(slots[0].className).not.toContain("pending"); // pending was cleared
+    expect(props.onSwapSlots).not.toHaveBeenCalled();
   });
 
   test("empty armor slots show a ghost icon and ignore clicks", async () => {
