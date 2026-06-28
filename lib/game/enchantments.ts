@@ -1,6 +1,8 @@
 import {
   EFFICIENCY_SPEED_PER_LEVEL,
   ENCHANT_MAX_LEVEL,
+  FEATHER_FALLING_MAX_REDUCTION,
+  FEATHER_FALLING_REDUCE_PER_LEVEL,
   KNOCKBACK_PER_LEVEL,
   MENDING_MAX_LEVEL,
   MENDING_REPAIR_PER_XP,
@@ -44,7 +46,9 @@ export const ENCHANTMENT_DEFS: Record<EnchantmentId, EnchantmentDef> = {
   power: { id: "power", label: "Power", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL },
   punch: { id: "punch", label: "Punch", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL },
   knockback: { id: "knockback", label: "Knockback", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL },
-  looting: { id: "looting", label: "Looting", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL }
+  looting: { id: "looting", label: "Looting", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL },
+  fortune: { id: "fortune", label: "Fortune", kinds: ["tool"], maxLevel: ENCHANT_MAX_LEVEL },
+  feather_falling: { id: "feather_falling", label: "Feather Falling", kinds: ["armor"], itemIds: ["boots"], maxLevel: ENCHANT_MAX_LEVEL }
 };
 
 /** Stable display order for the enchanting panel. */
@@ -55,7 +59,9 @@ export const ENCHANTMENT_ORDER: readonly EnchantmentId[] = [
   "power",
   "punch",
   "protection",
+  "feather_falling",
   "efficiency",
+  "fortune",
   "unbreaking",
   "mending"
 ];
@@ -109,6 +115,16 @@ export function knockbackBonus(slot: InventorySlot | null | undefined): number {
 /** Looting level on the held weapon (0 if absent) — feeds the bonus-count roll in rollMobDrops. */
 export function lootingLevel(slot: InventorySlot | null | undefined): number {
   return enchantLevel(slot, "looting");
+}
+
+/** Fortune level on the held tool (0 if absent) — feeds the bonus ore-drop roll in rollBlockDrops. */
+export function fortuneLevel(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "fortune");
+}
+
+/** Fall-damage reduction fraction (0..FEATHER_FALLING_MAX_REDUCTION) from Feather Falling on worn boots. */
+export function featherFallingReduction(boots: InventorySlot | null | undefined): number {
+  return Math.min(FEATHER_FALLING_MAX_REDUCTION, enchantLevel(boots, "feather_falling") * FEATHER_FALLING_REDUCE_PER_LEVEL);
 }
 
 /** Extra defense points from Protection on a worn armor piece. */

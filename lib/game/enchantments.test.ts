@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   EFFICIENCY_SPEED_PER_LEVEL,
   ENCHANT_MAX_LEVEL,
+  FEATHER_FALLING_MAX_REDUCTION,
+  FEATHER_FALLING_REDUCE_PER_LEVEL,
   KNOCKBACK_PER_LEVEL,
   MENDING_REPAIR_PER_XP,
   POWER_DAMAGE_PER_LEVEL,
@@ -16,6 +18,8 @@ import {
   canEnchant,
   efficiencyMultiplier,
   enchantLevel,
+  featherFallingReduction,
+  fortuneLevel,
   knockbackBonus,
   lootingLevel,
   mendXp,
@@ -64,6 +68,13 @@ describe("canEnchant / applyEnchant", () => {
     expect(canEnchant(createSlot("helmet", 1), "looting")).toBe(false);
   });
 
+  test("Fortune is tool-only; Feather Falling is boots-only (itemIds), not other armor", () => {
+    expect(canEnchant(createSlot("diamond_pickaxe", 1), "fortune")).toBe(true);
+    expect(canEnchant(createSlot("diamond_sword", 1), "fortune")).toBe(false); // weapon, not tool
+    expect(canEnchant(createSlot("boots", 1), "feather_falling")).toBe(true);
+    expect(canEnchant(createSlot("helmet", 1), "feather_falling")).toBe(false); // armor, but not boots
+  });
+
   test("applyEnchant adds then levels up, immutably, and stops at the cap", () => {
     const sword = createSlot("diamond_sword", 1);
     const once = applyEnchant(sword, "sharpness");
@@ -100,6 +111,18 @@ describe("seam readers", () => {
     expect(lootingLevel(sword)).toBe(0);
     expect(knockbackBonus(withEnchant("knockback", 2, sword))).toBe(2 * KNOCKBACK_PER_LEVEL);
     expect(lootingLevel(withEnchant("looting", 3, sword))).toBe(3);
+  });
+
+  test("Fortune reports its level and Feather Falling returns a capped reduction fraction", () => {
+    const pick = createSlot("diamond_pickaxe", 1);
+    expect(fortuneLevel(pick)).toBe(0);
+    expect(fortuneLevel(withEnchant("fortune", 2, pick))).toBe(2);
+
+    const boots = createSlot("boots", 1);
+    expect(featherFallingReduction(boots)).toBe(0);
+    expect(featherFallingReduction(withEnchant("feather_falling", 2, boots))).toBeCloseTo(2 * FEATHER_FALLING_REDUCE_PER_LEVEL, 5);
+    // A tampered over-cap level clamps to the max reduction.
+    expect(featherFallingReduction(withEnchant("feather_falling", 99, boots))).toBe(FEATHER_FALLING_MAX_REDUCTION);
   });
 
   test("Efficiency multiplies mining speed", () => {

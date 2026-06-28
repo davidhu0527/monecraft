@@ -353,7 +353,9 @@ times**:
 - **Power** (bows) — arrows hit harder
 - **Punch** (bows) — arrows knock the target back further
 - **Protection** (armor) — take less damage
+- **Feather Falling** (boots) — take less fall damage
 - **Efficiency** (tools) — mine faster
+- **Fortune** (tools) — ore drops more of itself when you mine it
 - **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
 - **Mending** (any gear) — XP you pick up repairs the held or worn item instead of
   banking, as long as it's damaged

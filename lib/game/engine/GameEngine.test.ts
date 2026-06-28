@@ -30,7 +30,7 @@ import {
 } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
-import { enchantLevel } from "@/lib/game/enchantments";
+import { applyEnchant, enchantLevel } from "@/lib/game/enchantments";
 import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
@@ -231,6 +231,30 @@ describe("movement and stats", () => {
     state.player.onGround = false;
     run(engine, 1);
     expect(engine.state.hearts).toBeLessThan(MAX_HEARTS);
+  });
+
+  test("Feather Falling boots soften fall damage", () => {
+    // Same fall, same armor defense — only the enchantment differs — so any gap
+    // is Feather Falling's doing, not the boots' base armor.
+    const fallDamage = (boots: ReturnType<typeof createSlot>): number => {
+      const engine = makeEngine();
+      calmDaytime(engine);
+      run(engine, 1); // settle on the ground
+      const { state } = engine;
+      state.equippedArmor = { ...state.equippedArmor, boots };
+      state.hearts = MAX_HEARTS;
+      state.player.position.y += 16; // a hard fall, deep in the damage window
+      state.player.velocity.set(0, 0, 0);
+      state.player.onGround = false;
+      run(engine, 1.5); // long enough to land (no regen interval elapses)
+      return MAX_HEARTS - state.hearts;
+    };
+    const plain = fallDamage(createSlot("boots", 1));
+    let ffBoots = createSlot("boots", 1);
+    for (let i = 0; i < 3; i += 1) ffBoots = applyEnchant(ffBoots, "feather_falling"); // level 3
+    const softened = fallDamage(ffBoots);
+    expect(plain).toBeGreaterThan(0);
+    expect(softened).toBeLessThan(plain);
   });
 
   test("hearts regenerate one per interval while hurt", () => {

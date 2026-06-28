@@ -249,7 +249,9 @@ const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
   power: true,
   punch: true,
   knockback: true,
-  looting: true
+  looting: true,
+  fortune: true,
+  feather_falling: true
 };
 
 /** Validates persisted enchantments: known ids and integer levels clamped to 1..(that enchant's max); undefined when none survive. */

@@ -6,6 +6,7 @@ import {
   EFFECT_STRENGTH_DURATION,
   EFFECT_WATER_BREATHING_DURATION,
   FISHING_ROD_DURABILITY,
+  FORTUNE_BONUS_PER_LEVEL,
   GRASS_SEED_DROP_CHANCE,
   INVENTORY_SLOTS,
   LEAVES_SAPLING_DROP_CHANCE,
@@ -380,17 +381,27 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.WheatStage2]: "seeds"
 };
 
+/** Ores whose mined yield the Fortune enchantment multiplies (their `BLOCK_TO_SLOT` item is the drop). */
+const FORTUNE_ORE_BLOCKS = new Set<BlockId>([BlockId.CoalOre, BlockId.SliverOre, BlockId.RubyOre, BlockId.GoldOre, BlockId.SapphireOre, BlockId.DiamondOre]);
+
 /**
  * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
  * grass occasionally also drops a seed (the natural seed source), mature wheat
  * drops wheat plus 1–2 seeds, and leaves occasionally drop a sapling (their only
- * yield — the renewable tree source). `rng` is injectable for deterministic tests.
+ * yield — the renewable tree source). `fortuneLevel` (from the Fortune tool used)
+ * rolls a bonus on **ore** drops only. `rng` is injectable for deterministic tests.
  */
-export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
+export function rollBlockDrops(block: BlockId, rng: () => number, fortuneLevel = 0): Array<{ itemId: string; count: number }> {
   if (isDoorBlock(block)) return [{ itemId: "door", count: 1 }];
   const drops: Array<{ itemId: string; count: number }> = [];
   const base = BLOCK_TO_SLOT[block];
-  if (base) drops.push({ itemId: base, count: 1 });
+  if (base) {
+    let count = 1;
+    if (fortuneLevel > 0 && FORTUNE_ORE_BLOCKS.has(block)) {
+      count += Math.floor(rng() * (fortuneLevel * FORTUNE_BONUS_PER_LEVEL + 1));
+    }
+    drops.push({ itemId: base, count });
+  }
 
   if (block === BlockId.Leaves && rng() < LEAVES_SAPLING_DROP_CHANCE) {
     drops.push({ itemId: "sapling", count: 1 });

@@ -208,17 +208,19 @@ Each costs **3 XP levels** per application, up to that enchantment's max level
 (**3** for most, **1** for Mending), applied at the enchanting table to the
 selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
-| Enchantment | Applies to          | Per level                                                     |
-| ----------- | ------------------- | ------------------------------------------------------------- |
-| Sharpness   | weapons             | +2 melee damage                                               |
-| Knockback   | weapons             | +0.4 melee knockback impulse                                  |
-| Looting     | weapons             | up to +1 of each mob drop, rolled per kill                    |
-| Power       | bows                | +2 arrow damage                                               |
-| Punch       | bows                | +0.25 arrow knockback                                         |
-| Protection  | armor               | +2 defense (more damage reduction)                            |
-| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed                               |
-| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear                             |
-| Mending     | tools/weapons/armor | gained XP repairs the gear (2 durability per XP); max level 1 |
+| Enchantment     | Applies to          | Per level                                                     |
+| --------------- | ------------------- | ------------------------------------------------------------- |
+| Sharpness       | weapons             | +2 melee damage                                               |
+| Knockback       | weapons             | +0.4 melee knockback impulse                                  |
+| Looting         | weapons             | up to +1 of each mob drop, rolled per kill                    |
+| Power           | bows                | +2 arrow damage                                               |
+| Punch           | bows                | +0.25 arrow knockback                                         |
+| Protection      | armor               | +2 defense (more damage reduction)                            |
+| Feather Falling | boots               | −15% fall damage per level (caps at −80%)                     |
+| Efficiency      | tools               | ×(1 + 0.3 × level) mining speed                               |
+| Fortune         | tools               | up to +1 ore per level when mining ore                        |
+| Unbreaking      | tools/weapons/armor | 20% chance per level to skip wear                             |
+| Mending         | tools/weapons/armor | gained XP repairs the gear (2 durability per XP); max level 1 |
 
 ## Blocks
 
