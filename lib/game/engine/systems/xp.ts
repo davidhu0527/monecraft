@@ -42,8 +42,9 @@ export function xpProgress(xp: number): number {
  */
 export function awardXp(state: GameState, amount: number, emit: EmitGameEvent): void {
   if (amount <= 0) return;
-  const { slots, xpLeft } = mendXp(state.inventory, state.selectedSlot, state.equippedArmor, amount);
+  const { slots, equipped, xpLeft } = mendXp(state.inventory, state.selectedSlot, state.equippedArmor, amount);
   if (slots !== state.inventory) state.inventory = slots;
+  if (equipped !== state.equippedArmor) state.equippedArmor = equipped;
   state.xp += xpLeft;
   emit({ type: "xpGained", amount });
 }

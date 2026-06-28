@@ -15,7 +15,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
-import type { EnchantmentId, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
@@ -428,6 +428,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     moveStack: (from: number, to: number) => engine?.dispatch({ type: "moveStack", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),
+    unequipArmor: (slot: ArmorSlot) => engine?.dispatch({ type: "unequipArmor", slot }),
     resumeNow: () => {
       engine?.dispatch({ type: "resume" });
       requestPointerLock();

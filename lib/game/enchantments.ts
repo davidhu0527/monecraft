@@ -82,40 +82,54 @@ export function unbreakingSkips(slot: InventorySlot | null | undefined, rng: () 
   return level > 0 && rng() < level * UNBREAKING_SKIP_PER_LEVEL;
 }
 
+/** Repairs one Mending slot with up to `xp` points; returns the repaired slot + XP used, or null when there's nothing to do. */
+function repairWithXp(slot: InventorySlot | null | undefined, xp: number): { slot: InventorySlot; xpUsed: number } | null {
+  if (!slot?.maxDurability || enchantLevel(slot, "mending") <= 0) return null;
+  const missing = slot.maxDurability - (slot.durability ?? slot.maxDurability);
+  if (missing <= 0) return null;
+  const xpNeeded = Math.ceil(missing / MENDING_REPAIR_PER_XP);
+  const xpUsed = Math.min(xp, xpNeeded);
+  const repaired = Math.min(missing, xpUsed * MENDING_REPAIR_PER_XP);
+  return { slot: { ...slot, durability: (slot.durability ?? slot.maxDurability) + repaired }, xpUsed };
+}
+
 /**
  * Mending seam: diverts gained XP to repair the player's damaged, Mending-enchanted
- * gear — the held item first, then equipped armor in ARMOR_SLOTS order — at
- * MENDING_REPAIR_PER_XP durability per diverted XP point. Returns a new slots array
- * (same ref when nothing was repaired) plus the XP left to bank. The one reader for
- * Mending: `awardXp` is its only caller.
+ * gear — the held item first, then worn armor in ARMOR_SLOTS order — at
+ * MENDING_REPAIR_PER_XP durability per diverted XP point. Returns (possibly new)
+ * slots + equipped records (same refs when nothing was repaired) plus the XP left
+ * to bank. The one reader for Mending: `awardXp` is its only caller.
  */
-export function mendXp(slots: InventorySlot[], selectedSlot: number, equipped: EquippedArmor, xp: number): { slots: InventorySlot[]; xpLeft: number } {
-  if (xp <= 0) return { slots, xpLeft: xp };
-
-  // Held item first, then each equipped armor piece (skipping a held piece already listed).
-  const indices: number[] = [];
-  if (selectedSlot >= 0 && selectedSlot < slots.length) indices.push(selectedSlot);
-  for (const armorSlot of ARMOR_SLOTS) {
-    const id = equipped[armorSlot];
-    if (!id) continue;
-    const i = slots.findIndex((s) => s.id === id && s.count > 0);
-    if (i >= 0 && !indices.includes(i)) indices.push(i);
-  }
-
+export function mendXp(
+  slots: InventorySlot[],
+  selectedSlot: number,
+  equipped: EquippedArmor,
+  xp: number
+): { slots: InventorySlot[]; equipped: EquippedArmor; xpLeft: number } {
+  if (xp <= 0) return { slots, equipped, xpLeft: xp };
   let remaining = xp;
-  let next = slots;
-  for (const i of indices) {
-    if (remaining <= 0) break;
-    const slot = next[i];
-    if (!slot?.maxDurability || enchantLevel(slot, "mending") <= 0) continue;
-    const missing = slot.maxDurability - (slot.durability ?? slot.maxDurability);
-    if (missing <= 0) continue;
-    const xpNeeded = Math.ceil(missing / MENDING_REPAIR_PER_XP);
-    const xpUsed = Math.min(remaining, xpNeeded);
-    const repaired = Math.min(missing, xpUsed * MENDING_REPAIR_PER_XP);
-    if (next === slots) next = slots.slice(); // clone on first write
-    next[i] = { ...slot, durability: (slot.durability ?? slot.maxDurability) + repaired };
-    remaining -= xpUsed;
+  let nextSlots = slots;
+  let nextEquipped = equipped;
+
+  // Held item first (worn armor lives in `equipped`, a disjoint store).
+  if (remaining > 0 && selectedSlot >= 0 && selectedSlot < slots.length) {
+    const r = repairWithXp(slots[selectedSlot], remaining);
+    if (r) {
+      nextSlots = slots.slice();
+      nextSlots[selectedSlot] = r.slot;
+      remaining -= r.xpUsed;
+    }
   }
-  return { slots: next, xpLeft: remaining };
+
+  // Then each worn armor piece.
+  for (const armorSlot of ARMOR_SLOTS) {
+    if (remaining <= 0) break;
+    const r = repairWithXp(nextEquipped[armorSlot], remaining);
+    if (!r) continue;
+    if (nextEquipped === equipped) nextEquipped = { ...equipped }; // clone on first write
+    nextEquipped[armorSlot] = r.slot;
+    remaining -= r.xpUsed;
+  }
+
+  return { slots: nextSlots, equipped: nextEquipped, xpLeft: remaining };
 }

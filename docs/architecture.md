@@ -106,7 +106,7 @@ Owns every DOM listener. Continuous input (movement keys, mouse button, pointer 
 
 ## Inventory and items (`lib/game/`)
 
-- `inventory.ts` — pure slot algebra (`adjustSlotCount`, `craft`, durability, armor); every function returns a new array or `null` for "no change". Crafting refuses when the result doesn't fit rather than destroying overflow.
+- `inventory.ts` — pure slot algebra (`adjustSlotCount`, `craft`, durability, armor); every function returns a new array or `null` for "no change". Crafting refuses when the result doesn't fit rather than destroying overflow. Equipped armor is **dedicated storage**: `state.equippedArmor` (`Record<ArmorSlot, InventorySlot | null>`) holds the worn pieces themselves — `toggleEquipArmor`/`unequipArmor` move a piece between the inventory and the record, and `equippedDefense`/`armorReduction`/`consumeEquippedArmorDurability` (and Mending's `mendXp`) read/wear/repair those instances directly rather than re-finding them in the inventory by id.
 - `items.ts` — `ITEM_DEFS`, `BLOCK_TO_SLOT`, `BREAK_HARDNESS`, armor slots, slot factories. `recipes.ts` — `RECIPES` (each with an optional `station`, e.g. `"furnace"` for smelting).
 - Drop tables: `mobLoot.ts` (`rollMobDrops` — per-`MobKind` loot) and `items.ts` (`rollBlockDrops` — block drops, e.g. grass→occasional seed, mature wheat→wheat + 1–2 seeds). Both take an injectable `rng`, so tests get deterministic counts.
 - `config.ts` — every gameplay tunable, named: physics, hunger rules, daylight thresholds, mob director, mining reach, autosave interval, the legacy `SAVE_KEY`, and `WORLDGEN_VERSION` (the worldgen baseline each world records).

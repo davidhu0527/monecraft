@@ -16,9 +16,9 @@ import {
   swapSlots,
   toggleEquipArmor,
   tryInsertSlots,
-  unequipMissingArmor
+  unequipArmor
 } from "@/lib/game/inventory";
-import type { InventorySlot } from "@/lib/game/types";
+import type { EquippedArmor, InventorySlot } from "@/lib/game/types";
 
 function makeSlots(...items: Array<[string, number] | null>): InventorySlot[] {
   const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
@@ -105,20 +105,20 @@ describe("durability", () => {
     expect(consumeToolDurability(slots, 0, 1)).toBeNull();
   });
 
-  test("equipped armor wears together; broken pieces vanish", () => {
-    let slots = makeSlots(["helmet", 1], ["boots", 1]);
-    const equipped = { ...createEmptyArmorEquipment(), helmet: "helmet", boots: "boots" };
-    slots = consumeEquippedArmorDurability(slots, equipped, slots[1].maxDurability! - 1)!;
-    expect(slots[0].durability).toBe(slots[0].maxDurability! - (slots[1].maxDurability! - 1));
-    expect(slots[1].durability).toBe(1);
-    slots = consumeEquippedArmorDurability(slots, equipped, 1)!;
-    expect(slots[1].id).toBeNull(); // boots broke, helmet survives
-    expect(slots[0].id).toBe("helmet");
+  test("worn armor wears together; broken pieces vanish", () => {
+    const helmet = createSlot("helmet", 1);
+    const boots = createSlot("boots", 1);
+    let equipped: EquippedArmor = { ...createEmptyArmorEquipment(), helmet, boots };
+    equipped = consumeEquippedArmorDurability(equipped, boots.maxDurability! - 1)!;
+    expect(equipped.helmet!.durability).toBe(helmet.maxDurability! - (boots.maxDurability! - 1));
+    expect(equipped.boots!.durability).toBe(1);
+    equipped = consumeEquippedArmorDurability(equipped, 1)!;
+    expect(equipped.boots).toBeNull(); // boots broke, helmet survives
+    expect(equipped.helmet!.id).toBe("helmet");
   });
 
-  test("nothing equipped is a no-op", () => {
-    const slots = makeSlots(["helmet", 1]);
-    expect(consumeEquippedArmorDurability(slots, createEmptyArmorEquipment(), 1)).toBeNull();
+  test("nothing worn is a no-op", () => {
+    expect(consumeEquippedArmorDurability(createEmptyArmorEquipment(), 1)).toBeNull();
   });
 });
 
@@ -246,39 +246,44 @@ describe("swap and armor", () => {
     expect(moved.b[0].durability).toBe(12);
   });
 
-  test("toggleEquipArmor equips then unequips", () => {
+  test("toggleEquipArmor moves the piece out of the inventory into its slot", () => {
     const slots = makeSlots(["helmet", 1]);
     const empty = createEmptyArmorEquipment();
-    const equipped = toggleEquipArmor(slots, empty, 0)!;
-    expect(equipped.helmet).toBe("helmet");
-    const unequipped = toggleEquipArmor(slots, equipped, 0)!;
-    expect(unequipped.helmet).toBeNull();
-    expect(toggleEquipArmor(makeSlots(["dirt", 1]), empty, 0)).toBeNull();
+    const r = toggleEquipArmor(slots, empty, 0)!;
+    expect(r.equipped.helmet?.id).toBe("helmet");
+    expect(r.slots[0].id).toBeNull(); // freed the inventory slot
+    expect(toggleEquipArmor(makeSlots(["dirt", 1]), empty, 0)).toBeNull(); // non-armor
   });
 
-  test("unequipMissingArmor clears pieces that left the inventory", () => {
-    const equipped = { ...createEmptyArmorEquipment(), helmet: "helmet", boots: "boots" };
-    const slots = makeSlots(["helmet", 1]); // boots gone
-    const next = unequipMissingArmor(slots, equipped)!;
-    expect(next.helmet).toBe("helmet");
-    expect(next.boots).toBeNull();
-    expect(unequipMissingArmor(slots, next)).toBeNull(); // already consistent
+  test("equipping into an occupied slot swaps the worn piece back to the freed index", () => {
+    const slots = makeSlots(["helmet", 1]);
+    const worn = { ...createSlot("helmet", 1), durability: 50 }; // distinguish the worn one
+    const equipped = { ...createEmptyArmorEquipment(), helmet: worn };
+    const r = toggleEquipArmor(slots, equipped, 0)!;
+    expect(r.equipped.helmet?.durability).toBe(slots[0].maxDurability); // newly-equipped (full)
+    expect(r.slots[0].durability).toBe(50); // previously-worn returned to the grid
   });
 
-  test("armorReduction is 5% per defense point, capped, and requires owned pieces", () => {
-    const slots = makeSlots(["helmet", 1], ["chestplate", 1]);
-    const equipped = { ...createEmptyArmorEquipment(), helmet: "helmet", chestplate: "chestplate" };
-    expect(armorReduction(slots, equipped)).toBeCloseTo((2 + 4) * 0.05);
-    // Equipped but not owned counts for nothing.
-    expect(armorReduction(makeSlots(["helmet", 1]), equipped)).toBeCloseTo(2 * 0.05);
-    expect(armorReduction(slots, createEmptyArmorEquipment())).toBe(0);
+  test("unequipArmor returns the piece to a free slot, and refuses when full", () => {
+    const worn = createSlot("helmet", 1);
+    const equipped = { ...createEmptyArmorEquipment(), helmet: worn };
+    const r = unequipArmor(makeSlots(), equipped, "helmet")!;
+    expect(r.equipped.helmet).toBeNull();
+    expect(r.slots.some((s) => s.id === "helmet" && s.count > 0)).toBe(true);
+    expect(unequipArmor(makeSlots(), createEmptyArmorEquipment(), "helmet")).toBeNull(); // nothing worn
+    const full = Array.from({ length: INVENTORY_SLOTS }, () => createSlot("dirt", 1));
+    expect(unequipArmor(full, equipped, "helmet")).toBeNull(); // inventory full → no-op
   });
 
-  test("equippedDefense sums defense points of owned equipped pieces", () => {
-    const slots = makeSlots(["helmet", 1], ["chestplate", 1]);
-    const equipped = { ...createEmptyArmorEquipment(), helmet: "helmet", chestplate: "chestplate" };
-    expect(equippedDefense(slots, equipped)).toBe(2 + 4);
-    expect(equippedDefense(makeSlots(["helmet", 1]), equipped)).toBe(2);
-    expect(equippedDefense(slots, createEmptyArmorEquipment())).toBe(0);
+  test("armorReduction is 5% per defense point and capped", () => {
+    const equipped = { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1), chestplate: createSlot("chestplate", 1) };
+    expect(armorReduction(equipped)).toBeCloseTo((2 + 4) * 0.05);
+    expect(armorReduction(createEmptyArmorEquipment())).toBe(0);
+  });
+
+  test("equippedDefense sums defense points of worn pieces", () => {
+    const equipped = { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1), chestplate: createSlot("chestplate", 1) };
+    expect(equippedDefense(equipped)).toBe(2 + 4);
+    expect(equippedDefense(createEmptyArmorEquipment())).toBe(0);
   });
 });

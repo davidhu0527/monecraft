@@ -56,11 +56,10 @@ describe("seam readers", () => {
   });
 
   test("Protection raises equipped defense and damage reduction", () => {
-    const equipped: EquippedArmor = { ...createEmptyArmorEquipment(), helmet: "helmet" };
-    const plainDef = equippedDefense([createSlot("helmet", 1)], equipped);
-    const enchanted = withEnchant("protection", 2, createSlot("helmet", 1));
-    expect(equippedDefense([enchanted], equipped)).toBeGreaterThan(plainDef);
-    expect(armorReduction([enchanted], equipped)).toBeGreaterThan(armorReduction([createSlot("helmet", 1)], equipped));
+    const plain: EquippedArmor = { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) };
+    const enchanted: EquippedArmor = { ...createEmptyArmorEquipment(), helmet: withEnchant("protection", 2, createSlot("helmet", 1)) };
+    expect(equippedDefense(enchanted)).toBeGreaterThan(equippedDefense(plain));
+    expect(armorReduction(enchanted)).toBeGreaterThan(armorReduction(plain));
   });
 });
 
@@ -106,12 +105,12 @@ describe("Mending (mendXp)", () => {
     expect(result.xpLeft).toBe(100 - Math.ceil(2 / MENDING_REPAIR_PER_XP));
   });
 
-  test("falls through to equipped Mending armor after the held item", () => {
+  test("falls through to worn Mending armor after the held item", () => {
     const helmet = damaged("helmet", 4);
-    const slots = [createSlot("diamond_sword", 1), helmet]; // held sword has no mending
-    const equipped: EquippedArmor = { ...noArmor, helmet: "helmet" };
+    const slots = [createSlot("diamond_sword", 1)]; // held sword has no mending
+    const equipped: EquippedArmor = { ...noArmor, helmet };
     const result = mendXp(slots, 0, equipped, 50);
-    expect(result.slots[1].durability).toBe(helmet.maxDurability);
+    expect(result.equipped.helmet!.durability).toBe(helmet.maxDurability);
   });
 
   test("no Mending gear → same array ref and full XP banked", () => {

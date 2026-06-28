@@ -3,7 +3,7 @@
  * controller goes through GameEngine.dispatch with one of these — the single
  * auditable entry point into the simulation.
  */
-import type { EnchantmentId } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
 
@@ -21,6 +21,7 @@ export type Command =
   | { type: "swapSlots"; from: number; to: number }
   | { type: "moveStack"; from: number; to: number }
   | { type: "toggleEquipArmor"; index: number }
+  | { type: "unequipArmor"; slot: ArmorSlot }
   | { type: "eatFood" }
   | { type: "drinkPotion" }
   | { type: "enchant"; enchant: EnchantmentId }

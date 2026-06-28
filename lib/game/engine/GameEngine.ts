@@ -49,6 +49,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import {
   inventorySlotsSnapshot,
+  serializeEquippedArmor,
   readContainers,
   readLootedChests,
   restoreDayClock,
@@ -394,7 +395,20 @@ export class GameEngine {
       }
       case "toggleEquipArmor": {
         if (!canInteract(state.gameMode)) break;
-        state.equippedArmor = inv.toggleEquipArmor(state.inventory, state.equippedArmor, command.index) ?? state.equippedArmor;
+        const equip = inv.toggleEquipArmor(state.inventory, state.equippedArmor, command.index);
+        if (equip) {
+          state.inventory = equip.slots;
+          state.equippedArmor = equip.equipped;
+        }
+        break;
+      }
+      case "unequipArmor": {
+        if (!canInteract(state.gameMode)) break;
+        const unequip = inv.unequipArmor(state.inventory, state.equippedArmor, command.slot);
+        if (unequip) {
+          state.inventory = unequip.slots;
+          state.equippedArmor = unequip.equipped;
+        }
         break;
       }
       case "eatFood": {
@@ -588,7 +602,6 @@ export class GameEngine {
         break;
       }
     }
-    this.syncEquippedArmor();
     this.refreshSnapshot();
   }
 
@@ -603,7 +616,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 11,
+      version: 12,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -612,7 +625,7 @@ export class GameEngine {
       gameOver: state.gameOver,
       changes: state.blockChanges.changes(),
       inventorySlots: inventorySlotsSnapshot(state.inventory),
-      equippedArmor: { ...state.equippedArmor },
+      equippedArmor: serializeEquippedArmor(state.equippedArmor),
       selectedSlot: state.selectedSlot,
       player: {
         x: state.player.position.x,
@@ -683,7 +696,6 @@ export class GameEngine {
   private applyDamage = (amount: number): void => {
     const heartsBefore = this.state.hearts;
     const died = applyDamageWithArmor(this.state, amount, this.rng);
-    this.syncEquippedArmor();
     if (died) {
       if (this.state.hardcore) return void this.triggerGameOver();
       clearEffects(this.state);
@@ -899,12 +911,6 @@ export class GameEngine {
     this.emit({ type: "wokeUp" });
   }
 
-  /** Unequips armor that left the inventory (broken or dropped). */
-  private syncEquippedArmor(): void {
-    const state = this.state;
-    state.equippedArmor = inv.unequipMissingArmor(state.inventory, state.equippedArmor) ?? state.equippedArmor;
-  }
-
   /** Refreshes the F3 readout at ~4 Hz so React is not re-rendered every frame. */
   private tickDebugInfo(dt: number): void {
     const state = this.state;
@@ -988,7 +994,7 @@ export class GameEngine {
       debugOpen: state.debugOpen,
       debug: state.debugInfo,
       cameraMode: state.cameraMode,
-      armorPoints: inv.equippedDefense(state.inventory, state.equippedArmor),
+      armorPoints: inv.equippedDefense(state.equippedArmor),
       capsActive: state.capsActive,
       sleeping: state.sleepTimer > 0,
       craftingStation: state.craftingStation,

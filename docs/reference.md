@@ -371,8 +371,10 @@ inventory or chest slot.
 
 ### Armor
 
-Each piece occupies its own equip slot. Defense reduces incoming damage (a hit
-always deals at least 1).
+Each piece occupies its own dedicated equip slot — equipping moves it out of the
+inventory (so it never occupies a hotbar/storage slot), and unequipping returns it
+to a free inventory slot. Defense reduces incoming damage (a hit always deals at
+least 1).
 
 | Item            | Slot            | Defense | Durability |
 | --------------- | --------------- | ------- | ---------- |

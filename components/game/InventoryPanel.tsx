@@ -13,7 +13,7 @@ import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot, displayName, ITEM_DEF_BY_ID
 import { groupRecipes } from "@/lib/game/recipes";
 import { itemIconUrl } from "@/lib/ui/sprites";
 import type { GameMode } from "@/lib/game/gameModes";
-import type { EnchantmentId, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 type InventoryPanelProps = {
   inventory: InventorySlot[];
@@ -37,6 +37,7 @@ type InventoryPanelProps = {
   /** Moves a slot across the inventory/chest boundary (chest indices offset by CONTAINER_SLOT_BASE). */
   onMoveStack: (fromIndex: number, toIndex: number) => void;
   onToggleEquipArmor: (index: number) => void;
+  onUnequipArmor: (slot: ArmorSlot) => void;
   onCraft: (recipe: Recipe) => void;
   onEnchant: (id: EnchantmentId) => void;
   onAnvilCombine: () => void;
@@ -99,6 +100,7 @@ export default function InventoryPanel({
   onSwapSlots,
   onMoveStack,
   onToggleEquipArmor,
+  onUnequipArmor,
   onCraft,
   onEnchant,
   onAnvilCombine,
@@ -136,15 +138,13 @@ export default function InventoryPanel({
     setPendingIndex(null);
   };
 
-  const isEquipped = (slot: InventorySlot) => slot.kind === "armor" && !!slot.id && equippedArmor[slot.armorSlot ?? "helmet"] === slot.id;
-
   const renderSlot = (slot: InventorySlot, idx: number, extraClass = "") => {
     const isChest = idx >= CONTAINER_SLOT_BASE;
     const name = isChest ? `Chest slot ${idx - CONTAINER_SLOT_BASE + 1}` : `Slot ${idx + 1}`;
     return (
       <button
         key={`inv-slot-${idx}`}
-        className={["inv-slot", extraClass, pendingIndex === idx ? "pending" : "", isEquipped(slot) ? "equipped" : ""].filter(Boolean).join(" ")}
+        className={["inv-slot", extraClass, pendingIndex === idx ? "pending" : ""].filter(Boolean).join(" ")}
         onClick={() => onSlotClick(idx)}
         {...bind(itemTooltipFor(slot))}
         aria-label={slot.id && slot.count > 0 ? `${name}: ${displayName(slot)}` : `${name}: empty`}
@@ -209,14 +209,12 @@ export default function InventoryPanel({
           <div className="inventory-upper">
             <div className="armor-column">
               {ARMOR_SLOTS.map((armorSlot) => {
-                const equippedId = equippedArmor[armorSlot];
-                const equippedIndex = equippedId ? inventory.findIndex((slot) => slot.id === equippedId && slot.count > 0) : -1;
-                const equippedItem = equippedIndex >= 0 ? inventory[equippedIndex] : undefined;
+                const equippedItem = equippedArmor[armorSlot] ?? undefined;
                 return (
                   <button
                     key={`armor-${armorSlot}`}
                     className={equippedItem ? "inv-slot armor-slot filled" : "inv-slot armor-slot"}
-                    onClick={() => equippedIndex >= 0 && onToggleEquipArmor(equippedIndex)}
+                    onClick={() => equippedItem && onUnequipArmor(armorSlot)}
                     {...bind(equippedItem ? itemTooltipFor(equippedItem) : { title: `${ARMOR_SLOT_LABELS[armorSlot]} (empty)` })}
                     aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${displayName(equippedItem)}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
                   >
