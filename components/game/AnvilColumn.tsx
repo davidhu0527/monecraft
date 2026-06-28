@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ItemIcon from "@/components/game/ItemIcon";
-import { canMaterialRepair, findSacrificeIndex, isAnvilGear, repairMaterialFor, wouldCombineHelp } from "@/lib/game/anvil";
+import { canMaterialRepair, findSacrificeIndex, isAnvilGear, repairMaterialFor, sanitizeCustomName, wouldCombineHelp } from "@/lib/game/anvil";
+import { CUSTOM_NAME_MAX_LEN } from "@/lib/game/config";
 import { displayName, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import type { InventorySlot } from "@/lib/game/types";
 
@@ -39,8 +40,9 @@ export default function AnvilColumn({
   onRename
 }: AnvilColumnProps) {
   const gear = isAnvilGear(item);
-  // Reset the rename field whenever the targeted item changes.
-  const fieldKey = `${selectedHotbarSlot}:${item?.id ?? ""}`;
+  // Reset the rename field whenever the targeted item changes — keyed on the saved
+  // name too, so swapping in a same-id item with a different name refreshes it.
+  const fieldKey = `${selectedHotbarSlot}:${item?.id ?? ""}:${item?.customName ?? ""}`;
   const [nameField, setNameField] = useState({ key: fieldKey, value: item?.customName ?? "" });
   const name = nameField.key === fieldKey ? nameField.value : (item?.customName ?? "");
   const setName = (value: string) => setNameField({ key: fieldKey, value });
@@ -109,9 +111,21 @@ export default function AnvilColumn({
         <div className="anvil-status">{repairStatus}</div>
         <label className="anvil-rename-field">
           <span className="enchant-name">Rename</span>
-          <input type="text" value={name} maxLength={32} placeholder={item.label} onChange={(e) => setName(e.target.value)} aria-label="Custom item name" />
+          <input
+            type="text"
+            value={name}
+            maxLength={CUSTOM_NAME_MAX_LEN}
+            placeholder={item.label}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Custom item name"
+          />
         </label>
-        <button className="anvil-action" onClick={() => onRename(name)} disabled={!renameEnabled} aria-label={`Apply rename — costs ${renameCost} levels`}>
+        <button
+          className="anvil-action"
+          onClick={() => onRename(sanitizeCustomName(name))}
+          disabled={!renameEnabled}
+          aria-label={`Apply rename — costs ${renameCost} levels`}
+        >
           <span className="enchant-name">{trimmed ? "Apply name" : "Clear name"}</span>
           <span className="enchant-cost">{renameCost} lvl</span>
         </button>

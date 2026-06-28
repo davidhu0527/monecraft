@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ANVIL_MATERIAL_REPAIR_PCT, CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, MENDING_MAX_LEVEL } from "@/lib/game/config";
+import { ANVIL_MATERIAL_REPAIR_PCT, ANVIL_REPAIR_BONUS_PCT, CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, MENDING_MAX_LEVEL } from "@/lib/game/config";
 import {
   canMaterialRepair,
   combineSlots,
@@ -12,9 +12,9 @@ import {
   wouldCombineHelp
 } from "@/lib/game/anvil";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
-import type { Enchantment, InventorySlot } from "@/lib/game/types";
+import type { Enchantment, EnchantmentId, InventorySlot } from "@/lib/game/types";
 
-const ench = (id: string, level: number): Enchantment => ({ id: id as never, level });
+const ench = (id: EnchantmentId, level: number): Enchantment => ({ id, level });
 const withEnchants = (slot: InventorySlot, ...e: Enchantment[]): InventorySlot => ({ ...slot, enchantments: e });
 const damaged = (id: string, durability: number): InventorySlot => ({ ...createSlot(id, 1), durability });
 
@@ -79,7 +79,7 @@ describe("combineSlots", () => {
     const sacrifice = withEnchants(damaged("diamond_sword", 200), ench("unbreaking", 1));
     const out = combineSlots(target, sacrifice);
     const max = target.maxDurability!;
-    expect(out.durability).toBe(Math.min(max, 300 + 200 + Math.floor(max * 0.12)));
+    expect(out.durability).toBe(Math.min(max, 300 + 200 + Math.floor(max * ANVIL_REPAIR_BONUS_PCT)));
     expect(out.enchantments).toContainEqual(ench("sharpness", 2));
     expect(out.enchantments).toContainEqual(ench("unbreaking", 1));
     expect(target.durability).toBe(300); // original untouched

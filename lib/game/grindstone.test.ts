@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { GRINDSTONE_REFUND_XP_PER_LEVEL } from "@/lib/game/config";
 import { canStripEnchantments, enchantRefund, stripEnchantments, totalEnchantLevels } from "@/lib/game/grindstone";
 import { createSlot } from "@/lib/game/items";
-import type { Enchantment, InventorySlot } from "@/lib/game/types";
+import type { Enchantment, EnchantmentId, InventorySlot } from "@/lib/game/types";
 
 const withEnchants = (id: string, ...e: Enchantment[]): InventorySlot => ({ ...createSlot(id, 1), enchantments: e });
-const ench = (id: string, level: number): Enchantment => ({ id: id as never, level });
+const ench = (id: EnchantmentId, level: number): Enchantment => ({ id, level });
 
 describe("grindstone", () => {
   test("totalEnchantLevels sums every enchantment's level", () => {

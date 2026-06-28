@@ -4,11 +4,11 @@ import userEvent from "@testing-library/user-event";
 import GrindstoneColumn from "./GrindstoneColumn";
 import { GRINDSTONE_REFUND_XP_PER_LEVEL } from "@/lib/game/config";
 import { createSlot } from "@/lib/game/items";
-import type { InventorySlot } from "@/lib/game/types";
+import type { EnchantmentId, InventorySlot } from "@/lib/game/types";
 
-const enchanted = (...levels: Array<[string, number]>): InventorySlot => ({
+const enchanted = (...levels: Array<[EnchantmentId, number]>): InventorySlot => ({
   ...createSlot("diamond_sword", 1),
-  enchantments: levels.map(([id, level]) => ({ id: id as never, level }))
+  enchantments: levels.map(([id, level]) => ({ id, level }))
 });
 
 describe("GrindstoneColumn", () => {

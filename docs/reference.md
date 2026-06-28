@@ -204,9 +204,9 @@ Source: `lib/game/engine/systems/xp.ts`, `lib/game/mobXp.ts`, `lib/game/enchantm
 
 ### Enchantments
 
-Each costs **3 XP levels** per application, up to **level 3**, applied at the
-enchanting table to the selected tool/weapon/armor. Enchantments are per-item and
-survive a save.
+Each costs **3 XP levels** per application, up to that enchantment's max level
+(**3** for most, **1** for Mending), applied at the enchanting table to the
+selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
 | Enchantment | Applies to          | Per level                                                     |
 | ----------- | ------------------- | ------------------------------------------------------------- |

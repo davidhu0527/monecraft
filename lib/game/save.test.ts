@@ -555,6 +555,15 @@ describe("v5 to v6 migration & status effects", () => {
     expect(slots[0].enchantments).toEqual([{ id: "sharpness", level: ENCHANT_MAX_LEVEL }]);
   });
 
+  test("restoreInventorySlots clamps each enchant to its own cap (a tampered mending:3 loads as 1)", () => {
+    const dirty: SaveData = {
+      ...sampleSave(),
+      inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, enchantments: [{ id: "mending", level: 3 }] as never }]
+    };
+    const slots = restoreInventorySlots(dirty)!;
+    expect(slots[0].enchantments).toEqual([{ id: "mending", level: 1 }]); // Mending is binary
+  });
+
   test("serializeEffects / restoreEffects round-trip the active effects", () => {
     const effects = new Map([
       ["speed", 30],

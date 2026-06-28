@@ -1,4 +1,5 @@
-import { CHEST_SLOTS, CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { CHEST_SLOTS, CUSTOM_NAME_MAX_LEN, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type {
   EffectId,
@@ -204,14 +205,15 @@ const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
   mending: true
 };
 
-/** Validates persisted enchantments: known ids and integer levels clamped to 1..max; undefined when none survive. */
+/** Validates persisted enchantments: known ids and integer levels clamped to 1..(that enchant's max); undefined when none survive. */
 function restoreEnchantments(saved: SavedSlot["enchantments"]): Enchantment[] | undefined {
   if (!Array.isArray(saved)) return undefined;
   const out: Enchantment[] = [];
   for (const entry of saved) {
     if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_ENCHANT_IDS, entry.id)) continue;
     if (!Number.isFinite(entry.level) || Math.floor(entry.level) < 1) continue;
-    out.push({ id: entry.id, level: Math.min(ENCHANT_MAX_LEVEL, Math.floor(entry.level)) });
+    // Clamp to the enchantment's own cap so e.g. a tampered mending:3 loads as 1.
+    out.push({ id: entry.id, level: Math.min(ENCHANTMENT_DEFS[entry.id].maxLevel, Math.floor(entry.level)) });
   }
   return out.length > 0 ? out : undefined;
 }
