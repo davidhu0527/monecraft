@@ -348,6 +348,8 @@ enchantments it can take. Each costs **3 levels** and can be applied up to **thr
 times**:
 
 - **Sharpness** (weapons) — hit harder in melee
+- **Power** (bows) — arrows hit harder
+- **Punch** (bows) — arrows knock the target back further
 - **Protection** (armor) — take less damage
 - **Efficiency** (tools) — mine faster
 - **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)

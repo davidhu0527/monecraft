@@ -1,9 +1,26 @@
 import { describe, expect, test } from "bun:test";
-import { EFFICIENCY_SPEED_PER_LEVEL, ENCHANT_MAX_LEVEL, MENDING_REPAIR_PER_XP, SHARPNESS_DAMAGE_PER_LEVEL } from "@/lib/game/config";
+import {
+  EFFICIENCY_SPEED_PER_LEVEL,
+  ENCHANT_MAX_LEVEL,
+  MENDING_REPAIR_PER_XP,
+  POWER_DAMAGE_PER_LEVEL,
+  PUNCH_KNOCKBACK_PER_LEVEL,
+  SHARPNESS_DAMAGE_PER_LEVEL
+} from "@/lib/game/config";
 import { createEmptyArmorEquipment, createSlot } from "@/lib/game/items";
 import { armorReduction, consumeToolDurability, equippedDefense } from "@/lib/game/inventory";
 import { miningSpeed } from "@/lib/game/engine/systems/mining";
-import { applyEnchant, canEnchant, efficiencyMultiplier, enchantLevel, mendXp, sharpnessBonus, unbreakingSkips } from "@/lib/game/enchantments";
+import {
+  applyEnchant,
+  canEnchant,
+  efficiencyMultiplier,
+  enchantLevel,
+  mendXp,
+  powerBonus,
+  punchKnockback,
+  sharpnessBonus,
+  unbreakingSkips
+} from "@/lib/game/enchantments";
 import type { EquippedArmor, InventorySlot } from "@/lib/game/types";
 
 const withEnchant = (id: string, level: number, slot: InventorySlot): InventorySlot => ({ ...slot, enchantments: [{ id: id as never, level }] });
@@ -26,6 +43,16 @@ describe("canEnchant / applyEnchant", () => {
     expect(canEnchant(createSlot("dirt", 1), "unbreaking")).toBe(false);
   });
 
+  test("Power and Punch are bow-only (the itemIds allow-list), not for other weapons", () => {
+    expect(canEnchant(createSlot("bow", 1), "power")).toBe(true);
+    expect(canEnchant(createSlot("bow", 1), "punch")).toBe(true);
+    // Swords are `weapon` too, but the itemIds gate keeps these bow-specific enchants off them.
+    expect(canEnchant(createSlot("diamond_sword", 1), "power")).toBe(false);
+    expect(canEnchant(createSlot("diamond_sword", 1), "punch")).toBe(false);
+    // The bow still can't take a melee enchant it doesn't qualify for via kind (e.g. Protection).
+    expect(canEnchant(createSlot("bow", 1), "protection")).toBe(false);
+  });
+
   test("applyEnchant adds then levels up, immutably, and stops at the cap", () => {
     const sword = createSlot("diamond_sword", 1);
     const once = applyEnchant(sword, "sharpness");
@@ -46,6 +73,14 @@ describe("seam readers", () => {
   test("Sharpness adds flat melee damage per level", () => {
     expect(sharpnessBonus(createSlot("diamond_sword", 1))).toBe(0);
     expect(sharpnessBonus(withEnchant("sharpness", 2, createSlot("diamond_sword", 1)))).toBe(2 * SHARPNESS_DAMAGE_PER_LEVEL);
+  });
+
+  test("Power and Punch add flat bow bonuses per level (0 when absent)", () => {
+    const bow = createSlot("bow", 1);
+    expect(powerBonus(bow)).toBe(0);
+    expect(punchKnockback(bow)).toBe(0);
+    expect(powerBonus(withEnchant("power", 3, bow))).toBe(3 * POWER_DAMAGE_PER_LEVEL);
+    expect(punchKnockback(withEnchant("punch", 2, bow))).toBe(2 * PUNCH_KNOCKBACK_PER_LEVEL);
   });
 
   test("Efficiency multiplies mining speed", () => {

@@ -211,6 +211,8 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 | Enchantment | Applies to          | Per level                                                     |
 | ----------- | ------------------- | ------------------------------------------------------------- |
 | Sharpness   | weapons             | +2 melee damage                                               |
+| Power       | bows                | +2 arrow damage                                               |
+| Punch       | bows                | +0.25 arrow knockback                                         |
 | Protection  | armor               | +2 defense (more damage reduction)                            |
 | Efficiency  | tools               | ×(1 + 0.3 × level) mining speed                               |
 | Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear                             |

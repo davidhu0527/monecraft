@@ -12,6 +12,7 @@ import {
   FIST_DAMAGE
 } from "@/lib/game/config";
 import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
+import { powerBonus, punchKnockback } from "@/lib/game/enchantments";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
 import { spawnArrow } from "../projectiles";
@@ -105,10 +106,11 @@ export function tryFireBow(state: GameState, emit: EmitGameEvent, rng?: () => nu
   const { position, yaw, pitch } = state.player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
   lookDirection(yaw, pitch, scratchForward);
+  // Power and Punch are bow-only enchants, read off the held bow at the one fire seam.
   spawnArrow(state, scratchOrigin.x, scratchOrigin.y, scratchOrigin.z, scratchForward, {
     speed: ARROW_SPEED,
-    damage: BOW_ARROW_DAMAGE,
-    knockback: BOW_KNOCKBACK,
+    damage: BOW_ARROW_DAMAGE + powerBonus(slot),
+    knockback: BOW_KNOCKBACK + punchKnockback(slot),
     fromPlayer: true,
     ttl: ARROW_TTL
   });

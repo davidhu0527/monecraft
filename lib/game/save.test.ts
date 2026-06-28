@@ -574,6 +574,30 @@ describe("v5 to v6 migration & status effects", () => {
     expect(parsed.inventorySlots?.[0].enchantments).toEqual([{ id: "sharpness", level: 2 }]);
   });
 
+  test("a bow's Power and Punch enchantments survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    const save: SaveData = {
+      ...sampleSave(),
+      inventorySlots: [
+        {
+          id: "bow",
+          count: 1,
+          durability: 200,
+          enchantments: [
+            { id: "power", level: 3 },
+            { id: "punch", level: 1 }
+          ]
+        }
+      ]
+    };
+    writeSave(KEY, save, storage);
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.inventorySlots?.[0].enchantments).toEqual([
+      { id: "power", level: 3 },
+      { id: "punch", level: 1 }
+    ]);
+  });
+
   test("restoreInventorySlots drops unknown enchant ids and clamps levels; non-durable items carry none", () => {
     const dirty: SaveData = {
       ...sampleSave(),

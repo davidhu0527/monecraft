@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { BOW_COOLDOWN_SECONDS } from "@/lib/game/config";
+import { BOW_ARROW_DAMAGE, BOW_COOLDOWN_SECONDS, BOW_KNOCKBACK, POWER_DAMAGE_PER_LEVEL, PUNCH_KNOCKBACK_PER_LEVEL } from "@/lib/game/config";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { applyEnchant } from "@/lib/game/enchantments";
 import { countsById } from "@/lib/game/inventory";
 import { createTimers, type GameEvent, type GameState } from "@/lib/game/engine/state";
 import { isBow, tryFireBow } from "@/lib/game/engine/systems/combat";
@@ -83,5 +84,19 @@ describe("tryFireBow", () => {
     );
     expect(tryFireBow(state, () => {})).toBe(false);
     expect(state.projectiles).toHaveLength(0);
+  });
+
+  test("Power and Punch on the bow raise the fired arrow's damage and knockback", () => {
+    const slots = inventory([
+      ["bow", 1],
+      ["arrow", 5]
+    ]);
+    // Power 2, Punch 1 on the held bow.
+    slots[0] = applyEnchant(applyEnchant(applyEnchant(slots[0], "power"), "power"), "punch");
+    const state = makeState(slots);
+    expect(tryFireBow(state, () => {})).toBe(true);
+    const arrow = state.projectiles[0];
+    expect(arrow.damage).toBe(BOW_ARROW_DAMAGE + 2 * POWER_DAMAGE_PER_LEVEL);
+    expect(arrow.knockback).toBeCloseTo(BOW_KNOCKBACK + 1 * PUNCH_KNOCKBACK_PER_LEVEL, 5);
   });
 });
