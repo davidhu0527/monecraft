@@ -20,7 +20,14 @@ import {
   LAVA_DAMAGE_HP,
   MAX_OXYGEN
 } from "@/lib/game/config";
-import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
+import {
+  ANVIL_COMBINE_COST_LEVELS,
+  ANVIL_RENAME_COST_LEVELS,
+  ANVIL_REPAIR_COST_LEVELS,
+  BOSS_HP,
+  CHEST_SLOTS,
+  GRINDSTONE_REFUND_XP_PER_LEVEL
+} from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { enchantLevel } from "@/lib/game/enchantments";
@@ -1945,6 +1952,58 @@ describe("anvil", () => {
     state.inventory[0] = createSlot("dirt", 10);
     engine.dispatch({ type: "anvilRename", name: "Fancy Dirt" });
     expect(state.inventory[0].customName).toBeUndefined();
+  });
+});
+
+describe("grindstone", () => {
+  test("right-clicking a grindstone opens the inventory in grindstone mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Grindstone);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "grindstone")).toBe(true);
+    expect(state.craftingStation).toBe("grindstone");
+  });
+
+  test("strip removes all enchantments and refunds XP, and is refused on un-enchanted gear", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = {
+      ...createSlot("diamond_sword", 1),
+      enchantments: [
+        { id: "sharpness", level: 3 },
+        { id: "unbreaking", level: 1 }
+      ]
+    };
+    state.selectedSlot = 0;
+    state.xp = 0;
+
+    // Refused away from a grindstone.
+    engine.dispatch({ type: "grindstoneStrip" });
+    expect(enchantLevel(state.inventory[0], "sharpness")).toBe(3);
+
+    state.craftingStation = "grindstone";
+    engine.consumeEvents();
+    engine.dispatch({ type: "grindstoneStrip" });
+    expect(state.inventory[0].enchantments).toBeUndefined();
+    expect(state.xp).toBe(4 * GRINDSTONE_REFUND_XP_PER_LEVEL); // 3 + 1 levels refunded
+    expect(engine.consumeEvents().some((e) => e.type === "grindstoneStripped")).toBe(true);
+
+    // Nothing left to strip — refused, no XP gained.
+    const before = state.xp;
+    engine.dispatch({ type: "grindstoneStrip" });
+    expect(state.xp).toBe(before);
   });
 });
 

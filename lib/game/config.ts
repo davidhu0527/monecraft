@@ -252,6 +252,8 @@ export const ANVIL_REPAIR_COST_LEVELS = 1; // XP levels to repair with one unit 
 export const ANVIL_RENAME_COST_LEVELS = 1; // XP levels to rename an item
 export const ANVIL_REPAIR_BONUS_PCT = 0.12; // bonus durability when combining = floor(maxDurability × this)
 export const ANVIL_MATERIAL_REPAIR_PCT = 0.25; // durability restored per material unit = ceil(maxDurability × this)
+// Grindstone: strip a held item's enchantments and refund XP (see lib/game/grindstone.ts).
+export const GRINDSTONE_REFUND_XP_PER_LEVEL = 5; // XP points refunded per enchantment level removed
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;

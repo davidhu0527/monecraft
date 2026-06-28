@@ -165,6 +165,17 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
             if (n > 0.88) c = tone([0.4, 0.41, 0.45], 1); // faint metal fleck
           }
         }
+        if (block === BlockId.Grindstone) {
+          // A round stone wheel set in a wooden frame.
+          if (face === "top") {
+            const onWheel = Math.abs(x - 7.5) + Math.abs(y - 7.5) < 5;
+            c = onWheel ? tone([0.55, 0.56, 0.58], 0.88 + n * 0.25) : tone([0.5, 0.36, 0.2], 0.9 + n * 0.2);
+          } else if (y >= 5 && y <= 10) {
+            c = tone([0.55, 0.56, 0.58], 0.85 + n * 0.3); // the stone wheel band
+          } else {
+            c = tone([0.5, 0.36, 0.2], 0.88 + n * 0.2); // wooden frame
+          }
+        }
         if (isDoorBlock(block)) {
           const state = doorState(block)!;
           const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;

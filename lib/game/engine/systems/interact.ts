@@ -24,7 +24,7 @@ const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil";
+export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil" | "grindstone";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
@@ -32,6 +32,7 @@ export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.BrewingStand]: "brewing",
   [BlockId.EnchantingTable]: "enchanting",
   [BlockId.Anvil]: "anvil",
+  [BlockId.Grindstone]: "grindstone",
   [BlockId.Chest]: "chest",
   [BlockId.DoorNorthLower]: "door",
   [BlockId.DoorNorthUpper]: "door",
@@ -75,6 +76,7 @@ export function tryInteractBlock(state: GameState, emit: EmitGameEvent): boolean
   if (kind === "brewing") return interactBrewingStand(state, emit);
   if (kind === "enchanting") return interactEnchantingTable(state, emit);
   if (kind === "anvil") return interactAnvil(state, emit);
+  if (kind === "grindstone") return interactGrindstone(state, emit);
   if (kind === "chest") return interactChest(state, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "door") return interactDoor(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
@@ -169,6 +171,14 @@ function interactAnvil(state: GameState, emit: EmitGameEvent): boolean {
   state.inventoryOpen = true;
   state.craftingStation = "anvil";
   emit({ type: "openedStation", station: "anvil" });
+  return true;
+}
+
+/** Opens the inventory in grindstone mode so the disenchant panel unlocks. */
+function interactGrindstone(state: GameState, emit: EmitGameEvent): boolean {
+  state.inventoryOpen = true;
+  state.craftingStation = "grindstone";
+  emit({ type: "openedStation", station: "grindstone" });
   return true;
 }
 

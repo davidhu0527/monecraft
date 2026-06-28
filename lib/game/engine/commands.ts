@@ -27,6 +27,7 @@ export type Command =
   | { type: "anvilCombine" }
   | { type: "anvilRepair" }
   | { type: "anvilRename"; name: string }
+  | { type: "grindstoneStrip" }
   | { type: "placeBlock" }
   | { type: "attack" }
   | { type: "toggleFlight" }

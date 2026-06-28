@@ -73,7 +73,10 @@ export const enum BlockId {
   EnchantingTable = 52,
   // A crafted station: right-click to open the anvil panel, where XP levels are
   // spent to repair, combine, or rename the held gear (see interact.ts).
-  Anvil = 53
+  Anvil = 53,
+  // A crafted station: right-click to open the grindstone panel, which strips a
+  // held item's enchantments and refunds some XP (see interact.ts).
+  Grindstone = 54
 }
 
 export enum BiomeId {
@@ -114,7 +117,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Sapling]: 0x5ea74a,
   [BlockId.BrewingStand]: 0x9a86b6,
   [BlockId.EnchantingTable]: 0x3a2a6a,
-  [BlockId.Anvil]: 0x4a4a52
+  [BlockId.Anvil]: 0x4a4a52,
+  [BlockId.Grindstone]: 0x8a7a5c
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -181,5 +185,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   // An obsidian-dark base topped with a glowing arcane book (painted in atlas.ts).
   [BlockId.EnchantingTable]: [0.16, 0.12, 0.26],
   // A dark iron block with a lighter worktop face (painted in atlas.ts).
-  [BlockId.Anvil]: [0.27, 0.28, 0.31]
+  [BlockId.Anvil]: [0.27, 0.28, 0.31],
+  // A stone wheel on a wooden frame (painted in atlas.ts).
+  [BlockId.Grindstone]: [0.5, 0.43, 0.32]
 };

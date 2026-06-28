@@ -44,6 +44,7 @@ import {
   sanitizeCustomName,
   wouldCombineHelp
 } from "@/lib/game/anvil";
+import { canStripEnchantments, enchantRefund, stripEnchantments } from "@/lib/game/grindstone";
 import { RECIPES } from "@/lib/game/recipes";
 import * as inv from "@/lib/game/inventory";
 import {
@@ -478,6 +479,18 @@ export class GameEngine {
         next[state.selectedSlot] = { ...slot, customName: name || undefined };
         state.inventory = next;
         this.emit({ type: "anvilRenamed" });
+        break;
+      }
+      case "grindstoneStrip": {
+        // Strip the selected gear's enchantments, refunding XP for them.
+        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "grindstone") break;
+        const slot = state.inventory[state.selectedSlot];
+        if (!canStripEnchantments(slot)) break;
+        state.xp += enchantRefund(slot);
+        const next = [...state.inventory];
+        next[state.selectedSlot] = stripEnchantments(slot);
+        state.inventory = next;
+        this.emit({ type: "grindstoneStripped" });
         break;
       }
       case "placeBlock": {

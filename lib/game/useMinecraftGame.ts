@@ -424,6 +424,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     anvilCombine: () => engine?.dispatch({ type: "anvilCombine" }),
     anvilRepair: () => engine?.dispatch({ type: "anvilRepair" }),
     anvilRename: (name: string) => engine?.dispatch({ type: "anvilRename", name }),
+    grindstoneStrip: () => engine?.dispatch({ type: "grindstoneStrip" }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     moveStack: (from: number, to: number) => engine?.dispatch({ type: "moveStack", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),

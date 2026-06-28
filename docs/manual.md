@@ -374,6 +374,15 @@ Buttons grey out when there's nothing to do (no duplicate, full durability, or n
 matching material) or you can't afford the cost. For passive, no-table upkeep,
 enchant gear with **Mending** instead.
 
+## The grindstone
+
+Craft a **grindstone** (**2 cobble + 2 planks**) and right-click it to open the
+grindstone panel — the anvil's opposite. With an **enchanted** tool, weapon, or
+armor selected in your hotbar, **Remove enchantments** strips them all off and
+**refunds XP** (5 points per enchantment level removed). Handy for salvaging XP
+from gear you've outgrown, or clearing an enchant you don't want before
+re-enchanting. It costs nothing to use — it only gives XP back.
+
 ## Doors
 
 Craft a **wood door** from **6 planks** and place it on a solid floor with two

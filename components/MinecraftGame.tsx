@@ -83,6 +83,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     anvilCombine,
     anvilRepair,
     anvilRename,
+    grindstoneStrip,
     swapInventorySlots,
     moveStack,
     toggleEquipArmor,
@@ -180,6 +181,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
           onAnvilCombine={anvilCombine}
           onAnvilRepair={anvilRepair}
           onAnvilRename={anvilRename}
+          onGrindstoneStrip={grindstoneStrip}
           onGiveItem={giveCreativeItem}
         />
       ) : null}

@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import AnvilColumn from "@/components/game/AnvilColumn";
 import CreativeInventoryTab from "@/components/game/CreativeInventoryTab";
 import EnchantingColumn from "@/components/game/EnchantingColumn";
+import GrindstoneColumn from "@/components/game/GrindstoneColumn";
 import ItemIcon from "@/components/game/ItemIcon";
 import { itemTooltipFor, type TooltipContent, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
@@ -20,7 +21,7 @@ type InventoryPanelProps = {
   selectedHotbarSlot: number;
   hotbarSlots: number;
   recipes: Recipe[];
-  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | null;
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
   /** Current game mode — Creative swaps the recipe book for the item palette. */
   gameMode: GameMode;
   /** Contents of the open chest, or null when no chest is open. */
@@ -41,6 +42,7 @@ type InventoryPanelProps = {
   onAnvilCombine: () => void;
   onAnvilRepair: () => void;
   onAnvilRename: (name: string) => void;
+  onGrindstoneStrip: () => void;
   /** Pulls a full stack of an item from the Creative palette into the inventory. */
   onGiveItem: (itemId: string) => void;
 };
@@ -102,6 +104,7 @@ export default function InventoryPanel({
   onAnvilCombine,
   onAnvilRepair,
   onAnvilRename,
+  onGrindstoneStrip,
   onGiveItem
 }: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
@@ -257,6 +260,8 @@ export default function InventoryPanel({
             onRepair={onAnvilRepair}
             onRename={onAnvilRename}
           />
+        ) : craftingStation === "grindstone" ? (
+          <GrindstoneColumn item={inventory[selectedHotbarSlot]} onStrip={onGrindstoneStrip} />
         ) : gameMode === "creative" ? (
           <CreativeInventoryTab onGiveItem={onGiveItem} />
         ) : (

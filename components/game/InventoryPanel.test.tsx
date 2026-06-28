@@ -24,7 +24,7 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     selectedHotbarSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
-    craftingStation: null as "furnace" | "enchanting" | "anvil" | null,
+    craftingStation: null as "furnace" | "enchanting" | "anvil" | "grindstone" | null,
     gameMode: "survival" as GameMode,
     container: null as InventorySlot[] | null,
     xpLevel: 0,
@@ -41,6 +41,7 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     onAnvilCombine: mock(),
     onAnvilRepair: mock(),
     onAnvilRename: mock(),
+    onGrindstoneStrip: mock(),
     onGiveItem: mock(),
     ...overrides
   };
@@ -218,6 +219,13 @@ describe("InventoryPanel", () => {
     expect(screen.getByText("Anvil")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Combine duplicate/ })).toBeTruthy();
     expect(screen.getByLabelText("Custom item name")).toBeTruthy();
+  });
+
+  test("the grindstone panel offers to remove enchantments from enchanted gear", () => {
+    const enchanted = { ...createSlot("diamond_sword", 1), enchantments: [{ id: "sharpness" as const, level: 2 }] };
+    renderPanel({ craftingStation: "grindstone", inventory: [enchanted], selectedHotbarSlot: 0 });
+    expect(screen.getByText("Grindstone")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Remove enchantments/ })).toBeTruthy();
   });
 
   test("an open chest renders its grid as an extra row of slots", () => {

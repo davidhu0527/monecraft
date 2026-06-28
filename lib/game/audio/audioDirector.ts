@@ -223,6 +223,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "anvilRenamed":
           backend.play(XP_SOUND);
           break;
+        case "grindstoneStripped":
+          backend.play(XP_SOUND);
+          break;
         case "jumped":
           backend.play(JUMP_SOUND);
           break;
