@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ENCHANT_MAX_LEVEL, INVENTORY_SLOTS } from "@/lib/game/config";
+import { CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, INVENTORY_SLOTS } from "@/lib/game/config";
 import { MAX_HEARTS, MAX_HUNGER } from "@/lib/game/config";
 import {
   inventorySlotsSnapshot,
@@ -12,6 +12,7 @@ import {
   migrateSaveV7toV8,
   migrateSaveV8toV9,
   migrateSaveV9toV10,
+  migrateSaveV10toV11,
   readContainers,
   readLootedChests,
   readSave,
@@ -44,7 +45,8 @@ import type {
   SaveDataV6,
   SaveDataV7,
   SaveDataV8,
-  SaveDataV9
+  SaveDataV9,
+  SaveDataV10
 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
@@ -65,7 +67,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 10,
+    version: 11,
     gameMode: "creative",
     difficulty: "hard",
     seed: 1337,
@@ -108,7 +110,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(10);
+    expect(parsed!.version).toBe(11);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -130,7 +132,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(10); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8 -> v9 -> v10
+    expect(parsed!.version).toBe(11); // chained v1 -> v2 -> v3 -> v4 -> v5 -> v6 -> v7 -> v8 -> v9 -> v10 -> v11
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -219,11 +221,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v10", () => {
+  test("readSave migrates a v2 save through to v11", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(10);
+    expect(parsed!.version).toBe(11);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -260,7 +262,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(10);
+    expect(parsed.version).toBe(11);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -335,7 +337,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(10);
+    expect(parsed.version).toBe(11);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -380,7 +382,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(10);
+    expect(parsed.version).toBe(11);
     expect(restoreEffects(parsed)).toEqual([]);
   });
 
@@ -402,7 +404,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(10);
+    expect(parsed.version).toBe(11);
     expect(restoreGameMode(parsed)).toBe("survival");
   });
 
@@ -429,7 +431,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v8: SaveDataV8 = { ...v5Save(), version: 8 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(10);
+    expect(parsed.version).toBe(11);
     expect(restoreDifficulty(parsed)).toBe("normal");
   });
 
@@ -457,7 +459,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v9: SaveDataV9 = { ...v5Save(), version: 9 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v9) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(10);
+    expect(parsed.version).toBe(11);
     expect(restoreHardcore(parsed)).toBe(false);
     expect(restoreGameOver(parsed)).toBe(false);
   });
@@ -479,6 +481,38 @@ describe("v5 to v6 migration & status effects", () => {
     const parsed = readSave(KEY, storage)!;
     expect(parsed.hardcore).toBe(true);
     expect(parsed.gameOver).toBe(true);
+  });
+
+  test("migrateSaveV10toV11 is a pure version bump leaving custom names absent", () => {
+    const v10: SaveDataV10 = { ...v5Save(), version: 10 };
+    const migrated = migrateSaveV10toV11(v10);
+    expect(migrated.version).toBe(11);
+    expect(migrated.inventorySlots).toEqual(v10.inventorySlots); // unchanged
+  });
+
+  test("a custom name survives a full save round-trip on durable gear", () => {
+    const storage = memoryStorage();
+    const save: SaveData = {
+      ...sampleSave(),
+      inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, customName: "Excalibur" }]
+    };
+    writeSave(KEY, save, storage);
+    expect(readSave(KEY, storage)!.inventorySlots?.[0].customName).toBe("Excalibur");
+  });
+
+  test("restoreInventorySlots trims and caps a custom name, drops blanks, and ignores names on non-durable items", () => {
+    const dirty: SaveData = {
+      ...sampleSave(),
+      inventorySlots: [
+        { id: "diamond_sword", count: 1, durability: 700, customName: `  ${"x".repeat(50)}  ` }, // trimmed + capped
+        { id: "ruby_sword", count: 1, durability: 360, customName: "   " }, // blank → dropped
+        { id: "dirt", count: 5, customName: "Dirty" } // non-durable → no name
+      ]
+    };
+    const slots = restoreInventorySlots(dirty)!;
+    expect(slots[0].customName).toBe("x".repeat(CUSTOM_NAME_MAX_LEN));
+    expect(slots[1].customName).toBeUndefined();
+    expect(slots[2].customName).toBeUndefined();
   });
 
   test("restoreXp clamps to a non-negative integer; absent/garbage → 0", () => {
@@ -519,6 +553,15 @@ describe("v5 to v6 migration & status effects", () => {
     };
     const slots = restoreInventorySlots(dirty)!;
     expect(slots[0].enchantments).toEqual([{ id: "sharpness", level: ENCHANT_MAX_LEVEL }]);
+  });
+
+  test("restoreInventorySlots clamps each enchant to its own cap (a tampered mending:3 loads as 1)", () => {
+    const dirty: SaveData = {
+      ...sampleSave(),
+      inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, enchantments: [{ id: "mending", level: 3 }] as never }]
+    };
+    const slots = restoreInventorySlots(dirty)!;
+    expect(slots[0].enchantments).toEqual([{ id: "mending", level: 1 }]); // Mending is binary
   });
 
   test("serializeEffects / restoreEffects round-trip the active effects", () => {
@@ -597,7 +640,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 11 };
+    const save = { ...sampleSave(), version: 12 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
@@ -621,11 +664,11 @@ describe("inventorySlotsSnapshot", () => {
   test("keeps only the persisted fields", () => {
     const snapshot = inventorySlotsSnapshot([createSlot("wood_pickaxe", 1), createSlot("dirt", 9), createEmptySlot()]);
     expect(snapshot).toEqual([
-      { id: "wood_pickaxe", count: 1, durability: 70, enchantments: undefined },
-      { id: "dirt", count: 9, durability: undefined, enchantments: undefined },
-      { id: null, count: 0, durability: undefined, enchantments: undefined }
+      { id: "wood_pickaxe", count: 1, durability: 70, enchantments: undefined, customName: undefined },
+      { id: "dirt", count: 9, durability: undefined, enchantments: undefined, customName: undefined },
+      { id: null, count: 0, durability: undefined, enchantments: undefined, customName: undefined }
     ]);
     // Definition-derived fields (label, attack, minePower…) must not be persisted.
-    expect(Object.keys(snapshot[0]).sort()).toEqual(["count", "durability", "enchantments", "id"]);
+    expect(Object.keys(snapshot[0]).sort()).toEqual(["count", "customName", "durability", "enchantments", "id"]);
   });
 });

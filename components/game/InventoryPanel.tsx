@@ -1,13 +1,15 @@
 import { Fragment, useState } from "react";
+import AnvilColumn from "@/components/game/AnvilColumn";
 import CreativeInventoryTab from "@/components/game/CreativeInventoryTab";
 import EnchantingColumn from "@/components/game/EnchantingColumn";
+import GrindstoneColumn from "@/components/game/GrindstoneColumn";
 import ItemIcon from "@/components/game/ItemIcon";
 import { itemTooltipFor, type TooltipContent, useItemTooltip } from "@/components/game/ItemTooltip";
 import PixelImg from "@/components/game/PixelImg";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { ingredientStatus } from "@/lib/game/inventory";
 import { itemSourceHint } from "@/lib/game/itemSources";
-import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
+import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot, displayName, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { groupRecipes } from "@/lib/game/recipes";
 import { itemIconUrl } from "@/lib/ui/sprites";
 import type { GameMode } from "@/lib/game/gameModes";
@@ -19,7 +21,7 @@ type InventoryPanelProps = {
   selectedHotbarSlot: number;
   hotbarSlots: number;
   recipes: Recipe[];
-  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | null;
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
   /** Current game mode — Creative swaps the recipe book for the item palette. */
   gameMode: GameMode;
   /** Contents of the open chest, or null when no chest is open. */
@@ -27,6 +29,9 @@ type InventoryPanelProps = {
   /** Current XP level + per-enchant cost, for the enchanting panel. */
   xpLevel: number;
   enchantCost: number;
+  anvilCombineCost: number;
+  anvilRepairCost: number;
+  anvilRenameCost: number;
   canCraft: (recipe: Recipe) => boolean;
   onSwapSlots: (fromIndex: number, toIndex: number) => void;
   /** Moves a slot across the inventory/chest boundary (chest indices offset by CONTAINER_SLOT_BASE). */
@@ -34,6 +39,10 @@ type InventoryPanelProps = {
   onToggleEquipArmor: (index: number) => void;
   onCraft: (recipe: Recipe) => void;
   onEnchant: (id: EnchantmentId) => void;
+  onAnvilCombine: () => void;
+  onAnvilRepair: () => void;
+  onAnvilRename: (name: string) => void;
+  onGrindstoneStrip: () => void;
   /** Pulls a full stack of an item from the Creative palette into the inventory. */
   onGiveItem: (itemId: string) => void;
 };
@@ -83,12 +92,19 @@ export default function InventoryPanel({
   container,
   xpLevel,
   enchantCost,
+  anvilCombineCost,
+  anvilRepairCost,
+  anvilRenameCost,
   canCraft,
   onSwapSlots,
   onMoveStack,
   onToggleEquipArmor,
   onCraft,
   onEnchant,
+  onAnvilCombine,
+  onAnvilRepair,
+  onAnvilRename,
+  onGrindstoneStrip,
   onGiveItem
 }: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
@@ -131,7 +147,7 @@ export default function InventoryPanel({
         className={["inv-slot", extraClass, pendingIndex === idx ? "pending" : "", isEquipped(slot) ? "equipped" : ""].filter(Boolean).join(" ")}
         onClick={() => onSlotClick(idx)}
         {...bind(itemTooltipFor(slot))}
-        aria-label={slot.id && slot.count > 0 ? `${name}: ${slot.label}` : `${name}: empty`}
+        aria-label={slot.id && slot.count > 0 ? `${name}: ${displayName(slot)}` : `${name}: empty`}
       >
         <ItemIcon slot={slot} size={32} />
       </button>
@@ -202,7 +218,7 @@ export default function InventoryPanel({
                     className={equippedItem ? "inv-slot armor-slot filled" : "inv-slot armor-slot"}
                     onClick={() => equippedIndex >= 0 && onToggleEquipArmor(equippedIndex)}
                     {...bind(equippedItem ? itemTooltipFor(equippedItem) : { title: `${ARMOR_SLOT_LABELS[armorSlot]} (empty)` })}
-                    aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${equippedItem.label}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
+                    aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${displayName(equippedItem)}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
                   >
                     {equippedItem ? (
                       <ItemIcon slot={equippedItem} size={32} />
@@ -231,6 +247,21 @@ export default function InventoryPanel({
 
         {craftingStation === "enchanting" ? (
           <EnchantingColumn item={inventory[selectedHotbarSlot]} xpLevel={xpLevel} cost={enchantCost} onEnchant={onEnchant} />
+        ) : craftingStation === "anvil" ? (
+          <AnvilColumn
+            item={inventory[selectedHotbarSlot]}
+            inventory={inventory}
+            selectedHotbarSlot={selectedHotbarSlot}
+            xpLevel={xpLevel}
+            combineCost={anvilCombineCost}
+            repairCost={anvilRepairCost}
+            renameCost={anvilRenameCost}
+            onCombine={onAnvilCombine}
+            onRepair={onAnvilRepair}
+            onRename={onAnvilRename}
+          />
+        ) : craftingStation === "grindstone" ? (
+          <GrindstoneColumn item={inventory[selectedHotbarSlot]} onStrip={onGrindstoneStrip} />
         ) : gameMode === "creative" ? (
           <CreativeInventoryTab onGiveItem={onGiveItem} />
         ) : (

@@ -1,5 +1,6 @@
 import ItemIcon from "@/components/game/ItemIcon";
 import { ENCHANTMENT_DEFS, ENCHANTMENT_ORDER, canEnchant, enchantLevel } from "@/lib/game/enchantments";
+import { displayName } from "@/lib/game/items";
 import type { EnchantmentId, InventorySlot } from "@/lib/game/types";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V"];
@@ -33,7 +34,7 @@ export default function EnchantingColumn({ item, xpLevel, cost, onEnchant }: Enc
         <>
           <div className="enchanting-item">
             <ItemIcon slot={item} size={32} />
-            <span>{item.label}</span>
+            <span>{displayName(item)}</span>
           </div>
           <div className="enchanting-cost">
             {cost} levels each · you have {xpLevel}

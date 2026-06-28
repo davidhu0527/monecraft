@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { BlockId, VoxelWorld } from "@/lib/world";
 import { FISHING_BITE_MAX_SECONDS, FISHING_BITE_MIN_SECONDS, FISHING_BITE_WINDOW_SECONDS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
-import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import type { GameEvent, GameState } from "../state";
 import { tickFishing, tryFish } from "./fishing";
 
@@ -20,6 +20,7 @@ function makeState(): GameState {
     world,
     inventory,
     selectedSlot: 0,
+    equippedArmor: createEmptyArmorEquipment(),
     fishing: null,
     isDead: false,
     player: { position: new THREE.Vector3(8.5, 6, 8.5), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true }

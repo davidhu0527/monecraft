@@ -347,10 +347,41 @@ times**:
 - **Protection** (armor) — take less damage
 - **Efficiency** (tools) — mine faster
 - **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
+- **Mending** (any gear) — XP you pick up repairs the held or worn item instead of
+  banking, as long as it's damaged
 
 Buttons grey out when you can't afford the cost or the enchant is maxed.
 Enchantments are part of the item, so they're kept in chests and across reloads.
 Full numbers are in the [reference](reference.md#xp--enchanting).
+
+## The anvil
+
+Craft an **anvil** (**3 gold ore + 4 cobble**), place it, and right-click to open
+the anvil panel. Like the enchanting table it works on the **selected** hotbar
+item — a tool, weapon, or armor piece — and spends XP levels:
+
+- **Combine** a second copy of the same item into it. The result keeps the best of
+  both: its durability is restored (the two bars added together, plus a bonus) and
+  any enchantments are merged, taking the higher level of each. The duplicate is
+  used up. Costs **4 levels**.
+- **Repair** with raw material — feed it the item's tier material (e.g. a diamond
+  sword takes **diamond ore**, a stone pickaxe takes **cobble**) to restore a chunk
+  of durability without needing a second copy. Costs **1 level** per material unit.
+- **Rename** the item to anything you like (it shows everywhere the item's name
+  does). Costs **1 level**.
+
+Buttons grey out when there's nothing to do (no duplicate, full durability, or no
+matching material) or you can't afford the cost. For passive, no-table upkeep,
+enchant gear with **Mending** instead.
+
+## The grindstone
+
+Craft a **grindstone** (**2 cobble + 2 planks**) and right-click it to open the
+grindstone panel — the anvil's opposite. With an **enchanted** tool, weapon, or
+armor selected in your hotbar, **Remove enchantments** strips them all off and
+**refunds XP** (5 points per enchantment level removed). Handy for salvaging XP
+from gear you've outgrown, or clearing an enchant you don't want before
+re-enchanting. It costs nothing to use — it only gives XP back.
 
 ## Doors
 

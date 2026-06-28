@@ -243,6 +243,17 @@ export const SHARPNESS_DAMAGE_PER_LEVEL = 2; // +melee damage per level
 export const PROTECTION_DEFENSE_PER_LEVEL = 2; // +defense points per level (feeds armorReduction)
 export const EFFICIENCY_SPEED_PER_LEVEL = 0.3; // mining speed ×(1 + level × this)
 export const UNBREAKING_SKIP_PER_LEVEL = 0.2; // chance per level to skip durability wear
+export const MENDING_MAX_LEVEL = 1; // Mending is binary, not tiered
+export const MENDING_REPAIR_PER_XP = 2; // durability points repaired per diverted XP point
+export const CUSTOM_NAME_MAX_LEN = 32; // cap on a per-item custom name (anvil rename), enforced on set and on restore
+// Anvil: repair/combine/rename gear for XP levels (see lib/game/anvil.ts).
+export const ANVIL_COMBINE_COST_LEVELS = 4; // XP levels to combine a duplicate (repairs + merges enchants)
+export const ANVIL_REPAIR_COST_LEVELS = 1; // XP levels to repair with one unit of tier material
+export const ANVIL_RENAME_COST_LEVELS = 1; // XP levels to rename an item
+export const ANVIL_REPAIR_BONUS_PCT = 0.12; // bonus durability when combining = floor(maxDurability × this)
+export const ANVIL_MATERIAL_REPAIR_PCT = 0.25; // durability restored per material unit = ceil(maxDurability × this)
+// Grindstone: strip a held item's enchantments and refund XP (see lib/game/grindstone.ts).
+export const GRINDSTONE_REFUND_XP_PER_LEVEL = 5; // XP points refunded per enchantment level removed
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;

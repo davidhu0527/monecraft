@@ -58,7 +58,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**66 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**68 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the nine **furnace** smelting
 recipes (need an open furnace) and the five **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -80,6 +80,8 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 | 1 Chest            | 8 Planks                 |
 | 1 Brewing Stand    | 3 Cobble + 1 Gold Ore    |
 | 1 Enchanting Table | 2 Diamond Ore + 4 Cobble |
+| 1 Anvil            | 3 Gold Ore + 4 Cobble    |
+| 1 Grindstone       | 2 Cobble + 2 Planks      |
 | 1 Wood Door        | 6 Planks                 |
 | 4 Torch            | 1 Coal + 1 Wood          |
 | 1 Bed              | 3 Wool + 3 Planks        |
@@ -202,60 +204,63 @@ Source: `lib/game/engine/systems/xp.ts`, `lib/game/mobXp.ts`, `lib/game/enchantm
 
 ### Enchantments
 
-Each costs **3 XP levels** per application, up to **level 3**, applied at the
-enchanting table to the selected tool/weapon/armor. Enchantments are per-item and
-survive a save.
+Each costs **3 XP levels** per application, up to that enchantment's max level
+(**3** for most, **1** for Mending), applied at the enchanting table to the
+selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
-| Enchantment | Applies to          | Per level                          |
-| ----------- | ------------------- | ---------------------------------- |
-| Sharpness   | weapons             | +2 melee damage                    |
-| Protection  | armor               | +2 defense (more damage reduction) |
-| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed    |
-| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear  |
+| Enchantment | Applies to          | Per level                                                     |
+| ----------- | ------------------- | ------------------------------------------------------------- |
+| Sharpness   | weapons             | +2 melee damage                                               |
+| Protection  | armor               | +2 defense (more damage reduction)                            |
+| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed                               |
+| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear                             |
+| Mending     | tools/weapons/armor | gained XP repairs the gear (2 durability per XP); max level 1 |
 
 ## Blocks
 
-**35 block types** (plus air). Hardness is relative break time — higher is slower.
+**37 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
-| Block             | Hardness | Mine with       | Notes                                                                                                                 |
-| ----------------- | -------- | --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                           |
-| Dirt              | 2        | any             | —                                                                                                                     |
-| Sand              | 2        | any             | Common on beaches and in deserts                                                                                      |
-| Snow              | 2        | any             | Mountain peaks                                                                                                        |
-| Leaves            | 2        | any             | From trees; drops a sapling ~8% of the time, else nothing                                                             |
-| Cactus            | 2        | any             | Desert decoration                                                                                                     |
-| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                  |
-| Wood              | 3        | any             | Tree trunks                                                                                                           |
-| Planks            | 3        | any             | Crafted from wood                                                                                                     |
-| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                                  |
-| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                        |
-| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                         |
-| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                              |
-| Brewing Stand     | 4        | any             | **Interactive** — opens brewing recipes (potions). Crafted from 3 cobble + 1 gold ore                                 |
-| Enchanting Table  | 6        | any             | **Interactive** — opens the enchanting panel (spend XP levels). Crafted from 2 diamond ore + 4 cobble                 |
-| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full)         |
-| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                   |
-| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                            |
-| TNT               | 1        | any             | **Interactive** — right-click with a torch to light a fuse, then it explodes (power 4). Crafted from gunpowder + sand |
-| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item          |
-| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                            |
-| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it              |
-| Coal Ore          | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                                |
-| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                                     |
-| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                                     |
-| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                                     |
-| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                                     |
-| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                                   |
-| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                                   |
-| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                              |
-| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                         |
-| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                  |
-| Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                          |
-| Bedrock           | —        | unbreakable     | World floor and border                                                                                                |
-| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second          |
+| Block             | Hardness | Mine with       | Notes                                                                                                                             |
+| ----------------- | -------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                                       |
+| Dirt              | 2        | any             | —                                                                                                                                 |
+| Sand              | 2        | any             | Common on beaches and in deserts                                                                                                  |
+| Snow              | 2        | any             | Mountain peaks                                                                                                                    |
+| Leaves            | 2        | any             | From trees; drops a sapling ~8% of the time, else nothing                                                                         |
+| Cactus            | 2        | any             | Desert decoration                                                                                                                 |
+| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                              |
+| Wood              | 3        | any             | Tree trunks                                                                                                                       |
+| Planks            | 3        | any             | Crafted from wood                                                                                                                 |
+| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                                              |
+| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                                    |
+| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                                     |
+| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                                          |
+| Brewing Stand     | 4        | any             | **Interactive** — opens brewing recipes (potions). Crafted from 3 cobble + 1 gold ore                                             |
+| Enchanting Table  | 6        | any             | **Interactive** — opens the enchanting panel (spend XP levels). Crafted from 2 diamond ore + 4 cobble                             |
+| Anvil             | 6        | any             | **Interactive** — opens the anvil panel: repair/combine/rename held gear for XP levels. Crafted from 3 gold ore + 4 cobble        |
+| Grindstone        | 5        | any             | **Interactive** — opens the grindstone panel: strip a held item's enchantments for an XP refund. Crafted from 2 cobble + 2 planks |
+| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full)                     |
+| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                               |
+| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                                        |
+| TNT               | 1        | any             | **Interactive** — right-click with a torch to light a fuse, then it explodes (power 4). Crafted from gunpowder + sand             |
+| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item                      |
+| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                                        |
+| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it                          |
+| Coal Ore          | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                                            |
+| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                                                 |
+| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                                                 |
+| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                                                 |
+| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                                                 |
+| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                                               |
+| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                                               |
+| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                                          |
+| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                                     |
+| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                              |
+| Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                                      |
+| Bedrock           | —        | unbreakable     | World floor and border                                                                                                            |
+| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second                      |
 
 ## Mobs
 

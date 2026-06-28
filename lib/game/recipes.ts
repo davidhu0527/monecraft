@@ -51,6 +51,24 @@ const CRAFTING_RECIPES: Recipe[] = [
     ],
     result: { slotId: "enchanting_table", count: 1 }
   },
+  {
+    id: "anvil",
+    label: "3 Gold Ore + 4 Cobble -> Anvil",
+    cost: [
+      { slotId: "gold_ore", count: 3 },
+      { slotId: "cobble", count: 4 }
+    ],
+    result: { slotId: "anvil", count: 1 }
+  },
+  {
+    id: "grindstone",
+    label: "2 Cobble + 2 Planks -> Grindstone",
+    cost: [
+      { slotId: "cobble", count: 2 },
+      { slotId: "planks", count: 2 }
+    ],
+    result: { slotId: "grindstone", count: 1 }
+  },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
   {
     id: "torch",

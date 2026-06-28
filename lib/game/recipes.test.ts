@@ -57,6 +57,16 @@ describe("recipe categories", () => {
     expect(recipeCategory(recipe("enchanting_table"))).toBe("Building");
   });
 
+  test("the anvil is a plain Building recipe (its actions aren't recipe-gated)", () => {
+    expect(recipe("anvil").station).toBeUndefined();
+    expect(recipeCategory(recipe("anvil"))).toBe("Building");
+  });
+
+  test("the grindstone is a plain Building recipe (its actions aren't recipe-gated)", () => {
+    expect(recipe("grindstone").station).toBeUndefined();
+    expect(recipeCategory(recipe("grindstone"))).toBe("Building");
+  });
+
   test("groupRecipes returns non-empty categories in the fixed display order", () => {
     const groups = groupRecipes(RECIPES, () => false);
     const positions = groups.map((g) => RECIPE_CATEGORY_ORDER.indexOf(g.category));
