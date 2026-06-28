@@ -373,8 +373,8 @@ inventory or chest slot.
 
 Each piece occupies its own dedicated equip slot — equipping moves it out of the
 inventory (so it never occupies a hotbar/storage slot), and unequipping returns it
-to a free inventory slot. Defense reduces incoming damage (a hit always deals at
-least 1).
+to a free inventory slot. Worn pieces render on the third-person player model
+(ore-tinted shells). Defense reduces incoming damage (a hit always deals at least 1).
 
 | Item            | Slot            | Defense | Durability |
 | --------------- | --------------- | ------- | ---------- |

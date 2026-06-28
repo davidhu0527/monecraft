@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { createPlayerVisuals, type PlayerVisualsState } from "@/lib/game/render/playerVisuals";
-import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import { getSkinPreset } from "@/lib/game/playerSkins";
 
 function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsState {
@@ -17,6 +17,7 @@ function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsSt
       onGround: true
     },
     inventory: [createSlot("dirt", 5)],
+    equippedArmor: createEmptyArmorEquipment(),
     selectedSlot: 0,
     mining: { targetKey: "" },
     fishing: null,
@@ -112,6 +113,27 @@ describe("playerVisuals", () => {
     const head = bodyGroup(scene).getObjectByName("head")!;
     const skull = head.children[0] as THREE.Mesh;
     expect((skull.material as THREE.MeshStandardMaterial).color.getHex()).toBe(knight.skin);
+    visuals.dispose();
+  });
+
+  test("shows a worn armor piece's shells and hides the rest", () => {
+    const scene = new THREE.Scene();
+    const visuals = createPlayerVisuals(scene);
+    const armor = (slot: "helmet" | "chestplate") => bodyGroup(scene).getObjectByName(`armor-${slot}`);
+
+    // Nothing worn → all armor shells hidden (sample helmet + chestplate torso).
+    visuals.sync(makeState(), 0);
+    expect(armor("helmet")!.visible).toBe(false);
+    expect(armor("chestplate")!.visible).toBe(false);
+
+    // Wearing a helmet shows its shell, leaves the chestplate hidden.
+    visuals.sync(makeState({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } }), 16);
+    expect(armor("helmet")!.visible).toBe(true);
+    expect(armor("chestplate")!.visible).toBe(false);
+
+    // Unequipping hides it again.
+    visuals.sync(makeState(), 32);
+    expect(armor("helmet")!.visible).toBe(false);
     visuals.dispose();
   });
 

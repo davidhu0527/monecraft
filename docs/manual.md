@@ -214,6 +214,8 @@ chestplate, leggings, or boots in your inventory to **equip** it — the piece
 inventory/hotbar slot it came from. Click the armor slot to take it back off (it
 returns to a free inventory slot). Each piece adds defense and absorbs durability
 when you're struck — but a hit always deals at least **1 damage**, even in a full set.
+Worn pieces also **show on your character** in third-person (press **V**), each tinted
+toward the ore it's made from.
 
 **Ranged combat.** Craft a **bow** (3 wood + 3 string) and **arrows** (1 stone +
 1 wood + 1 feather makes 4). With the bow selected, **left-click fires an arrow**
