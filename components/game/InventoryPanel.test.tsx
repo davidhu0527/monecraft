@@ -142,6 +142,18 @@ describe("InventoryPanel", () => {
     expect(props.onUnequipArmor).toHaveBeenCalledWith("helmet");
   });
 
+  test("unequipping clears a pending grid selection (no stale source left active)", async () => {
+    const user = userEvent.setup();
+    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } });
+    const slots = slotButtons();
+    await user.click(slots[0]); // select a source slot → pending
+    expect(slots[0].className).toContain("pending");
+    await user.click(screen.getByRole("button", { name: "Helmet: Helmet" })); // unequip
+    expect(props.onUnequipArmor).toHaveBeenCalledWith("helmet");
+    expect(slots[0].className).not.toContain("pending"); // pending was cleared
+    expect(props.onSwapSlots).not.toHaveBeenCalled();
+  });
+
   test("empty armor slots show a ghost icon and ignore clicks", async () => {
     const user = userEvent.setup();
     const props = renderPanel();

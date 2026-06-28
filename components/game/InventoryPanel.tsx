@@ -214,7 +214,11 @@ export default function InventoryPanel({
                   <button
                     key={`armor-${armorSlot}`}
                     className={equippedItem ? "inv-slot armor-slot filled" : "inv-slot armor-slot"}
-                    onClick={() => equippedItem && onUnequipArmor(armorSlot)}
+                    onClick={() => {
+                      if (!equippedItem) return;
+                      setPendingIndex(null); // match onSlotClick — don't leave a stale source selected
+                      onUnequipArmor(armorSlot);
+                    }}
                     {...bind(equippedItem ? itemTooltipFor(equippedItem) : { title: `${ARMOR_SLOT_LABELS[armorSlot]} (empty)` })}
                     aria-label={equippedItem ? `${ARMOR_SLOT_LABELS[armorSlot]}: ${displayName(equippedItem)}` : `${ARMOR_SLOT_LABELS[armorSlot]}: empty`}
                   >
