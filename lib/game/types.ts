@@ -9,13 +9,24 @@ export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate
 export type EquippedArmor = Record<ArmorSlot, InventorySlot | null>;
 
 /** A timed status effect on the player. Positive effects come from potions; poison is a hazard. */
-export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "poison";
+export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance" | "water_breathing" | "haste" | "resistance" | "jump_boost" | "poison";
 
 /** The effect a drinkable potion applies, with how long it lasts. */
 export type ItemEffect = { id: EffectId; durationSeconds: number };
 
 /** A gear enchantment applied at the enchanting table; each maps to one combat/mining/durability seam. */
-export type EnchantmentId = "sharpness" | "protection" | "efficiency" | "unbreaking" | "mending";
+export type EnchantmentId =
+  | "sharpness"
+  | "protection"
+  | "efficiency"
+  | "unbreaking"
+  | "mending"
+  | "power"
+  | "punch"
+  | "knockback"
+  | "looting"
+  | "fortune"
+  | "feather_falling";
 
 /** A per-item-instance enchantment and its level. */
 export type Enchantment = { id: EnchantmentId; level: number };

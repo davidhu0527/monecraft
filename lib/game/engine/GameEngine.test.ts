@@ -4,8 +4,10 @@ import { BlockId, collidesAt } from "@/lib/world";
 import {
   DAY_CYCLE_SECONDS,
   EFFECT_SPEED_DURATION,
+  EFFECT_JUMP_BOOST_VELOCITY,
   ENCHANT_COST_LEVELS,
   EYE_HEIGHT,
+  JUMP_VELOCITY,
   MAX_HUNGER,
   POISON_DURATION,
   XP_PER_LEVEL,
@@ -30,7 +32,8 @@ import {
 } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
-import { enchantLevel } from "@/lib/game/enchantments";
+import { applyEnchant, enchantLevel } from "@/lib/game/enchantments";
+import { addEffect } from "@/lib/game/engine/systems/statusEffects";
 import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
@@ -233,6 +236,39 @@ describe("movement and stats", () => {
     expect(engine.state.hearts).toBeLessThan(MAX_HEARTS);
   });
 
+  test("Feather Falling boots soften fall damage", () => {
+    // Same fall, same armor defense — only the enchantment differs — so any gap
+    // is Feather Falling's doing, not the boots' base armor.
+    const fallDamage = (boots: ReturnType<typeof createSlot>): number => {
+      const engine = makeEngine();
+      calmDaytime(engine);
+      run(engine, 1); // settle on the ground
+      const { state } = engine;
+      state.equippedArmor = { ...state.equippedArmor, boots };
+      state.hearts = MAX_HEARTS;
+      state.player.position.y += 16; // a hard fall, deep in the damage window
+      state.player.velocity.set(0, 0, 0);
+      state.player.onGround = false;
+      run(engine, 1.5); // long enough to land (no regen interval elapses)
+      return MAX_HEARTS - state.hearts;
+    };
+    const plain = fallDamage(createSlot("boots", 1));
+    let ffBoots = createSlot("boots", 1);
+    for (let i = 0; i < 3; i += 1) ffBoots = applyEnchant(ffBoots, "feather_falling"); // level 3
+    const softened = fallDamage(ffBoots);
+    expect(plain).toBeGreaterThan(0);
+    expect(softened).toBeLessThan(plain);
+  });
+
+  test("the Jump Boost effect raises jump launch velocity", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1); // settle on the ground
+    addEffect(engine.state, "jump_boost", 60);
+    engine.step(1 / 60, input({ keys: ["Space"] }));
+    expect(engine.state.player.velocity.y).toBeCloseTo(JUMP_VELOCITY + EFFECT_JUMP_BOOST_VELOCITY, 5);
+  });
+
   test("hearts regenerate one per interval while hurt", () => {
     const engine = makeEngine();
     calmDaytime(engine);
@@ -377,6 +413,32 @@ describe("mining", () => {
     const gained = [...after.entries()].some(([id, count]) => count > (before.get(id) ?? 0));
     expect(gained).toBe(true);
     expect(state.blockChanges.changes().length).toBeGreaterThan(0);
+  });
+
+  test("the Haste effect speeds up mining progress", () => {
+    // Same block + tool + duration; only the effect differs, and the run is short
+    // enough that the (hard) stone never breaks, so progress accumulates.
+    const progressAfter = (haste: boolean): number => {
+      const engine = makeEngine();
+      calmDaytime(engine);
+      run(engine, 1); // settle
+      const { state } = engine;
+      const px = Math.floor(state.player.position.x);
+      const py = Math.floor(state.player.position.y) - 1;
+      const pz = Math.floor(state.player.position.z);
+      state.blockChanges.set(px, py, pz, BlockId.Stone);
+      state.player.position.x = px + 0.5;
+      state.player.position.z = pz + 0.5;
+      state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
+      state.inventory[state.selectedSlot] = createSlot("wood_pickaxe", 1);
+      if (haste) addEffect(state, "haste", 60);
+      run(engine, 0.5, input({ leftMouseHeld: true, pointerLocked: true }));
+      return state.mining.progress;
+    };
+    const plain = progressAfter(false);
+    const hasted = progressAfter(true);
+    expect(plain).toBeGreaterThan(0);
+    expect(hasted).toBeGreaterThan(plain);
   });
 
   test("mining is gated on pointer lock and the inventory being closed", () => {

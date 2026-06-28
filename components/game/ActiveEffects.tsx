@@ -17,6 +17,9 @@ const EFFECT_ICONS: Record<EffectId, HudIconName> = {
   regeneration: "effect_regeneration",
   fire_resistance: "effect_fire_resistance",
   water_breathing: "effect_water_breathing",
+  haste: "effect_haste",
+  resistance: "effect_resistance",
+  jump_boost: "effect_jump_boost",
   poison: "effect_poison"
 };
 
@@ -26,6 +29,9 @@ const EFFECT_LABELS: Record<EffectId, string> = {
   regeneration: "Regeneration",
   fire_resistance: "Fire Resistance",
   water_breathing: "Water Breathing",
+  haste: "Haste",
+  resistance: "Resistance",
+  jump_boost: "Leaping",
   poison: "Poison"
 };
 

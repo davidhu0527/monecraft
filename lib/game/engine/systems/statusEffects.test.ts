@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import {
+  EFFECT_HASTE_MULTIPLIER,
+  EFFECT_JUMP_BOOST_VELOCITY,
   EFFECT_REGEN_INTERVAL,
+  EFFECT_RESISTANCE_MULTIPLIER,
   EFFECT_SPEED_MULTIPLIER,
   EFFECT_STRENGTH_BONUS,
   MAX_HEARTS,
@@ -10,18 +13,22 @@ import {
   POISON_INTERVAL
 } from "@/lib/game/config";
 import { BlockId } from "@/lib/world";
+import { createEmptyArmorEquipment } from "@/lib/game/items";
 import { createTimers, type GameEvent, type GameState } from "@/lib/game/engine/state";
 import {
   addEffect,
   clearEffects,
   effectRemaining,
   hasEffect,
+  hasteMultiplier,
+  jumpBoostBonus,
+  resistanceMultiplier,
   speedMultiplier,
   strengthBonus,
   tickStatusEffects,
   type StatusEffectDeps
 } from "@/lib/game/engine/systems/statusEffects";
-import { applyNonLethalDamage } from "@/lib/game/engine/systems/playerLife";
+import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage } from "@/lib/game/engine/systems/playerLife";
 import { tickLavaExposure, tickOxygen } from "@/lib/game/engine/systems/playerStats";
 import type { EffectId } from "@/lib/game/types";
 
@@ -76,6 +83,38 @@ describe("modifiers", () => {
     addEffect(state, "strength", 10);
     expect(speedMultiplier(state)).toBe(EFFECT_SPEED_MULTIPLIER);
     expect(strengthBonus(state)).toBe(EFFECT_STRENGTH_BONUS);
+  });
+
+  test("haste, resistance, and jump-boost modifiers reflect active effects", () => {
+    const state = makeState();
+    expect(hasteMultiplier(state)).toBe(1);
+    expect(resistanceMultiplier(state)).toBe(1);
+    expect(jumpBoostBonus(state)).toBe(0);
+    addEffect(state, "haste", 10);
+    addEffect(state, "resistance", 10);
+    addEffect(state, "jump_boost", 10);
+    expect(hasteMultiplier(state)).toBe(EFFECT_HASTE_MULTIPLIER);
+    expect(resistanceMultiplier(state)).toBe(EFFECT_RESISTANCE_MULTIPLIER);
+    expect(jumpBoostBonus(state)).toBe(EFFECT_JUMP_BOOST_VELOCITY);
+  });
+});
+
+describe("Resistance scope", () => {
+  test("reduces armor-mitigated combat damage but leaves unmitigated hazards alone", () => {
+    const plain = makeState({ hearts: 20, equippedArmor: createEmptyArmorEquipment() });
+    const resisted = makeState({ hearts: 20, equippedArmor: createEmptyArmorEquipment() });
+    addEffect(resisted, "resistance", 60);
+    applyDamageWithArmor(plain, 10);
+    applyDamageWithArmor(resisted, 10);
+    expect(20 - resisted.hearts).toBeLessThan(20 - plain.hearts); // Resistance softened the combat hit
+
+    // Lava/void/starvation flow through applyUnmitigatedDamage, which Resistance must not touch.
+    const hazardPlain = makeState({ hearts: 20 });
+    const hazardResisted = makeState({ hearts: 20 });
+    addEffect(hazardResisted, "resistance", 60);
+    applyUnmitigatedDamage(hazardPlain, 6);
+    applyUnmitigatedDamage(hazardResisted, 6);
+    expect(hazardResisted.hearts).toBe(hazardPlain.hearts);
   });
 });
 

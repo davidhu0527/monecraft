@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { canCraft, countsById, craft } from "@/lib/game/inventory";
 import { groupRecipes, recipeCategory, RECIPE_CATEGORY_ORDER, RECIPES } from "@/lib/game/recipes";
+import { EFFECT_ORDER } from "@/lib/game/engine/systems/statusEffects";
 import type { InventorySlot } from "@/lib/game/types";
 
 function inventory(items: Array<[string, number]>): InventorySlot[] {
@@ -50,6 +51,20 @@ describe("recipe categories", () => {
     expect(recipe("brewing_stand").station).toBeUndefined();
     expect(recipeCategory(recipe("brewing_stand"))).toBe("Building");
     expect(recipe("empty_bottle").station).toBeUndefined();
+  });
+
+  test("every brewed potion yields an item carrying a valid status effect", () => {
+    const brewed = RECIPES.filter((r) => r.station === "brewing");
+    for (const r of brewed) {
+      const result = ITEM_DEF_BY_ID[r.result.slotId];
+      expect(result.effect, `${r.id} result has no effect`).toBeDefined();
+      expect(EFFECT_ORDER, `${r.id} effect ${result.effect!.id}`).toContain(result.effect!.id);
+      expect(result.effect!.durationSeconds).toBeGreaterThan(0);
+    }
+    // The three new potions are present and brew from existing reagents.
+    expect(recipe("potion_haste").station).toBe("brewing");
+    expect(recipe("potion_resistance").station).toBe("brewing");
+    expect(recipe("potion_jump_boost").station).toBe("brewing");
   });
 
   test("the enchanting table is a plain Building recipe (enchanting isn't recipe-gated)", () => {

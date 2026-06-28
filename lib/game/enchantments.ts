@@ -1,9 +1,14 @@
 import {
   EFFICIENCY_SPEED_PER_LEVEL,
   ENCHANT_MAX_LEVEL,
+  FEATHER_FALLING_MAX_REDUCTION,
+  FEATHER_FALLING_REDUCE_PER_LEVEL,
+  KNOCKBACK_PER_LEVEL,
   MENDING_MAX_LEVEL,
   MENDING_REPAIR_PER_XP,
+  POWER_DAMAGE_PER_LEVEL,
   PROTECTION_DEFENSE_PER_LEVEL,
+  PUNCH_KNOCKBACK_PER_LEVEL,
   SHARPNESS_DAMAGE_PER_LEVEL,
   UNBREAKING_SKIP_PER_LEVEL
 } from "@/lib/game/config";
@@ -23,6 +28,12 @@ export type EnchantmentDef = {
   label: string;
   /** Item kinds this enchantment can be applied to. */
   kinds: ItemKind[];
+  /**
+   * Optional allow-list of specific item ids: when set, the slot's item must be
+   * one of these (on top of the `kinds` gate). Used to bind a weapon enchant to a
+   * single item — Power/Punch are bow-only, not for swords (which also are `weapon`).
+   */
+  itemIds?: string[];
   maxLevel: number;
 };
 
@@ -31,22 +42,42 @@ export const ENCHANTMENT_DEFS: Record<EnchantmentId, EnchantmentDef> = {
   protection: { id: "protection", label: "Protection", kinds: ["armor"], maxLevel: ENCHANT_MAX_LEVEL },
   efficiency: { id: "efficiency", label: "Efficiency", kinds: ["tool"], maxLevel: ENCHANT_MAX_LEVEL },
   unbreaking: { id: "unbreaking", label: "Unbreaking", kinds: ["tool", "weapon", "armor"], maxLevel: ENCHANT_MAX_LEVEL },
-  mending: { id: "mending", label: "Mending", kinds: ["tool", "weapon", "armor"], maxLevel: MENDING_MAX_LEVEL }
+  mending: { id: "mending", label: "Mending", kinds: ["tool", "weapon", "armor"], maxLevel: MENDING_MAX_LEVEL },
+  power: { id: "power", label: "Power", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL },
+  punch: { id: "punch", label: "Punch", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL },
+  knockback: { id: "knockback", label: "Knockback", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL },
+  looting: { id: "looting", label: "Looting", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL },
+  fortune: { id: "fortune", label: "Fortune", kinds: ["tool"], maxLevel: ENCHANT_MAX_LEVEL },
+  feather_falling: { id: "feather_falling", label: "Feather Falling", kinds: ["armor"], itemIds: ["boots"], maxLevel: ENCHANT_MAX_LEVEL }
 };
 
 /** Stable display order for the enchanting panel. */
-export const ENCHANTMENT_ORDER: readonly EnchantmentId[] = ["sharpness", "protection", "efficiency", "unbreaking", "mending"];
+export const ENCHANTMENT_ORDER: readonly EnchantmentId[] = [
+  "sharpness",
+  "knockback",
+  "looting",
+  "power",
+  "punch",
+  "protection",
+  "feather_falling",
+  "efficiency",
+  "fortune",
+  "unbreaking",
+  "mending"
+];
 
 /** Level of `id` on a slot (0 if absent). */
 export function enchantLevel(slot: InventorySlot | null | undefined, id: EnchantmentId): number {
   return slot?.enchantments?.find((e) => e.id === id)?.level ?? 0;
 }
 
-/** Whether `id` can be applied to `slot` now — right item kind, owned, below its max level. */
+/** Whether `id` can be applied to `slot` now — right item kind (and specific item, if gated), owned, below its max level. */
 export function canEnchant(slot: InventorySlot | null | undefined, id: EnchantmentId): boolean {
   if (!slot?.id || !slot.kind || slot.count <= 0) return false;
   const def = ENCHANTMENT_DEFS[id];
-  return def.kinds.includes(slot.kind) && enchantLevel(slot, id) < def.maxLevel;
+  if (!def.kinds.includes(slot.kind)) return false;
+  if (def.itemIds && !def.itemIds.includes(slot.id)) return false; // item-specific enchant (e.g. bow-only Power/Punch)
+  return enchantLevel(slot, id) < def.maxLevel;
 }
 
 /** A new slot with `id` added (level 1) or its level bumped by one; returns the slot unchanged if not allowed. */
@@ -64,6 +95,36 @@ export function applyEnchant(slot: InventorySlot, id: EnchantmentId): InventoryS
 /** Extra melee damage from Sharpness on the held weapon. */
 export function sharpnessBonus(slot: InventorySlot | null | undefined): number {
   return enchantLevel(slot, "sharpness") * SHARPNESS_DAMAGE_PER_LEVEL;
+}
+
+/** Extra arrow damage from Power on the held bow. */
+export function powerBonus(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "power") * POWER_DAMAGE_PER_LEVEL;
+}
+
+/** Extra arrow knockback from Punch on the held bow. */
+export function punchKnockback(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "punch") * PUNCH_KNOCKBACK_PER_LEVEL;
+}
+
+/** Extra melee knockback impulse from Knockback on the held weapon. */
+export function knockbackBonus(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "knockback") * KNOCKBACK_PER_LEVEL;
+}
+
+/** Looting level on the held weapon (0 if absent) — feeds the bonus-count roll in rollMobDrops. */
+export function lootingLevel(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "looting");
+}
+
+/** Fortune level on the held tool (0 if absent) — feeds the bonus ore-drop roll in rollBlockDrops. */
+export function fortuneLevel(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "fortune");
+}
+
+/** Fall-damage reduction fraction (0..FEATHER_FALLING_MAX_REDUCTION) from Feather Falling on worn boots. */
+export function featherFallingReduction(boots: InventorySlot | null | undefined): number {
+  return Math.min(FEATHER_FALLING_MAX_REDUCTION, enchantLevel(boots, "feather_falling") * FEATHER_FALLING_REDUCE_PER_LEVEL);
 }
 
 /** Extra defense points from Protection on a worn armor piece. */

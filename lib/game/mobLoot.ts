@@ -1,3 +1,4 @@
+import { LOOTING_BONUS_PER_LEVEL } from "@/lib/game/config";
 import type { MobKind } from "@/lib/game/types";
 
 /**
@@ -51,14 +52,19 @@ const clampUnit = (v: number): number => Math.min(1 - Number.EPSILON, Math.max(0
 /**
  * Rolls the drop table for a mob kind. Returns one entry per item that yielded a
  * positive count; the engine adds each to the inventory. `rng` is injectable so
- * tests get deterministic counts (0 → min, ~1 → max).
+ * tests get deterministic counts (0 → min, ~1 → max). `lootingLevel` (from the
+ * Looting enchantment on the killing weapon) adds a random bonus count — up to
+ * `level × LOOTING_BONUS_PER_LEVEL` extra — to each entry that already dropped.
  */
-export function rollMobDrops(kind: MobKind, rng: () => number): Array<{ itemId: string; count: number }> {
+export function rollMobDrops(kind: MobKind, rng: () => number, lootingLevel = 0): Array<{ itemId: string; count: number }> {
   const drops: Array<{ itemId: string; count: number }> = [];
   for (const entry of MOB_DROPS[kind]) {
     if (entry.chance !== undefined && clampUnit(rng()) >= entry.chance) continue;
     const span = entry.max - entry.min + 1;
-    const count = entry.min + Math.floor(clampUnit(rng()) * span);
+    let count = entry.min + Math.floor(clampUnit(rng()) * span);
+    if (count > 0 && lootingLevel > 0) {
+      count += Math.floor(clampUnit(rng()) * (lootingLevel * LOOTING_BONUS_PER_LEVEL + 1));
+    }
     if (count > 0) drops.push({ itemId: entry.itemId, count });
   }
   return drops;

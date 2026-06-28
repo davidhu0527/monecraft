@@ -321,13 +321,16 @@ furnace, the potion recipes unlock while the stand is open.
 Every potion starts with a **glass bottle** (3 glass → 3 bottles, on the basic
 grid). Add one reagent at the stand to brew a potion:
 
-| Potion          | Reagent   | While active                          |
-| --------------- | --------- | ------------------------------------- |
-| Swiftness       | Feather   | Move noticeably faster                |
-| Strength        | Gunpowder | Hit harder in melee                   |
-| Regeneration    | Wheat     | Steadily heal, even on an empty belly |
-| Fire Resistance | Coal      | Wade through lava unharmed            |
-| Water Breathing | Raw Fish  | Stay underwater without drowning      |
+| Potion          | Reagent    | While active                          |
+| --------------- | ---------- | ------------------------------------- |
+| Swiftness       | Feather    | Move noticeably faster                |
+| Strength        | Gunpowder  | Hit harder in melee                   |
+| Regeneration    | Wheat      | Steadily heal, even on an empty belly |
+| Fire Resistance | Coal       | Wade through lava unharmed            |
+| Water Breathing | Raw Fish   | Stay underwater without drowning      |
+| Haste           | Gold Ore   | Mine noticeably faster                |
+| Resistance      | Leather    | Shrug off some combat damage          |
+| Leaping         | Sliver Ore | Jump higher                           |
 
 **Drink** a potion the same way you eat — select it and press `F`. Its icon and a
 countdown appear top-left while it lasts. Effects survive a save and reload but
@@ -348,8 +351,14 @@ enchantments it can take. Each costs **3 levels** and can be applied up to **thr
 times**:
 
 - **Sharpness** (weapons) — hit harder in melee
+- **Knockback** (weapons) — your melee hits shove mobs further back
+- **Looting** (weapons) — kills drop more loot
+- **Power** (bows) — arrows hit harder
+- **Punch** (bows) — arrows knock the target back further
 - **Protection** (armor) — take less damage
+- **Feather Falling** (boots) — take less fall damage
 - **Efficiency** (tools) — mine faster
+- **Fortune** (tools) — ore drops more of itself when you mine it
 - **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
 - **Mending** (any gear) — XP you pick up repairs the held or worn item instead of
   banking, as long as it's damaged

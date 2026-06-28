@@ -1,6 +1,9 @@
 import {
+  EFFECT_HASTE_MULTIPLIER,
+  EFFECT_JUMP_BOOST_VELOCITY,
   EFFECT_REGEN_HP,
   EFFECT_REGEN_INTERVAL,
+  EFFECT_RESISTANCE_MULTIPLIER,
   EFFECT_SPEED_MULTIPLIER,
   EFFECT_STRENGTH_BONUS,
   MAX_HEARTS,
@@ -21,7 +24,17 @@ import type { EmitGameEvent, GameState } from "../state";
  */
 
 /** Stable HUD/iteration order for the effects readout. */
-export const EFFECT_ORDER: readonly EffectId[] = ["speed", "strength", "regeneration", "fire_resistance", "water_breathing", "poison"];
+export const EFFECT_ORDER: readonly EffectId[] = [
+  "speed",
+  "strength",
+  "haste",
+  "resistance",
+  "jump_boost",
+  "regeneration",
+  "fire_resistance",
+  "water_breathing",
+  "poison"
+];
 
 export function hasEffect(state: GameState, id: EffectId): boolean {
   return (state.effects.get(id) ?? 0) > 0;
@@ -52,6 +65,21 @@ export function speedMultiplier(state: GameState): number {
 /** Extra melee damage per hit from the Strength effect (0 when inactive). */
 export function strengthBonus(state: GameState): number {
   return hasEffect(state, "strength") ? EFFECT_STRENGTH_BONUS : 0;
+}
+
+/** Mining-speed multiplier from the Haste effect (1 when inactive). */
+export function hasteMultiplier(state: GameState): number {
+  return hasEffect(state, "haste") ? EFFECT_HASTE_MULTIPLIER : 1;
+}
+
+/** Incoming armor-mitigated combat-damage multiplier from the Resistance effect (1 when inactive). */
+export function resistanceMultiplier(state: GameState): number {
+  return hasEffect(state, "resistance") ? EFFECT_RESISTANCE_MULTIPLIER : 1;
+}
+
+/** Extra jump launch velocity from the Jump Boost effect (0 when inactive). */
+export function jumpBoostBonus(state: GameState): number {
+  return hasEffect(state, "jump_boost") ? EFFECT_JUMP_BOOST_VELOCITY : 0;
 }
 
 export type StatusEffectDeps = {

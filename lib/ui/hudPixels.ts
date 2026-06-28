@@ -250,12 +250,72 @@ const EFFECT_SKULL_GRID = [
   "................"
 ];
 
+const EFFECT_STAR_GRID = [
+  "................",
+  ".......oo.......",
+  ".......mm.......",
+  ".......mm.......",
+  "....o..mm..o....",
+  "....om.mm.mo....",
+  ".....ommmmo.....",
+  "..oommmllmmoo...",
+  "..oommmllmmoo...",
+  ".....ommmmo.....",
+  "....om.mm.mo....",
+  "....o..mm..o....",
+  ".......mm.......",
+  ".......mm.......",
+  ".......oo.......",
+  "................"
+];
+
+const EFFECT_SHIELD_GRID = [
+  "................",
+  "....oooooooo....",
+  "...ommmmmmmmo...",
+  "..ommmmmmmmmmo..",
+  "..ommmllllmmmo..",
+  "..ommmllllmmmo..",
+  "..ommmmmmmmmmo..",
+  "..ommmmmmmmmmo..",
+  "..ommmmmmmmmmo..",
+  "...ommmmmmmmo...",
+  "...ommmmmmmmo...",
+  "....ommmmmmo....",
+  ".....ommmmo.....",
+  "......ommo......",
+  ".......oo.......",
+  "................"
+];
+
+const EFFECT_UP_ARROW_GRID = [
+  "................",
+  ".......mm.......",
+  "......mmmm......",
+  ".....mmmmmm.....",
+  "....mmmmmmmm....",
+  "...mmmmmmmmmm...",
+  "..mmmmmmmmmmmm..",
+  ".mmmmmmmmmmmmmm.",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "......mmmm......",
+  "................"
+];
+
 const EFFECT_SPEED_PALETTE: PixelPalette = { o: [18, 70, 86], m: [96, 206, 236] };
 const EFFECT_STRENGTH_PALETTE: PixelPalette = { o: [92, 22, 22], m: [226, 74, 66] };
 const EFFECT_REGEN_PALETTE: PixelPalette = { m: [226, 84, 180] };
 const EFFECT_FIRE_RESIST_PALETTE: PixelPalette = { o: [110, 44, 12], m: [236, 138, 42], l: [252, 222, 128] };
 const EFFECT_WATER_BREATHING_PALETTE: PixelPalette = { o: [16, 54, 96], m: [74, 144, 226], l: [186, 224, 255] };
 const EFFECT_POISON_PALETTE: PixelPalette = { o: [22, 52, 18], m: [122, 190, 72] };
+const EFFECT_HASTE_PALETTE: PixelPalette = { o: [120, 90, 16], m: [240, 200, 40], l: [255, 240, 160] };
+const EFFECT_RESISTANCE_PALETTE: PixelPalette = { o: [40, 52, 80], m: [120, 140, 180], l: [205, 216, 238] };
+const EFFECT_JUMP_BOOST_PALETTE: PixelPalette = { m: [120, 210, 90] };
 
 export type HudIconName =
   | "heart_full"
@@ -278,6 +338,9 @@ export type HudIconName =
   | "effect_regeneration"
   | "effect_fire_resistance"
   | "effect_water_breathing"
+  | "effect_haste"
+  | "effect_resistance"
+  | "effect_jump_boost"
   | "effect_poison";
 
 export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
@@ -322,6 +385,12 @@ export function renderHudIconPixels(name: HudIconName): Uint8ClampedArray {
       return paintGrid(EFFECT_FLAME_GRID, EFFECT_FIRE_RESIST_PALETTE);
     case "effect_water_breathing":
       return paintGrid(EFFECT_DROPLET_GRID, EFFECT_WATER_BREATHING_PALETTE);
+    case "effect_haste":
+      return paintGrid(EFFECT_STAR_GRID, EFFECT_HASTE_PALETTE);
+    case "effect_resistance":
+      return paintGrid(EFFECT_SHIELD_GRID, EFFECT_RESISTANCE_PALETTE);
+    case "effect_jump_boost":
+      return paintGrid(EFFECT_UP_ARROW_GRID, EFFECT_JUMP_BOOST_PALETTE);
     case "effect_poison":
       return paintGrid(EFFECT_SKULL_GRID, EFFECT_POISON_PALETTE);
   }

@@ -245,7 +245,13 @@ const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
   protection: true,
   efficiency: true,
   unbreaking: true,
-  mending: true
+  mending: true,
+  power: true,
+  punch: true,
+  knockback: true,
+  looting: true,
+  fortune: true,
+  feather_falling: true
 };
 
 /** Validates persisted enchantments: known ids and integer levels clamped to 1..(that enchant's max); undefined when none survive. */
@@ -319,6 +325,9 @@ const VALID_EFFECT_IDS: Record<EffectId, true> = {
   regeneration: true,
   fire_resistance: true,
   water_breathing: true,
+  haste: true,
+  resistance: true,
+  jump_boost: true,
   poison: true
 };
 

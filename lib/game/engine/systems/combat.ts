@@ -9,9 +9,11 @@ import {
   BOW_DURABILITY_PER_SHOT,
   BOW_KNOCKBACK,
   EYE_HEIGHT,
-  FIST_DAMAGE
+  FIST_DAMAGE,
+  MELEE_KNOCKBACK_IMPULSE
 } from "@/lib/game/config";
 import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
+import { powerBonus, punchKnockback } from "@/lib/game/enchantments";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
 import { spawnArrow } from "../projectiles";
@@ -65,8 +67,19 @@ export function findAimedMobIndex(state: GameState, reach = ATTACK_REACH): numbe
 /**
  * Melee attack at the mob nearest the crosshair within reach. Returns the kind
  * of the mob hit (or null); the caller (engine) handles death drops and durability.
+ * `knockback` is the extra horizontal impulse from the Knockback enchantment (0 by
+ * default); `lootingLevel` (the held weapon's Looting) is forwarded to the kill
+ * callback so the drop roll uses the *killing* weapon, not whatever is held when a
+ * delayed kill resolves — Looting is a melee enchant, so indirect kills pass 0.
  */
-export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void, reach = ATTACK_REACH): MobKind | null {
+export function tryAttackMob(
+  state: GameState,
+  damage: number,
+  onMobKilled: (index: number, lootingLevel?: number) => void,
+  reach = ATTACK_REACH,
+  knockback = 0,
+  lootingLevel = 0
+): MobKind | null {
   const { position } = state.player;
   const bestIndex = findAimedMobIndex(state, reach);
   if (bestIndex < 0) return null;
@@ -77,11 +90,11 @@ export function tryAttackMob(state: GameState, damage: number, onMobKilled: (ind
   if (scratchKnock.lengthSq() > 0.0001) {
     scratchKnock.normalize();
     mob.direction.copy(scratchKnock);
-    mob.position.addScaledVector(scratchKnock, 0.75);
+    mob.position.addScaledVector(scratchKnock, MELEE_KNOCKBACK_IMPULSE + knockback);
     mob.position.y += 0.12;
   }
 
-  if (mob.hp <= 0) onMobKilled(bestIndex);
+  if (mob.hp <= 0) onMobKilled(bestIndex, lootingLevel);
   return mob.kind;
 }
 
@@ -105,10 +118,11 @@ export function tryFireBow(state: GameState, emit: EmitGameEvent, rng?: () => nu
   const { position, yaw, pitch } = state.player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
   lookDirection(yaw, pitch, scratchForward);
+  // Power and Punch are bow-only enchants, read off the held bow at the one fire seam.
   spawnArrow(state, scratchOrigin.x, scratchOrigin.y, scratchOrigin.z, scratchForward, {
     speed: ARROW_SPEED,
-    damage: BOW_ARROW_DAMAGE,
-    knockback: BOW_KNOCKBACK,
+    damage: BOW_ARROW_DAMAGE + powerBonus(slot),
+    knockback: BOW_KNOCKBACK + punchKnockback(slot),
     fromPlayer: true,
     ttl: ARROW_TTL
   });

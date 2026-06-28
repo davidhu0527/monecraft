@@ -58,9 +58,9 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**68 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
-All use the always-available crafting grid except the nine **furnace** smelting
-recipes (need an open furnace) and the five **brewing** recipes (need an open
+**71 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+All use the always-available crafting grid except the **furnace** smelting recipes
+(need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
 
 In-game, the recipe book groups recipes into the sections below (Tools, Weapons,
@@ -165,13 +165,16 @@ Each potion is one **glass bottle** plus one reagent, brewed at an open **brewin
 stand**. Drink a potion with `F` (the eat key) to gain its [status effect](#status-effects);
 drinking consumes the whole bottle. See the [manual](manual.md#brewing--potions) for the how-to.
 
-| Result                    | Ingredients              | Station |
-| ------------------------- | ------------------------ | ------- |
-| Potion of Swiftness       | Glass Bottle + Feather   | Brewing |
-| Potion of Strength        | Glass Bottle + Gunpowder | Brewing |
-| Potion of Regeneration    | Glass Bottle + Wheat     | Brewing |
-| Potion of Fire Resistance | Glass Bottle + Coal      | Brewing |
-| Potion of Water Breathing | Glass Bottle + Raw Fish  | Brewing |
+| Result                    | Ingredients               | Station |
+| ------------------------- | ------------------------- | ------- |
+| Potion of Swiftness       | Glass Bottle + Feather    | Brewing |
+| Potion of Strength        | Glass Bottle + Gunpowder  | Brewing |
+| Potion of Regeneration    | Glass Bottle + Wheat      | Brewing |
+| Potion of Fire Resistance | Glass Bottle + Coal       | Brewing |
+| Potion of Water Breathing | Glass Bottle + Raw Fish   | Brewing |
+| Potion of Haste           | Glass Bottle + Gold Ore   | Brewing |
+| Potion of Resistance      | Glass Bottle + Leather    | Brewing |
+| Potion of Leaping         | Glass Bottle + Sliver Ore | Brewing |
 
 ## Status effects
 
@@ -186,6 +189,9 @@ remaining time; **all clear on death** but otherwise persist across a reload.
 | Regeneration    | 0:45     | Potion (wheat)      | Heal 1 HP / 1.5 s, even at low hunger                  |
 | Fire Resistance | 3:00     | Potion (coal)       | Lava can't burn you                                    |
 | Water Breathing | 3:00     | Potion (raw fish)   | Lungs stay full; no drowning                           |
+| Haste           | 3:00     | Potion (gold ore)   | Mine ×1.4 faster                                       |
+| Resistance      | 2:00     | Potion (leather)    | Take ×0.8 combat damage (not lava/poison/fall void)    |
+| Leaping         | 3:00     | Potion (sliver ore) | Jump higher (+2 launch velocity)                       |
 | Poison          | 0:08     | Eating rotten flesh | 1 HP / 1.25 s, but **never kills** (floors at ½ heart) |
 
 ## XP & enchanting
@@ -208,13 +214,19 @@ Each costs **3 XP levels** per application, up to that enchantment's max level
 (**3** for most, **1** for Mending), applied at the enchanting table to the
 selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
-| Enchantment | Applies to          | Per level                                                     |
-| ----------- | ------------------- | ------------------------------------------------------------- |
-| Sharpness   | weapons             | +2 melee damage                                               |
-| Protection  | armor               | +2 defense (more damage reduction)                            |
-| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed                               |
-| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear                             |
-| Mending     | tools/weapons/armor | gained XP repairs the gear (2 durability per XP); max level 1 |
+| Enchantment     | Applies to          | Per level                                                     |
+| --------------- | ------------------- | ------------------------------------------------------------- |
+| Sharpness       | weapons             | +2 melee damage                                               |
+| Knockback       | weapons             | +0.4 melee knockback impulse                                  |
+| Looting         | weapons             | up to +1 of each mob drop, per **melee** kill                 |
+| Power           | bows                | +2 arrow damage                                               |
+| Punch           | bows                | +0.25 arrow knockback                                         |
+| Protection      | armor               | +2 defense (more damage reduction)                            |
+| Feather Falling | boots               | −15% fall damage per level (caps at −80%)                     |
+| Efficiency      | tools               | ×(1 + 0.3 × level) mining speed                               |
+| Fortune         | tools               | up to +1 ore per level when mining ore                        |
+| Unbreaking      | tools/weapons/armor | 20% chance per level to skip wear                             |
+| Mending         | tools/weapons/armor | gained XP repairs the gear (2 durability per XP); max level 1 |
 
 ## Blocks
 
