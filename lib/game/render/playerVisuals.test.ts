@@ -116,24 +116,35 @@ describe("playerVisuals", () => {
     visuals.dispose();
   });
 
-  test("shows a worn armor piece's shells and hides the rest", () => {
+  test("shows every shell of a worn armor piece and hides the rest", () => {
     const scene = new THREE.Scene();
     const visuals = createPlayerVisuals(scene);
-    const armor = (slot: "helmet" | "chestplate") => bodyGroup(scene).getObjectByName(`armor-${slot}`);
+    // Collect ALL shells for a slot — multi-part slots (chestplate = torso + 2 shoulders)
+    // must toggle together, so a single-mesh check could miss a shell drifting out of sync.
+    const meshesFor = (slot: string) => {
+      const out: THREE.Mesh[] = [];
+      bodyGroup(scene).traverse((obj) => {
+        if (obj instanceof THREE.Mesh && obj.name === `armor-${slot}`) out.push(obj);
+      });
+      return out;
+    };
+    const allHidden = (slot: string) => meshesFor(slot).every((m) => !m.visible);
+    const allShown = (slot: string) => meshesFor(slot).length > 0 && meshesFor(slot).every((m) => m.visible);
 
-    // Nothing worn → all armor shells hidden (sample helmet + chestplate torso).
+    // Nothing worn → all armor shells hidden.
     visuals.sync(makeState(), 0);
-    expect(armor("helmet")!.visible).toBe(false);
-    expect(armor("chestplate")!.visible).toBe(false);
+    expect(allHidden("helmet")).toBe(true);
+    expect(allHidden("chestplate")).toBe(true);
 
-    // Wearing a helmet shows its shell, leaves the chestplate hidden.
-    visuals.sync(makeState({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } }), 16);
-    expect(armor("helmet")!.visible).toBe(true);
-    expect(armor("chestplate")!.visible).toBe(false);
+    // Wearing the (multi-part) chestplate shows every one of its shells, helmet stays hidden.
+    visuals.sync(makeState({ equippedArmor: { ...createEmptyArmorEquipment(), chestplate: createSlot("chestplate", 1) } }), 16);
+    expect(meshesFor("chestplate").length).toBeGreaterThan(1);
+    expect(allShown("chestplate")).toBe(true);
+    expect(allHidden("helmet")).toBe(true);
 
-    // Unequipping hides it again.
+    // Unequipping hides them again.
     visuals.sync(makeState(), 32);
-    expect(armor("helmet")!.visible).toBe(false);
+    expect(allHidden("chestplate")).toBe(true);
     visuals.dispose();
   });
 
