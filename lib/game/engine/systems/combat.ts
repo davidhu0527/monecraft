@@ -67,9 +67,19 @@ export function findAimedMobIndex(state: GameState, reach = ATTACK_REACH): numbe
 /**
  * Melee attack at the mob nearest the crosshair within reach. Returns the kind
  * of the mob hit (or null); the caller (engine) handles death drops and durability.
- * `knockback` is the extra horizontal impulse from the Knockback enchantment (0 by default).
+ * `knockback` is the extra horizontal impulse from the Knockback enchantment (0 by
+ * default); `lootingLevel` (the held weapon's Looting) is forwarded to the kill
+ * callback so the drop roll uses the *killing* weapon, not whatever is held when a
+ * delayed kill resolves — Looting is a melee enchant, so indirect kills pass 0.
  */
-export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void, reach = ATTACK_REACH, knockback = 0): MobKind | null {
+export function tryAttackMob(
+  state: GameState,
+  damage: number,
+  onMobKilled: (index: number, lootingLevel?: number) => void,
+  reach = ATTACK_REACH,
+  knockback = 0,
+  lootingLevel = 0
+): MobKind | null {
   const { position } = state.player;
   const bestIndex = findAimedMobIndex(state, reach);
   if (bestIndex < 0) return null;
@@ -84,7 +94,7 @@ export function tryAttackMob(state: GameState, damage: number, onMobKilled: (ind
     mob.position.y += 0.12;
   }
 
-  if (mob.hp <= 0) onMobKilled(bestIndex);
+  if (mob.hp <= 0) onMobKilled(bestIndex, lootingLevel);
   return mob.kind;
 }
 

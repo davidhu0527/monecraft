@@ -137,4 +137,14 @@ describe("tryAttackMob knockback", () => {
     expect(enchanted.mobs[0].position.z).toBeLessThan(plain.mobs[0].position.z);
     expect(enchanted.mobs[0].position.z).toBeCloseTo(-2 - (MELEE_KNOCKBACK_IMPULSE + 2 * KNOCKBACK_PER_LEVEL), 5);
   });
+
+  test("a lethal melee hit forwards the killing weapon's Looting level to the kill callback", () => {
+    const state = makeState(inventory([["diamond_sword", 1]]));
+    const mob = mobInFront();
+    mob.hp = 1; // dies in one hit
+    state.mobs = [mob];
+    let received = -1;
+    tryAttackMob(state, 5, (_index, looting = 0) => (received = looting), 5, 0, 3);
+    expect(received).toBe(3); // Looting from the held weapon, not live selected-slot state at death
+  });
 });

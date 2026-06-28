@@ -162,7 +162,9 @@ on a fired arrow (bow-only via the enchant's `itemIds`, read in `tryFireBow`),
 Knockback `+KNOCKBACK_PER_LEVEL` (0.4) on the melee shove (added to
 `MELEE_KNOCKBACK_IMPULSE` in `tryAttackMob`), Looting up to
 `LOOTING_BONUS_PER_LEVEL` (1) extra of each mob drop per level (rolled in
-`rollMobDrops` off the killing weapon), Protection
+`rollMobDrops`; the killing **melee** weapon's level is forwarded through the
+kill callback, so indirect kills — arrows, thrown spears, explosions — apply
+none), Protection
 `+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
 `armorReduction`), Feather Falling `−FEATHER_FALLING_REDUCE_PER_LEVEL` (0.15)
 fall damage per level on worn boots, capped at `FEATHER_FALLING_MAX_REDUCTION`

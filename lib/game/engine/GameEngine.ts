@@ -538,7 +538,8 @@ export class GameEngine {
           weaponDamage(state) + strengthBonus(state) + sharpnessBonus(heldWeapon),
           this.removeMobAt,
           weaponReach(state),
-          knockbackBonus(heldWeapon)
+          knockbackBonus(heldWeapon),
+          lootingLevel(heldWeapon)
         );
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
@@ -760,13 +761,14 @@ export class GameEngine {
     if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
 
-  private removeMobAt = (index: number): void => {
+  private removeMobAt = (index: number, lootingLevel = 0): void => {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
-    // Babies drop nothing — only grown animals yield loot. Looting on the held
-    // weapon rolls a bonus count per drop entry (0 for any non-Looting item).
-    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel(state.inventory[state.selectedSlot])) : [];
+    // Babies drop nothing — only grown animals yield loot. `lootingLevel` is the
+    // *killing* melee weapon's Looting (forwarded by tryAttackMob); indirect kills
+    // (arrows, thrown spears, explosions) pass 0, since Looting is a melee enchant.
+    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
