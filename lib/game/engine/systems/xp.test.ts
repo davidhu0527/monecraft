@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { XP_PER_LEVEL } from "@/lib/game/config";
+import { MENDING_REPAIR_PER_XP, XP_PER_LEVEL } from "@/lib/game/config";
 import { BlockId } from "@/lib/world";
+import { applyEnchant } from "@/lib/game/enchantments";
+import { createEmptyArmorEquipment, createSlot } from "@/lib/game/items";
 import { MOB_XP, xpForMob } from "@/lib/game/mobXp";
 import { awardXp, spendXpLevels, xpForBlock, xpLevel, xpProgress } from "@/lib/game/engine/systems/xp";
 import type { GameEvent, GameState } from "@/lib/game/engine/state";
-import type { MobKind } from "@/lib/game/types";
+import type { InventorySlot, MobKind } from "@/lib/game/types";
 
-function makeState(xp = 0): GameState {
-  return { xp } as unknown as GameState;
+function makeState(xp = 0, inventory: InventorySlot[] = [], selectedSlot = 0): GameState {
+  return { xp, inventory, selectedSlot, equippedArmor: createEmptyArmorEquipment() } as unknown as GameState;
 }
 
 describe("xp levels & progress", () => {
@@ -40,6 +42,27 @@ describe("awardXp", () => {
     awardXp(state, -10, emit);
     expect(state.xp).toBe(8); // unchanged
     expect(events).toHaveLength(2); // no extra events
+  });
+
+  test("Mending diverts XP to repair the held item, banks the remainder, and reports the gross amount", () => {
+    const missing = 10;
+    const pick = applyEnchant(createSlot("diamond_pickaxe", 1), "mending");
+    pick.durability = pick.maxDurability! - missing;
+    const state = makeState(0, [pick], 0);
+    const events: GameEvent[] = [];
+
+    const xpNeeded = Math.ceil(missing / MENDING_REPAIR_PER_XP); // 5
+    awardXp(state, xpNeeded + 3, (e) => events.push(e));
+
+    expect(state.inventory[0].durability).toBe(pick.maxDurability); // fully repaired
+    expect(state.xp).toBe(3); // remainder banked
+    expect(events).toEqual([{ type: "xpGained", amount: xpNeeded + 3 }]); // gross amount
+  });
+
+  test("without Mending gear, awardXp banks the full amount (no diversion)", () => {
+    const state = makeState(0, [createSlot("diamond_pickaxe", 1)], 0);
+    awardXp(state, 6, () => {});
+    expect(state.xp).toBe(6);
   });
 });
 

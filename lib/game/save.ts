@@ -181,7 +181,8 @@ const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
   sharpness: true,
   protection: true,
   efficiency: true,
-  unbreaking: true
+  unbreaking: true,
+  mending: true
 };
 
 /** Validates persisted enchantments: known ids and integer levels clamped to 1..max; undefined when none survive. */

@@ -347,6 +347,8 @@ times**:
 - **Protection** (armor) — take less damage
 - **Efficiency** (tools) — mine faster
 - **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
+- **Mending** (any gear) — XP you pick up repairs the held or worn item instead of
+  banking, as long as it's damaged
 
 Buttons grey out when you can't afford the cost or the enchant is maxed.
 Enchantments are part of the item, so they're kept in chests and across reloads.

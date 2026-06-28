@@ -206,12 +206,13 @@ Each costs **3 XP levels** per application, up to **level 3**, applied at the
 enchanting table to the selected tool/weapon/armor. Enchantments are per-item and
 survive a save.
 
-| Enchantment | Applies to          | Per level                          |
-| ----------- | ------------------- | ---------------------------------- |
-| Sharpness   | weapons             | +2 melee damage                    |
-| Protection  | armor               | +2 defense (more damage reduction) |
-| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed    |
-| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear  |
+| Enchantment | Applies to          | Per level                                                     |
+| ----------- | ------------------- | ------------------------------------------------------------- |
+| Sharpness   | weapons             | +2 melee damage                                               |
+| Protection  | armor               | +2 defense (more damage reduction)                            |
+| Efficiency  | tools               | ×(1 + 0.3 × level) mining speed                               |
+| Unbreaking  | tools/weapons/armor | 20% chance per level to skip wear                             |
+| Mending     | tools/weapons/armor | gained XP repairs the gear (2 durability per XP); max level 1 |
 
 ## Blocks
 

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { EFFICIENCY_SPEED_PER_LEVEL, ENCHANT_MAX_LEVEL, SHARPNESS_DAMAGE_PER_LEVEL } from "@/lib/game/config";
+import { EFFICIENCY_SPEED_PER_LEVEL, ENCHANT_MAX_LEVEL, MENDING_REPAIR_PER_XP, SHARPNESS_DAMAGE_PER_LEVEL } from "@/lib/game/config";
 import { createEmptyArmorEquipment, createSlot } from "@/lib/game/items";
 import { armorReduction, consumeToolDurability, equippedDefense } from "@/lib/game/inventory";
 import { miningSpeed } from "@/lib/game/engine/systems/mining";
-import { applyEnchant, canEnchant, efficiencyMultiplier, enchantLevel, sharpnessBonus, unbreakingSkips } from "@/lib/game/enchantments";
+import { applyEnchant, canEnchant, efficiencyMultiplier, enchantLevel, mendXp, sharpnessBonus, unbreakingSkips } from "@/lib/game/enchantments";
 import type { EquippedArmor, InventorySlot } from "@/lib/game/types";
 
 const withEnchant = (id: string, level: number, slot: InventorySlot): InventorySlot => ({ ...slot, enchantments: [{ id: id as never, level }] });
@@ -15,10 +15,13 @@ describe("canEnchant / applyEnchant", () => {
     expect(canEnchant(createSlot("diamond_pickaxe", 1), "efficiency")).toBe(true);
     expect(canEnchant(createSlot("helmet", 1), "protection")).toBe(true);
     expect(canEnchant(createSlot("helmet", 1), "efficiency")).toBe(false);
-    // Unbreaking applies to all three durable kinds.
+    // Unbreaking and Mending apply to all three durable kinds.
     expect(canEnchant(createSlot("diamond_sword", 1), "unbreaking")).toBe(true);
     expect(canEnchant(createSlot("diamond_pickaxe", 1), "unbreaking")).toBe(true);
     expect(canEnchant(createSlot("helmet", 1), "unbreaking")).toBe(true);
+    expect(canEnchant(createSlot("diamond_sword", 1), "mending")).toBe(true);
+    expect(canEnchant(createSlot("diamond_pickaxe", 1), "mending")).toBe(true);
+    expect(canEnchant(createSlot("helmet", 1), "mending")).toBe(true);
     // Non-durable / empty slots can't be enchanted.
     expect(canEnchant(createSlot("dirt", 1), "unbreaking")).toBe(false);
   });
@@ -75,5 +78,46 @@ describe("Unbreaking", () => {
 
     // Back-compat: without an rng, Unbreaking never triggers.
     expect(consumeToolDurability(slots, 0, 1)?.[0].durability).toBe(max - 1);
+  });
+});
+
+describe("Mending (mendXp)", () => {
+  const damaged = (id: string, missing: number): InventorySlot => {
+    const slot = applyEnchant(createSlot(id, 1), "mending");
+    slot.durability = slot.maxDurability! - missing;
+    return slot;
+  };
+  const noArmor = createEmptyArmorEquipment();
+
+  test("repairs the held item first, capping at max durability and returning the XP left", () => {
+    const missing = 6;
+    const slots = [damaged("diamond_pickaxe", missing)];
+    const xpNeeded = Math.ceil(missing / MENDING_REPAIR_PER_XP); // 3
+    const result = mendXp(slots, 0, noArmor, xpNeeded + 4);
+    expect(result.slots[0].durability).toBe(slots[0].maxDurability!); // fully repaired
+    expect(result.xpLeft).toBe(4);
+    expect(result.slots).not.toBe(slots); // cloned on write
+  });
+
+  test("never repairs above max and never goes negative on XP", () => {
+    const slots = [damaged("diamond_pickaxe", 2)];
+    const result = mendXp(slots, 0, noArmor, 100);
+    expect(result.slots[0].durability).toBe(slots[0].maxDurability);
+    expect(result.xpLeft).toBe(100 - Math.ceil(2 / MENDING_REPAIR_PER_XP));
+  });
+
+  test("falls through to equipped Mending armor after the held item", () => {
+    const helmet = damaged("helmet", 4);
+    const slots = [createSlot("diamond_sword", 1), helmet]; // held sword has no mending
+    const equipped: EquippedArmor = { ...noArmor, helmet: "helmet" };
+    const result = mendXp(slots, 0, equipped, 50);
+    expect(result.slots[1].durability).toBe(helmet.maxDurability);
+  });
+
+  test("no Mending gear → same array ref and full XP banked", () => {
+    const slots = [createSlot("diamond_pickaxe", 1)];
+    const result = mendXp(slots, 0, noArmor, 9);
+    expect(result.slots).toBe(slots);
+    expect(result.xpLeft).toBe(9);
   });
 });
