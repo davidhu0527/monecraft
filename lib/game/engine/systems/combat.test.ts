@@ -1,11 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { BOW_ARROW_DAMAGE, BOW_COOLDOWN_SECONDS, BOW_KNOCKBACK, POWER_DAMAGE_PER_LEVEL, PUNCH_KNOCKBACK_PER_LEVEL } from "@/lib/game/config";
+import {
+  BOW_ARROW_DAMAGE,
+  BOW_COOLDOWN_SECONDS,
+  BOW_KNOCKBACK,
+  EYE_HEIGHT,
+  KNOCKBACK_PER_LEVEL,
+  MELEE_KNOCKBACK_IMPULSE,
+  POWER_DAMAGE_PER_LEVEL,
+  PUNCH_KNOCKBACK_PER_LEVEL
+} from "@/lib/game/config";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { applyEnchant } from "@/lib/game/enchantments";
 import { countsById } from "@/lib/game/inventory";
-import { createTimers, type GameEvent, type GameState } from "@/lib/game/engine/state";
-import { isBow, tryFireBow } from "@/lib/game/engine/systems/combat";
+import { createTimers, type GameEvent, type GameState, type MobState } from "@/lib/game/engine/state";
+import { isBow, tryAttackMob, tryFireBow } from "@/lib/game/engine/systems/combat";
 import type { InventorySlot } from "@/lib/game/types";
 
 function makeState(slots: InventorySlot[], selectedSlot = 0): GameState {
@@ -13,10 +22,21 @@ function makeState(slots: InventorySlot[], selectedSlot = 0): GameState {
     player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
     inventory: slots,
     selectedSlot,
+    mobs: [],
     timers: createTimers(),
     projectiles: [],
     nextProjectileId: 1
   } as unknown as GameState;
+}
+
+/** A zombie at eye height two blocks ahead (down -Z), directly in the aim cone. */
+function mobInFront(): MobState {
+  return {
+    kind: "zombie",
+    hp: 100,
+    position: new THREE.Vector3(0, 64 + EYE_HEIGHT, -2),
+    direction: new THREE.Vector3()
+  } as unknown as MobState;
 }
 
 function inventory(items: Array<[string, number]>): InventorySlot[] {
@@ -98,5 +118,23 @@ describe("tryFireBow", () => {
     const arrow = state.projectiles[0];
     expect(arrow.damage).toBe(BOW_ARROW_DAMAGE + 2 * POWER_DAMAGE_PER_LEVEL);
     expect(arrow.knockback).toBeCloseTo(BOW_KNOCKBACK + 1 * PUNCH_KNOCKBACK_PER_LEVEL, 5);
+  });
+});
+
+describe("tryAttackMob knockback", () => {
+  test("a plain hit shoves by the base impulse; Knockback adds to it", () => {
+    const plain = makeState(inventory([["diamond_sword", 1]]));
+    plain.mobs = [mobInFront()];
+    const enchanted = makeState(inventory([["diamond_sword", 1]]));
+    enchanted.mobs = [mobInFront()];
+
+    expect(tryAttackMob(plain, 5, () => {}, 5, 0)).toBe("zombie");
+    expect(tryAttackMob(enchanted, 5, () => {}, 5, 2 * KNOCKBACK_PER_LEVEL)).toBe("zombie");
+
+    // The mob starts at z = -2 and is shoved further down -Z; the base impulse is exact.
+    expect(plain.mobs[0].position.z).toBeCloseTo(-2 - MELEE_KNOCKBACK_IMPULSE, 5);
+    // More knockback => pushed further (more negative z).
+    expect(enchanted.mobs[0].position.z).toBeLessThan(plain.mobs[0].position.z);
+    expect(enchanted.mobs[0].position.z).toBeCloseTo(-2 - (MELEE_KNOCKBACK_IMPULSE + 2 * KNOCKBACK_PER_LEVEL), 5);
   });
 });

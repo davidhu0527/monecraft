@@ -348,6 +348,8 @@ enchantments it can take. Each costs **3 levels** and can be applied up to **thr
 times**:
 
 - **Sharpness** (weapons) — hit harder in melee
+- **Knockback** (weapons) — your melee hits shove mobs further back
+- **Looting** (weapons) — kills drop more loot
 - **Power** (bows) — arrows hit harder
 - **Punch** (bows) — arrows knock the target back further
 - **Protection** (armor) — take less damage

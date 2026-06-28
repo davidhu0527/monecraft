@@ -86,7 +86,7 @@ import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tick
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
-import { applyEnchant, canEnchant, sharpnessBonus } from "@/lib/game/enchantments";
+import { applyEnchant, canEnchant, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -533,7 +533,13 @@ export class GameEngine {
           break;
         }
         const heldWeapon = state.inventory[state.selectedSlot];
-        const hitKind = tryAttackMob(state, weaponDamage(state) + strengthBonus(state) + sharpnessBonus(heldWeapon), this.removeMobAt, weaponReach(state));
+        const hitKind = tryAttackMob(
+          state,
+          weaponDamage(state) + strengthBonus(state) + sharpnessBonus(heldWeapon),
+          this.removeMobAt,
+          weaponReach(state),
+          knockbackBonus(heldWeapon)
+        );
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
@@ -758,8 +764,9 @@ export class GameEngine {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
-    // Babies drop nothing — only grown animals yield loot.
-    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng) : [];
+    // Babies drop nothing — only grown animals yield loot. Looting on the held
+    // weapon rolls a bonus count per drop entry (0 for any non-Looting item).
+    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel(state.inventory[state.selectedSlot])) : [];
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }

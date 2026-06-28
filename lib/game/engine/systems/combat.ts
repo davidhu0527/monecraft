@@ -9,7 +9,8 @@ import {
   BOW_DURABILITY_PER_SHOT,
   BOW_KNOCKBACK,
   EYE_HEIGHT,
-  FIST_DAMAGE
+  FIST_DAMAGE,
+  MELEE_KNOCKBACK_IMPULSE
 } from "@/lib/game/config";
 import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
 import { powerBonus, punchKnockback } from "@/lib/game/enchantments";
@@ -66,8 +67,9 @@ export function findAimedMobIndex(state: GameState, reach = ATTACK_REACH): numbe
 /**
  * Melee attack at the mob nearest the crosshair within reach. Returns the kind
  * of the mob hit (or null); the caller (engine) handles death drops and durability.
+ * `knockback` is the extra horizontal impulse from the Knockback enchantment (0 by default).
  */
-export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void, reach = ATTACK_REACH): MobKind | null {
+export function tryAttackMob(state: GameState, damage: number, onMobKilled: (index: number) => void, reach = ATTACK_REACH, knockback = 0): MobKind | null {
   const { position } = state.player;
   const bestIndex = findAimedMobIndex(state, reach);
   if (bestIndex < 0) return null;
@@ -78,7 +80,7 @@ export function tryAttackMob(state: GameState, damage: number, onMobKilled: (ind
   if (scratchKnock.lengthSq() > 0.0001) {
     scratchKnock.normalize();
     mob.direction.copy(scratchKnock);
-    mob.position.addScaledVector(scratchKnock, 0.75);
+    mob.position.addScaledVector(scratchKnock, MELEE_KNOCKBACK_IMPULSE + knockback);
     mob.position.y += 0.12;
   }
 

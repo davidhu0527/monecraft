@@ -211,6 +211,8 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 | Enchantment | Applies to          | Per level                                                     |
 | ----------- | ------------------- | ------------------------------------------------------------- |
 | Sharpness   | weapons             | +2 melee damage                                               |
+| Knockback   | weapons             | +0.4 melee knockback impulse                                  |
+| Looting     | weapons             | up to +1 of each mob drop, rolled per kill                    |
 | Power       | bows                | +2 arrow damage                                               |
 | Punch       | bows                | +0.25 arrow knockback                                         |
 | Protection  | armor               | +2 defense (more damage reduction)                            |

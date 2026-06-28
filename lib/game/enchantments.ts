@@ -1,6 +1,7 @@
 import {
   EFFICIENCY_SPEED_PER_LEVEL,
   ENCHANT_MAX_LEVEL,
+  KNOCKBACK_PER_LEVEL,
   MENDING_MAX_LEVEL,
   MENDING_REPAIR_PER_XP,
   POWER_DAMAGE_PER_LEVEL,
@@ -41,11 +42,23 @@ export const ENCHANTMENT_DEFS: Record<EnchantmentId, EnchantmentDef> = {
   unbreaking: { id: "unbreaking", label: "Unbreaking", kinds: ["tool", "weapon", "armor"], maxLevel: ENCHANT_MAX_LEVEL },
   mending: { id: "mending", label: "Mending", kinds: ["tool", "weapon", "armor"], maxLevel: MENDING_MAX_LEVEL },
   power: { id: "power", label: "Power", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL },
-  punch: { id: "punch", label: "Punch", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL }
+  punch: { id: "punch", label: "Punch", kinds: ["weapon"], itemIds: ["bow"], maxLevel: ENCHANT_MAX_LEVEL },
+  knockback: { id: "knockback", label: "Knockback", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL },
+  looting: { id: "looting", label: "Looting", kinds: ["weapon"], maxLevel: ENCHANT_MAX_LEVEL }
 };
 
 /** Stable display order for the enchanting panel. */
-export const ENCHANTMENT_ORDER: readonly EnchantmentId[] = ["sharpness", "power", "punch", "protection", "efficiency", "unbreaking", "mending"];
+export const ENCHANTMENT_ORDER: readonly EnchantmentId[] = [
+  "sharpness",
+  "knockback",
+  "looting",
+  "power",
+  "punch",
+  "protection",
+  "efficiency",
+  "unbreaking",
+  "mending"
+];
 
 /** Level of `id` on a slot (0 if absent). */
 export function enchantLevel(slot: InventorySlot | null | undefined, id: EnchantmentId): number {
@@ -86,6 +99,16 @@ export function powerBonus(slot: InventorySlot | null | undefined): number {
 /** Extra arrow knockback from Punch on the held bow. */
 export function punchKnockback(slot: InventorySlot | null | undefined): number {
   return enchantLevel(slot, "punch") * PUNCH_KNOCKBACK_PER_LEVEL;
+}
+
+/** Extra melee knockback impulse from Knockback on the held weapon. */
+export function knockbackBonus(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "knockback") * KNOCKBACK_PER_LEVEL;
+}
+
+/** Looting level on the held weapon (0 if absent) — feeds the bonus-count roll in rollMobDrops. */
+export function lootingLevel(slot: InventorySlot | null | undefined): number {
+  return enchantLevel(slot, "looting");
 }
 
 /** Extra defense points from Protection on a worn armor piece. */

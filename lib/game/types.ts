@@ -15,7 +15,7 @@ export type EffectId = "speed" | "strength" | "regeneration" | "fire_resistance"
 export type ItemEffect = { id: EffectId; durationSeconds: number };
 
 /** A gear enchantment applied at the enchanting table; each maps to one combat/mining/durability seam. */
-export type EnchantmentId = "sharpness" | "protection" | "efficiency" | "unbreaking" | "mending" | "power" | "punch";
+export type EnchantmentId = "sharpness" | "protection" | "efficiency" | "unbreaking" | "mending" | "power" | "punch" | "knockback" | "looting";
 
 /** A per-item-instance enchantment and its level. */
 export type Enchantment = { id: EnchantmentId; level: number };

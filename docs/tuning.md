@@ -137,8 +137,9 @@ odds to make the system gentler; the reagent map is the economic dial.
 
 `XP_PER_LEVEL`, `FISHING_XP`, `ENCHANT_MAX_LEVEL`, `ENCHANT_COST_LEVELS`,
 `SHARPNESS_DAMAGE_PER_LEVEL`, `POWER_DAMAGE_PER_LEVEL`, `PUNCH_KNOCKBACK_PER_LEVEL`,
-`PROTECTION_DEFENSE_PER_LEVEL`, `EFFICIENCY_SPEED_PER_LEVEL`,
-`UNBREAKING_SKIP_PER_LEVEL`, `MENDING_MAX_LEVEL`, `MENDING_REPAIR_PER_XP`.
+`KNOCKBACK_PER_LEVEL`, `LOOTING_BONUS_PER_LEVEL`, `PROTECTION_DEFENSE_PER_LEVEL`,
+`EFFICIENCY_SPEED_PER_LEVEL`, `UNBREAKING_SKIP_PER_LEVEL`, `MENDING_MAX_LEVEL`,
+`MENDING_REPAIR_PER_XP`.
 
 XP banks as points; `XP_PER_LEVEL` (10) points make one level. The per-mob and
 per-ore XP tables live in `mobXp.ts` / `systems/xp.ts` (not here, like
@@ -148,7 +149,11 @@ Each enchant is a flat per-level modifier read at one seam:
 Sharpness `+SHARPNESS_DAMAGE_PER_LEVEL` (2) melee damage (`combat.ts` dispatch),
 Power `+POWER_DAMAGE_PER_LEVEL` (2) and Punch `+PUNCH_KNOCKBACK_PER_LEVEL` (0.25)
 on a fired arrow (bow-only via the enchant's `itemIds`, read in `tryFireBow`),
-Protection `+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
+Knockback `+KNOCKBACK_PER_LEVEL` (0.4) on the melee shove (added to
+`MELEE_KNOCKBACK_IMPULSE` in `tryAttackMob`), Looting up to
+`LOOTING_BONUS_PER_LEVEL` (1) extra of each mob drop per level (rolled in
+`rollMobDrops` off the killing weapon), Protection
+`+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
 `armorReduction`), Efficiency `×(1 + EFFICIENCY_SPEED_PER_LEVEL × level)` mining
 speed (`miningSpeed`), Unbreaking a `UNBREAKING_SKIP_PER_LEVEL` (0.2)
 skip-chance per level (`consumeToolDurability`/`consumeEquippedArmorDurability`),
@@ -219,7 +224,7 @@ shorten the cycle for more frequent, briefer showers.
 ## Progression — mining & combat reach
 
 `MINE_REACH`, `MINING_RATE`, `BARE_HAND_MINE_POWER`, `FIST_DAMAGE`, `ATTACK_REACH`,
-`ATTACK_AIM_DOT`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
+`ATTACK_AIM_DOT`, `MELEE_KNOCKBACK_IMPULSE`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
 `SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
 `SPEAR_STUCK_SECONDS`, `SPEAR_THROW_COOLDOWN_SECONDS`, `SPEAR_HIT_RADIUS`.
 
@@ -229,7 +234,9 @@ Read by `systems/mining.ts`, `systems/combat.ts`, and `systems/spears.ts`.
 _all_ mining globally while item tiers scale it per-tool. Note the deliberate
 asymmetry: `MINE_REACH` (7) is longer than `ATTACK_REACH` (4.5) — you can dig
 farther than you can punch. `ATTACK_AIM_DOT` (0.89) is how precisely the crosshair
-must point at a mob to hit it — lower is more forgiving. The per-ore **tool-tier
+must point at a mob to hit it — lower is more forgiving. `MELEE_KNOCKBACK_IMPULSE`
+(0.75) is the base horizontal shove a melee hit gives a mob — the Knockback
+enchantment adds to it. The per-ore **tool-tier
 gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config. Spears
 override only melee reach; their projectile speed, gravity, lifetime, cooldown,
 terrain embed duration, and collision radius are global, while tier
