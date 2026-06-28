@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-28
+
 ### Fixed
 
 - **Equipped armor no longer occupies a hotbar/inventory slot.** Armor was equipped _by reference_ — the worn piece stayed in the inventory and kept occupying its slot (and rendered twice: once in the hotbar/grid, once in the armor column). Armor now has **dedicated storage**: equipping **moves** the piece out of the inventory into its armor slot (freeing the slot, ending the double-render), and unequipping returns it to a free inventory slot (refused when the inventory is full, so nothing is lost). `EquippedArmor` now holds the worn `InventorySlot` instances; the defense/durability/Mending seams read them directly (no more find-by-id, which also removes the duplicate-piece ambiguity). The save schema bumps **v11 → v12** — `migrateSaveV11toV12` moves each legacy by-id equip out of `inventorySlots` into the armor record (preserving durability/enchantments/customName) — with **no worldgen change** (`WORLDGEN_VERSION` stays 8)
