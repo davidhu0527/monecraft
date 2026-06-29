@@ -245,6 +245,25 @@ oceans stay clear. At night the sky fills with **stars and a moon**, while cloud
 drift overhead by day. Weather is atmospheric only: it doesn't change how mobs
 spawn or behave, and it isn't saved.
 
+## Companions and animals
+
+**Breeding.** Feed two adult animals of the same kind their food to send them
+"in love" and breed a baby that grows up in about 90 seconds: **wheat** for sheep,
+cows, and horses; **seeds** for chickens and pigs.
+
+**Taming wolves and cats.** Wild **wolves** and **cats** roam the world. Right-click
+one while holding its treat — a **bone** for a wolf, **raw fish** for a cat — to try
+to tame it (about a 1-in-3 chance; the treat is eaten either way, so bring a few).
+A tamed pet becomes your **companion**:
+
+- It **follows you** around, jogging to catch up when it falls behind and teleporting to your side if it gets too far away.
+- It **fights hostiles for you** — it'll lunge at nearby zombies, skeletons, spiders, and creepers on its own, and anything it kills drops loot and XP straight to you.
+- **Right-click your pet** (with something other than its treat in hand) to tell it to **sit and stay** — it'll hold its ground until you right-click it again. Handy before a risky dive.
+- Pets are **saved with your world**, so they're waiting where you left them when you return. Feed two of your own with their treat and they'll breed more.
+
+The world is a little more alive now: monsters will also go after **villagers** (who
+flee), so a wandering trader isn't always safe after dark.
+
 ## Mining and building
 
 **Break** a block by holding left-click; a crack overlay shows progress, and harder

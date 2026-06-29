@@ -276,23 +276,26 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 
 ## Mobs
 
-**10 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
-can be bred; the villager is passive but doesn't flee (right-click to trade); hostiles
-hunt at night. Drop counts are inclusive ranges rolled per kill.
+**12 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+can be bred; wolves and cats are passive until **tamed** into fighting companions;
+the villager is passive but doesn't flee (right-click to trade); hostiles hunt at
+night and now also attack villagers. Drop counts are inclusive ranges rolled per kill.
 
-| Mob      | Type    | HP   | Speed | Detect range | Attack             | Cooldown | Drops                           |
-| -------- | ------- | ---- | ----- | ------------ | ------------------ | -------- | ------------------------------- |
-| Sheep    | passive | 10   | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
-| Chicken  | passive | 7    | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
-| Horse    | passive | 14   | 1.4   | —            | —                  | —        | 1–2 Leather                     |
-| Cow      | passive | 10   | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
-| Pig      | passive | 8    | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
-| Villager | passive | 20   | 0.6   | —            | — (trade partner)  | —        | nothing                         |
-| Zombie   | hostile | 100  | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
-| Skeleton | hostile | 100  | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
-| Spider   | hostile | 100  | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
-| Creeper  | hostile | 100  | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
-| Boss     | hostile | 1000 | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
+| Mob      | Type    | HP           | Speed | Detect range | Attack             | Cooldown | Drops                           |
+| -------- | ------- | ------------ | ----- | ------------ | ------------------ | -------- | ------------------------------- |
+| Sheep    | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
+| Chicken  | passive | 7            | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
+| Horse    | passive | 14           | 1.4   | —            | —                  | —        | 1–2 Leather                     |
+| Cow      | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
+| Pig      | passive | 8            | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
+| Wolf     | passive | 8 (20 tamed) | 1.3   | 12 (tamed)   | 4 (ally, melee)    | 0.9 s    | nothing                         |
+| Cat      | passive | 8 (20 tamed) | 1.35  | 12 (tamed)   | 3 (ally, melee)    | 1.0 s    | nothing                         |
+| Villager | passive | 20           | 0.6   | —            | — (trade partner)  | —        | nothing                         |
+| Zombie   | hostile | 100          | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
+| Skeleton | hostile | 100          | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
+| Spider   | hostile | 100          | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
+| Creeper  | hostile | 100          | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
+| Boss     | hostile | 1000         | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
 
 ### Trading
 
@@ -322,8 +325,21 @@ before it detonates to claim its gunpowder safely. Hostiles never spawn within 1
 blocks of you, so nothing materializes point-blank.
 Spiders are hostile only in the dark (daylight below 0.42); in twilight and day
 they behave like passives. **Breeding:** feed wheat to a sheep, horse, or cow, or
-seeds to a chicken or pig; babies grow up in ~90 s. Passive population is capped at
-24, hostiles at 16.
+seeds to a chicken or pig (tamed wolves breed with a bone, cats with raw fish);
+babies grow up in ~90 s. Passive population is capped at 24, hostiles at 16.
+
+### Companions (wolves & cats)
+
+Wild **wolves** and **cats** roam the world. Right-click one holding its treat — a
+**Bone** for a wolf, **Raw Fish** for a cat — to attempt to tame it; the treat is
+eaten whether or not the ~1-in-3 roll succeeds. A tamed pet becomes your **ally**:
+
+- **Fights for you** — it attacks nearby hostiles (within ~12 blocks) on its own, and its kills drop loot and XP straight to you.
+- **Follows you** — it roams near you, jogs to catch up when it strays, and is recalled (teleported) to your side if it gets more than ~24 blocks away.
+- **Sit / stay** — right-click your own pet (holding anything that isn't its breeding treat) to toggle sitting; a sitting pet stays put and won't follow or fight.
+- **Persists** — pets are the only mobs saved with the world; they (and their bred offspring) survive a reload.
+
+Mobs also now fight **each other**: hostiles hunt villagers (who flee), and your pets defend against them. Mob-vs-mob combat is melee-only.
 
 The **Boss** is summoned, not spawned (see [Endgame](#endgame)): it bears down on
 you, melees up close, fires a 3-arrow spread at range, summons minions, and is
