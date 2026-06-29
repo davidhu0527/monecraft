@@ -50,6 +50,7 @@ import {
 } from "@/lib/game/anvil";
 import { canStripEnchantments, enchantRefund, stripEnchantments } from "@/lib/game/grindstone";
 import { RECIPES } from "@/lib/game/recipes";
+import { tradeProfession } from "@/lib/game/trades";
 import * as inv from "@/lib/game/inventory";
 import {
   inventorySlotsSnapshot,
@@ -108,6 +109,7 @@ import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
 import {
+  assignVillagerProfessions,
   pushMob,
   spawnBoss,
   spawnInitialMobs,
@@ -228,6 +230,7 @@ export class GameEngine {
       inventoryOpen: false,
       advancementsOpen: false,
       craftingStation: null,
+      activeVillagerProfession: null,
       containers: new Map(),
       primedTnt: new Map(),
       openContainerIndex: null,
@@ -317,6 +320,9 @@ export class GameEngine {
         const { x, z } = this.state.player.position;
         spawnMobGroup(this.state, { kind: "villager", hostile: false, count: 3, centerX: x, centerZ: z, radius: RENDER_RADIUS }, this.rng, this.surfaceYAt);
       }
+      // Give the freshly seeded villagers their trade professions (round-robin);
+      // restored residents already carry theirs from the save.
+      assignVillagerProfessions(this.state);
     }
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
@@ -416,6 +422,7 @@ export class GameEngine {
         if (state.inventoryOpen) state.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
+          state.activeVillagerProfession = null; // ...and the open villager's trades
           state.openContainerIndex = null; // ...and the open chest
         }
         break;
@@ -426,6 +433,7 @@ export class GameEngine {
         if (state.advancementsOpen) {
           state.inventoryOpen = false; // mutually exclusive with the inventory panel
           state.craftingStation = null;
+          state.activeVillagerProfession = null;
           state.openContainerIndex = null;
         }
         break;
@@ -436,6 +444,9 @@ export class GameEngine {
         // Station recipes (e.g. furnace smelting) require that station to be open.
         // The UI gates these too, but dispatch is the spoofable surface to guard.
         if (recipe.station && recipe.station !== state.craftingStation) break;
+        // A villager trade additionally requires the open villager's profession —
+        // you can't craft a blacksmith trade while talking to a farmer.
+        if (recipe.station === "villager" && tradeProfession(recipe.id) !== state.activeVillagerProfession) break;
         const next = inv.craft(state.inventory, recipe);
         if (!next) break;
         state.inventory = next;
@@ -689,7 +700,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 14,
+      version: 15,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -882,6 +893,7 @@ export class GameEngine {
         mob.hp = Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
       }
       if (m.sitting) mob.sitting = true;
+      if (m.profession) mob.profession = m.profession;
       if (m.ageTimer && m.ageTimer > 0) {
         mob.ageTimer = m.ageTimer;
         mob.halfHeight = mobHalfHeight(m.kind) * BABY_SCALE;
@@ -1141,6 +1153,7 @@ export class GameEngine {
       capsActive: state.capsActive,
       sleeping: state.sleepTimer > 0,
       craftingStation: state.craftingStation,
+      activeVillagerProfession: state.activeVillagerProfession,
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
       victory: state.victory,

@@ -4,7 +4,14 @@ import { VoxelWorld, generateWorld } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { createSurfaceYAt } from "@/lib/game/spawn";
-import { pushMob, spawnVillageResidents, tickHostileSpawnDirector, tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
+import {
+  assignVillagerProfessions,
+  pushMob,
+  spawnVillageResidents,
+  tickHostileSpawnDirector,
+  tickSpawnerDirector
+} from "@/lib/game/engine/systems/spawnDirector";
+import { PROFESSIONS } from "@/lib/game/trades";
 import type { GameState } from "@/lib/game/engine/state";
 import type { Difficulty } from "@/lib/game/difficulties";
 
@@ -55,6 +62,19 @@ describe("spawnVillageResidents", () => {
 
     expect(state.mobs).toHaveLength(GEN.villagersPerVillage * 2);
     expect(state.mobs.every((m) => m.kind === "villager" && m.faction === "villager" && !m.hostile)).toBe(true);
+  });
+
+  test("assignVillagerProfessions fills professionless villagers round-robin, leaving assigned ones alone", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    generateWorld(world);
+    const state = { world, mobs: [], nextMobId: 1 } as unknown as GameState;
+    spawnVillageResidents(state, [{ x: 20, z: 20 }], mulberry32(1), createSurfaceYAt(world));
+    state.mobs[0].profession = "cleric"; // a "restored" resident keeps its profession
+
+    assignVillagerProfessions(state);
+
+    expect(state.mobs[0].profession).toBe("cleric"); // untouched
+    expect(state.mobs.slice(1).map((m) => m.profession)).toEqual(PROFESSIONS.slice(0, state.mobs.length - 1)); // the rest cycle
   });
 });
 

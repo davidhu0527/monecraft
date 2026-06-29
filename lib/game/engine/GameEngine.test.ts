@@ -1477,7 +1477,7 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(14);
+    expect(save.version).toBe(15);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -2316,6 +2316,7 @@ describe("villager trading", () => {
       kind: "villager",
       hostile: false,
       faction: "villager",
+      profession: "farmer", // trade_wheat is a farmer trade
       targetId: null,
       retargetTimer: 0,
       hp: 20,
@@ -2353,6 +2354,14 @@ describe("villager trading", () => {
     engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
     expect(countsById(state.inventory).get("emerald")).toBe(1);
     expect(countsById(state.inventory).get("wheat")).toBeUndefined();
+
+    // A trade from another profession (blacksmith's gold→emerald) is refused while
+    // a farmer is open — the profession gate, not just the station gate.
+    const goldSlot = state.inventory.findIndex((s) => !s.id);
+    state.inventory[goldSlot] = createSlot("gold_ore", 1);
+    engine.dispatch({ type: "craft", recipeId: "trade_gold" });
+    expect(countsById(state.inventory).get("gold_ore")).toBe(1); // not consumed
+    expect(state.activeVillagerProfession).toBe("farmer");
   });
 });
 

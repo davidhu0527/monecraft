@@ -11,9 +11,10 @@ import { ingredientStatus } from "@/lib/game/inventory";
 import { itemSourceHint } from "@/lib/game/itemSources";
 import { ARMOR_SLOT_LABELS, ARMOR_SLOTS, createSlot, displayName, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { groupRecipes } from "@/lib/game/recipes";
+import { tradeProfession } from "@/lib/game/trades";
 import { itemIconUrl } from "@/lib/ui/sprites";
 import type { GameMode } from "@/lib/game/gameModes";
-import type { ArmorSlot, EnchantmentId, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId, EquippedArmor, InventorySlot, Profession, Recipe } from "@/lib/game/types";
 
 type InventoryPanelProps = {
   inventory: InventorySlot[];
@@ -22,6 +23,8 @@ type InventoryPanelProps = {
   hotbarSlots: number;
   recipes: Recipe[];
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** Open villager's profession — filters the Trading panel to its offers, or null. */
+  activeVillagerProfession: Profession | null;
   /** Current game mode — Creative swaps the recipe book for the item palette. */
   gameMode: GameMode;
   /** Contents of the open chest, or null when no chest is open. */
@@ -89,6 +92,7 @@ export default function InventoryPanel({
   hotbarSlots,
   recipes,
   craftingStation,
+  activeVillagerProfession,
   gameMode,
   container,
   xpLevel,
@@ -162,7 +166,12 @@ export default function InventoryPanel({
   // groups by category and floats the "make now" recipes to the top of each group.
   const stationLocked = (recipe: Recipe) => !!recipe.station && recipe.station !== craftingStation;
   const canMakeNow = (recipe: Recipe) => !stationLocked(recipe) && canCraft(recipe);
-  const recipeGroups = groupRecipes(recipes, canMakeNow);
+  // A villager shows only its profession's trades; while no villager is open
+  // (browsing the book) every trade stays visible but locked.
+  const visibleRecipes = recipes.filter(
+    (recipe) => recipe.station !== "villager" || activeVillagerProfession === null || tradeProfession(recipe.id) === activeVillagerProfession
+  );
+  const recipeGroups = groupRecipes(visibleRecipes, canMakeNow);
 
   const renderRecipe = (recipe: Recipe) => {
     const locked = stationLocked(recipe);

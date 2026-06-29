@@ -96,6 +96,13 @@ export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "wolf" | "
  */
 export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
 
+/**
+ * A villager's trade profession — it offers only the trades tagged with its
+ * profession (TRADE_PROFESSION in trades.ts) and is tinted accordingly. Assigned
+ * per resident at spawn and persisted with the mob (save v15+).
+ */
+export type Profession = "farmer" | "blacksmith" | "librarian" | "cleric";
+
 export type MobModel = {
   group: THREE.Group;
   legs: THREE.Mesh[];
@@ -282,15 +289,25 @@ export type SavedMob = {
   owner?: "player";
   sitting?: boolean;
   ageTimer?: number;
+  /** Villager-only trade profession (added v15); absent on pets. */
+  profession?: Profession;
 };
 
 /**
- * Current save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14
- * migration is a pure version bump and pre-v14 saves load with none (the world
- * still re-seeds its wildlife at boot). Like `xp`/`stats`, persisted pets are
- * long-term; unlike `effects` they are NOT cleared on death.
+ * Save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14 migration
+ * is a pure version bump and pre-v14 saves load with none.
  */
-export type SaveData = Omit<SaveDataV13, "version"> & {
+export type SaveDataV14 = Omit<SaveDataV13, "version"> & {
   version: 14;
   mobs?: SavedMob[];
+};
+
+/**
+ * Current save shape (v15): villager professions. A persisted villager resident
+ * now carries an optional `profession` on its `SavedMob`. The field is additive,
+ * so the v14→v15 migration is a pure version bump and pre-v15 villagers load
+ * professionless (the engine assigns one).
+ */
+export type SaveData = Omit<SaveDataV14, "version"> & {
+  version: 15;
 };

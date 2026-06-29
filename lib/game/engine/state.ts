@@ -3,7 +3,7 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, SaveData } from "@/lib/game/types";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -36,6 +36,8 @@ export type MobState = {
   owner?: "player";
   /** A tamed pet told to stay put (sit/stay) — no follow, wander, or pursuit. Persisted (save v14). */
   sitting?: boolean;
+  /** Villager-only: trade profession (drives its trade subset + tint). Persisted (save v15). */
+  profession?: Profession;
   /** Session-only: id of the enemy mob this fighter is attacking, or null. Never serialized. */
   targetId: number | null;
   /** Session-only: seconds until the next enemy-mob rescan (throttle). Never serialized. */
@@ -190,6 +192,8 @@ export type GameState = {
   advancementsOpen: boolean;
   /** Crafting station whose recipes (or the enchanting panel) are unlocked while the inventory is open, or null. */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's trade profession while a "villager" station is up (gates which trades show + craft), else null. Session-only. */
+  activeVillagerProfession: Profession | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
   /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
@@ -328,6 +332,8 @@ export type GameSnapshot = {
   sleeping: boolean;
   /** Open crafting station (gates smelting recipes, or opens the enchanting panel). */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's profession (filters the Trading panel to its offers), or null. */
+  activeVillagerProfession: Profession | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */

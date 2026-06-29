@@ -13,6 +13,7 @@ import {
   SPAWNER_LOCAL_CAP
 } from "@/lib/game/config";
 import { FACTION_BY_KIND, MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import { PROFESSIONS } from "@/lib/game/trades";
 import { hostileCapScale, hostileSpawnIntervalScale, hostilesSpawn } from "@/lib/game/difficulties";
 import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
@@ -123,6 +124,20 @@ export function spawnVillageResidents(state: GameState, sites: Array<{ x: number
       const pos = randomLandPointNear(state.world, surfaceYAt, site.x, site.z, 8, rng, 0);
       pushMob(state, "villager", false, pos.x, pos.y, pos.z, rng);
     }
+  }
+}
+
+/**
+ * Assigns a trade profession (round-robin) to every villager that doesn't have
+ * one yet — newly seeded residents on a fresh world. Restored residents keep
+ * their saved profession, so this skips them (they're not professionless).
+ */
+export function assignVillagerProfessions(state: GameState): void {
+  let next = 0;
+  for (const mob of state.mobs) {
+    if (mob.faction !== "villager" || mob.profession != null) continue;
+    mob.profession = PROFESSIONS[next % PROFESSIONS.length];
+    next += 1;
   }
 }
 

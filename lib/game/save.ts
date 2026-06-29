@@ -20,6 +20,7 @@ import type {
   SaveDataV11,
   SaveDataV12,
   SaveDataV13,
+  SaveDataV14,
   SavedContainer,
   SavedEffect,
   SavedEquippedArmor,
@@ -32,6 +33,7 @@ import type {
 import { isGameMode, type GameMode } from "@/lib/game/gameModes";
 import { isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
+import { isProfession } from "@/lib/game/trades";
 import type { MobState } from "@/lib/game/engine/state";
 
 /**
@@ -197,8 +199,17 @@ export function migrateSaveV12toV13(save: SaveDataV12): SaveDataV13 {
  * optional, so a pre-v14 save simply loads with none and the world re-seeds its
  * wildlife at boot as before.
  */
-export function migrateSaveV13toV14(save: SaveDataV13): SaveData {
+export function migrateSaveV13toV14(save: SaveDataV13): SaveDataV14 {
   return { ...save, version: 14 };
+}
+
+/**
+ * Migrates a v14 save to v15 — a pure version bump. A villager resident's
+ * `profession` is an additive optional field on its `SavedMob`, so a pre-v15 save
+ * simply loads its villagers professionless and the engine assigns one.
+ */
+export function migrateSaveV14toV15(save: SaveDataV14): SaveData {
+  return { ...save, version: 15 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -208,6 +219,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV14
       | SaveDataV13
       | SaveDataV12
       | SaveDataV11
@@ -235,6 +247,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV11
       | SaveDataV12
       | SaveDataV13
+      | SaveDataV14
       | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -248,7 +261,8 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 11) migrated = migrateSaveV11toV12(migrated);
     if (migrated.version === 12) migrated = migrateSaveV12toV13(migrated);
     if (migrated.version === 13) migrated = migrateSaveV13toV14(migrated);
-    if (migrated.version !== 14) return null;
+    if (migrated.version === 14) migrated = migrateSaveV14toV15(migrated);
+    if (migrated.version !== 15) return null;
     return migrated;
   } catch {
     return null;
@@ -452,6 +466,7 @@ export function serializeMobs(mobs: MobState[]): SavedMob[] {
     if (mob.owner != null) saved.owner = mob.owner;
     if (mob.sitting) saved.sitting = true;
     if (mob.ageTimer > 0) saved.ageTimer = mob.ageTimer;
+    if (mob.profession != null) saved.profession = mob.profession;
     out.push(saved);
   }
   return out;
@@ -481,6 +496,7 @@ export function restoreMobs(save: SaveData): SavedMob[] {
     if (entry.owner === "player") saved.owner = "player";
     if (entry.sitting === true) saved.sitting = true;
     if (Number.isFinite(entry.ageTimer) && (entry.ageTimer ?? 0) > 0) saved.ageTimer = entry.ageTimer;
+    if (isProfession(entry.profession)) saved.profession = entry.profession;
     out.push(saved);
   }
   return out;
