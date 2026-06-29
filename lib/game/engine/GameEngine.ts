@@ -15,6 +15,7 @@ import {
   ANVIL_COMBINE_COST_LEVELS,
   ANVIL_RENAME_COST_LEVELS,
   ANVIL_REPAIR_COST_LEVELS,
+  BABY_SCALE,
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
@@ -68,16 +69,19 @@ import {
   restoreXp,
   restoreStats,
   restoreAdvancements,
+  restoreMobs,
   serializeContainers,
   serializeEffects,
   serializeLootedChests,
+  serializeMobs,
   serializeStats
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
-import type { InventorySlot, SaveData } from "@/lib/game/types";
+import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import type { InventorySlot, SaveData, SavedMob } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
@@ -100,7 +104,7 @@ import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { pushMob, spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
 import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
@@ -257,6 +261,9 @@ export class GameEngine {
       // Filter against the registry so a corrupt/edited save can't inject bogus ids
       // (which would inflate the unlocked count and round-trip back out forever).
       for (const id of restoreAdvancements(save)) if (ADVANCEMENTS_BY_ID[id]) this.state.advancements.add(id);
+      // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
+      // fungible population, so the world stays alive and pets simply pre-exist.
+      this.restorePersistedMobs(restoreMobs(save));
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -651,7 +658,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 13,
+      version: 14,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -676,7 +683,8 @@ export class GameEngine {
       effects: serializeEffects(state.effects),
       xp: state.xp,
       stats: serializeStats(state.stats),
-      advancements: [...state.advancements]
+      advancements: [...state.advancements],
+      mobs: serializeMobs(state.mobs)
     };
   }
 
@@ -818,6 +826,30 @@ export class GameEngine {
   private applyStarvationFloored = (amount: number, floorHp: number): void => {
     if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
+
+  /**
+   * Rebuilds the live MobState for each validated SavedMob: re-grounds onto the
+   * current surface (the world may have changed since the save), assigns a fresh
+   * id via pushMob, then restores the persisted hp/faction/owner/sit/baby state.
+   * hp is clamped to the kind's template max — owned pets get a generous ceiling,
+   * since a tamed pet's hp can exceed the wild template (refined when companions land).
+   */
+  private restorePersistedMobs(saved: SavedMob[]): void {
+    for (const m of saved) {
+      const ground = this.surfaceYAt(m.x, m.z);
+      const hostile = m.faction === "hostile" || m.faction === "raider";
+      pushMob(this.state, m.kind, hostile, m.x, ground, m.z, this.rng);
+      const mob = this.state.mobs[this.state.mobs.length - 1];
+      mob.faction = m.faction;
+      mob.hp = m.owner != null ? Math.min(m.hp, BOSS_HP) : Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
+      if (m.owner != null) mob.owner = m.owner;
+      if (m.sitting) mob.sitting = true;
+      if (m.ageTimer && m.ageTimer > 0) {
+        mob.ageTimer = m.ageTimer;
+        mob.halfHeight = mobHalfHeight(m.kind) * BABY_SCALE;
+      }
+    }
+  }
 
   // `credit` (default true) gates loot + XP to the player: player/arrow/spear/
   // explosion kills credit; the mobAI sweep passes the victim's faction so a pet's

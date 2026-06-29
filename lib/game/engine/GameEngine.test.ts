@@ -1476,7 +1476,7 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(13);
+    expect(save.version).toBe(14);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -2767,5 +2767,33 @@ describe("advancements (save v13)", () => {
     const detail = engine.advancementState();
     expect(detail.unlocked).toContain("tool_up");
     expect(detail.stats.find((entry) => entry.id === "items_crafted")?.value).toBe(1);
+  });
+});
+
+describe("mob persistence (pets)", () => {
+  test("a tamed pet is restored across reload; the wild population is not duplicated", () => {
+    const engine = makeEngine();
+    // Flag an existing mob as a pet (taming itself arrives with companions); the
+    // persistence machinery only keys on `owner`.
+    const pet = engine.state.mobs[0];
+    pet.owner = "player";
+    pet.faction = "ally";
+    pet.hp = 7;
+    pet.position.set(20, 40, 20);
+    const wildCount = engine.state.mobs.length;
+
+    const restored = makeEngine(engine.serialize());
+    const pets = restored.state.mobs.filter((m) => m.owner === "player");
+    expect(pets).toHaveLength(1);
+    expect(pets[0].faction).toBe("ally");
+    expect(pets[0].hp).toBe(7);
+    expect(pets[0].position.x).toBe(20); // x/z survive; y is re-grounded onto current terrain
+    // Only the pet was persisted — the fungible population is re-seeded fresh, so
+    // the restored world has the same wildlife plus the one restored pet.
+    expect(restored.state.mobs.length).toBe(wildCount + 1);
+  });
+
+  test("a fresh world persists no mobs (nothing owned yet)", () => {
+    expect(makeEngine().serialize().mobs).toEqual([]);
   });
 });

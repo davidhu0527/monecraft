@@ -253,13 +253,44 @@ export type SaveDataV12 = Omit<SaveDataV11, "version" | "equippedArmor"> & {
 export type SavedStat = { id: string; value: number };
 
 /**
- * Current save shape (v13): progression meta. `stats` are the running gameplay
- * counters and `advancements` the unlocked ids. Both are optional, so the v12→v13
- * migration is a pure version bump and pre-v13 saves load with none. Like `xp`
- * (and unlike `effects`), both are long-term and are NOT cleared on death.
+ * Save shape (v13): progression meta. `stats` are the running gameplay counters
+ * and `advancements` the unlocked ids. Both are optional, so the v12→v13 migration
+ * is a pure version bump and pre-v13 saves load with none.
  */
-export type SaveData = Omit<SaveDataV12, "version"> & {
+export type SaveDataV13 = Omit<SaveDataV12, "version"> & {
   version: 13;
   stats?: SavedStat[];
   advancements?: string[];
+};
+
+/**
+ * One persisted mob — only tamed pets are saved in PR-A (village residents join
+ * the persistent set in PR-B; see isPersistentMob). The fungible wild/hostile
+ * population — including the loose villagers spawnInitialMobs seeds — is re-created
+ * each boot, so it is never serialized. Carries just the irreplaceable identity/
+ * state; the rest (speed, ranges, fresh timers) is rebuilt from MOB_TEMPLATES on
+ * restore. `ageTimer` keeps a bred juvenile young; `owner`/`sitting` carry pet
+ * ownership and its sit/stay state.
+ */
+export type SavedMob = {
+  kind: MobKind;
+  x: number;
+  y: number;
+  z: number;
+  hp: number;
+  faction: MobFaction;
+  owner?: "player";
+  sitting?: boolean;
+  ageTimer?: number;
+};
+
+/**
+ * Current save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14
+ * migration is a pure version bump and pre-v14 saves load with none (the world
+ * still re-seeds its wildlife at boot). Like `xp`/`stats`, persisted pets are
+ * long-term; unlike `effects` they are NOT cleared on death.
+ */
+export type SaveData = Omit<SaveDataV13, "version"> & {
+  version: 14;
+  mobs?: SavedMob[];
 };
