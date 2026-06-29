@@ -133,6 +133,15 @@ function nearestThreat(state: GameState, mob: MobState, range: number): MobState
   return best;
 }
 
+/** True when nothing solid blocks the segment from a fighter's eye to its target — so it can't bite through a wall/door. */
+function mobVsMobLineOfSight(world: GameState["world"], mob: MobState, dx: number, dy: number, dz: number): boolean {
+  scratchRay.set(dx, dy, dz);
+  if (scratchRay.lengthSq() <= 1e-6) return true;
+  const dist = scratchRay.length();
+  scratchMobEye.set(mob.position.x, mob.position.y + mob.halfHeight * 0.35, mob.position.z);
+  return voxelRaycast(world, scratchMobEye, scratchRay.normalize(), dist) === null;
+}
+
 /**
  * A ranged mob looses an arrow from its eye toward the player's chest, leading a
  * moving target by a fraction of the arrow's travel time. The arrow is not
@@ -375,13 +384,15 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     // Mob-vs-mob melee: a fighter with a live mob target bites it when adjacent.
     // Independent of the player (it happens through the respawn countdown too) and
     // of difficulty (dmgScale scales player-facing damage only). No LOS raycast —
-    // mob collision already keeps fighters from closing through walls. The kill is
-    // resolved by the post-loop sweep, never mid-loop (splice-safety).
+    // A line-of-sight raycast (like the player-facing strike) stops a fighter from
+    // biting through a thin wall or door when within reach. The kill is resolved by
+    // the post-loop sweep, never mid-loop (splice-safety).
     if (mobTarget && mob.attackDamage > 0 && mob.attackTimer <= 0 && mobTarget.hp > 0) {
       const dx = mobTarget.position.x - mob.position.x;
+      const dy = mobTarget.position.y - mob.position.y;
       const dz = mobTarget.position.z - mob.position.z;
       const horiz = Math.hypot(dx, dz);
-      if (horiz < MOB_VS_MOB_REACH && Math.abs(mobTarget.position.y - mob.position.y) < 1.6) {
+      if (horiz < MOB_VS_MOB_REACH && Math.abs(dy) < 1.6 && mobVsMobLineOfSight(world, mob, dx, dy, dz)) {
         mobTarget.hp -= mob.attackDamage;
         if (horiz > 0.001) {
           const push = MOB_VS_MOB_KNOCKBACK / horiz;

@@ -2774,9 +2774,10 @@ describe("advancements (save v13)", () => {
 describe("mob persistence (pets)", () => {
   test("a tamed pet is restored across reload; the wild population is not duplicated", () => {
     const engine = makeEngine();
-    // Flag an existing mob as a pet (taming itself arrives with companions); the
-    // persistence machinery only keys on `owner`.
+    // Flag an existing mob as a real tamed pet (taming itself is covered separately);
+    // a pet is a wolf/cat that is owned + ally.
     const pet = engine.state.mobs[0];
+    pet.kind = "wolf";
     pet.owner = "player";
     pet.faction = "ally";
     pet.hp = 7;
@@ -2795,7 +2796,7 @@ describe("mob persistence (pets)", () => {
   });
 
   test("a fresh world persists no mobs (nothing owned yet)", () => {
-    expect(makeEngine().serialize().mobs).toEqual([]);
+    expect(makeEngine().serialize().mobs ?? []).toEqual([]); // mobs is optional in v14
   });
 
   test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {

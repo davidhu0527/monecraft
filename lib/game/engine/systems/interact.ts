@@ -192,6 +192,10 @@ export function tryToggleSitPet(state: GameState, emit: EmitGameEvent): boolean 
   if (index < 0) return false;
   const mob = state.mobs[index];
   if (mob.owner == null) return false; // only your own pet
+  // Holding the pet's breeding treat means "breed", not "sit" — so a feed that was
+  // declined (a baby, or one already in love) doesn't fall through and flip sitting.
+  const slot = state.inventory[state.selectedSlot];
+  if (slot?.id && FEED_ITEMS[mob.kind] === slot.id) return false;
   mob.sitting = !mob.sitting;
   emit({ type: "petSitToggled", kind: mob.kind, sitting: mob.sitting === true });
   return true;

@@ -4,6 +4,9 @@ import { createMobModelForKind, MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { MobModel } from "@/lib/game/types";
 import type { MobState } from "@/lib/game/engine/state";
 
+/** How much a sitting pet shrinks (and is lowered) to read as crouched. */
+const SIT_SCALE = 0.7;
+
 type HealthBar = {
   group: THREE.Group;
   fill: THREE.Sprite;
@@ -74,8 +77,10 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         }
         const { model, healthBar } = visual;
 
-        // A told-to-stay pet sits still: no bob, hunkered down, legs at rest.
-        const bob = mob.sitting ? 0 : Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
+        // A told-to-stay pet sits still: no bob, hunkered down (lowered so the 0.7
+        // scale crouches it onto the ground rather than lifting its feet, the same
+        // position/scale coupling a scaled-down baby uses), legs at rest.
+        const bob = mob.sitting ? -mob.halfHeight * (1 - SIT_SCALE) : Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
         model.group.position.set(mob.position.x, mob.position.y + bob, mob.position.z);
         model.group.rotation.y = mob.yaw;
 
@@ -88,7 +93,7 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
           const flash = primed ? 0.35 + 0.55 * wave : 0;
           for (const material of model.materials) (material as THREE.MeshStandardMaterial).emissive.setScalar(flash);
         }
-        if (mob.sitting) scale *= 0.7;
+        if (mob.sitting) scale *= SIT_SCALE;
         model.group.scale.setScalar(scale);
 
         if (healthBar) {

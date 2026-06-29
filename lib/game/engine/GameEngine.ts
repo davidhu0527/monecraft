@@ -860,6 +860,7 @@ export class GameEngine {
       if (m.ageTimer && m.ageTimer > 0) {
         mob.ageTimer = m.ageTimer;
         mob.halfHeight = mobHalfHeight(m.kind) * BABY_SCALE;
+        mob.position.y = ground + mob.halfHeight; // re-center on the shrunk height so a baby doesn't float
       }
     }
   }

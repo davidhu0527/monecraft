@@ -470,6 +470,10 @@ export function restoreMobs(save: SaveData): SavedMob[] {
     if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z)) continue;
     if (!Number.isFinite(entry.hp) || entry.hp <= 0) continue;
     if (typeof entry.faction !== "string" || !Object.hasOwn(VALID_MOB_FACTIONS, entry.faction)) continue;
+    // PR-A only ever persists owned pets (mirrors isPersistentMob), so reject any
+    // other persisted mob — a stale/edited v14 save can't resurrect a "pet zombie".
+    // PR-B relaxes this when village residents (owner-less) join the persistent set.
+    if (entry.owner !== "player" || entry.faction !== "ally") continue;
     const saved: SavedMob = { kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, hp: entry.hp, faction: entry.faction };
     if (entry.owner === "player") saved.owner = "player";
     if (entry.sitting === true) saved.sitting = true;

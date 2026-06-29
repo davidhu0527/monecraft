@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { VoxelWorld } from "@/lib/world";
+import { BlockId, VoxelWorld } from "@/lib/world";
 import { CREEPER_FUSE_SECONDS, PET_FIGHT_RANGE } from "@/lib/game/config";
 import { FACTION_BY_KIND, mobHalfHeight } from "@/lib/game/mobs";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
@@ -8,9 +8,11 @@ import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
 import { tickMobs, type MobTickDeps } from "@/lib/game/engine/systems/mobAI";
 import type { MobKind } from "@/lib/game/types";
 
+let nextMobId = 1;
+
 function makeMob(kind: MobKind, x: number, y: number, z: number, attackTimer = 0): MobState {
   return {
-    id: 1,
+    id: nextMobId++, // unique, so targetId assertions can't accidentally resolve to the attacker
     kind,
     hostile: true,
     faction: FACTION_BY_KIND[kind],
@@ -251,11 +253,22 @@ describe("mob-vs-mob & allegiance", () => {
     expect(getDamage()).toBe(0); // the player took no damage
   });
 
+  test("a wall blocks a mob-vs-mob bite (line of sight)", () => {
+    const zombie = makeMob("zombie", 24, 30, 10.28);
+    const villager = makeVillager(24, 8.72); // ~1.56 apart — within MOB_VS_MOB_REACH, but across a wall
+    const state = makeState([zombie, villager]);
+    for (let y = 28; y <= 31; y += 1) state.world.set(24, y, 9, BlockId.Stone); // a wall in the voxel between them
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(villager.hp).toBe(20); // the bite was blocked — no damage through the wall
+  });
+
   test("villagers and hostiles never target their own side", () => {
     const villager = makeVillager(24, 9);
     const zombieA = makeMob("zombie", 24, 30, 8);
     const zombieB = makeMob("zombie", 24, 30, 8.6);
-    zombieB.id = 99;
     const state = makeState([villager, zombieA, zombieB]);
     const { deps } = makeDeps();
 

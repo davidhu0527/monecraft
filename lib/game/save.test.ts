@@ -924,15 +924,17 @@ describe("v13 to v14 migration & mob persistence", () => {
     ]);
   });
 
-  test("restoreMobs drops unknown kinds, bad coords/hp, and unknown factions", () => {
+  test("restoreMobs drops unknown kinds, bad coords/hp, and non-pet entries", () => {
     const dirty = [
       { kind: "dragon", x: 1, y: 1, z: 1, hp: 5, faction: "ally", owner: "player" }, // unknown kind
-      { kind: "sheep", x: Number.NaN, y: 1, z: 1, hp: 5, faction: "ally", owner: "player" }, // bad coord
-      { kind: "sheep", x: 1, y: 1, z: 1, hp: 0, faction: "ally", owner: "player" }, // dead
-      { kind: "sheep", x: 1, y: 1, z: 1, hp: 5, faction: "wizard", owner: "player" }, // bad faction
-      { kind: "sheep", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "player" } // valid
+      { kind: "wolf", x: Number.NaN, y: 1, z: 1, hp: 5, faction: "ally", owner: "player" }, // bad coord
+      { kind: "wolf", x: 1, y: 1, z: 1, hp: 0, faction: "ally", owner: "player" }, // dead
+      { kind: "wolf", x: 1, y: 1, z: 1, hp: 5, faction: "wizard", owner: "player" }, // bad faction
+      { kind: "wolf", x: 1, y: 1, z: 1, hp: 5, faction: "wild" }, // owner-less / not a pet → dropped
+      { kind: "zombie", x: 1, y: 1, z: 1, hp: 5, faction: "hostile", owner: "player" }, // tampered "pet zombie" → dropped
+      { kind: "wolf", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "player" } // valid
     ] as unknown as SavedMob[];
-    expect(restoreMobs({ ...sampleSave(), mobs: dirty })).toEqual([{ kind: "sheep", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "player" }]);
+    expect(restoreMobs({ ...sampleSave(), mobs: dirty })).toEqual([{ kind: "wolf", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "player" }]);
   });
 
   test("persisted pets survive a full save round-trip", () => {

@@ -118,4 +118,11 @@ describe("tryToggleSitPet", () => {
     expect(tryToggleSitPet(state, () => {})).toBe(false);
     expect(wild.sitting).toBeUndefined();
   });
+
+  test("declines while holding the pet's breeding treat (so a breed attempt doesn't flip sitting)", () => {
+    const pet = mobInFront("wolf", { owner: "player", faction: "ally" });
+    const state = makeState(inventory([["bone", 1]]), pet); // bone is the wolf's breed/tame treat
+    expect(tryToggleSitPet(state, () => {})).toBe(false);
+    expect(pet.sitting).toBeUndefined();
+  });
 });
