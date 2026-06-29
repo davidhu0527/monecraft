@@ -202,6 +202,8 @@ export type GameState = {
   dungeonSpawnerIndices: Set<number>;
   /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
   lootedDungeonChests: Set<number>;
+  /** Village center (x,z) sites (session; re-derived from the seed each load) — seed the resident villager population. */
+  villageSites: Array<{ x: number; z: number }>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;

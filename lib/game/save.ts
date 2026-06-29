@@ -433,13 +433,14 @@ export function restoreAdvancements(save: SaveData): string[] {
 const VALID_MOB_FACTIONS: Record<MobFaction, true> = { wild: true, hostile: true, ally: true, villager: true, raider: true };
 
 /**
- * Whether a mob survives a save/reload. PR-A persists only tamed pets; the
- * fungible wild/hostile population (and the loose villagers) is re-seeded each
- * boot by spawnInitialMobs, so persisting it would just duplicate it. PR-B
- * widens this to include village residents.
+ * Whether a mob survives a save/reload: tamed pets (owner set) and village
+ * residents (faction "villager"). The fungible wild/hostile population is
+ * re-seeded each boot by spawnInitialMobs, so persisting it would just duplicate
+ * it. Villagers no longer scatter loosely — they live in villages — so persisting
+ * them is safe and keeps a settlement's population stable across reloads.
  */
 export function isPersistentMob(mob: MobState): boolean {
-  return mob.owner != null;
+  return mob.owner != null || mob.faction === "villager";
 }
 
 /** Snapshots the persistent mobs (tamed pets) for the save — body-center position + the state a template can't rebuild. */
@@ -470,10 +471,12 @@ export function restoreMobs(save: SaveData): SavedMob[] {
     if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z)) continue;
     if (!Number.isFinite(entry.hp) || entry.hp <= 0) continue;
     if (typeof entry.faction !== "string" || !Object.hasOwn(VALID_MOB_FACTIONS, entry.faction)) continue;
-    // PR-A only ever persists owned pets (mirrors isPersistentMob), so reject any
-    // other persisted mob — a stale/edited v14 save can't resurrect a "pet zombie".
-    // PR-B relaxes this when village residents (owner-less) join the persistent set.
-    if (entry.owner !== "player" || entry.faction !== "ally") continue;
+    // Only the two persistent shapes are accepted (mirrors isPersistentMob), so a
+    // stale/edited save can't resurrect e.g. a "pet zombie": an owned ally pet, or
+    // an owner-less villager resident. Anything else is dropped.
+    const isPet = entry.owner === "player" && entry.faction === "ally";
+    const isResident = entry.owner == null && entry.faction === "villager";
+    if (!isPet && !isResident) continue;
     const saved: SavedMob = { kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, hp: entry.hp, faction: entry.faction };
     if (entry.owner === "player") saved.owner = "player";
     if (entry.sitting === true) saved.sitting = true;

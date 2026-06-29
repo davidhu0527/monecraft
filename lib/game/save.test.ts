@@ -903,10 +903,10 @@ describe("v13 to v14 migration & mob persistence", () => {
     expect(restoreMobs(parsed)).toEqual([]);
   });
 
-  test("isPersistentMob keeps only owned mobs (pets); residents join in PR-B", () => {
-    expect(isPersistentMob(makeMob({ owner: "player", faction: "ally" }))).toBe(true);
+  test("isPersistentMob keeps owned pets and village residents, not the fungible population", () => {
+    expect(isPersistentMob(makeMob({ owner: "player", faction: "ally" }))).toBe(true); // pet
+    expect(isPersistentMob(makeMob({ kind: "villager", faction: "villager" }))).toBe(true); // village resident
     expect(isPersistentMob(makeMob({ faction: "wild" }))).toBe(false);
-    expect(isPersistentMob(makeMob({ kind: "villager", faction: "villager" }))).toBe(false);
     expect(isPersistentMob(makeMob({ hostile: true, faction: "hostile" }))).toBe(false);
   });
 

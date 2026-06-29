@@ -2795,8 +2795,11 @@ describe("mob persistence (pets)", () => {
     expect(restored.state.mobs.length).toBe(wildCount + 1);
   });
 
-  test("a fresh world persists no mobs (nothing owned yet)", () => {
-    expect(makeEngine().serialize().mobs ?? []).toEqual([]); // mobs is optional in v14
+  test("a fresh world persists its village residents (or fallback villagers) but no pets", () => {
+    const mobs = makeEngine().serialize().mobs ?? [];
+    expect(mobs.length).toBeGreaterThan(0); // villagers persist now
+    expect(mobs.every((m) => m.faction === "villager")).toBe(true); // only residents, nothing owned
+    expect(mobs.some((m) => m.owner === "player")).toBe(false);
   });
 
   test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {

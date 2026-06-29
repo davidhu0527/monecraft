@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectVillageSites,
   collidesAt,
   computeFullLight,
   generateWorld,
@@ -106,7 +107,15 @@ import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { pushMob, spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import {
+  pushMob,
+  spawnBoss,
+  spawnInitialMobs,
+  spawnMobGroup,
+  spawnVillageResidents,
+  tickHostileSpawnDirector,
+  tickSpawnerDirector
+} from "./systems/spawnDirector";
 import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
@@ -165,6 +174,8 @@ export class GameEngine {
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
     const dungeonSites = collectDungeonSites(world, this.worldType);
+    // Likewise re-derive village centers, so resident villagers can be seeded there.
+    const villageSites = collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
@@ -223,6 +234,7 @@ export class GameEngine {
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
       lootedDungeonChests: new Set(),
+      villageSites: villageSites.centers,
       paused: false,
       debugOpen: false,
       debugInfo: null,
@@ -293,6 +305,19 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
+    // Seed each village's residents, but only when the world has no villagers yet
+    // — a fresh world, or one upgraded from a pre-village save. A reload of a
+    // populated world restored its residents above, so this is skipped (no double).
+    if (!this.state.mobs.some((mob) => mob.faction === "villager")) {
+      if (this.state.villageSites.length > 0) {
+        spawnVillageResidents(this.state, this.state.villageSites, this.rng, this.surfaceYAt);
+      } else {
+        // A village-less seed (rough/ocean terrain) still gets a few wandering
+        // villagers near spawn so trading is never wholly unavailable.
+        const { x, z } = this.state.player.position;
+        spawnMobGroup(this.state, { kind: "villager", hostile: false, count: 3, centerX: x, centerZ: z, radius: RENDER_RADIUS }, this.rng, this.surfaceYAt);
+      }
+    }
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
     tickWeather(this.state);

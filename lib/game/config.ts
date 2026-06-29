@@ -303,13 +303,13 @@ export const SAVE_KEY = "minecraft_save_v7";
 // The deterministic world-generation baseline. Bumped whenever worldgen
 // changes, so old block-diffs (which index against generated terrain) can't be
 // applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
-// lakes; v8 added shallow coal ore. Each world records the WORLDGEN_VERSION it
-// was generated under; a world whose recorded version differs from this constant
-// has its block-diffs discarded and is rebooted from its stored seed
-// (lib/game/worlds.ts). The save *schema* (SaveData, currently v6) is independent
-// of this — lighting is a derived cache and lava is worldgen, so neither is
-// persisted, and additive schema bumps (like v6's status effects) don't touch it.
-export const WORLDGEN_VERSION = 8;
+// lakes; v8 added shallow coal ore; v9 added generated villages. Each world
+// records the WORLDGEN_VERSION it was generated under; a world whose recorded
+// version differs from this constant has its block-diffs discarded and is
+// rebooted from its stored seed (lib/game/worlds.ts). The save *schema* (SaveData)
+// is independent of this — lighting is a derived cache and lava is worldgen, so
+// neither is persisted, and additive schema bumps don't touch it.
+export const WORLDGEN_VERSION = 9;
 
 // Rendering
 export const RENDER_RADIUS = 90;

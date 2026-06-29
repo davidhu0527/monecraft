@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { HOSTILE_CAP } from "@/lib/game/config";
+import { VoxelWorld, generateWorld } from "@/lib/world";
+import { GEN } from "@/lib/world/generation";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { createSurfaceYAt } from "@/lib/game/spawn";
-import { pushMob, tickHostileSpawnDirector, tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
+import { pushMob, spawnVillageResidents, tickHostileSpawnDirector, tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
+import type { GameState } from "@/lib/game/engine/state";
 import type { Difficulty } from "@/lib/game/difficulties";
 
 function mulberry32(seed: number): () => number {
@@ -31,6 +34,27 @@ describe("spawnInitialMobs difficulty gating (via the constructor)", () => {
   test("Normal seeds the usual hostile population", () => {
     const e = makeEngine("normal");
     expect(hostileCount(e)).toBeGreaterThan(0);
+  });
+});
+
+describe("spawnVillageResidents", () => {
+  test("seeds villagersPerVillage residents (faction villager, passive) at each site", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    generateWorld(world);
+    const state = { world, mobs: [], nextMobId: 1 } as unknown as GameState;
+
+    spawnVillageResidents(
+      state,
+      [
+        { x: 20, z: 20 },
+        { x: 44, z: 44 }
+      ],
+      mulberry32(1),
+      createSurfaceYAt(world)
+    );
+
+    expect(state.mobs).toHaveLength(GEN.villagersPerVillage * 2);
+    expect(state.mobs.every((m) => m.kind === "villager" && m.faction === "villager" && !m.hostile)).toBe(true);
   });
 });
 
