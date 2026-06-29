@@ -24,17 +24,25 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     selectedHotbarSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
-    craftingStation: null as "furnace" | "enchanting" | null,
+    craftingStation: null as "furnace" | "enchanting" | "anvil" | "grindstone" | null,
     gameMode: "survival" as GameMode,
     container: null as InventorySlot[] | null,
     xpLevel: 0,
     enchantCost: 3,
+    anvilCombineCost: 4,
+    anvilRepairCost: 1,
+    anvilRenameCost: 1,
     canCraft: () => true,
     onSwapSlots: mock(),
     onMoveStack: mock(),
     onToggleEquipArmor: mock(),
+    onUnequipArmor: mock(),
     onCraft: mock(),
     onEnchant: mock(),
+    onAnvilCombine: mock(),
+    onAnvilRepair: mock(),
+    onAnvilRename: mock(),
+    onGrindstoneStrip: mock(),
     onGiveItem: mock(),
     ...overrides
   };
@@ -123,15 +131,27 @@ describe("InventoryPanel", () => {
     expect(props.onSwapSlots).not.toHaveBeenCalled();
   });
 
-  test("equipped armor is shown in its armor slot with durability and unequips on click", async () => {
+  test("worn armor is shown in its armor slot with durability and unequips on click", async () => {
     const user = userEvent.setup();
-    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: "helmet" } });
+    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } });
     const helmetSlot = screen.getByRole("button", { name: "Helmet: Helmet" });
     expect(helmetSlot.className).toContain("filled");
     await user.hover(helmetSlot);
     expect(screen.getByText("Durability 260 / 260")).toBeTruthy(); // surfaced in the hover tooltip
     await user.click(helmetSlot);
-    expect(props.onToggleEquipArmor).toHaveBeenCalledWith(2); // the helmet's inventory index
+    expect(props.onUnequipArmor).toHaveBeenCalledWith("helmet");
+  });
+
+  test("unequipping clears a pending grid selection (no stale source left active)", async () => {
+    const user = userEvent.setup();
+    const props = renderPanel({ equippedArmor: { ...createEmptyArmorEquipment(), helmet: createSlot("helmet", 1) } });
+    const slots = slotButtons();
+    await user.click(slots[0]); // select a source slot → pending
+    expect(slots[0].className).toContain("pending");
+    await user.click(screen.getByRole("button", { name: "Helmet: Helmet" })); // unequip
+    expect(props.onUnequipArmor).toHaveBeenCalledWith("helmet");
+    expect(slots[0].className).not.toContain("pending"); // pending was cleared
+    expect(props.onSwapSlots).not.toHaveBeenCalled();
   });
 
   test("empty armor slots show a ghost icon and ignore clicks", async () => {
@@ -200,6 +220,25 @@ describe("InventoryPanel", () => {
     renderPanel({ craftingStation: null });
     await user.hover(screen.getByRole("button", { name: cook.label }));
     expect(screen.getByText("Requires Furnace")).toBeTruthy();
+  });
+
+  test("the anvil panel shows a hint when the selected slot isn't gear", () => {
+    renderPanel({ craftingStation: "anvil", selectedHotbarSlot: 0 }); // dirt selected
+    expect(screen.getByText(/Select a tool, weapon, or armor/)).toBeTruthy();
+  });
+
+  test("the anvil panel offers repair/combine/rename for the selected gear", () => {
+    renderPanel({ craftingStation: "anvil", inventory: makeInventory(["diamond_sword", 1]), selectedHotbarSlot: 0 });
+    expect(screen.getByText("Anvil")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Combine duplicate/ })).toBeTruthy();
+    expect(screen.getByLabelText("Custom item name")).toBeTruthy();
+  });
+
+  test("the grindstone panel offers to remove enchantments from enchanted gear", () => {
+    const enchanted = { ...createSlot("diamond_sword", 1), enchantments: [{ id: "sharpness" as const, level: 2 }] };
+    renderPanel({ craftingStation: "grindstone", inventory: [enchanted], selectedHotbarSlot: 0 });
+    expect(screen.getByText("Grindstone")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Remove enchantments/ })).toBeTruthy();
   });
 
   test("an open chest renders its grid as an extra row of slots", () => {

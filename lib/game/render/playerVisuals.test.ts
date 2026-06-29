@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { createPlayerVisuals, type PlayerVisualsState } from "@/lib/game/render/playerVisuals";
-import { createEmptySlot, createSlot } from "@/lib/game/items";
+import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import { getSkinPreset } from "@/lib/game/playerSkins";
 
 function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsState {
@@ -17,6 +17,7 @@ function makeState(overrides: Partial<PlayerVisualsState> = {}): PlayerVisualsSt
       onGround: true
     },
     inventory: [createSlot("dirt", 5)],
+    equippedArmor: createEmptyArmorEquipment(),
     selectedSlot: 0,
     mining: { targetKey: "" },
     fishing: null,
@@ -112,6 +113,38 @@ describe("playerVisuals", () => {
     const head = bodyGroup(scene).getObjectByName("head")!;
     const skull = head.children[0] as THREE.Mesh;
     expect((skull.material as THREE.MeshStandardMaterial).color.getHex()).toBe(knight.skin);
+    visuals.dispose();
+  });
+
+  test("shows every shell of a worn armor piece and hides the rest", () => {
+    const scene = new THREE.Scene();
+    const visuals = createPlayerVisuals(scene);
+    // Collect ALL shells for a slot — multi-part slots (chestplate = torso + 2 shoulders)
+    // must toggle together, so a single-mesh check could miss a shell drifting out of sync.
+    const meshesFor = (slot: string) => {
+      const out: THREE.Mesh[] = [];
+      bodyGroup(scene).traverse((obj) => {
+        if (obj instanceof THREE.Mesh && obj.name === `armor-${slot}`) out.push(obj);
+      });
+      return out;
+    };
+    const allHidden = (slot: string) => meshesFor(slot).every((m) => !m.visible);
+    const allShown = (slot: string) => meshesFor(slot).length > 0 && meshesFor(slot).every((m) => m.visible);
+
+    // Nothing worn → all armor shells hidden.
+    visuals.sync(makeState(), 0);
+    expect(allHidden("helmet")).toBe(true);
+    expect(allHidden("chestplate")).toBe(true);
+
+    // Wearing the (multi-part) chestplate shows every one of its shells, helmet stays hidden.
+    visuals.sync(makeState({ equippedArmor: { ...createEmptyArmorEquipment(), chestplate: createSlot("chestplate", 1) } }), 16);
+    expect(meshesFor("chestplate").length).toBeGreaterThan(1);
+    expect(allShown("chestplate")).toBe(true);
+    expect(allHidden("helmet")).toBe(true);
+
+    // Unequipping hides them again.
+    visuals.sync(makeState(), 32);
+    expect(allHidden("chestplate")).toBe(true);
     visuals.dispose();
   });
 

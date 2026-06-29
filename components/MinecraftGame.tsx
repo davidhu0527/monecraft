@@ -13,7 +13,7 @@ import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
 import VictoryScreen from "@/components/game/VictoryScreen";
 import XpBar from "@/components/game/XpBar";
-import { ENCHANT_COST_LEVELS } from "@/lib/game/config";
+import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, ENCHANT_COST_LEVELS } from "@/lib/game/config";
 import type { Profile } from "@/lib/game/profiles";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { takesDamage, usesInventory } from "@/lib/game/gameModes";
@@ -80,9 +80,14 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     canCraft,
     craft,
     enchant,
+    anvilCombine,
+    anvilRepair,
+    anvilRename,
+    grindstoneStrip,
     swapInventorySlots,
     moveStack,
     toggleEquipArmor,
+    unequipArmor,
     resumeNow,
     respawnNow,
     dismissVictory,
@@ -165,12 +170,20 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
           container={container}
           xpLevel={xpLevel}
           enchantCost={ENCHANT_COST_LEVELS}
+          anvilCombineCost={ANVIL_COMBINE_COST_LEVELS}
+          anvilRepairCost={ANVIL_REPAIR_COST_LEVELS}
+          anvilRenameCost={ANVIL_RENAME_COST_LEVELS}
           canCraft={canCraft}
           onSwapSlots={swapInventorySlots}
           onMoveStack={moveStack}
           onToggleEquipArmor={toggleEquipArmor}
+          onUnequipArmor={unequipArmor}
           onCraft={craft}
           onEnchant={enchant}
+          onAnvilCombine={anvilCombine}
+          onAnvilRepair={anvilRepair}
+          onAnvilRename={anvilRename}
+          onGrindstoneStrip={grindstoneStrip}
           onGiveItem={giveCreativeItem}
         />
       ) : null}

@@ -5,10 +5,11 @@ import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/item
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
 import { canEditBlocks, freeBuild } from "@/lib/game/gameModes";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
-import { efficiencyMultiplier } from "@/lib/game/enchantments";
+import { efficiencyMultiplier, fortuneLevel } from "@/lib/game/enchantments";
 import { fillDungeonChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
+import { hasteMultiplier } from "./statusEffects";
 import type { InventorySlot } from "@/lib/game/types";
 
 const scratchEye = new THREE.Vector3();
@@ -44,8 +45,8 @@ export function resetMining(state: GameState): void {
   state.mining.progress = 0;
 }
 
-function addBlockDrop(state: GameState, block: BlockId, rng: () => number): void {
-  for (const drop of rollBlockDrops(block, rng)) {
+function addBlockDrop(state: GameState, block: BlockId, rng: () => number, tool: InventorySlot | null): void {
+  for (const drop of rollBlockDrops(block, rng, fortuneLevel(tool))) {
     state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
   }
 }
@@ -121,7 +122,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
 
   if (!creative) {
     const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
-    mining.progress += dt * miningSpeed(tool) * MINING_RATE;
+    mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(state);
     if (mining.progress < hardness) return;
   }
 
@@ -150,7 +151,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   // Creative breaks for free: no tool wear, no drops, no XP.
   if (tool && !creative) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
   if (!creative) {
-    addBlockDrop(state, targetBlock as BlockId, rng);
+    addBlockDrop(state, targetBlock as BlockId, rng, tool); // Fortune on the tool multiplies ore drops
     awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
   }
   state.worldMeshDirty = true;

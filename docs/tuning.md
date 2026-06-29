@@ -116,15 +116,24 @@ the 0–15 levels), and the cave-darkness floor + torch tint are shader constant
 `EFFECT_STRENGTH_DURATION`/`EFFECT_STRENGTH_BONUS`,
 `EFFECT_REGEN_DURATION`/`EFFECT_REGEN_INTERVAL`/`EFFECT_REGEN_HP`,
 `EFFECT_FIRE_RESIST_DURATION`, `EFFECT_WATER_BREATHING_DURATION`,
+`EFFECT_HASTE_DURATION`/`EFFECT_HASTE_MULTIPLIER`,
+`EFFECT_RESISTANCE_DURATION`/`EFFECT_RESISTANCE_MULTIPLIER`,
+`EFFECT_JUMP_BOOST_DURATION`/`EFFECT_JUMP_BOOST_VELOCITY`,
 `POISON_DURATION`/`POISON_INTERVAL`/`POISON_HP`/`POISON_FLOOR_HP`,
 `ROTTEN_FLESH_POISON_CHANCE`.
 
 Read by `systems/statusEffects.ts` (and the seams it feeds: `playerMotion.ts`
-for speed, the melee dispatch in `GameEngine.ts` for strength, and the gated
+for speed and jump-boost, the melee dispatch in `GameEngine.ts` for strength,
+`mining.ts` for haste, `playerLife.ts` for resistance, and the gated
 `tickLavaExposure`/`tickOxygen` for fire-resist/water-breathing). The
 `*_DURATION` values are how long a drunk potion lasts (default Minecraft-ish:
 buffs 3:00, Regeneration 0:45). **Strength** adds `EFFECT_STRENGTH_BONUS` (3) flat
 melee damage; **Speed** multiplies movement by `EFFECT_SPEED_MULTIPLIER` (1.2);
+**Haste** multiplies mining speed by `EFFECT_HASTE_MULTIPLIER` (1.4);
+**Resistance** scales incoming armor-mitigated _combat_ damage by
+`EFFECT_RESISTANCE_MULTIPLIER` (0.8) — environmental/poison damage is untouched;
+**Jump Boost** adds `EFFECT_JUMP_BOOST_VELOCITY` (2.0) to the jump launch (chosen
+to stay under the fall-damage threshold on flat ground);
 **Regeneration** heals `EFFECT_REGEN_HP` (1) every `EFFECT_REGEN_INTERVAL` (1.5 s)
 on its **own** accumulator, ignoring the hunger gate. **Poison** ticks `POISON_HP`
 (1) every `POISON_INTERVAL` (1.25 s) but floors at `POISON_FLOOR_HP` (1) so it can
@@ -136,8 +145,11 @@ odds to make the system gentler; the reagent map is the economic dial.
 ## XP & enchanting
 
 `XP_PER_LEVEL`, `FISHING_XP`, `ENCHANT_MAX_LEVEL`, `ENCHANT_COST_LEVELS`,
-`SHARPNESS_DAMAGE_PER_LEVEL`, `PROTECTION_DEFENSE_PER_LEVEL`,
-`EFFICIENCY_SPEED_PER_LEVEL`, `UNBREAKING_SKIP_PER_LEVEL`.
+`SHARPNESS_DAMAGE_PER_LEVEL`, `POWER_DAMAGE_PER_LEVEL`, `PUNCH_KNOCKBACK_PER_LEVEL`,
+`KNOCKBACK_PER_LEVEL`, `LOOTING_BONUS_PER_LEVEL`, `PROTECTION_DEFENSE_PER_LEVEL`,
+`FEATHER_FALLING_REDUCE_PER_LEVEL`, `FEATHER_FALLING_MAX_REDUCTION`,
+`EFFICIENCY_SPEED_PER_LEVEL`, `FORTUNE_BONUS_PER_LEVEL`,
+`UNBREAKING_SKIP_PER_LEVEL`, `MENDING_MAX_LEVEL`, `MENDING_REPAIR_PER_XP`.
 
 XP banks as points; `XP_PER_LEVEL` (10) points make one level. The per-mob and
 per-ore XP tables live in `mobXp.ts` / `systems/xp.ts` (not here, like
@@ -145,12 +157,45 @@ per-ore XP tables live in `mobXp.ts` / `systems/xp.ts` (not here, like
 `ENCHANT_COST_LEVELS` (3) levels per application, up to `ENCHANT_MAX_LEVEL` (3).
 Each enchant is a flat per-level modifier read at one seam:
 Sharpness `+SHARPNESS_DAMAGE_PER_LEVEL` (2) melee damage (`combat.ts` dispatch),
-Protection `+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
-`armorReduction`), Efficiency `×(1 + EFFICIENCY_SPEED_PER_LEVEL × level)` mining
-speed (`miningSpeed`), and Unbreaking a `UNBREAKING_SKIP_PER_LEVEL` (0.2)
-skip-chance per level (`consumeToolDurability`/`consumeEquippedArmorDurability`).
-Lower the costs or raise the magnitudes for faster progression; the XP-source
-tables are the earning dial.
+Power `+POWER_DAMAGE_PER_LEVEL` (2) and Punch `+PUNCH_KNOCKBACK_PER_LEVEL` (0.25)
+on a fired arrow (bow-only via the enchant's `itemIds`, read in `tryFireBow`),
+Knockback `+KNOCKBACK_PER_LEVEL` (0.4) on the melee shove (added to
+`MELEE_KNOCKBACK_IMPULSE` in `tryAttackMob`), Looting up to
+`LOOTING_BONUS_PER_LEVEL` (1) extra of each mob drop per level (rolled in
+`rollMobDrops`; the killing **melee** weapon's level is forwarded through the
+kill callback, so indirect kills — arrows, thrown spears, explosions — apply
+none), Protection
+`+PROTECTION_DEFENSE_PER_LEVEL` (2) defense (`equippedDefense` →
+`armorReduction`), Feather Falling `−FEATHER_FALLING_REDUCE_PER_LEVEL` (0.15)
+fall damage per level on worn boots, capped at `FEATHER_FALLING_MAX_REDUCTION`
+(0.8) (read in `tickPlayerMotion`), Efficiency
+`×(1 + EFFICIENCY_SPEED_PER_LEVEL × level)` mining speed (`miningSpeed`),
+Fortune up to `FORTUNE_BONUS_PER_LEVEL` (1) extra ore per level on an ore mined
+(rolled in `rollBlockDrops`), Unbreaking a `UNBREAKING_SKIP_PER_LEVEL` (0.2)
+skip-chance per level (`consumeToolDurability`/`consumeEquippedArmorDurability`),
+and Mending (`MENDING_MAX_LEVEL` 1, binary) diverting gained XP to repair
+`MENDING_REPAIR_PER_XP` (2) durability per point on the held/worn item (`mendXp`,
+read once in `awardXp`). Lower the costs or raise the magnitudes for faster
+progression; the XP-source tables are the earning dial.
+
+## Anvil & grindstone
+
+`ANVIL_COMBINE_COST_LEVELS`, `ANVIL_REPAIR_COST_LEVELS`, `ANVIL_RENAME_COST_LEVELS`,
+`ANVIL_REPAIR_BONUS_PCT`, `ANVIL_MATERIAL_REPAIR_PCT`, `CUSTOM_NAME_MAX_LEN`,
+`GRINDSTONE_REFUND_XP_PER_LEVEL`.
+
+The anvil spends XP levels to maintain gear (`lib/game/anvil.ts`, applied in
+`GameEngine.dispatch`): **combine** a duplicate for `ANVIL_COMBINE_COST_LEVELS` (4) —
+the two durabilities add together plus a `ANVIL_REPAIR_BONUS_PCT` (0.12 × max) bonus,
+and enchantments merge at the higher level; **material repair** for
+`ANVIL_REPAIR_COST_LEVELS` (1) restores `ANVIL_MATERIAL_REPAIR_PCT` (0.25 × max)
+durability per material unit; **rename** for `ANVIL_RENAME_COST_LEVELS` (1) sets a
+custom name capped at `CUSTOM_NAME_MAX_LEN` (32). The grindstone is the inverse — it
+**strips** all enchantments and refunds `GRINDSTONE_REFUND_XP_PER_LEVEL` (5) XP points
+per level removed (`lib/game/grindstone.ts`). Raise the repair percentages or lower
+the costs to make upkeep cheaper; raise the grindstone refund to make disenchanting
+more rewarding. The repair-material map (which material mends which gear) lives in
+`REPAIR_MATERIAL_BY_ITEM` in `items.ts`.
 
 ## Danger — day-night & the mob director
 
@@ -195,7 +240,7 @@ shorten the cycle for more frequent, briefer showers.
 ## Progression — mining & combat reach
 
 `MINE_REACH`, `MINING_RATE`, `BARE_HAND_MINE_POWER`, `FIST_DAMAGE`, `ATTACK_REACH`,
-`ATTACK_AIM_DOT`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
+`ATTACK_AIM_DOT`, `MELEE_KNOCKBACK_IMPULSE`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
 `SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
 `SPEAR_STUCK_SECONDS`, `SPEAR_THROW_COOLDOWN_SECONDS`, `SPEAR_HIT_RADIUS`.
 
@@ -205,7 +250,9 @@ Read by `systems/mining.ts`, `systems/combat.ts`, and `systems/spears.ts`.
 _all_ mining globally while item tiers scale it per-tool. Note the deliberate
 asymmetry: `MINE_REACH` (7) is longer than `ATTACK_REACH` (4.5) — you can dig
 farther than you can punch. `ATTACK_AIM_DOT` (0.89) is how precisely the crosshair
-must point at a mob to hit it — lower is more forgiving. The per-ore **tool-tier
+must point at a mob to hit it — lower is more forgiving. `MELEE_KNOCKBACK_IMPULSE`
+(0.75) is the base horizontal shove a melee hit gives a mob — the Knockback
+enchantment adds to it. The per-ore **tool-tier
 gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config. Spears
 override only melee reach; their projectile speed, gravity, lifetime, cooldown,
 terrain embed duration, and collision radius are global, while tier

@@ -64,6 +64,12 @@ export const EFFECT_REGEN_INTERVAL = 1.5; // heal cadence — its OWN accumulato
 export const EFFECT_REGEN_HP = 1; // HP restored each interval (regardless of hunger)
 export const EFFECT_FIRE_RESIST_DURATION = 180;
 export const EFFECT_WATER_BREATHING_DURATION = 180;
+export const EFFECT_HASTE_DURATION = 180;
+export const EFFECT_HASTE_MULTIPLIER = 1.4; // ×mining speed while active
+export const EFFECT_RESISTANCE_DURATION = 120;
+export const EFFECT_RESISTANCE_MULTIPLIER = 0.8; // ×incoming armor-mitigated combat damage while active
+export const EFFECT_JUMP_BOOST_DURATION = 180;
+export const EFFECT_JUMP_BOOST_VELOCITY = 2.0; // +jump launch velocity while active (base JUMP_VELOCITY 8.2)
 // Poison: ticks armor-bypassing damage but floors at POISON_FLOOR_HP so it can
 // chip you down to half a heart yet never deliver the killing blow.
 export const POISON_DURATION = 8;
@@ -86,6 +92,7 @@ export const BARE_HAND_MINE_POWER = 0.8;
 export const FIST_DAMAGE = 6;
 export const ATTACK_REACH = 4.5;
 export const ATTACK_AIM_DOT = 0.89; // how precisely the camera must face a mob
+export const MELEE_KNOCKBACK_IMPULSE = 0.75; // base horizontal shove on a melee hit (Knockback enchant adds to it)
 export const SPEAR_MELEE_REACH = 7;
 export const SPEAR_THROW_SPEED = 32;
 export const SPEAR_THROW_GRAVITY = 6;
@@ -240,9 +247,27 @@ export const FISHING_XP = 2;
 export const ENCHANT_MAX_LEVEL = 3;
 export const ENCHANT_COST_LEVELS = 3; // XP levels per enchant application
 export const SHARPNESS_DAMAGE_PER_LEVEL = 2; // +melee damage per level
+export const POWER_DAMAGE_PER_LEVEL = 2; // +bow arrow damage per level (matches Sharpness, but at range)
+export const PUNCH_KNOCKBACK_PER_LEVEL = 0.25; // +bow arrow knockback per level (base BOW_KNOCKBACK 0.6)
+export const KNOCKBACK_PER_LEVEL = 0.4; // +melee knockback impulse per level (base melee impulse 0.75)
+export const LOOTING_BONUS_PER_LEVEL = 1; // max extra count rolled per mob-drop entry per level
 export const PROTECTION_DEFENSE_PER_LEVEL = 2; // +defense points per level (feeds armorReduction)
 export const EFFICIENCY_SPEED_PER_LEVEL = 0.3; // mining speed ×(1 + level × this)
+export const FORTUNE_BONUS_PER_LEVEL = 1; // max extra ore items rolled per level when mining ore
+export const FEATHER_FALLING_REDUCE_PER_LEVEL = 0.15; // fall-damage reduction per level (boots)
+export const FEATHER_FALLING_MAX_REDUCTION = 0.8; // cap on total Feather Falling reduction
 export const UNBREAKING_SKIP_PER_LEVEL = 0.2; // chance per level to skip durability wear
+export const MENDING_MAX_LEVEL = 1; // Mending is binary, not tiered
+export const MENDING_REPAIR_PER_XP = 2; // durability points repaired per diverted XP point
+export const CUSTOM_NAME_MAX_LEN = 32; // cap on a per-item custom name (anvil rename), enforced on set and on restore
+// Anvil: repair/combine/rename gear for XP levels (see lib/game/anvil.ts).
+export const ANVIL_COMBINE_COST_LEVELS = 4; // XP levels to combine a duplicate (repairs + merges enchants)
+export const ANVIL_REPAIR_COST_LEVELS = 1; // XP levels to repair with one unit of tier material
+export const ANVIL_RENAME_COST_LEVELS = 1; // XP levels to rename an item
+export const ANVIL_REPAIR_BONUS_PCT = 0.12; // bonus durability when combining = floor(maxDurability × this)
+export const ANVIL_MATERIAL_REPAIR_PCT = 0.25; // durability restored per material unit = ceil(maxDurability × this)
+// Grindstone: strip a held item's enchantments and refund XP (see lib/game/grindstone.ts).
+export const GRINDSTONE_REFUND_XP_PER_LEVEL = 5; // XP points refunded per enchantment level removed
 
 // Safety & persistence
 export const STUCK_RESET_SECONDS = 0.8;

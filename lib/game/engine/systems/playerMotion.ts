@@ -14,8 +14,9 @@ import {
   WORLD_BORDER_PADDING
 } from "@/lib/game/config";
 import type { FrameInput, GameState } from "../state";
+import { featherFallingReduction } from "@/lib/game/enchantments";
 import { speedScaleFromHunger } from "./playerStats";
-import { speedMultiplier } from "./statusEffects";
+import { jumpBoostBonus, speedMultiplier } from "./statusEffects";
 
 export type MoveTickResult = {
   didSprint: boolean;
@@ -105,7 +106,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   } else {
     player.velocity.y -= GRAVITY * dt;
     if (wantsJump && player.onGround && !crouching) {
-      player.velocity.y = JUMP_VELOCITY;
+      player.velocity.y = JUMP_VELOCITY + jumpBoostBonus(state);
       player.onGround = false;
       didJump = true;
     }
@@ -142,8 +143,11 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   player.position.z = Math.min(world.sizeZ - WORLD_BORDER_PADDING, Math.max(WORLD_BORDER_PADDING, player.position.z));
 
   if (!wasGrounded && player.onGround && vyBeforeMove < -14) {
-    // Any fall hard enough to trigger this deals at least half a heart.
-    applyDamage(Math.max(1, Math.min(19, Math.floor((-vyBeforeMove - 13) * 0.5))));
+    // Any fall hard enough to trigger this deals at least half a heart; Feather
+    // Falling on worn boots softens the landing before armor mitigation.
+    const raw = Math.min(19, Math.floor((-vyBeforeMove - 13) * 0.5));
+    const softened = raw * (1 - featherFallingReduction(state.equippedArmor.boots));
+    applyDamage(Math.max(1, Math.round(softened)));
   }
 
   const inVoid = player.position.y < -4;

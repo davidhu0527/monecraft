@@ -51,6 +51,24 @@ const CRAFTING_RECIPES: Recipe[] = [
     ],
     result: { slotId: "enchanting_table", count: 1 }
   },
+  {
+    id: "anvil",
+    label: "3 Gold Ore + 4 Cobble -> Anvil",
+    cost: [
+      { slotId: "gold_ore", count: 3 },
+      { slotId: "cobble", count: 4 }
+    ],
+    result: { slotId: "anvil", count: 1 }
+  },
+  {
+    id: "grindstone",
+    label: "2 Cobble + 2 Planks -> Grindstone",
+    cost: [
+      { slotId: "cobble", count: 2 },
+      { slotId: "planks", count: 2 }
+    ],
+    result: { slotId: "grindstone", count: 1 }
+  },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
   {
     id: "torch",
@@ -227,6 +245,36 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "raw_fish", count: 1 }
     ],
     result: { slotId: "potion_water_breathing", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_haste",
+    label: "Glass Bottle + Gold Ore -> Potion of Haste",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "gold_ore", count: 1 }
+    ],
+    result: { slotId: "potion_haste", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_resistance",
+    label: "Glass Bottle + Leather -> Potion of Resistance",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "leather", count: 1 }
+    ],
+    result: { slotId: "potion_resistance", count: 1 },
+    station: "brewing"
+  },
+  {
+    id: "potion_jump_boost",
+    label: "Glass Bottle + Sliver Ore -> Potion of Leaping",
+    cost: [
+      { slotId: "empty_bottle", count: 1 },
+      { slotId: "sliver_ore", count: 1 }
+    ],
+    result: { slotId: "potion_jump_boost", count: 1 },
     station: "brewing"
   },
   {

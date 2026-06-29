@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { LOOTING_BONUS_PER_LEVEL } from "@/lib/game/config";
 import { ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { MOB_DROPS, rollMobDrops } from "@/lib/game/mobLoot";
 import type { MobKind } from "@/lib/game/types";
@@ -38,6 +39,26 @@ describe("mob drop tables", () => {
     const drops = rollMobDrops("chicken", () => 0);
     expect(drops.some((d) => d.itemId === "feather")).toBe(false);
     expect(drops.some((d) => d.itemId === "raw_chicken")).toBe(true);
+  });
+
+  test("Looting adds a bonus count to each dropped entry", () => {
+    const rng = () => 0.999; // max base count, then max looting bonus
+    const base = new Map(rollMobDrops("sheep", rng).map((d) => [d.itemId, d.count]));
+    const looted = new Map(rollMobDrops("sheep", rng, 2).map((d) => [d.itemId, d.count]));
+    // Base sheep: wool 2 (max), mutton 1. Looting 2 adds floor(0.999 × (2×1 + 1)) = 2 to each.
+    expect(base.get("wool")).toBe(2);
+    expect(base.get("raw_mutton")).toBe(1);
+    expect(looted.get("wool")).toBe(2 + 2 * LOOTING_BONUS_PER_LEVEL);
+    expect(looted.get("raw_mutton")).toBe(1 + 2 * LOOTING_BONUS_PER_LEVEL);
+  });
+
+  test("Looting level 0 is identical to no Looting (back-compat default)", () => {
+    const seq = [0.2, 0.7, 0.4, 0.9];
+    const make = () => {
+      let i = 0;
+      return () => seq[i++ % seq.length];
+    };
+    expect(rollMobDrops("cow", make(), 0)).toEqual(rollMobDrops("cow", make()));
   });
 
   test("every combat mob has at least one drop entry (villagers are NPCs and drop nothing)", () => {

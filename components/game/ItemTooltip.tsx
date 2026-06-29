@@ -2,6 +2,7 @@
 
 import { type MouseEvent, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
+import { displayName } from "@/lib/game/items";
 import type { InventorySlot } from "@/lib/game/types";
 
 export type TooltipContent = { title: string; lines?: string[] } | null;
@@ -18,9 +19,9 @@ export function itemTooltipFor(slot: InventorySlot): TooltipContent {
     if (slot.attack) lines.push(`Attack ${slot.attack}`);
     if (slot.meleeReach) lines.push(`Reach ${slot.meleeReach}`);
     if (slot.throwDamage) lines.push(`Throw damage ${slot.throwDamage}`);
-    return { title: slot.label, lines };
+    return { title: displayName(slot), lines };
   }
-  return { title: slot.label };
+  return { title: displayName(slot) };
 }
 
 /**

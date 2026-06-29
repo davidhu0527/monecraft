@@ -208,10 +208,14 @@ for two seconds before disappearing. The spear remains in your inventory until
 its durability runs out. Armor, tools, knives, swords, and spears never stack;
 every durable item occupies its own slot.
 
-**Armor** reduces incoming damage. Equip a helmet, face mask, neck protection,
-chestplate, leggings, and boots from the inventory's armor slots. Each piece adds
-defense and absorbs durability when you're struck — but a hit always deals at
-least **1 damage**, even in a full set.
+**Armor** reduces incoming damage. Click a helmet, face mask, neck protection,
+chestplate, leggings, or boots in your inventory to **equip** it — the piece
+**moves into its dedicated armor slot** (on the left of the inventory), freeing the
+inventory/hotbar slot it came from. Click the armor slot to take it back off (it
+returns to a free inventory slot). Each piece adds defense and absorbs durability
+when you're struck — but a hit always deals at least **1 damage**, even in a full set.
+Worn pieces also **show on your character** in third-person (press **V**), each tinted
+toward the ore it's made from.
 
 **Ranged combat.** Craft a **bow** (3 wood + 3 string) and **arrows** (1 stone +
 1 wood + 1 feather makes 4). With the bow selected, **left-click fires an arrow**
@@ -317,13 +321,16 @@ furnace, the potion recipes unlock while the stand is open.
 Every potion starts with a **glass bottle** (3 glass → 3 bottles, on the basic
 grid). Add one reagent at the stand to brew a potion:
 
-| Potion          | Reagent   | While active                          |
-| --------------- | --------- | ------------------------------------- |
-| Swiftness       | Feather   | Move noticeably faster                |
-| Strength        | Gunpowder | Hit harder in melee                   |
-| Regeneration    | Wheat     | Steadily heal, even on an empty belly |
-| Fire Resistance | Coal      | Wade through lava unharmed            |
-| Water Breathing | Raw Fish  | Stay underwater without drowning      |
+| Potion          | Reagent    | While active                          |
+| --------------- | ---------- | ------------------------------------- |
+| Swiftness       | Feather    | Move noticeably faster                |
+| Strength        | Gunpowder  | Hit harder in melee                   |
+| Regeneration    | Wheat      | Steadily heal, even on an empty belly |
+| Fire Resistance | Coal       | Wade through lava unharmed            |
+| Water Breathing | Raw Fish   | Stay underwater without drowning      |
+| Haste           | Gold Ore   | Mine noticeably faster                |
+| Resistance      | Leather    | Shrug off some combat damage          |
+| Leaping         | Sliver Ore | Jump higher                           |
 
 **Drink** a potion the same way you eat — select it and press `F`. Its icon and a
 countdown appear top-left while it lasts. Effects survive a save and reload but
@@ -344,13 +351,50 @@ enchantments it can take. Each costs **3 levels** and can be applied up to **thr
 times**:
 
 - **Sharpness** (weapons) — hit harder in melee
+- **Knockback** (weapons) — your melee hits shove mobs further back
+- **Looting** (weapons) — kills drop more loot
+- **Power** (bows) — arrows hit harder
+- **Punch** (bows) — arrows knock the target back further
 - **Protection** (armor) — take less damage
+- **Feather Falling** (boots) — take less fall damage
 - **Efficiency** (tools) — mine faster
+- **Fortune** (tools) — ore drops more of itself when you mine it
 - **Unbreaking** (any gear) — gear lasts longer (it sometimes ignores wear)
+- **Mending** (any gear) — XP you pick up repairs the held or worn item instead of
+  banking, as long as it's damaged
 
 Buttons grey out when you can't afford the cost or the enchant is maxed.
 Enchantments are part of the item, so they're kept in chests and across reloads.
 Full numbers are in the [reference](reference.md#xp--enchanting).
+
+## The anvil
+
+Craft an **anvil** (**3 gold ore + 4 cobble**), place it, and right-click to open
+the anvil panel. Like the enchanting table it works on the **selected** hotbar
+item — a tool, weapon, or armor piece — and spends XP levels:
+
+- **Combine** a second copy of the same item into it. The result keeps the best of
+  both: its durability is restored (the two bars added together, plus a bonus) and
+  any enchantments are merged, taking the higher level of each. The duplicate is
+  used up. Costs **4 levels**.
+- **Repair** with raw material — feed it the item's tier material (e.g. a diamond
+  sword takes **diamond ore**, a stone pickaxe takes **cobble**) to restore a chunk
+  of durability without needing a second copy. Costs **1 level** per material unit.
+- **Rename** the item to anything you like (it shows everywhere the item's name
+  does). Costs **1 level**.
+
+Buttons grey out when there's nothing to do (no duplicate, full durability, or no
+matching material) or you can't afford the cost. For passive, no-table upkeep,
+enchant gear with **Mending** instead.
+
+## The grindstone
+
+Craft a **grindstone** (**2 cobble + 2 planks**) and right-click it to open the
+grindstone panel — the anvil's opposite. With an **enchanted** tool, weapon, or
+armor selected in your hotbar, **Remove enchantments** strips them all off and
+**refunds XP** (5 points per enchantment level removed). Handy for salvaging XP
+from gear you've outgrown, or clearing an enchant you don't want before
+re-enchanting. It costs nothing to use — it only gives XP back.
 
 ## Doors
 

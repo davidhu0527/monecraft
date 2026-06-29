@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { WALK_SPEED } from "@/lib/game/config";
+import { ARMOR_SLOTS } from "@/lib/game/items";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { CameraMode, FishingState } from "@/lib/game/engine/state";
-import type { InventorySlot } from "@/lib/game/types";
+import type { EquippedArmor, InventorySlot } from "@/lib/game/types";
 import type { PlayerPalette } from "@/lib/game/playerSkins";
 import { buildItemModel, type ItemModel } from "./itemModel";
 import { applyPalette, createPlayerModel } from "./playerModel";
@@ -21,6 +22,7 @@ export type PlayerVisualsState = {
     onGround: boolean;
   };
   inventory: InventorySlot[];
+  equippedArmor: EquippedArmor;
   selectedSlot: number;
   mining: { targetKey: string };
   fishing: FishingState | null;
@@ -128,6 +130,12 @@ export function createPlayerVisuals(scene: THREE.Scene): PlayerVisuals {
       model.rightArm.rotation.x = pose.rightArmX;
       model.leftLeg.rotation.x = pose.leftLegX;
       model.rightLeg.rotation.x = pose.rightLegX;
+
+      // Show the shell for each worn armor piece (hide the rest).
+      for (const slot of ARMOR_SLOTS) {
+        const worn = state.equippedArmor[slot] != null;
+        for (const mesh of model.armor[slot]) mesh.visible = worn;
+      }
     },
 
     triggerSwing() {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { applyPalette, createPlayerModel } from "@/lib/game/render/playerModel";
+import { ARMOR_SLOTS } from "@/lib/game/items";
 import { getSkinPreset } from "@/lib/game/playerSkins";
 
 describe("createPlayerModel", () => {
@@ -54,6 +55,18 @@ describe("createPlayerModel", () => {
     const model = createPlayerModel();
     for (const mat of Object.values(model.paletteMaterials)) {
       expect(model.materials).toContain(mat);
+    }
+  });
+
+  test("builds armor shells for every slot, hidden until worn and tracked for disposal", () => {
+    const model = createPlayerModel();
+    for (const slot of ARMOR_SLOTS) {
+      expect(model.armor[slot].length).toBeGreaterThan(0);
+      for (const mesh of model.armor[slot]) {
+        expect(mesh.visible).toBe(false); // shown only when worn (playerVisuals)
+        expect(model.geometries).toContain(mesh.geometry);
+        expect(model.materials).toContain(mesh.material as THREE.Material);
+      }
     }
   });
 

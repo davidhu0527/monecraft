@@ -4,8 +4,10 @@ import { BlockId, collidesAt } from "@/lib/world";
 import {
   DAY_CYCLE_SECONDS,
   EFFECT_SPEED_DURATION,
+  EFFECT_JUMP_BOOST_VELOCITY,
   ENCHANT_COST_LEVELS,
   EYE_HEIGHT,
+  JUMP_VELOCITY,
   MAX_HUNGER,
   POISON_DURATION,
   XP_PER_LEVEL,
@@ -20,10 +22,18 @@ import {
   LAVA_DAMAGE_HP,
   MAX_OXYGEN
 } from "@/lib/game/config";
-import { BOSS_HP, CHEST_SLOTS } from "@/lib/game/config";
+import {
+  ANVIL_COMBINE_COST_LEVELS,
+  ANVIL_RENAME_COST_LEVELS,
+  ANVIL_REPAIR_COST_LEVELS,
+  BOSS_HP,
+  CHEST_SLOTS,
+  GRINDSTONE_REFUND_XP_PER_LEVEL
+} from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
-import { enchantLevel } from "@/lib/game/enchantments";
+import { applyEnchant, enchantLevel } from "@/lib/game/enchantments";
+import { addEffect } from "@/lib/game/engine/systems/statusEffects";
 import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
@@ -226,6 +236,39 @@ describe("movement and stats", () => {
     expect(engine.state.hearts).toBeLessThan(MAX_HEARTS);
   });
 
+  test("Feather Falling boots soften fall damage", () => {
+    // Same fall, same armor defense — only the enchantment differs — so any gap
+    // is Feather Falling's doing, not the boots' base armor.
+    const fallDamage = (boots: ReturnType<typeof createSlot>): number => {
+      const engine = makeEngine();
+      calmDaytime(engine);
+      run(engine, 1); // settle on the ground
+      const { state } = engine;
+      state.equippedArmor = { ...state.equippedArmor, boots };
+      state.hearts = MAX_HEARTS;
+      state.player.position.y += 16; // a hard fall, deep in the damage window
+      state.player.velocity.set(0, 0, 0);
+      state.player.onGround = false;
+      run(engine, 1.5); // long enough to land (no regen interval elapses)
+      return MAX_HEARTS - state.hearts;
+    };
+    const plain = fallDamage(createSlot("boots", 1));
+    let ffBoots = createSlot("boots", 1);
+    for (let i = 0; i < 3; i += 1) ffBoots = applyEnchant(ffBoots, "feather_falling"); // level 3
+    const softened = fallDamage(ffBoots);
+    expect(plain).toBeGreaterThan(0);
+    expect(softened).toBeLessThan(plain);
+  });
+
+  test("the Jump Boost effect raises jump launch velocity", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1); // settle on the ground
+    addEffect(engine.state, "jump_boost", 60);
+    engine.step(1 / 60, input({ keys: ["Space"] }));
+    expect(engine.state.player.velocity.y).toBeCloseTo(JUMP_VELOCITY + EFFECT_JUMP_BOOST_VELOCITY, 5);
+  });
+
   test("hearts regenerate one per interval while hurt", () => {
     const engine = makeEngine();
     calmDaytime(engine);
@@ -255,11 +298,9 @@ describe("movement and stats", () => {
     const y = Math.floor(state.player.position.y + PLAYER_HEIGHT * 0.5);
     const z = Math.floor(state.player.position.z);
     state.blockChanges.set(x, y, z, BlockId.Water);
-    const armorSlot = state.inventory.findIndex((slot) => !slot.id);
-    state.inventory = [...state.inventory];
-    state.inventory[armorSlot] = createSlot("chestplate", 1);
-    state.equippedArmor.chestplate = "chestplate";
-    const durability = state.inventory[armorSlot].durability;
+    const chestplate = createSlot("chestplate", 1);
+    state.equippedArmor = { ...state.equippedArmor, chestplate };
+    const durability = chestplate.durability;
     state.timers.waterExposureTimer = WATER_DAMAGE_DELAY_SECONDS - 0.5;
     engine.consumeEvents();
 
@@ -267,7 +308,7 @@ describe("movement and stats", () => {
     expect(state.hearts).toBe(MAX_HEARTS);
     run(engine, 1.2);
     expect(state.hearts).toBe(MAX_HEARTS - WATER_DAMAGE_HP);
-    expect(state.inventory[armorSlot].durability).toBe(durability);
+    expect(state.equippedArmor.chestplate?.durability).toBe(durability); // env damage bypasses armor wear
     expect(engine.consumeEvents().some((event) => event.type === "playerHurt")).toBe(true);
   });
 
@@ -372,6 +413,32 @@ describe("mining", () => {
     const gained = [...after.entries()].some(([id, count]) => count > (before.get(id) ?? 0));
     expect(gained).toBe(true);
     expect(state.blockChanges.changes().length).toBeGreaterThan(0);
+  });
+
+  test("the Haste effect speeds up mining progress", () => {
+    // Same block + tool + duration; only the effect differs, and the run is short
+    // enough that the (hard) stone never breaks, so progress accumulates.
+    const progressAfter = (haste: boolean): number => {
+      const engine = makeEngine();
+      calmDaytime(engine);
+      run(engine, 1); // settle
+      const { state } = engine;
+      const px = Math.floor(state.player.position.x);
+      const py = Math.floor(state.player.position.y) - 1;
+      const pz = Math.floor(state.player.position.z);
+      state.blockChanges.set(px, py, pz, BlockId.Stone);
+      state.player.position.x = px + 0.5;
+      state.player.position.z = pz + 0.5;
+      state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
+      state.inventory[state.selectedSlot] = createSlot("wood_pickaxe", 1);
+      if (haste) addEffect(state, "haste", 60);
+      run(engine, 0.5, input({ leftMouseHeld: true, pointerLocked: true }));
+      return state.mining.progress;
+    };
+    const plain = progressAfter(false);
+    const hasted = progressAfter(true);
+    expect(plain).toBeGreaterThan(0);
+    expect(hasted).toBeGreaterThan(plain);
   });
 
   test("mining is gated on pointer lock and the inventory being closed", () => {
@@ -1399,14 +1466,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 10 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is version 12 and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(10);
+    expect(save.version).toBe(12);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -1836,6 +1903,167 @@ describe("furnace and cooking", () => {
     state.xp = 0;
     engine.dispatch({ type: "enchant", enchant: "sharpness" });
     expect(enchantLevel(state.inventory[state.selectedSlot], "sharpness")).toBe(1); // unchanged
+  });
+});
+
+describe("anvil", () => {
+  test("right-clicking an anvil opens the inventory in anvil mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Anvil);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "anvil")).toBe(true);
+    expect(state.craftingStation).toBe("anvil");
+  });
+
+  test("combine merges a duplicate into the held gear, clears the sacrifice, and conserves item count", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const max = createSlot("diamond_sword", 1).maxDurability!;
+    state.inventory[0] = { ...createSlot("diamond_sword", 1), durability: 300, enchantments: [{ id: "sharpness", level: 2 }] };
+    state.inventory[1] = { ...createSlot("diamond_sword", 1), durability: 200, enchantments: [{ id: "unbreaking", level: 1 }] };
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+
+    // Refused away from an anvil.
+    engine.dispatch({ type: "anvilCombine" });
+    expect(countsById(state.inventory).get("diamond_sword")).toBe(2);
+
+    state.craftingStation = "anvil";
+    engine.consumeEvents();
+    engine.dispatch({ type: "anvilCombine" });
+
+    const result = state.inventory[0];
+    expect(result.durability).toBe(Math.min(max, 300 + 200 + Math.floor(max * 0.12)));
+    expect(enchantLevel(result, "sharpness")).toBe(2);
+    expect(enchantLevel(result, "unbreaking")).toBe(1);
+    expect(state.inventory[1].id).toBeNull(); // sacrifice consumed
+    expect(countsById(state.inventory).get("diamond_sword")).toBe(1); // net −1, never duplicated
+    expect(xpLevel(state.xp)).toBe(10 - ANVIL_COMBINE_COST_LEVELS);
+    expect(engine.consumeEvents().some((e) => e.type === "anvilCombined")).toBe(true);
+  });
+
+  test("combine is refused with no duplicate (no XP spent)", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = { ...createSlot("diamond_sword", 1), durability: 100 };
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+    state.craftingStation = "anvil";
+    engine.dispatch({ type: "anvilCombine" });
+    expect(state.inventory[0].durability).toBe(100); // unchanged
+    expect(xpLevel(state.xp)).toBe(10);
+  });
+
+  test("material repair restores durability, consumes one unit, and spends XP", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    const max = createSlot("diamond_sword", 1).maxDurability!;
+    state.inventory[0] = { ...createSlot("diamond_sword", 1), durability: 100 };
+    state.inventory[1] = createSlot("diamond_ore", 3);
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+    state.craftingStation = "anvil";
+
+    engine.dispatch({ type: "anvilRepair" });
+    expect(state.inventory[0].durability).toBe(Math.min(max, 100 + Math.ceil(max * 0.25)));
+    expect(countsById(state.inventory).get("diamond_ore")).toBe(2); // one unit consumed
+    expect(xpLevel(state.xp)).toBe(10 - ANVIL_REPAIR_COST_LEVELS);
+    expect(engine.consumeEvents().some((e) => e.type === "anvilRepaired")).toBe(true);
+
+    // Refused with no material in stock.
+    state.inventory[1] = createEmptySlot();
+    const dur = state.inventory[0].durability;
+    const xp = state.xp;
+    engine.dispatch({ type: "anvilRepair" });
+    expect(state.inventory[0].durability).toBe(dur);
+    expect(state.xp).toBe(xp);
+  });
+
+  test("rename sets a custom name, refuses a no-op, and refuses non-durable items", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = createSlot("diamond_sword", 1);
+    state.selectedSlot = 0;
+    state.xp = XP_PER_LEVEL * 10;
+    state.craftingStation = "anvil";
+
+    engine.dispatch({ type: "anvilRename", name: "  Excalibur  " });
+    expect(state.inventory[0].customName).toBe("Excalibur"); // trimmed
+    expect(xpLevel(state.xp)).toBe(10 - ANVIL_RENAME_COST_LEVELS);
+
+    // No-op rename (same name) — no XP spent.
+    const xp = state.xp;
+    engine.dispatch({ type: "anvilRename", name: "Excalibur" });
+    expect(state.xp).toBe(xp);
+
+    // Non-durable item — refused.
+    state.inventory[0] = createSlot("dirt", 10);
+    engine.dispatch({ type: "anvilRename", name: "Fancy Dirt" });
+    expect(state.inventory[0].customName).toBeUndefined();
+  });
+});
+
+describe("grindstone", () => {
+  test("right-clicking a grindstone opens the inventory in grindstone mode", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.blockChanges.set(ex, ey, ez, BlockId.Air);
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Grindstone);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.consumeEvents().some((event) => event.type === "openedStation" && event.station === "grindstone")).toBe(true);
+    expect(state.craftingStation).toBe("grindstone");
+  });
+
+  test("strip removes all enchantments and refunds XP, and is refused on un-enchanted gear", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = {
+      ...createSlot("diamond_sword", 1),
+      enchantments: [
+        { id: "sharpness", level: 3 },
+        { id: "unbreaking", level: 1 }
+      ]
+    };
+    state.selectedSlot = 0;
+    state.xp = 0;
+
+    // Refused away from a grindstone.
+    engine.dispatch({ type: "grindstoneStrip" });
+    expect(enchantLevel(state.inventory[0], "sharpness")).toBe(3);
+
+    state.craftingStation = "grindstone";
+    engine.consumeEvents();
+    engine.dispatch({ type: "grindstoneStrip" });
+    expect(state.inventory[0].enchantments).toBeUndefined();
+    expect(state.xp).toBe(4 * GRINDSTONE_REFUND_XP_PER_LEVEL); // 3 + 1 levels refunded
+    expect(engine.consumeEvents().some((e) => e.type === "grindstoneStripped")).toBe(true);
+
+    // Nothing left to strip — refused, no XP gained.
+    const before = state.xp;
+    engine.dispatch({ type: "grindstoneStrip" });
+    expect(state.xp).toBe(before);
   });
 });
 
@@ -2340,5 +2568,55 @@ describe("drinking potions", () => {
     const later = engine.getSnapshot().activeEffects;
     expect(later).not.toBe(first);
     expect(later[0].seconds).toBeLessThan(30);
+  });
+});
+
+describe("armor equipping (dedicated slots)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+
+  test("equipping moves the piece out of the hotbar, freeing the slot", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory[0] = createSlot("helmet", 1);
+    engine.dispatch({ type: "toggleEquipArmor", index: 0 });
+    expect(state.inventory[0].id).toBeNull(); // hotbar slot freed
+    expect(state.equippedArmor.helmet?.id).toBe("helmet"); // now worn
+    expect(countsById(state.inventory).get("helmet") ?? 0).toBe(0); // no longer in the grid
+  });
+
+  test("unequip returns the piece to a free slot; refused when the inventory is full", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.inventory = Array.from({ length: state.inventory.length }, () => createEmptySlot());
+    state.equippedArmor = { ...state.equippedArmor, helmet: createSlot("helmet", 1) };
+    engine.dispatch({ type: "unequipArmor", slot: "helmet" });
+    expect(state.equippedArmor.helmet).toBeNull();
+    expect(countsById(state.inventory).get("helmet")).toBe(1);
+
+    // Worn again with a full inventory → unequip is refused, nothing lost.
+    state.equippedArmor = { ...state.equippedArmor, helmet: createSlot("helmet", 1) };
+    state.inventory = Array.from({ length: state.inventory.length }, () => createSlot("dirt", 1));
+    engine.dispatch({ type: "unequipArmor", slot: "helmet" });
+    expect(state.equippedArmor.helmet?.id).toBe("helmet");
+  });
+
+  test("worn armor (with durability) survives serialize -> reload", () => {
+    const engine = makeEngine();
+    engine.state.equippedArmor = { ...engine.state.equippedArmor, chestplate: { ...createSlot("chestplate", 1), durability: 123 } };
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.equippedArmor.chestplate?.durability).toBe(123);
+  });
+
+  test("worn armor survives death and respawn", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.mobs = [];
+    state.equippedArmor = { ...state.equippedArmor, boots: createSlot("boots", 1) };
+    state.hearts = 1;
+    die(engine);
+    expect(state.isDead).toBe(true);
+    run(engine, 5); // RESPAWN_SECONDS is 3
+    expect(state.isDead).toBe(false);
+    expect(state.equippedArmor.boots?.id).toBe("boots");
   });
 });

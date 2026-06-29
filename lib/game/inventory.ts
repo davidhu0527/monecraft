@@ -1,7 +1,7 @@
 import { MAX_STACK_SIZE } from "@/lib/game/config";
 import { ARMOR_SLOTS, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import { protectionDefense, unbreakingSkips } from "@/lib/game/enchantments";
-import type { EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EquippedArmor, InventorySlot, Recipe } from "@/lib/game/types";
 
 /**
  * Pure inventory slot algebra. Every mutation returns a NEW slots array, or
@@ -97,24 +97,20 @@ export function consumeToolDurability(slots: InventorySlot[], index: number, amo
 }
 
 /**
- * Wears every equipped armor piece by `amount`; broken pieces disappear. When
- * `rng` is supplied, each piece's Unbreaking enchant may skip its wear.
+ * Wears every worn armor piece by `amount`; a piece that hits zero durability
+ * breaks (its slot becomes null). When `rng` is supplied, each piece's Unbreaking
+ * enchant may skip its wear. Returns a new record, or null when nothing changed.
  */
-export function consumeEquippedArmorDurability(slots: InventorySlot[], equipped: EquippedArmor, amount = 1, rng?: () => number): InventorySlot[] | null {
+export function consumeEquippedArmorDurability(equipped: EquippedArmor, amount = 1, rng?: () => number): EquippedArmor | null {
   if (amount <= 0) return null;
-  const next = cloneSlots(slots);
+  const next = { ...equipped };
   let changed = false;
   for (const armorSlot of ARMOR_SLOTS) {
-    const equippedId = equipped[armorSlot];
-    if (!equippedId) continue;
-    const idx = next.findIndex((slot) => slot.id === equippedId && slot.kind === "armor" && slot.count > 0);
-    if (idx < 0) continue;
-    const slot = next[idx];
-    if (!slot.maxDurability) continue;
-    if (rng && unbreakingSkips(slot, rng)) continue; // this piece's Unbreaking saved its wear
-    const nextDurability = (slot.durability ?? slot.maxDurability) - amount;
-    if (nextDurability <= 0) next[idx] = createEmptySlot();
-    else slot.durability = nextDurability;
+    const piece = next[armorSlot];
+    if (!piece?.maxDurability) continue;
+    if (rng && unbreakingSkips(piece, rng)) continue; // this piece's Unbreaking saved its wear
+    const nextDurability = (piece.durability ?? piece.maxDurability) - amount;
+    next[armorSlot] = nextDurability <= 0 ? null : { ...piece, durability: nextDurability };
     changed = true;
   }
   return changed ? next : null;
@@ -266,46 +262,49 @@ export function tryInsertSlots(inventory: InventorySlot[], incoming: InventorySl
 }
 
 /** Toggles the armor piece at `index` in its armor slot. */
-export function toggleEquipArmor(slots: InventorySlot[], equipped: EquippedArmor, index: number): EquippedArmor | null {
+export function toggleEquipArmor(slots: InventorySlot[], equipped: EquippedArmor, index: number): { slots: InventorySlot[]; equipped: EquippedArmor } | null {
   if (index < 0 || index >= slots.length) return null;
   const slot = slots[index];
   if (slot.kind !== "armor" || !slot.id || !slot.armorSlot || slot.count <= 0) return null;
-  const next = { ...equipped };
-  next[slot.armorSlot] = equipped[slot.armorSlot] === slot.id ? null : slot.id;
-  return next;
+  const armorSlot = slot.armorSlot;
+  const nextSlots = cloneSlots(slots);
+  const nextEquipped = { ...equipped };
+  // Move the piece into its armor slot; any piece already worn there swaps back
+  // into the freed inventory index (armor is always count:1, so no stack splitting).
+  const previouslyWorn = nextEquipped[armorSlot];
+  nextEquipped[armorSlot] = { ...slot, count: 1 };
+  nextSlots[index] = previouslyWorn ? { ...previouslyWorn } : createEmptySlot();
+  return { slots: nextSlots, equipped: nextEquipped };
 }
 
-/** Unequips armor pieces no longer present in the inventory (broken or dropped). */
-export function unequipMissingArmor(slots: InventorySlot[], equipped: EquippedArmor): EquippedArmor | null {
-  let changed = false;
-  const next = { ...equipped };
-  for (const armorSlot of ARMOR_SLOTS) {
-    const equippedId = next[armorSlot];
-    if (!equippedId) continue;
-    const stillOwned = slots.some((slot) => slot.id === equippedId && slot.count > 0);
-    if (stillOwned) continue;
-    next[armorSlot] = null;
-    changed = true;
-  }
-  return changed ? next : null;
+/** Moves a worn piece back into the first free inventory slot; null (no-op) when the inventory is full. */
+export function unequipArmor(
+  slots: InventorySlot[],
+  equipped: EquippedArmor,
+  armorSlot: ArmorSlot
+): { slots: InventorySlot[]; equipped: EquippedArmor } | null {
+  const worn = equipped[armorSlot];
+  if (!worn) return null;
+  const freeIndex = slots.findIndex((s) => !s.id && s.count === 0);
+  if (freeIndex < 0) return null; // inventory full — keep it worn so nothing is lost
+  const nextSlots = cloneSlots(slots);
+  nextSlots[freeIndex] = { ...worn };
+  const nextEquipped = { ...equipped, [armorSlot]: null };
+  return { slots: nextSlots, equipped: nextEquipped };
 }
 
-/** Total defense points from equipped, still-owned armor (drives the HUD armor bar). */
-export function equippedDefense(slots: InventorySlot[], equipped: EquippedArmor): number {
+/** Total defense points from worn armor (drives the HUD armor bar). */
+export function equippedDefense(equipped: EquippedArmor): number {
   let defense = 0;
   for (const armorSlot of ARMOR_SLOTS) {
-    const equippedId = equipped[armorSlot];
-    if (!equippedId) continue;
-    const def = ITEM_DEF_BY_ID[equippedId];
-    if (!def || def.kind !== "armor" || def.armorSlot !== armorSlot) continue;
-    const piece = slots.find((slot) => slot.id === equippedId && slot.count > 0);
-    if (!piece) continue;
-    defense += (def.defense ?? 0) + protectionDefense(piece); // base defense + Protection enchant
+    const piece = equipped[armorSlot];
+    if (!piece || piece.kind !== "armor" || piece.armorSlot !== armorSlot || piece.count <= 0) continue;
+    defense += (piece.defense ?? 0) + protectionDefense(piece); // base defense + Protection enchant
   }
   return defense;
 }
 
-/** Damage reduction from equipped, still-owned armor: 5% per defense point, capped at 75%. */
-export function armorReduction(slots: InventorySlot[], equipped: EquippedArmor): number {
-  return Math.min(0.75, equippedDefense(slots, equipped) * 0.05);
+/** Damage reduction from worn armor: 5% per defense point, capped at 75%. */
+export function armorReduction(equipped: EquippedArmor): number {
+  return Math.min(0.75, equippedDefense(equipped) * 0.05);
 }

@@ -1,11 +1,15 @@
 import { DOOR_BLOCK_IDS, BlockId, isDoorBlock } from "@/lib/world";
 import {
   EFFECT_FIRE_RESIST_DURATION,
+  EFFECT_HASTE_DURATION,
+  EFFECT_JUMP_BOOST_DURATION,
   EFFECT_REGEN_DURATION,
+  EFFECT_RESISTANCE_DURATION,
   EFFECT_SPEED_DURATION,
   EFFECT_STRENGTH_DURATION,
   EFFECT_WATER_BREATHING_DURATION,
   FISHING_ROD_DURABILITY,
+  FORTUNE_BONUS_PER_LEVEL,
   GRASS_SEED_DROP_CHANCE,
   INVENTORY_SLOTS,
   LEAVES_SAPLING_DROP_CHANCE,
@@ -65,6 +69,8 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Chest]: 3,
   [BlockId.BrewingStand]: 4,
   [BlockId.EnchantingTable]: 6,
+  [BlockId.Anvil]: 6,
+  [BlockId.Grindstone]: 5,
   [BlockId.MossyCobblestone]: 5,
   // A spawner is hard to break and drops nothing (no BLOCK_TO_SLOT entry).
   [BlockId.Spawner]: 30,
@@ -95,6 +101,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "chest", label: "Chest", kind: "block", blockId: BlockId.Chest },
   { id: "brewing_stand", label: "Brewing Stand", kind: "block", blockId: BlockId.BrewingStand },
   { id: "enchanting_table", label: "Enchanting Table", kind: "block", blockId: BlockId.EnchantingTable },
+  { id: "anvil", label: "Anvil", kind: "block", blockId: BlockId.Anvil },
+  { id: "grindstone", label: "Grindstone", kind: "block", blockId: BlockId.Grindstone },
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
   { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
@@ -145,6 +153,9 @@ export const ITEM_DEFS: ItemDef[] = [
     kind: "material",
     effect: { id: "water_breathing", durationSeconds: EFFECT_WATER_BREATHING_DURATION }
   },
+  { id: "potion_haste", label: "Potion of Haste", kind: "material", effect: { id: "haste", durationSeconds: EFFECT_HASTE_DURATION } },
+  { id: "potion_resistance", label: "Potion of Resistance", kind: "material", effect: { id: "resistance", durationSeconds: EFFECT_RESISTANCE_DURATION } },
+  { id: "potion_jump_boost", label: "Potion of Leaping", kind: "material", effect: { id: "jump_boost", durationSeconds: EFFECT_JUMP_BOOST_DURATION } },
   // Mob meats — edible raw; rotten flesh fills little, fresh meat more.
   { id: "rotten_flesh", label: "Rotten Flesh", kind: "food", hunger: 2 },
   { id: "raw_chicken", label: "Raw Chicken", kind: "food", hunger: 3 },
@@ -274,6 +285,52 @@ export function createSlot(itemId: string, count: number): InventorySlot {
   return slot;
 }
 
+/** The name to show for a slot — its player-set anvil name if any, else the item label. */
+export function displayName(slot: InventorySlot): string {
+  return slot.customName ?? slot.label;
+}
+
+/**
+ * The material a piece of durable gear is repaired with at the anvil — its
+ * dominant crafting-tier ingredient. Gear absent from this map (none today) can
+ * still be combined with a duplicate; it just has no material-repair option.
+ */
+export const REPAIR_MATERIAL_BY_ITEM: Record<string, string> = {
+  wood_pickaxe: "planks",
+  wood_sword: "planks",
+  wood_spear: "planks",
+  wood_hoe: "planks",
+  stone_pickaxe: "cobble",
+  stone_sword: "cobble",
+  stone_spear: "cobble",
+  knife: "stone",
+  sliver_pickaxe: "sliver_ore",
+  sliver_sword: "sliver_ore",
+  sliver_spear: "sliver_ore",
+  ruby_pickaxe: "ruby_ore",
+  ruby_sword: "ruby_ore",
+  ruby_spear: "ruby_ore",
+  gold_pickaxe: "gold_ore",
+  gold_sword: "gold_ore",
+  gold_spear: "gold_ore",
+  sapphire_pickaxe: "sapphire_ore",
+  sapphire_sword: "sapphire_ore",
+  sapphire_spear: "sapphire_ore",
+  diamond_pickaxe: "diamond_ore",
+  diamond_sword: "diamond_ore",
+  diamond_spear: "diamond_ore",
+  dragon_sword: "diamond_ore",
+  bow: "string",
+  fishing_rod: "string",
+  // Armor is repaired with its dominant ore.
+  helmet: "sapphire_ore",
+  face_mask: "sapphire_ore",
+  neck_protection: "gold_ore",
+  chestplate: "gold_ore",
+  leggings: "gold_ore",
+  boots: "gold_ore"
+};
+
 export function createInitialInventory(): InventorySlot[] {
   const slots: InventorySlot[] = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
   const starter: Array<{ id: string; count: number }> = [
@@ -316,6 +373,8 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Chest]: "chest",
   [BlockId.BrewingStand]: "brewing_stand",
   [BlockId.EnchantingTable]: "enchanting_table",
+  [BlockId.Anvil]: "anvil",
+  [BlockId.Grindstone]: "grindstone",
   [BlockId.MossyCobblestone]: "mossy_cobble",
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",
@@ -328,17 +387,27 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.WheatStage2]: "seeds"
 };
 
+/** Ores whose mined yield the Fortune enchantment multiplies (their `BLOCK_TO_SLOT` item is the drop). */
+const FORTUNE_ORE_BLOCKS = new Set<BlockId>([BlockId.CoalOre, BlockId.SliverOre, BlockId.RubyOre, BlockId.GoldOre, BlockId.SapphireOre, BlockId.DiamondOre]);
+
 /**
  * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
  * grass occasionally also drops a seed (the natural seed source), mature wheat
  * drops wheat plus 1–2 seeds, and leaves occasionally drop a sapling (their only
- * yield — the renewable tree source). `rng` is injectable for deterministic tests.
+ * yield — the renewable tree source). `fortuneLevel` (from the Fortune tool used)
+ * rolls a bonus on **ore** drops only. `rng` is injectable for deterministic tests.
  */
-export function rollBlockDrops(block: BlockId, rng: () => number): Array<{ itemId: string; count: number }> {
+export function rollBlockDrops(block: BlockId, rng: () => number, fortuneLevel = 0): Array<{ itemId: string; count: number }> {
   if (isDoorBlock(block)) return [{ itemId: "door", count: 1 }];
   const drops: Array<{ itemId: string; count: number }> = [];
   const base = BLOCK_TO_SLOT[block];
-  if (base) drops.push({ itemId: base, count: 1 });
+  if (base) {
+    let count = 1;
+    if (fortuneLevel > 0 && FORTUNE_ORE_BLOCKS.has(block)) {
+      count += Math.floor(rng() * (fortuneLevel * FORTUNE_BONUS_PER_LEVEL + 1));
+    }
+    drops.push({ itemId: base, count });
+  }
 
   if (block === BlockId.Leaves && rng() < LEAVES_SAPLING_DROP_CHANCE) {
     drops.push({ itemId: "sapling", count: 1 });

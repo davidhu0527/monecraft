@@ -1,4 +1,5 @@
-import { CHEST_SLOTS, ENCHANT_MAX_LEVEL, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { CHEST_SLOTS, CUSTOM_NAME_MAX_LEN, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type {
   EffectId,
@@ -15,8 +16,11 @@ import type {
   SaveDataV7,
   SaveDataV8,
   SaveDataV9,
+  SaveDataV10,
+  SaveDataV11,
   SavedContainer,
   SavedEffect,
+  SavedEquippedArmor,
   SavedSlot,
   InventorySlot
 } from "@/lib/game/types";
@@ -130,8 +134,46 @@ export function migrateSaveV8toV9(save: SaveDataV8): SaveDataV9 {
  * optional, so a pre-Hardcore save simply loads as a normal, non-hardcore world
  * (see restoreHardcore/restoreGameOver).
  */
-export function migrateSaveV9toV10(save: SaveDataV9): SaveData {
+export function migrateSaveV9toV10(save: SaveDataV9): SaveDataV10 {
   return { ...save, version: 10 };
+}
+
+/**
+ * Migrates a v10 save to v11. v11 adds an optional per-item `customName` (the
+ * anvil rename) inside each `SavedSlot`; the Mending enchantment rides the
+ * existing per-slot `enchantments`. Both are additive, so this is a pure version
+ * bump and pre-v11 saves load with no custom names.
+ */
+export function migrateSaveV10toV11(save: SaveDataV10): SaveDataV11 {
+  return { ...save, version: 11 };
+}
+
+/**
+ * Migrates a v11 save to v12 — armor moves to dedicated storage. The legacy
+ * `equippedArmor` was a by-id reference into `inventorySlots` (the worn item also
+ * lived in the inventory). For each valid equip, move the matching inventory item
+ * out into the armor record (preserving durability/enchantments/customName); drop
+ * equips whose item isn't found or isn't valid armor for the slot. Pre-`inventorySlots`
+ * (legacy counts-only) saves simply drop the equip map and keep items in inventory.
+ */
+export function migrateSaveV11toV12(save: SaveDataV11): SaveData {
+  const legacy = save.equippedArmor;
+  if (!legacy || !Array.isArray(save.inventorySlots)) {
+    return { ...save, version: 12, equippedArmor: undefined };
+  }
+  const slots = save.inventorySlots.slice();
+  const equipped: SavedEquippedArmor = {};
+  for (const armorSlot of ARMOR_SLOTS) {
+    const id = legacy[armorSlot];
+    if (!id) continue;
+    const def = ITEM_DEF_BY_ID[id];
+    if (def?.kind !== "armor" || def.armorSlot !== armorSlot) continue; // drop invalid equips
+    const idx = slots.findIndex((s) => s?.id === id && s.count > 0);
+    if (idx < 0) continue; // item not in inventory → drop the equip
+    equipped[armorSlot] = slots[idx]; // preserves durability/enchantments/customName
+    slots[idx] = { id: null, count: 0 };
+  }
+  return { ...save, version: 12, inventorySlots: slots, equippedArmor: equipped };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -141,6 +183,8 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV11
+      | SaveDataV10
       | SaveDataV9
       | SaveDataV8
       | SaveDataV7
@@ -151,7 +195,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV2
       | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveData =
+    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveDataV10 | SaveDataV11 | SaveData =
       parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -161,7 +205,9 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 7) migrated = migrateSaveV7toV8(migrated);
     if (migrated.version === 8) migrated = migrateSaveV8toV9(migrated);
     if (migrated.version === 9) migrated = migrateSaveV9toV10(migrated);
-    if (migrated.version !== 10) return null;
+    if (migrated.version === 10) migrated = migrateSaveV10toV11(migrated);
+    if (migrated.version === 11) migrated = migrateSaveV11toV12(migrated);
+    if (migrated.version !== 12) return null;
     return migrated;
   } catch {
     return null;
@@ -173,7 +219,24 @@ export function writeSave(saveKey: string, data: SaveData, storage: Storage = lo
 }
 
 export function inventorySlotsSnapshot(inventory: InventorySlot[]): SavedSlot[] {
-  return inventory.map((slot) => ({ id: slot.id, count: slot.count, durability: slot.durability, enchantments: slot.enchantments }));
+  return inventory.map((slot) => ({
+    id: slot.id,
+    count: slot.count,
+    durability: slot.durability,
+    enchantments: slot.enchantments,
+    customName: slot.customName
+  }));
+}
+
+/** Snapshots the worn armor pieces for persistence (sparse — empty slots are omitted). */
+export function serializeEquippedArmor(equipped: EquippedArmor): SavedEquippedArmor {
+  const out: SavedEquippedArmor = {};
+  for (const armorSlot of ARMOR_SLOTS) {
+    const piece = equipped[armorSlot];
+    if (!piece?.id || piece.count <= 0) continue;
+    out[armorSlot] = { id: piece.id, count: piece.count, durability: piece.durability, enchantments: piece.enchantments, customName: piece.customName };
+  }
+  return out;
 }
 
 // Every known enchantment id, keyed so a new enchantment can't be forgotten here.
@@ -181,17 +244,25 @@ const VALID_ENCHANT_IDS: Record<EnchantmentId, true> = {
   sharpness: true,
   protection: true,
   efficiency: true,
-  unbreaking: true
+  unbreaking: true,
+  mending: true,
+  power: true,
+  punch: true,
+  knockback: true,
+  looting: true,
+  fortune: true,
+  feather_falling: true
 };
 
-/** Validates persisted enchantments: known ids and integer levels clamped to 1..max; undefined when none survive. */
+/** Validates persisted enchantments: known ids and integer levels clamped to 1..(that enchant's max); undefined when none survive. */
 function restoreEnchantments(saved: SavedSlot["enchantments"]): Enchantment[] | undefined {
   if (!Array.isArray(saved)) return undefined;
   const out: Enchantment[] = [];
   for (const entry of saved) {
     if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_ENCHANT_IDS, entry.id)) continue;
     if (!Number.isFinite(entry.level) || Math.floor(entry.level) < 1) continue;
-    out.push({ id: entry.id, level: Math.min(ENCHANT_MAX_LEVEL, Math.floor(entry.level)) });
+    // Clamp to the enchantment's own cap so e.g. a tampered mending:3 loads as 1.
+    out.push({ id: entry.id, level: Math.min(ENCHANTMENT_DEFS[entry.id].maxLevel, Math.floor(entry.level)) });
   }
   return out.length > 0 ? out : undefined;
 }
@@ -216,6 +287,11 @@ function restoreSlot(saved: SavedSlot | undefined): InventorySlot {
     // Enchantments live only on durable gear; validated against the known set.
     const enchantments = restoreEnchantments(saved.enchantments);
     if (enchantments) slot.enchantments = enchantments;
+    // A custom name (anvil rename) also lives only on durable gear; trim and cap it.
+    if (typeof saved.customName === "string") {
+      const name = saved.customName.trim().slice(0, CUSTOM_NAME_MAX_LEN);
+      if (name) slot.customName = name;
+    }
   }
   return slot;
 }
@@ -249,6 +325,9 @@ const VALID_EFFECT_IDS: Record<EffectId, true> = {
   regeneration: true,
   fire_resistance: true,
   water_breathing: true,
+  haste: true,
+  resistance: true,
+  jump_boost: true,
   poison: true
 };
 
@@ -323,16 +402,16 @@ export function restoreInventorySlots(save: SaveData): InventorySlot[] | null {
   return null;
 }
 
-/** Restores equipped armor from a save, ignoring ids that are not valid armor for the slot. */
+/** Restores worn armor, rebuilding each piece through restoreSlot and dropping anything that isn't valid armor for its slot. */
 export function restoreEquippedArmor(save: SaveData): EquippedArmor | null {
   if (!save.equippedArmor) return null;
   const next = createEmptyArmorEquipment();
   for (const armorSlot of ARMOR_SLOTS) {
-    const equippedId = save.equippedArmor[armorSlot];
-    if (!equippedId) continue;
-    const def = ITEM_DEF_BY_ID[equippedId];
-    if (def?.kind !== "armor" || def.armorSlot !== armorSlot) continue;
-    next[armorSlot] = equippedId;
+    const saved = save.equippedArmor[armorSlot];
+    if (!saved) continue;
+    const slot = restoreSlot(saved);
+    if (slot.kind !== "armor" || slot.armorSlot !== armorSlot || slot.count <= 0) continue;
+    next[armorSlot] = slot;
   }
   return next;
 }

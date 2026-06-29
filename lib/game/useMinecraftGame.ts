@@ -15,7 +15,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
-import type { EnchantmentId, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
@@ -421,9 +421,14 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     canCraft: (recipe: Recipe) => inv.canCraft(snapshot.inventory, recipe),
     craft: (recipe: Recipe) => engine?.dispatch({ type: "craft", recipeId: recipe.id }),
     enchant: (id: EnchantmentId) => engine?.dispatch({ type: "enchant", enchant: id }),
+    anvilCombine: () => engine?.dispatch({ type: "anvilCombine" }),
+    anvilRepair: () => engine?.dispatch({ type: "anvilRepair" }),
+    anvilRename: (name: string) => engine?.dispatch({ type: "anvilRename", name }),
+    grindstoneStrip: () => engine?.dispatch({ type: "grindstoneStrip" }),
     swapInventorySlots: (from: number, to: number) => engine?.dispatch({ type: "swapSlots", from, to }),
     moveStack: (from: number, to: number) => engine?.dispatch({ type: "moveStack", from, to }),
     toggleEquipArmor: (index: number) => engine?.dispatch({ type: "toggleEquipArmor", index }),
+    unequipArmor: (slot: ArmorSlot) => engine?.dispatch({ type: "unequipArmor", slot }),
     resumeNow: () => {
       engine?.dispatch({ type: "resume" });
       requestPointerLock();
