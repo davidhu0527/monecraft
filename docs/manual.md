@@ -65,6 +65,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | Right-click or `E` | Place/interact, or throw a selected spear                                                                     |
 | `1`–`9`            | Select a hotbar slot                                                                                          |
 | `I`                | Open / close inventory & crafting                                                                             |
+| `L`                | Open / close advancements & statistics                                                                        |
 | `F`                | Eat the selected food, or drink a selected potion                                                             |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
 | `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
@@ -395,6 +396,28 @@ armor selected in your hotbar, **Remove enchantments** strips them all off and
 **refunds XP** (5 points per enchantment level removed). Handy for salvaging XP
 from gear you've outgrown, or clearing an enchant you don't want before
 re-enchanting. It costs nothing to use — it only gives XP back.
+
+## Advancements and statistics
+
+Press **L** any time to open the progress screen — two tabs over your world's
+record.
+
+**Advancements** are a checklist of small goals, one per system the game has to
+offer: chop your first log, mine stone, craft a pickaxe, build a furnace, mine
+sliver and diamond ore, fire a bow, slay a monster, breed animals, harvest
+fully-grown wheat, catch a fish, enchant an item, drink a potion, sleep through a
+night, trade with a villager, and — the big one — defeat the Dragon Lord. Each
+unlocks the moment you do the thing, with a pop-up message and a chime, and
+they're grouped by theme (Mining, Crafting, Combat, Farming, Magic, Adventure).
+They're a tour of what there is to do, not a tech tree — nothing is gated behind
+them.
+
+**Statistics** track totals as you play: blocks mined, monsters slain, animals
+bred, items crafted and enchanted, potions drunk, fish caught, villager trades,
+jumps, deaths, distance travelled, and time played.
+
+Both are **saved with your world and kept when you die** (like XP, unlike potion
+effects), so your record only ever grows.
 
 ## Doors
 

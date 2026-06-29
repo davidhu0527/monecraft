@@ -1466,14 +1466,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 12 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is version 13 and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(12);
+    expect(save.version).toBe(13);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -2618,5 +2618,139 @@ describe("armor equipping (dedicated slots)", () => {
     run(engine, 5); // RESPAWN_SECONDS is 3
     expect(state.isDead).toBe(false);
     expect(state.equippedArmor.boots?.id).toBe("boots");
+  });
+});
+
+describe("statistics (save v13)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+
+  test("crafting bumps items_crafted and the per-recipe counter at the emit chokepoint", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    expect(engine.state.stats.get("items_crafted")).toBe(1);
+    expect(engine.state.stats.get("crafted_planks")).toBe(1);
+  });
+
+  test("active play accumulates the tick counters", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    expect(engine.state.stats.get("play_time")).toBeGreaterThan(0);
+    expect(engine.state.stats.get("distance_walked")).toBeGreaterThanOrEqual(0);
+  });
+
+  test("statistics survive serialize -> reload", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.stats.get("items_crafted")).toBe(1);
+    expect(restored.state.stats.get("crafted_planks")).toBe(1);
+  });
+
+  test("statistics survive death — counted, not cleared like effects", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    die(engine);
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.state.stats.get("items_crafted")).toBe(1); // not cleared on death
+    expect(engine.state.stats.get("deaths")).toBe(1); // the death itself is counted
+  });
+});
+
+describe("advancements (save v13)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const removeMobAt = (engine: GameEngine, index: number) => (engine as unknown as { removeMobAt: (i: number, looting?: number) => void }).removeMobAt(index);
+
+  function pushHostile(engine: GameEngine, kind: MobKind): void {
+    const p = engine.state.player.position;
+    engine.state.mobs.push({
+      id: engine.state.nextMobId++,
+      kind,
+      hostile: true,
+      hp: 1,
+      position: new THREE.Vector3(p.x, p.y, p.z),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 0,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    });
+  }
+
+  test("crafting a pickaxe unlocks Tool Up once, announcing it", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" });
+    const unlocks = engine.consumeEvents().filter((event) => event.type === "advancementUnlocked");
+    expect(unlocks).toHaveLength(1);
+    expect(unlocks[0]).toMatchObject({ id: "tool_up", name: "Tool Up" });
+    expect(engine.state.advancements.has("tool_up")).toBe(true);
+    // A second pickaxe must not re-announce the already-earned advancement.
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" });
+    expect(engine.consumeEvents().some((event) => event.type === "advancementUnlocked")).toBe(false);
+  });
+
+  test("killing a hostile unlocks Monster Hunter through the emit chokepoint", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    pushHostile(engine, "zombie");
+    removeMobAt(engine, engine.state.mobs.length - 1);
+    expect(engine.consumeEvents().some((event) => event.type === "advancementUnlocked" && event.id === "monster_hunter")).toBe(true);
+    expect(engine.state.advancements.has("monster_hunter")).toBe(true);
+  });
+
+  test("advancements persist through serialize -> reload and survive death", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }); // unlocks tool_up
+    expect(engine.state.advancements.has("tool_up")).toBe(true);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.advancements.has("tool_up")).toBe(true);
+
+    die(engine);
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.state.advancements.has("tool_up")).toBe(true); // not cleared on death
+  });
+
+  test("a corrupt/unknown advancement id is dropped on load (registry-filtered)", () => {
+    const engine = makeEngine();
+    const save = engine.serialize();
+    save.advancements = ["getting_wood", "totally_bogus"];
+    const restored = makeEngine(save);
+    expect(restored.state.advancements.has("getting_wood")).toBe(true); // real id kept
+    expect(restored.state.advancements.has("totally_bogus")).toBe(false); // bogus id dropped
+    expect(restored.getSnapshot().advancementsUnlocked).toBe(1); // count not inflated
+  });
+
+  test("toggleAdvancements opens the overlay, mutually exclusive with the inventory", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleAdvancements" });
+    expect(engine.getSnapshot().advancementsOpen).toBe(true);
+    // Opening the inventory closes the advancements overlay…
+    engine.dispatch({ type: "toggleInventory" });
+    expect(engine.getSnapshot().advancementsOpen).toBe(false);
+    expect(engine.getSnapshot().inventoryOpen).toBe(true);
+    // …and opening advancements closes the inventory.
+    engine.dispatch({ type: "toggleAdvancements" });
+    expect(engine.getSnapshot().inventoryOpen).toBe(false);
+    expect(engine.getSnapshot().advancementsOpen).toBe(true);
+  });
+
+  test("the snapshot count and advancementState() expose progression to the UI", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }); // unlock tool_up + items_crafted
+    expect(engine.getSnapshot().advancementsUnlocked).toBe(1);
+    const detail = engine.advancementState();
+    expect(detail.unlocked).toContain("tool_up");
+    expect(detail.stats.find((entry) => entry.id === "items_crafted")?.value).toBe(1);
   });
 });

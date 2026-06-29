@@ -131,6 +131,15 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 - **Apply it** with the `enchant` command (gated on an open enchanting table): `canEnchant` (kind + level cap) → `spendXpLevels` → immutable `applyEnchant`. The `EnchantingColumn` panel renders the options for the selected hotbar item.
 - **Persist it**: enchantments are an **additive save field** on `SavedSlot` — see [save-format.md](save-format.md) (v7); `restoreSlot` validates them on load (known ids, clamped levels, durable gear only).
 
+## An advancement / a stat
+
+Progression meta lives in one declarative module, `lib/game/engine/systems/advancements.ts`, hooked to the single `GameEngine.emit` chokepoint — so you never edit per-system files.
+
+- **A new statistic.** In `recordEvent`, map the relevant `GameEvent` to a counter with `bump(state, "<stat_id>")` (one `Map<string, number>` on `GameState.stats`); for a tick-driven total use `recordTick`. To surface it on the Statistics tab, add a `{ id, label, format }` row to `STATS` (`format` is `"count" | "distance" | "duration"`). The id set is open — no allow-list to touch. If the event you need doesn't exist yet, emit a new one (the `crafted` event was added this way); every emit flows through the observer.
+- **A new advancement.** Add a row to the `ADVANCEMENTS` registry: `{ id, title, description, icon, category, stat, threshold }`. Unlock is uniform (`state.stats.get(stat) >= threshold`), so there's **no logic** — pick (or add) the `stat` it keys on and a `category` from `ADVANCEMENT_CATEGORY_ORDER`. `icon` is any existing item/block id (rendered via `itemIconUrl` — **zero new assets**; verify it renders). The engine's `observeProgress` auto-unlocks it, fires the `advancementUnlocked` toast + chime, and `AdvancementsPanel` shows it.
+- **Persist it.** `stats` and `advancements` are **additive save fields** — see [save-format.md](save-format.md) (v13). Both are kept across death (like `xp`, unlike `effects`); `restoreStats`/`restoreAdvancements` validate them on load. No new field is needed for a stat or advancement that keys on existing counters.
+- **Reuse lookups.** Counting hostile kills reads `HOSTILE_MOB_KINDS` (`lib/game/mobs.ts`), the single source of truth (hostility isn't on `MOB_TEMPLATES`) — reuse such a table rather than re-deriving it.
+
 ## A new mechanic
 
 Add a system module under `lib/game/engine/systems/` (a function over `GameState`), give it a slot in the `GameEngine.step` sequence, and put its tunables in `lib/game/config.ts`. If the UI triggers it, add a `Command` variant. Write its headless test next to it.

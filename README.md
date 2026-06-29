@@ -27,7 +27,7 @@ The game opens to a menu: pick or create a **profile** (your name and look), the
 - `Left click` (hold): Break block / attack mobs
 - `Right click` or `E`: Place/interact, or throw a selected spear
 - `1..9`: Select hotbar slot
-- `I`: Inventory & crafting · `F`: Eat food · `Shift+U`: Emergency unstuck
+- `I`: Inventory & crafting · `L`: Advancements & statistics · `F`: Eat food · `Shift+U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)
 - `Esc`: Pause menu — three tabs: **Game** (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** and **Difficulty** switchers), **Options** (sound/music volume, Appearance skins), and **Controls** · `F3`: Debug overlay
 

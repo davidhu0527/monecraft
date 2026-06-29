@@ -230,13 +230,28 @@ export type SaveDataV11 = Omit<SaveDataV10, "version"> & {
 };
 
 /**
- * Current save shape (v12): armor moves to dedicated storage. `equippedArmor` is no
- * longer a by-id reference into the inventory (`SavedArmorById`) but the worn pieces
+ * v12 save shape: armor moves to dedicated storage. `equippedArmor` is no longer a
+ * by-id reference into the inventory (`SavedArmorById`) but the worn pieces
  * themselves (`SavedEquippedArmor`, per-slot `SavedSlot`). The v11→v12 migration
  * moves each legacy by-id equip out of `inventorySlots` into the armor record so a
  * worn piece no longer double-occupies an inventory slot.
  */
-export type SaveData = Omit<SaveDataV11, "version" | "equippedArmor"> & {
+export type SaveDataV12 = Omit<SaveDataV11, "version" | "equippedArmor"> & {
   version: 12;
   equippedArmor?: SavedEquippedArmor;
+};
+
+/** One persisted statistic: its id and accumulated value (kept as a number — play_time/distance are fractional). */
+export type SavedStat = { id: string; value: number };
+
+/**
+ * Current save shape (v13): progression meta. `stats` are the running gameplay
+ * counters and `advancements` the unlocked ids. Both are optional, so the v12→v13
+ * migration is a pure version bump and pre-v13 saves load with none. Like `xp`
+ * (and unlike `effects`), both are long-term and are NOT cleared on death.
+ */
+export type SaveData = Omit<SaveDataV12, "version"> & {
+  version: 13;
+  stats?: SavedStat[];
+  advancements?: string[];
 };

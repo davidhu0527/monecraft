@@ -464,3 +464,53 @@ fight is meant to test full diamond gear plus a bow:
 - Defeating it drops a **Dragon Heart** (+ 2–4 diamond ore), shows a one-time
   **victory screen**, and lets you craft the **Dragon Sword** (60 attack). You
   keep playing afterward; another totem summons it again.
+
+## Advancements
+
+Press **L** to open the advancements & statistics overlay. Advancements unlock
+the moment their goal is met (a toast + chime), persist in the save, and are
+**kept across death**. The registry lives in `lib/game/engine/systems/advancements.ts`;
+each is a declarative `{ stat, threshold }` row, so nothing is gated behind them.
+
+| Advancement    | Category  | How to unlock              |
+| -------------- | --------- | -------------------------- |
+| Getting Wood   | Mining    | Chop down a log            |
+| Stone Age      | Mining    | Mine a block of stone      |
+| Iron-ish       | Mining    | Mine sliver ore            |
+| Diamonds!      | Mining    | Mine diamond ore           |
+| Tool Up        | Crafting  | Craft a pickaxe (any tier) |
+| Hot Topic      | Crafting  | Craft a furnace            |
+| Take Aim       | Combat    | Fire an arrow from a bow   |
+| Monster Hunter | Combat    | Slay a hostile monster     |
+| Dragon Slayer  | Combat    | Defeat the Dragon Lord     |
+| Two by Two     | Farming   | Breed two animals          |
+| Time to Farm   | Farming   | Harvest fully-grown wheat  |
+| Gone Fishing   | Farming   | Reel in a catch            |
+| Enchanter      | Magic     | Enchant an item            |
+| Local Brewery  | Magic     | Drink a potion             |
+| Sleep Tight    | Adventure | Sleep through the night    |
+| Hired Help     | Adventure | Trade with a villager      |
+
+## Statistics
+
+Running counters shown on the overlay's Statistics tab — also persisted and kept
+across death. (Internally more counters are tracked to drive advancements, e.g.
+per-ore mining and per-recipe crafts; these are the ones displayed.)
+
+| Statistic          | Counts                                       |
+| ------------------ | -------------------------------------------- |
+| Time Played        | Seconds of active play                       |
+| Distance Travelled | Blocks moved                                 |
+| Blocks Mined       | Total blocks broken                          |
+| Logs Chopped       | Logs broken                                  |
+| Diamond Ore Mined  | Diamond ore broken                           |
+| Monsters Slain     | Hostile mobs killed                          |
+| Animals Bred       | Successful breedings                         |
+| Items Crafted      | Successful crafts (incl. smelting & trading) |
+| Items Enchanted    | Enchantments applied                         |
+| Potions Drunk      | Potions consumed                             |
+| Fish Caught        | Fishing catches                              |
+| Arrows Fired       | Bow shots                                    |
+| Villager Trades    | Trades made with a villager                  |
+| Jumps              | Times jumped                                 |
+| Deaths             | Times died                                   |

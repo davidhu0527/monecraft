@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Advancements & statistics**: the game gains a progression meta — running **statistics** (blocks mined, monsters slain, items crafted/enchanted, potions drunk, fish caught, animals bred, distance travelled, time played, deaths, jumps, villager trades) and a tight, flat set of **16 advancements**, one per major system (mine a log/stone/sliver/diamond, craft a pickaxe, craft a furnace, fire a bow, slay a hostile, defeat the Dragon Lord, breed animals, harvest wheat, catch a fish, enchant an item, drink a potion, sleep, trade with a villager). All on **zero new assets** — advancement icons reuse existing item/block sprites — and the save schema bumps **v12 → v13** (additive), with **no worldgen change** (`WORLDGEN_VERSION` stays 8)
+  - Press **L** to open a dedicated two-tab overlay (mutually exclusive with the inventory; the pause menu won't open over it): an **Advancements** grid grouped by category with locked/unlocked styling, and a **Statistics** list of the counters. Each unlock raises an _"Advancement Unlocked"_ toast and a celebratory chime
+  - **Persist across death.** Like `xp` and unlike status `effects`, both stats and advancements are a long-term record that survives a death (`clearEffects` never touches them) and a reload
+  - **Architecture**: one observer at the engine's single `emit` chokepoint folds every gameplay event into the stat counters (`recordEvent`), then unlocks any advancement whose threshold the new stats just crossed and announces it (`advancementUnlocked` event) — no per-system bookkeeping. The whole set is a **declarative registry** in `lib/game/engine/systems/advancements.ts` (`{ stat, threshold }` per row), so `evaluateAdvancements` is pure and adding one is a one-line edit. A new broadly-useful `crafted` event drives the craft/brew/trade counters; `HOSTILE_MOB_KINDS` (`lib/game/mobs.ts`) is the single source of truth for counting hostile kills. The overlay reads detail through a new `GameApi.advancementState()` pulled on render, so play never churns the snapshot with stat values the HUD doesn't show
+
 ## [0.11.0] - 2026-06-28
 
 ### Fixed

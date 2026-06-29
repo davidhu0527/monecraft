@@ -114,6 +114,14 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
 };
 
 /**
+ * The mob kinds that spawn hostile. Hostility is set per-mob at spawn time (see
+ * spawnDirector.pushMob), not stored on MOB_TEMPLATES, so this set is the single
+ * source of truth for "is this kind a monster" — used by the statistics /
+ * advancements system to count hostile kills.
+ */
+export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "boss"]);
+
+/**
  * Body-center height above the ground for a mob kind. Mirrors the geometry
  * math in createMobModel so the headless simulation needs no Three.js meshes.
  */

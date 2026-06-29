@@ -946,6 +946,22 @@ export const ENCHANT_SOUND: SoundDef = {
   minRetriggerMs: 200
 };
 
+// A bright, celebratory chime when an advancement unlocks — a rising sparkle.
+export const ADVANCEMENT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.45,
+    frequency: 523,
+    sustain: 0.05,
+    release: 0.28,
+    shape: 1,
+    pitchJump: 392,
+    pitchJumpTime: 0.12,
+    repeatTime: 0.1,
+    decay: 0.05
+  }),
+  minRetriggerMs: 300
+};
+
 export const DEATH_SOUND: SoundDef = {
   params: zz({
     volume: 0.8,

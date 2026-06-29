@@ -66,9 +66,12 @@ import {
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
+  restoreStats,
+  restoreAdvancements,
   serializeContainers,
   serializeEffects,
-  serializeLootedChests
+  serializeLootedChests,
+  serializeStats
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
@@ -98,6 +101,7 @@ import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
 import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
@@ -200,9 +204,12 @@ export class GameEngine {
       oxygen: MAX_OXYGEN,
       effects: new Map(),
       xp: 0,
+      stats: new Map(),
+      advancements: new Set(),
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
+      advancementsOpen: false,
       craftingStation: null,
       containers: new Map(),
       primedTnt: new Map(),
@@ -245,6 +252,11 @@ export class GameEngine {
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
+      // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
+      for (const { id, value } of restoreStats(save)) this.state.stats.set(id, value);
+      // Filter against the registry so a corrupt/edited save can't inject bogus ids
+      // (which would inflate the unlocked count and round-trip back out forever).
+      for (const id of restoreAdvancements(save)) if (ADVANCEMENTS_BY_ID[id]) this.state.advancements.add(id);
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -324,6 +336,8 @@ export class GameEngine {
     const move = tickPlayerMotion(state, input, dt, this.applyDamage);
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
+    // Tick-driven display stats (no event, so out of the advancement path).
+    recordTick(state, dt, move.horizontalDistance);
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
@@ -365,9 +379,20 @@ export class GameEngine {
       case "toggleInventory": {
         if (!canInteract(state.gameMode)) break; // Spectator has no inventory
         state.inventoryOpen = !state.inventoryOpen;
+        if (state.inventoryOpen) state.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
           state.openContainerIndex = null; // ...and the open chest
+        }
+        break;
+      }
+      case "toggleAdvancements": {
+        // A read-only progression overlay — available in any mode (even Spectator).
+        state.advancementsOpen = !state.advancementsOpen;
+        if (state.advancementsOpen) {
+          state.inventoryOpen = false; // mutually exclusive with the inventory panel
+          state.craftingStation = null;
+          state.openContainerIndex = null;
         }
         break;
       }
@@ -380,6 +405,9 @@ export class GameEngine {
         const next = inv.craft(state.inventory, recipe);
         if (!next) break;
         state.inventory = next;
+        // A broadly-useful craft signal: drives items_crafted + the craft/brew/trade
+        // advancements. Station recipes still emit `smelted` for the audio director.
+        this.emit({ type: "crafted", recipeId: recipe.id });
         if (recipe.station) this.emit({ type: "smelted" });
         break;
       }
@@ -579,7 +607,7 @@ export class GameEngine {
         // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
         // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
         // would stall the sleep timer (step early-returns on paused before sleep).
-        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
+        if (state.inventoryOpen || state.advancementsOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
         state.paused = true;
         state.craftingStation = null;
         state.openContainerIndex = null;
@@ -623,7 +651,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 12,
+      version: 13,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -646,7 +674,21 @@ export class GameEngine {
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedDungeonChests),
       effects: serializeEffects(state.effects),
-      xp: state.xp
+      xp: state.xp,
+      stats: serializeStats(state.stats),
+      advancements: [...state.advancements]
+    };
+  }
+
+  /**
+   * Detailed progression read for the advancements overlay. Pulled on render via
+   * the snapshot's stable `api` handle (not projected per-frame into the snapshot),
+   * so play never churns the snapshot with stat values the HUD doesn't show.
+   */
+  advancementState(): { stats: Array<{ id: string; value: number }>; unlocked: string[] } {
+    return {
+      stats: [...this.state.stats].map(([id, value]) => ({ id, value })),
+      unlocked: [...this.state.advancements]
     };
   }
 
@@ -667,7 +709,23 @@ export class GameEngine {
 
   private emit = (event: GameEvent): void => {
     this.events.push(event);
+    // Observe progress at the one chokepoint every system already emits through —
+    // but guard against recursion: observing an unlock re-enters emit.
+    if (event.type !== "advancementUnlocked") this.observeProgress(event);
   };
+
+  /**
+   * Folds a gameplay event into the statistics counters, then unlocks any
+   * advancement whose threshold the new stats just crossed — adding it to the set
+   * (before the emit, so a re-entrant observe is idempotent) and announcing it.
+   */
+  private observeProgress(event: GameEvent): void {
+    recordEvent(this.state, event);
+    for (const id of evaluateAdvancements(this.state)) {
+      this.state.advancements.add(id);
+      this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title });
+    }
+  }
 
   /**
    * Moves a slot between the player inventory and the open chest. Indices at or
@@ -999,6 +1057,8 @@ export class GameEngine {
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),
       respawnSeconds: state.isDead ? Math.max(0, Math.ceil(state.respawnTimer)) : 0,
       inventoryOpen: state.inventoryOpen,
+      advancementsOpen: state.advancementsOpen,
+      advancementsUnlocked: state.advancements.size,
       paused: state.paused,
       debugOpen: state.debugOpen,
       debug: state.debugInfo,
