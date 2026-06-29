@@ -213,6 +213,17 @@ export const BABY_GROW_SECONDS = 90;
 export const BABY_SCALE = 0.55;
 export const PASSIVE_CAP = 24;
 
+// Companions (tameable pets). A wild wolf (fed a bone) or cat (raw fish) tames on
+// a TAME_CHANCE roll, becoming an "ally" that follows the owner and fights nearby
+// hostiles (PET_FIGHT_RANGE = its enemy-detect radius once tamed, PET_TAMED_HP its
+// boosted health). It roams freely within PET_FOLLOW_MAX of the owner, jogs to
+// catch up beyond that, and is recalled (teleported) past PET_TELEPORT_DISTANCE.
+export const TAME_CHANCE = 1 / 3;
+export const PET_TAMED_HP = 20;
+export const PET_FIGHT_RANGE = 12;
+export const PET_FOLLOW_MAX = 10;
+export const PET_TELEPORT_DISTANCE = 24;
+
 // Random block ticks (crop growth; the system is extensible to other blocks).
 // Each interval samples N columns within RADIUS of the player and runs the
 // block's handler. ~128 samples/s over a 64x64 area ≈ 50 s/stage (~2.5 min to

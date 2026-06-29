@@ -61,10 +61,13 @@ describe("mob drop tables", () => {
     expect(rollMobDrops("cow", make(), 0)).toEqual(rollMobDrops("cow", make()));
   });
 
-  test("every combat mob has at least one drop entry (villagers are NPCs and drop nothing)", () => {
+  test("every combat mob has at least one drop entry (NPCs and pets drop nothing)", () => {
+    // Villagers are trade NPCs and wolves/cats are companions — killing them is not
+    // rewarded, so their drop tables are intentionally empty.
+    const noDropKinds = new Set<MobKind>(["villager", "wolf", "cat"]);
     for (const kind of ALL_KINDS) {
-      if (kind === "villager") {
-        expect(MOB_DROPS[kind]).toHaveLength(0); // intentional: don't reward killing a trader
+      if (noDropKinds.has(kind)) {
+        expect(MOB_DROPS[kind]).toHaveLength(0);
         continue;
       }
       expect(MOB_DROPS[kind].length).toBeGreaterThan(0);

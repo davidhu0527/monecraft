@@ -627,6 +627,42 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       tremolo: 0.3,
       filter: -180
     })
+  },
+  wolf: {
+    // A short, mid-low woof.
+    params: zz({
+      volume: 0.55,
+      randomness: 0.15,
+      frequency: 180,
+      attack: 0.02,
+      sustain: 0.06,
+      release: 0.13,
+      shape: 2,
+      shapeCurve: 1.2,
+      pitchJump: -40,
+      pitchJumpTime: 0.05,
+      sustainVolume: 0.7,
+      decay: 0.06,
+      filter: -200
+    })
+  },
+  cat: {
+    // A rising-then-falling meow.
+    params: zz({
+      volume: 0.45,
+      randomness: 0.2,
+      frequency: 480,
+      attack: 0.03,
+      sustain: 0.12,
+      release: 0.18,
+      shape: 2,
+      shapeCurve: 1.1,
+      pitchJump: 90,
+      pitchJumpTime: 0.07,
+      sustainVolume: 0.7,
+      decay: 0.08,
+      tremolo: 0.25
+    })
   }
 };
 
@@ -793,6 +829,42 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       filter: -300
     }),
     minRetriggerMs: 100
+  },
+  wolf: {
+    // A snarling bite.
+    params: zz({
+      volume: 0.7,
+      randomness: 0.1,
+      frequency: 150,
+      sustain: 0.03,
+      release: 0.1,
+      shape: 4,
+      shapeCurve: 1.1,
+      slide: -2,
+      noise: 0.6,
+      sustainVolume: 0.8,
+      decay: 0.04,
+      filter: -300
+    }),
+    minRetriggerMs: 120
+  },
+  cat: {
+    // A sharp hiss/scratch.
+    params: zz({
+      volume: 0.55,
+      randomness: 0.15,
+      frequency: 600,
+      sustain: 0.03,
+      release: 0.08,
+      shape: 4,
+      shapeCurve: 0.9,
+      slide: 1,
+      noise: 1,
+      sustainVolume: 0.7,
+      decay: 0.03,
+      filter: 700
+    }),
+    minRetriggerMs: 120
   }
 };
 

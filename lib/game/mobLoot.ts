@@ -33,6 +33,9 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
     { itemId: "raw_beef", min: 1, max: 1 }
   ],
   pig: [{ itemId: "raw_porkchop", min: 1, max: 1 }],
+  // Pets drop nothing — you don't harvest your companions. Empty tables are allowed.
+  wolf: [],
+  cat: [],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
   spider: [{ itemId: "string", min: 0, max: 2 }],

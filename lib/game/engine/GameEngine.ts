@@ -24,6 +24,8 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  PET_FIGHT_RANGE,
+  PET_TAMED_HP,
   POISON_DURATION,
   POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
@@ -95,7 +97,7 @@ import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
 import { applyEnchant, canEnchant, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
@@ -549,7 +551,11 @@ export class GameEngine {
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
+        // Companions: a treat tames a wild wolf/cat; otherwise toggling sit on your
+        // own pet. Both run before feeding so the bone/fish tames rather than feeds.
+        if (tryTameAimedMob(state, this.emit, this.rng)) break;
         if (tryFeedAimedMob(state, this.emit)) break;
+        if (tryToggleSitPet(state, this.emit)) break;
         if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
@@ -841,8 +847,15 @@ export class GameEngine {
       pushMob(this.state, m.kind, hostile, m.x, ground, m.z, this.rng);
       const mob = this.state.mobs[this.state.mobs.length - 1];
       mob.faction = m.faction;
-      mob.hp = m.owner != null ? Math.min(m.hp, BOSS_HP) : Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
-      if (m.owner != null) mob.owner = m.owner;
+      // A tamed pet's hp/detectRange exceed its wild template — restore the pet
+      // ceiling and fight range so it stays a healthy, fighting ally.
+      if (m.owner != null) {
+        mob.owner = m.owner;
+        mob.hp = Math.min(m.hp, PET_TAMED_HP);
+        mob.detectRange = PET_FIGHT_RANGE;
+      } else {
+        mob.hp = Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
+      }
       if (m.sitting) mob.sitting = true;
       if (m.ageTimer && m.ageTimer > 0) {
         mob.ageTimer = m.ageTimer;

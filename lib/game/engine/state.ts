@@ -390,6 +390,8 @@ export type GameEvent =
   | { type: "advancementUnlocked"; id: string; name: string }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }
+  | { type: "mobTamed"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "petSitToggled"; kind: MobKind; sitting: boolean }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

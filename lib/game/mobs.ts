@@ -56,6 +56,27 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     // Pink body and a darker pink snout; small and low to the ground.
     modelArgs: [0xe79a9a, 0xd98484, 0xc06a6a, 0x111111, 0xb45656, [0.95, 0.62, 1.25], [0.5, 0.42, 0.46]]
   },
+  wolf: {
+    // Wild and passive (flees like other animals) until tamed; taming flips it to
+    // an ally and raises hp/detectRange (see config PET_*). attackDamage drives its
+    // bite once it fights for the player.
+    speed: 1.3,
+    hp: 8,
+    detectRange: 0,
+    attackDamage: 4,
+    attackCooldown: 0.9,
+    // Grey body, lighter head, dark legs, amber eyes; low and long like a dog.
+    modelArgs: [0x9a9a9a, 0xb0b0b0, 0x6f6f6f, 0xffe08a, 0x7a7a7a, [0.85, 0.6, 1.25], [0.5, 0.5, 0.55]]
+  },
+  cat: {
+    speed: 1.35,
+    hp: 8,
+    detectRange: 0,
+    attackDamage: 3,
+    attackCooldown: 1.0,
+    // Orange tabby with green eyes; small and lithe.
+    modelArgs: [0xd98a3a, 0xe0a050, 0xb06a28, 0x9bd84f, 0xc06a20, [0.55, 0.45, 0.95], [0.42, 0.4, 0.42]]
+  },
   zombie: {
     speed: 1.05,
     hp: HOSTILE_MOB_HP,
@@ -133,6 +154,8 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
   horse: "wild",
   cow: "wild",
   pig: "wild",
+  wolf: "wild",
+  cat: "wild",
   villager: "villager",
   zombie: "hostile",
   skeleton: "hostile",

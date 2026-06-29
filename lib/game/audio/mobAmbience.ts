@@ -10,6 +10,8 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   horse: [8, 18],
   cow: [7, 16],
   pig: [5, 13],
+  wolf: [5, 12],
+  cat: [6, 14],
   zombie: [4, 9],
   skeleton: [5, 11],
   spider: [4, 10],

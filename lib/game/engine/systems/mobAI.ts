@@ -19,6 +19,8 @@ import {
   MOB_RETARGET_SECONDS,
   MOB_VS_MOB_KNOCKBACK,
   MOB_VS_MOB_REACH,
+  PET_FOLLOW_MAX,
+  PET_TELEPORT_DISTANCE,
   SKELETON_ARROW_DAMAGE,
   SKELETON_ARROW_SPEED,
   SKELETON_FIRE_VGAP,
@@ -247,11 +249,14 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
 
     // A fighter that isn't chasing the player hunts the nearest enemy-faction mob
     // (a hostile after a villager, a pet after a hostile). Creepers stay
-    // player-focused — they detonate rather than bite.
+    // player-focused — they detonate rather than bite. A sitting pet does nothing.
+    const sitting = mob.sitting === true;
     const playerAggro = activeHostile && distanceToPlayer < mob.detectRange;
-    const mobTarget = !playerAggro && mob.kind !== "creeper" ? selectMobTarget(state, mob) : null;
+    const mobTarget = !sitting && !playerAggro && mob.kind !== "creeper" ? selectMobTarget(state, mob) : null;
 
-    if (playerAggro) {
+    if (sitting) {
+      moveSpeed = 0; // a told-to-stay pet holds its ground
+    } else if (playerAggro) {
       if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
       // Skeletons kite (back off / hold in a standoff band); the boss bears down.
@@ -263,6 +268,23 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       scratchToTarget.copy(mobTarget.position).sub(mob.position).setY(0);
       if (scratchToTarget.lengthSq() > 1e-6) mob.direction.lerp(scratchToTarget.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
+    } else if (mob.faction === "ally") {
+      // A pet with no enemy nearby follows its owner: recalled (teleported) when it
+      // strays too far, jogging to catch up otherwise, and milling about up close.
+      if (distanceToPlayer > PET_TELEPORT_DISTANCE) {
+        const tx = playerPosition.x + (deps.rng() - 0.5) * 2;
+        const tz = playerPosition.z + (deps.rng() - 0.5) * 2;
+        mob.position.set(tx, deps.surfaceYAt(tx, tz) + mob.halfHeight, tz);
+        mob.moveSpeed = mob.speed;
+        continue; // recalled to the owner — skip the rest of this tick
+      }
+      if (distanceToPlayer > PET_FOLLOW_MAX) {
+        if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
+        moveSpeed *= 1.3;
+      } else if (mob.turnTimer <= 0) {
+        mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
+        mob.turnTimer = 1.5 + deps.rng() * 4;
+      }
     } else if (mob.faction === "villager") {
       // Villagers don't fight — they flee the nearest hostile/raider, else mill about.
       const threat = nearestThreat(state, mob, VILLAGER_FLEE_RANGE);

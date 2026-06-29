@@ -11,6 +11,8 @@ export const MOB_XP: Record<MobKind, number> = {
   horse: 2,
   cow: 2,
   pig: 1,
+  wolf: 1,
+  cat: 1,
   // A villager is a trade NPC — no combat reward (and you shouldn't be killing it).
   villager: 0,
   zombie: 5,

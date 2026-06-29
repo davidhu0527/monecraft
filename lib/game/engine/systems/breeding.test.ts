@@ -56,6 +56,19 @@ describe("breeding", () => {
     expect(events.some((e) => e.type === "mobBred" && e.kind === "sheep")).toBe(true);
   });
 
+  test("a bred pet's offspring inherits ownership and the ally faction (so it persists)", () => {
+    const pet = (id: number, x: number): MobState =>
+      Object.assign(makeSheep(id, x, 0, BREED_FED_WINDOW_SECONDS), { kind: "wolf" as const, faction: "ally" as const, owner: "player" as const });
+    const state = makeState([pet(1, 0), pet(2, 1)]);
+    tickBreeding(state, BREED_CHECK_INTERVAL_SECONDS, rng, surfaceYAt, () => {});
+
+    expect(state.mobs).toHaveLength(3);
+    const baby = state.mobs[2];
+    expect(baby.kind).toBe("wolf");
+    expect(baby.owner).toBe("player");
+    expect(baby.faction).toBe("ally");
+  });
+
   test("far-apart fed adults do not breed", () => {
     const a = makeSheep(1, 0, 0, BREED_FED_WINDOW_SECONDS);
     const b = makeSheep(2, 10, 0, BREED_FED_WINDOW_SECONDS); // beyond radius

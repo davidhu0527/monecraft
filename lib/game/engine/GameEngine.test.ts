@@ -37,6 +37,7 @@ import { addEffect } from "@/lib/game/engine/systems/statusEffects";
 import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
+import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
@@ -2795,5 +2796,22 @@ describe("mob persistence (pets)", () => {
 
   test("a fresh world persists no mobs (nothing owned yet)", () => {
     expect(makeEngine().serialize().mobs).toEqual([]);
+  });
+
+  test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {
+    const engine = makeEngine();
+    const wolf = engine.state.mobs[0];
+    wolf.kind = "wolf";
+    wolf.owner = "player";
+    wolf.faction = "ally";
+    wolf.hp = PET_TAMED_HP;
+    wolf.detectRange = PET_FIGHT_RANGE;
+
+    const restored = makeEngine(engine.serialize());
+    const pet = restored.state.mobs.find((m) => m.owner === "player")!;
+    expect(pet.kind).toBe("wolf");
+    expect(pet.faction).toBe("ally");
+    expect(pet.hp).toBe(PET_TAMED_HP);
+    expect(pet.detectRange).toBe(PET_FIGHT_RANGE); // re-armed so the pet still fights
   });
 });

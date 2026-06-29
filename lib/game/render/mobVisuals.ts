@@ -74,7 +74,8 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         }
         const { model, healthBar } = visual;
 
-        const bob = Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
+        // A told-to-stay pet sits still: no bob, hunkered down, legs at rest.
+        const bob = mob.sitting ? 0 : Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
         model.group.position.set(mob.position.x, mob.position.y + bob, mob.position.z);
         model.group.rotation.y = mob.yaw;
 
@@ -87,6 +88,7 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
           const flash = primed ? 0.35 + 0.55 * wave : 0;
           for (const material of model.materials) (material as THREE.MeshStandardMaterial).emissive.setScalar(flash);
         }
+        if (mob.sitting) scale *= 0.7;
         model.group.scale.setScalar(scale);
 
         if (healthBar) {
@@ -95,7 +97,7 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
           healthBar.fill.position.x = -(healthBar.width - healthBar.fill.scale.x) * 0.5;
         }
 
-        const gait = Math.sin(timeMs * 0.015 * mob.moveSpeed + mob.bobSeed) * 0.3;
+        const gait = mob.sitting ? 0 : Math.sin(timeMs * 0.015 * mob.moveSpeed + mob.bobSeed) * 0.3;
         if (model.legs.length === 4) {
           model.legs[0].rotation.x = gait;
           model.legs[1].rotation.x = -gait;

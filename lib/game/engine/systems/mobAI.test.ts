@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { VoxelWorld } from "@/lib/world";
-import { CREEPER_FUSE_SECONDS } from "@/lib/game/config";
+import { CREEPER_FUSE_SECONDS, PET_FIGHT_RANGE } from "@/lib/game/config";
 import { FACTION_BY_KIND, mobHalfHeight } from "@/lib/game/mobs";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
 import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
@@ -292,5 +292,69 @@ describe("mob-vs-mob & allegiance", () => {
 
     expect(calls.find((c) => c.index === 0)?.credit).toBe(true); // zombie — credited
     expect(calls.find((c) => c.index === 1)?.credit).toBe(false); // villager — no loot/XP
+  });
+});
+
+describe("companion pets (allies)", () => {
+  function makePet(x: number, z: number, overrides: Partial<MobState> = {}): MobState {
+    const pet = makeMob("wolf", x, 30, z);
+    pet.hostile = false;
+    pet.faction = "ally";
+    pet.owner = "player";
+    pet.detectRange = PET_FIGHT_RANGE;
+    pet.attackDamage = 4;
+    return Object.assign(pet, overrides);
+  }
+
+  test("a sitting pet holds its ground (no movement)", () => {
+    const pet = makePet(10, 10, { sitting: true });
+    const state = makeState([pet]);
+    const startX = pet.position.x;
+    const startZ = pet.position.z;
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.1, deps);
+
+    expect(pet.position.x).toBe(startX);
+    expect(pet.position.z).toBe(startZ);
+    expect(pet.moveSpeed).toBe(0);
+  });
+
+  test("a pet attacks a nearby hostile, and the kill credits the player", () => {
+    const pet = makePet(10, 9.5);
+    const zombie = makeMob("zombie", 10, 30, 8.5); // ~1 block from the pet, far from the player
+    zombie.hp = 3;
+    const state = makeState([pet, zombie]);
+    const calls: Array<{ index: number; credit: boolean }> = [];
+    const { deps } = makeDeps();
+    deps.removeMobAt = (index: number, _looting?: number, credit = true) => calls.push({ index, credit });
+
+    tickMobs(state, 0.05, deps);
+
+    expect(pet.targetId).toBe(zombie.id);
+    expect(zombie.hp).toBeLessThan(3); // the pet bit it
+  });
+
+  test("a pet beyond follow range jogs toward the owner and closes the gap over time", () => {
+    const pet = makePet(40, 40); // ~22 blocks from the player at (24,24): past FOLLOW_MAX, within TELEPORT
+    const state = makeState([pet]);
+    const startDist = Math.hypot(40 - 24, 40 - 24);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.1, deps);
+    expect(pet.moveSpeed).toBeCloseTo(pet.speed * 1.3, 5); // follow boost (in range, not teleporting)
+
+    for (let i = 0; i < 60; i += 1) tickMobs(state, 0.1, deps);
+    expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(startDist); // closed the gap
+  });
+
+  test("a pet stranded past the teleport distance is recalled next to the owner", () => {
+    const pet = makePet(46, 46); // ~31 blocks from (24,24) — beyond PET_TELEPORT_DISTANCE
+    const state = makeState([pet]);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(3); // teleported adjacent
   });
 });
