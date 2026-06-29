@@ -31,6 +31,8 @@ import {
   POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
+  RAID_TRIGGER_DISTANCE,
+  RAID_WAVE_COUNT,
   RENDER_RADIUS,
   ROTTEN_FLESH_POISON_CHANCE,
   STUCK_RESET_SECONDS,
@@ -108,6 +110,7 @@ import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
+import { startRaid, tickRaid } from "./systems/raid";
 import {
   assignVillagerProfessions,
   pushMob,
@@ -259,7 +262,8 @@ export class GameEngine {
       mining: { targetKey: "", progress: 0 },
       timers: createTimers(),
       worldMeshDirty: true,
-      victory: false
+      victory: false,
+      raid: null
     };
 
     if (save) {
@@ -401,6 +405,7 @@ export class GameEngine {
     tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
+    tickRaid(state, dt, { surfaceYAt: this.surfaceYAt, rng: this.rng, emit: this.emit });
     this.tickDebugInfo(dt);
 
     this.refreshSnapshot();
@@ -595,6 +600,7 @@ export class GameEngine {
         if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
+        if (this.tryStartRaid()) break;
         if (tryFish(state, this.emit, this.rng)) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
@@ -945,6 +951,36 @@ export class GameEngine {
     spawnBoss(state, point.x, point.y, point.z, this.rng);
     state.inventory = inv.adjustSlotCount(state.inventory, "boss_summoner", -1, state.selectedSlot) ?? state.inventory;
     this.emit({ type: "bossSummoned", x: point.x, y: point.y, z: point.z });
+    return true;
+  }
+
+  /**
+   * Sounds a held Ominous Horn at the nearest village (within RAID_TRIGGER_DISTANCE)
+   * to start a raid, consuming the horn. Refuses (keeping it) when a raid is already
+   * running; does nothing (returns false, so placement falls through) when no village
+   * is in range or the difficulty is Peaceful.
+   */
+  private tryStartRaid(): boolean {
+    const state = this.state;
+    const slot = state.inventory[state.selectedSlot];
+    if (slot?.id !== "ominous_horn" || slot.count <= 0) return false;
+    if (state.raid) {
+      this.emit({ type: "summonFailed" });
+      return true;
+    }
+    const { x, z } = state.player.position;
+    let nearest: { x: number; z: number } | null = null;
+    let bestSq = RAID_TRIGGER_DISTANCE * RAID_TRIGGER_DISTANCE;
+    for (const site of state.villageSites) {
+      const d = (site.x - x) * (site.x - x) + (site.z - z) * (site.z - z);
+      if (d < bestSq) {
+        bestSq = d;
+        nearest = site;
+      }
+    }
+    if (!nearest || !startRaid(state, nearest.x, nearest.z)) return false;
+    state.inventory = inv.adjustSlotCount(state.inventory, "ominous_horn", -1, state.selectedSlot) ?? state.inventory;
+    this.emit({ type: "raidStarted", totalWaves: RAID_WAVE_COUNT });
     return true;
   }
 

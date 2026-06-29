@@ -663,6 +663,24 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       decay: 0.08,
       tremolo: 0.25
     })
+  },
+  raider: {
+    // A low, menacing grunt.
+    params: zz({
+      volume: 0.6,
+      randomness: 0.15,
+      frequency: 95,
+      attack: 0.02,
+      sustain: 0.1,
+      release: 0.18,
+      shape: 2,
+      shapeCurve: 1.3,
+      slide: -1,
+      noise: 0.3,
+      sustainVolume: 0.8,
+      decay: 0.12,
+      filter: -260
+    })
   }
 };
 
@@ -865,6 +883,24 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       filter: 700
     }),
     minRetriggerMs: 120
+  },
+  raider: {
+    // A brutish thwack.
+    params: zz({
+      volume: 0.75,
+      randomness: 0.1,
+      frequency: 120,
+      sustain: 0.03,
+      release: 0.12,
+      shape: 4,
+      shapeCurve: 1.2,
+      slide: -2,
+      noise: 0.5,
+      sustainVolume: 0.8,
+      decay: 0.05,
+      filter: -350
+    }),
+    minRetriggerMs: 110
   }
 };
 

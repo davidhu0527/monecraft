@@ -156,6 +156,20 @@ export type GameTimers = {
 export type WeatherKind = "clear" | "rain" | "snow";
 export type WeatherState = { kind: WeatherKind; intensity: number };
 
+/**
+ * An in-progress village raid — session-only, never serialized (like the boss).
+ * A reload cancels it. Waves of raiders spawn around `center`; once a wave is
+ * cleared, `waveTimer` counts down to the next, until all `totalWaves` are beaten.
+ */
+export type RaidState = {
+  center: { x: number; z: number };
+  /** Waves spawned so far (0 before the first spawns, up to totalWaves). */
+  wavesSpawned: number;
+  totalWaves: number;
+  /** Seconds until the next wave once the current one is cleared. */
+  waveTimer: number;
+};
+
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
@@ -239,6 +253,8 @@ export type GameState = {
   worldMeshDirty: boolean;
   /** True once the boss has been defeated — drives the one-shot victory screen (session-only). */
   victory: boolean;
+  /** The active village raid, or null. Session-only (a reload cancels it). */
+  raid: RaidState | null;
 };
 
 export function createTimers(): GameTimers {
@@ -400,6 +416,10 @@ export type GameEvent =
   | { type: "mobBred"; kind: MobKind }
   | { type: "mobTamed"; kind: MobKind; x: number; y: number; z: number }
   | { type: "petSitToggled"; kind: MobKind; sitting: boolean }
+  | { type: "raidStarted"; totalWaves: number }
+  | { type: "raidWaveStarted"; wave: number; totalWaves: number }
+  | { type: "raidWon" }
+  | { type: "raidLost" }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

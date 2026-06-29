@@ -21,6 +21,7 @@ export const MOB_XP: Record<MobKind, number> = {
   skeleton: 5,
   spider: 5,
   creeper: 5,
+  raider: 6,
   boss: 200
 };
 

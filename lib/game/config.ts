@@ -142,6 +142,19 @@ export const BOSS_SUMMON_RADIUS = 10; // where the boss appears, around the play
 export const BOSS_MINION_CAP = 4; // boss-summoned minions alive at once
 export const BOSS_SUMMON_INTERVAL_SECONDS = 12;
 
+// Raids. Sounding an Ominous Horn within RAID_TRIGGER_DISTANCE of a village calls
+// down RAID_WAVE_COUNT waves of RAID_WAVE_SIZE raiders, spawned in a ring of
+// RAID_RADIUS around the village center; a new wave starts RAID_WAVE_DELAY_SECONDS
+// after the previous one is cleared. Defending all waves rewards emeralds + XP; if
+// every villager near the center dies first, the raid is lost.
+export const RAID_WAVE_COUNT = 3;
+export const RAID_WAVE_SIZE = 4;
+export const RAID_WAVE_DELAY_SECONDS = 4;
+export const RAID_RADIUS = 24;
+export const RAID_TRIGGER_DISTANCE = 48;
+export const RAID_REWARD_EMERALDS = 5;
+export const RAID_REWARD_XP = 50;
+
 // Creepers, TNT & explosions. An explosion destroys blocks within `power` (with a
 // distance falloff vs each block's blast resistance) and damages the player/mobs
 // out to twice that radius, also with falloff. Damage scales with power, so a

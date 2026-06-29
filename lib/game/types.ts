@@ -86,7 +86,21 @@ export type Recipe = {
   station?: "furnace" | "villager" | "brewing";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "wolf" | "cat" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
+export type MobKind =
+  | "sheep"
+  | "chicken"
+  | "horse"
+  | "cow"
+  | "pig"
+  | "wolf"
+  | "cat"
+  | "zombie"
+  | "skeleton"
+  | "spider"
+  | "creeper"
+  | "raider"
+  | "villager"
+  | "boss";
 
 /**
  * A mob's social allegiance — the axis that drives who fights whom (see mobAI's

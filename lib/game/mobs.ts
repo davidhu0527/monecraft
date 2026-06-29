@@ -112,6 +112,18 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     // Mottled green, taller than wide, with a dark face — the classic silhouette.
     modelArgs: [0x4f9a3a, 0x3f8030, 0x356b29, 0x1a1a1a, 0x2a5520, [0.7, 1.25, 0.7], [0.5, 0.5, 0.5]]
   },
+  raider: {
+    // A pillager that storms a village in waves (see systems/raid.ts). Hostile, so
+    // it chases the player up close and hunts villagers otherwise (the faction
+    // enmity table). Tougher than an ordinary hostile.
+    speed: 1.1,
+    hp: 120,
+    detectRange: 16,
+    attackDamage: 5,
+    attackCooldown: 1.2,
+    // A drab grey-green brute with red eyes and a dark tunic.
+    modelArgs: [0x55603f, 0x6b6b5a, 0x3a3a30, 0xff3333, 0x2a2a22, [0.82, 1.18, 0.55], [0.54, 0.54, 0.54]]
+  },
   villager: {
     speed: 0.6,
     hp: 20,
@@ -140,7 +152,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
  * source of truth for "is this kind a monster" — used by the statistics /
  * advancements system to count hostile kills.
  */
-export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "boss"]);
+export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "raider", "boss"]);
 
 /**
  * The allegiance each kind spawns with (see MobFaction). The targeting axis, set
@@ -161,6 +173,7 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
   skeleton: "hostile",
   spider: "hostile",
   creeper: "hostile",
+  raider: "raider",
   boss: "hostile"
 };
 

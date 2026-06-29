@@ -2365,6 +2365,36 @@ describe("villager trading", () => {
   });
 });
 
+describe("village raids", () => {
+  test("sounding an Ominous Horn near a village starts a raid and consumes the horn", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    state.player.pitch = -1.2; // look up at the sky so no block interaction intercepts
+
+    // A village right where the player stands, and a horn in hand.
+    state.villageSites = [{ x: state.player.position.x, z: state.player.position.z }];
+    const slot = state.inventory.findIndex((s) => !s.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("ominous_horn", 1);
+    state.selectedSlot = slot;
+
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.raid).not.toBeNull();
+    expect(engine.consumeEvents().some((e) => e.type === "raidStarted")).toBe(true);
+    expect(countsById(state.inventory).get("ominous_horn")).toBeUndefined(); // consumed
+
+    // A second horn is refused while the raid runs.
+    state.inventory[slot] = createSlot("ominous_horn", 1);
+    engine.dispatch({ type: "placeBlock" });
+    expect(countsById(state.inventory).get("ominous_horn")).toBe(1); // not consumed
+  });
+});
+
 describe("living world", () => {
   /** Settles the player, centers it, aims straight down, and returns the floor cell. */
   function aimDownAtFloor(engine: GameEngine): { x: number; y: number; z: number } {
