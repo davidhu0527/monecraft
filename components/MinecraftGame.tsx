@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useReducer } from "react";
 import ActiveEffects from "@/components/game/ActiveEffects";
 import BossHealthBar from "@/components/game/BossHealthBar";
 import DeathScreen from "@/components/game/DeathScreen";
@@ -104,6 +104,17 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
   useEffect(() => {
     installUiTiles();
   }, []);
+
+  // While the advancements overlay is open the live stats keep accruing (play
+  // time, distance), but the snapshot only changes on an unlock. Re-render on a
+  // light interval *while open* so the Statistics tab stays current — without
+  // coupling stat freshness to the hot per-frame snapshot path.
+  const [, refreshAdvancements] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!advancementsOpen) return;
+    const id = window.setInterval(refreshAdvancements, 400);
+    return () => window.clearInterval(id);
+  }, [advancementsOpen]);
 
   if (rendererError) {
     return (

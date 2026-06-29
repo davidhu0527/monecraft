@@ -2721,6 +2721,16 @@ describe("advancements (save v13)", () => {
     expect(engine.state.advancements.has("tool_up")).toBe(true); // not cleared on death
   });
 
+  test("a corrupt/unknown advancement id is dropped on load (registry-filtered)", () => {
+    const engine = makeEngine();
+    const save = engine.serialize();
+    save.advancements = ["getting_wood", "totally_bogus"];
+    const restored = makeEngine(save);
+    expect(restored.state.advancements.has("getting_wood")).toBe(true); // real id kept
+    expect(restored.state.advancements.has("totally_bogus")).toBe(false); // bogus id dropped
+    expect(restored.getSnapshot().advancementsUnlocked).toBe(1); // count not inflated
+  });
+
   test("toggleAdvancements opens the overlay, mutually exclusive with the inventory", () => {
     const engine = makeEngine();
     engine.dispatch({ type: "toggleAdvancements" });

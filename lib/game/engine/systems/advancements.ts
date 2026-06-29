@@ -100,6 +100,7 @@ export function recordEvent(state: GameState, event: GameEvent): void {
       bump(state, "boss_defeated");
       break;
     case "died":
+    case "gameOver": // hardcore permadeath emits gameOver instead of died — still a death
       bump(state, "deaths");
       break;
     case "jumped":
@@ -108,8 +109,10 @@ export function recordEvent(state: GameState, event: GameEvent): void {
     case "crafted": {
       const recipe = RECIPE_BY_ID.get(event.recipeId);
       if (!recipe) break;
-      bump(state, "items_crafted");
       bump(state, `crafted_${recipe.id}`);
+      // "Items Crafted" is workbench crafts only — station outputs (smelting,
+      // brewing, trading) have their own counters, so don't fold them in here.
+      if (!recipe.station) bump(state, "items_crafted");
       // "Tool Up" wants any pickaxe (7 tiers, 7 recipes), so aggregate them.
       if (recipe.result.slotId.endsWith("_pickaxe")) bump(state, "pickaxes_crafted");
       // A villager trade is a station-gated recipe — drive the trade advancement.

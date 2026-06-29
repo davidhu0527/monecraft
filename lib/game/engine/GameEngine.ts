@@ -254,7 +254,9 @@ export class GameEngine {
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
       // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
       for (const { id, value } of restoreStats(save)) this.state.stats.set(id, value);
-      for (const id of restoreAdvancements(save)) this.state.advancements.add(id);
+      // Filter against the registry so a corrupt/edited save can't inject bogus ids
+      // (which would inflate the unlocked count and round-trip back out forever).
+      for (const id of restoreAdvancements(save)) if (ADVANCEMENTS_BY_ID[id]) this.state.advancements.add(id);
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {

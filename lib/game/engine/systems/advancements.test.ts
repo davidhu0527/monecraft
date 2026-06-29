@@ -93,17 +93,26 @@ describe("recordEvent — crafting", () => {
     expect(state.stats.get("villager_trades")).toBeUndefined();
   });
 
-  test("the furnace recipe drives crafted_furnace but not pickaxes_crafted", () => {
+  test("the furnace recipe (a workbench craft) counts toward items_crafted", () => {
     const state = freshState();
     record(state, { type: "crafted", recipeId: "furnace" });
+    expect(state.stats.get("items_crafted")).toBe(1);
     expect(state.stats.get("crafted_furnace")).toBe(1);
     expect(state.stats.get("pickaxes_crafted")).toBeUndefined();
   });
 
-  test("a villager trade bumps villager_trades", () => {
+  test("station outputs (smelting, brewing, trading) do NOT count toward items_crafted", () => {
     const state = freshState();
-    record(state, { type: "crafted", recipeId: "trade_wheat" });
-    expect(state.stats.get("items_crafted")).toBe(1);
+    record(
+      state,
+      { type: "crafted", recipeId: "charcoal" }, // furnace
+      { type: "crafted", recipeId: "potion_speed" }, // brewing
+      { type: "crafted", recipeId: "trade_wheat" } // villager
+    );
+    expect(state.stats.get("items_crafted")).toBeUndefined();
+    // …but the per-recipe and trade counters still fire.
+    expect(state.stats.get("crafted_charcoal")).toBe(1);
+    expect(state.stats.get("crafted_potion_speed")).toBe(1);
     expect(state.stats.get("villager_trades")).toBe(1);
   });
 
@@ -138,6 +147,12 @@ describe("recordEvent — system events & accumulation", () => {
     const state = freshState();
     record(state, { type: "jumped" }, { type: "jumped" }, { type: "jumped" });
     expect(state.stats.get("jumps")).toBe(3);
+  });
+
+  test("a hardcore game-over counts as a death (it emits gameOver, not died)", () => {
+    const state = freshState();
+    record(state, { type: "gameOver" });
+    expect(state.stats.get("deaths")).toBe(1);
   });
 
   test("irrelevant events record nothing", () => {
