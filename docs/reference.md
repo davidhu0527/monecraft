@@ -58,7 +58,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**71 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**72 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -132,6 +132,7 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 | Bow          | 3 Wood + 3 String                   |
 | Arrow (×4)   | 1 Stone + 1 Wood + 1 Feather        |
 | Cursed Totem | 1 Diamond Ore + 2 Bone + 2 Gold Ore |
+| Ominous Horn | 3 Gold Ore + 2 Bone + 4 Gunpowder   |
 
 ### Armor
 
@@ -276,10 +277,11 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 
 ## Mobs
 
-**12 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+**13 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
 can be bred; wolves and cats are passive until **tamed** into fighting companions;
 the villager is passive but doesn't flee (right-click to trade); hostiles hunt at
-night and now also attack villagers. Drop counts are inclusive ranges rolled per kill.
+night and also attack villagers; **raiders** storm a village in waves when a raid is
+triggered. Drop counts are inclusive ranges rolled per kill.
 
 | Mob      | Type    | HP           | Speed | Detect range | Attack             | Cooldown | Drops                           |
 | -------- | ------- | ------------ | ----- | ------------ | ------------------ | -------- | ------------------------------- |
@@ -295,6 +297,7 @@ night and now also attack villagers. Drop counts are inclusive ranges rolled per
 | Skeleton | hostile | 100          | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
 | Spider   | hostile | 100          | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
 | Creeper  | hostile | 100          | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
+| Raider   | hostile | 120          | 1.1   | 16           | 5 melee            | 1.2 s    | 1–2 Arrow                       |
 | Boss     | hostile | 1000         | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
 
 ### Trading
@@ -304,18 +307,25 @@ Right-click a **villager** to open its trades (the recipe book switches to a
 emeralds, then spend them on goods. No use caps — trading is bounded only by what
 you can gather. Trades live in `lib/game/trades.ts`.
 
-| Trade             | Give       | Get             |
-| ----------------- | ---------- | --------------- |
-| Sell wheat        | 6 Wheat    | 1 Emerald       |
-| Sell coal         | 3 Coal     | 1 Emerald       |
-| Sell leather      | 2 Leather  | 1 Emerald       |
-| Sell gold ore     | 1 Gold Ore | 1 Emerald       |
-| Buy bread         | 1 Emerald  | 2 Bread         |
-| Buy torches       | 1 Emerald  | 8 Torch         |
-| Buy arrows        | 2 Emerald  | 8 Arrow         |
-| Buy stone pickaxe | 3 Emerald  | 1 Stone Pickaxe |
-| Buy sliver ore    | 5 Emerald  | 1 Sliver Ore    |
-| Buy ruby ore      | 8 Emerald  | 1 Ruby Ore      |
+Each villager has a **profession** and offers only its own trades (its smock is
+tinted to match). The ten offers split four ways:
+
+| Profession | Trades                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------- |
+| Farmer     | sell 6 Wheat → Emerald · buy Emerald → 2 Bread                                         |
+| Blacksmith | sell 1 Gold Ore → Emerald · buy 3 Emerald → Stone Pickaxe · buy 5 Emerald → Sliver Ore |
+| Librarian  | sell 3 Coal → Emerald · buy Emerald → 8 Torch · buy 2 Emerald → 8 Arrow                |
+| Cleric     | sell 2 Leather → Emerald · buy 8 Emerald → Ruby Ore                                    |
+
+### Villages & raids
+
+**Villages** are clusters of houses that generate on flat, dry land, home to a
+small population of **resident villagers** (who persist with the world). Craft an
+**Ominous Horn** (3 Gold Ore + 2 Bone + 4 Gunpowder) and right-click it near a
+village to call down a **raid**: **3 waves** of **raiders** (4 each) storm the
+settlement. Defeat every wave and the village holds — you're paid **5 emeralds +
+50 XP**; if every nearby villager dies first, the village falls. Raiders hunt
+villagers, so a tamed wolf or cat helps defend.
 
 Skeletons are now **ranged** — they kite and fire arrows instead of meleeing.
 **Creepers** chase silently, then light a ~1.5 s fuse when they get within ~2.6

@@ -264,6 +264,22 @@ A tamed pet becomes your **companion**:
 The world is a little more alive now: monsters will also go after **villagers** (who
 flee), so a wandering trader isn't always safe after dark.
 
+## Villages, trading, and raids
+
+**Villages** are clusters of houses that generate on flat, dry land, home to a few
+resident **villagers** who stay put across reloads. Right-click a villager to
+**trade**: the currency is the **emerald** — sell gathered materials for emeralds,
+then spend them on goods. Each villager has a **profession** (farmer, blacksmith,
+librarian, or cleric, shown by its smock colour) and offers only its own handful of
+deals, so look around the village for the trades you want.
+
+When you're ready for a fight, craft an **Ominous Horn** (3 Gold Ore + 2 Bone +
+4 Gunpowder) and right-click it near a village to trigger a **raid**: waves of
+**raiders** attack the settlement. Beat every wave to defend the village — you're
+rewarded with emeralds and XP — but if the villagers are all killed first, the
+village falls. Raiders go after the villagers, so station a tamed wolf or two among
+them and help hold the line.
+
 ## Mining and building
 
 **Break** a block by holding left-click; a crack overlay shows progress, and harder
