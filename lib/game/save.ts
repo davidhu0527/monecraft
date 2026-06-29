@@ -402,6 +402,16 @@ export function restoreStats(save: SaveData): SavedStat[] {
   return out;
 }
 
+/** Reads the unlocked advancement ids from a save (non-empty strings only, de-duplicated). */
+export function restoreAdvancements(save: SaveData): string[] {
+  if (!Array.isArray(save.advancements)) return [];
+  const seen = new Set<string>();
+  for (const id of save.advancements) {
+    if (typeof id === "string" && id) seen.add(id);
+  }
+  return [...seen];
+}
+
 /**
  * Reads chest containers from a save into validated, CHEST_SLOTS-length slot
  * arrays keyed by voxel index. Per-slot validation only — the engine still

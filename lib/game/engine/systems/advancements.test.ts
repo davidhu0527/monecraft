@@ -1,12 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { BlockId } from "@/lib/world";
-import { recordEvent, recordTick, STATS } from "@/lib/game/engine/systems/advancements";
+import {
+  ADVANCEMENTS,
+  ADVANCEMENT_CATEGORY_ORDER,
+  ADVANCEMENTS_BY_ID,
+  evaluateAdvancements,
+  recordEvent,
+  recordTick,
+  STATS
+} from "@/lib/game/engine/systems/advancements";
 import type { GameEvent, GameState } from "@/lib/game/engine/state";
 
-// recordEvent / recordTick only ever touch `state.stats`, so a bare stub is all
-// the unit needs — no engine, world, or Three.js.
+// recordEvent / recordTick / evaluateAdvancements only ever touch `state.stats`
+// and `state.advancements`, so a bare stub is all the unit needs — no engine,
+// world, or Three.js.
 function freshState(): GameState {
-  return { stats: new Map<string, number>() } as unknown as GameState;
+  return { stats: new Map<string, number>(), advancements: new Set<string>() } as unknown as GameState;
 }
 
 function record(state: GameState, ...events: GameEvent[]): void {
@@ -152,5 +161,80 @@ describe("STATS metadata", () => {
   test("the displayed stat ids are unique", () => {
     const ids = STATS.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("evaluateAdvancements", () => {
+  test("nothing unlocks from a blank slate", () => {
+    expect(evaluateAdvancements(freshState())).toEqual([]);
+  });
+
+  test("an advancement unlocks exactly when its stat reaches the threshold", () => {
+    const state = freshState();
+    record(state, { type: "blockBroken", blockId: BlockId.Wood, x: 0, y: 0, z: 0 });
+    expect(evaluateAdvancements(state)).toContain("getting_wood");
+  });
+
+  test("an already-unlocked advancement is never returned again", () => {
+    const state = freshState();
+    record(state, { type: "blockBroken", blockId: BlockId.Wood, x: 0, y: 0, z: 0 });
+    for (const id of evaluateAdvancements(state)) state.advancements.add(id);
+    // The counter is still over threshold, but the advancement is already earned.
+    record(state, { type: "blockBroken", blockId: BlockId.Wood, x: 0, y: 0, z: 0 });
+    expect(evaluateAdvancements(state)).not.toContain("getting_wood");
+  });
+
+  test("several advancements can unlock at once, in registry order", () => {
+    const state = freshState();
+    record(state, { type: "blockBroken", blockId: BlockId.DiamondOre, x: 0, y: 0, z: 0 }, { type: "mobDied", kind: "zombie", x: 0, y: 0, z: 0 });
+    const unlocked = evaluateAdvancements(state);
+    expect(unlocked).toEqual(expect.arrayContaining(["diamonds", "monster_hunter"]));
+    // Registry order: "diamonds" (Mining) precedes "monster_hunter" (Combat).
+    expect(unlocked.indexOf("diamonds")).toBeLessThan(unlocked.indexOf("monster_hunter"));
+  });
+
+  test("every advancement is reachable by some tracked counter", () => {
+    // Drive every counter an advancement keys on, then assert the whole set unlocks.
+    const state = freshState();
+    record(
+      state,
+      { type: "blockBroken", blockId: BlockId.Wood, x: 0, y: 0, z: 0 },
+      { type: "blockBroken", blockId: BlockId.Stone, x: 0, y: 0, z: 0 },
+      { type: "blockBroken", blockId: BlockId.SliverOre, x: 0, y: 0, z: 0 },
+      { type: "blockBroken", blockId: BlockId.DiamondOre, x: 0, y: 0, z: 0 },
+      { type: "blockBroken", blockId: BlockId.WheatStage3, x: 0, y: 0, z: 0 },
+      { type: "crafted", recipeId: "wood_pickaxe" },
+      { type: "crafted", recipeId: "furnace" },
+      { type: "crafted", recipeId: "trade_wheat" },
+      { type: "bowFired" },
+      { type: "mobDied", kind: "zombie", x: 0, y: 0, z: 0 },
+      { type: "bossDefeated", x: 0, y: 0, z: 0 },
+      { type: "mobBred", kind: "cow" },
+      { type: "fishingCaught", items: [], x: 0, y: 0, z: 0 },
+      { type: "enchanted", enchant: "sharpness" },
+      { type: "drankPotion" },
+      { type: "sleepStarted" }
+    );
+    const unlocked = new Set(evaluateAdvancements(state));
+    for (const advancement of ADVANCEMENTS) expect(unlocked.has(advancement.id)).toBe(true);
+  });
+});
+
+describe("ADVANCEMENTS registry integrity", () => {
+  test("ids are unique", () => {
+    const ids = ADVANCEMENTS.map((advancement) => advancement.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("every entry has an icon, a positive threshold, and a known category", () => {
+    for (const advancement of ADVANCEMENTS) {
+      expect(advancement.icon.length).toBeGreaterThan(0);
+      expect(advancement.threshold).toBeGreaterThanOrEqual(1);
+      expect(ADVANCEMENT_CATEGORY_ORDER).toContain(advancement.category);
+    }
+  });
+
+  test("ADVANCEMENTS_BY_ID resolves every id to its entry", () => {
+    for (const advancement of ADVANCEMENTS) expect(ADVANCEMENTS_BY_ID[advancement.id]).toBe(advancement);
   });
 });

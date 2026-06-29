@@ -2657,3 +2657,67 @@ describe("statistics (save v13)", () => {
     expect(engine.state.stats.get("deaths")).toBe(1); // the death itself is counted
   });
 });
+
+describe("advancements (save v13)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const removeMobAt = (engine: GameEngine, index: number) => (engine as unknown as { removeMobAt: (i: number, looting?: number) => void }).removeMobAt(index);
+
+  function pushHostile(engine: GameEngine, kind: MobKind): void {
+    const p = engine.state.player.position;
+    engine.state.mobs.push({
+      id: engine.state.nextMobId++,
+      kind,
+      hostile: true,
+      hp: 1,
+      position: new THREE.Vector3(p.x, p.y, p.z),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 0,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    });
+  }
+
+  test("crafting a pickaxe unlocks Tool Up once, announcing it", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" });
+    const unlocks = engine.consumeEvents().filter((event) => event.type === "advancementUnlocked");
+    expect(unlocks).toHaveLength(1);
+    expect(unlocks[0]).toMatchObject({ id: "tool_up", name: "Tool Up" });
+    expect(engine.state.advancements.has("tool_up")).toBe(true);
+    // A second pickaxe must not re-announce the already-earned advancement.
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" });
+    expect(engine.consumeEvents().some((event) => event.type === "advancementUnlocked")).toBe(false);
+  });
+
+  test("killing a hostile unlocks Monster Hunter through the emit chokepoint", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    pushHostile(engine, "zombie");
+    removeMobAt(engine, engine.state.mobs.length - 1);
+    expect(engine.consumeEvents().some((event) => event.type === "advancementUnlocked" && event.id === "monster_hunter")).toBe(true);
+    expect(engine.state.advancements.has("monster_hunter")).toBe(true);
+  });
+
+  test("advancements persist through serialize -> reload and survive death", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }); // unlocks tool_up
+    expect(engine.state.advancements.has("tool_up")).toBe(true);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.advancements.has("tool_up")).toBe(true);
+
+    die(engine);
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.state.advancements.has("tool_up")).toBe(true); // not cleared on death
+  });
+});

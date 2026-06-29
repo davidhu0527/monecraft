@@ -67,6 +67,7 @@ import {
   restoreSpawnPoint,
   restoreXp,
   restoreStats,
+  restoreAdvancements,
   serializeContainers,
   serializeEffects,
   serializeLootedChests,
@@ -100,7 +101,7 @@ import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
 import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
-import { recordEvent, recordTick } from "./systems/advancements";
+import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
@@ -204,6 +205,7 @@ export class GameEngine {
       effects: new Map(),
       xp: 0,
       stats: new Map(),
+      advancements: new Set(),
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -251,6 +253,7 @@ export class GameEngine {
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
       // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
       for (const { id, value } of restoreStats(save)) this.state.stats.set(id, value);
+      for (const id of restoreAdvancements(save)) this.state.advancements.add(id);
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -658,7 +661,8 @@ export class GameEngine {
       lootedChests: serializeLootedChests(state.lootedDungeonChests),
       effects: serializeEffects(state.effects),
       xp: state.xp,
-      stats: serializeStats(state.stats)
+      stats: serializeStats(state.stats),
+      advancements: [...state.advancements]
     };
   }
 
@@ -679,10 +683,23 @@ export class GameEngine {
 
   private emit = (event: GameEvent): void => {
     this.events.push(event);
-    // Fold every gameplay event into the statistics counters at the one chokepoint
-    // every system already emits through — no per-system bookkeeping.
-    recordEvent(this.state, event);
+    // Observe progress at the one chokepoint every system already emits through —
+    // but guard against recursion: observing an unlock re-enters emit.
+    if (event.type !== "advancementUnlocked") this.observeProgress(event);
   };
+
+  /**
+   * Folds a gameplay event into the statistics counters, then unlocks any
+   * advancement whose threshold the new stats just crossed — adding it to the set
+   * (before the emit, so a re-entrant observe is idempotent) and announcing it.
+   */
+  private observeProgress(event: GameEvent): void {
+    recordEvent(this.state, event);
+    for (const id of evaluateAdvancements(this.state)) {
+      this.state.advancements.add(id);
+      this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title });
+    }
+  }
 
   /**
    * Moves a slot between the player inventory and the open chest. Indices at or

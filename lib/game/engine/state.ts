@@ -171,6 +171,8 @@ export type GameState = {
   xp: number;
   /** Gameplay statistics → running counter (blocks mined, mobs killed, time played, …). Persisted (save v13); NOT cleared on death. */
   stats: Map<string, number>;
+  /** Unlocked advancement ids. Persisted (save v13); NOT cleared on death. */
+  advancements: Set<string>;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
@@ -367,6 +369,7 @@ export type GameEvent =
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "crafted"; recipeId: string }
+  | { type: "advancementUnlocked"; id: string; name: string }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };

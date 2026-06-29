@@ -29,6 +29,7 @@ import {
   restoreHungerLevel,
   restoreInventorySlots,
   restorePlayerPosition,
+  restoreAdvancements,
   restoreSpawnPoint,
   restoreStats,
   restoreXp,
@@ -742,6 +743,22 @@ describe("v12 to v13 migration & statistics", () => {
     const storage = memoryStorage();
     writeSave(KEY, { ...sampleSave(), stats: [{ id: "fish_caught", value: 9 }] }, storage);
     expect(readSave(KEY, storage)!.stats).toEqual([{ id: "fish_caught", value: 9 }]);
+  });
+
+  test("migrateSaveV12toV13 leaves a v12 save with no advancements", () => {
+    expect(restoreAdvancements(migrateSaveV12toV13(v12Save()))).toEqual([]);
+  });
+
+  test("restoreAdvancements rejects a non-array and drops non-string / empty ids, de-duplicating", () => {
+    expect(restoreAdvancements({ ...sampleSave(), advancements: undefined })).toEqual([]);
+    const dirty = ["getting_wood", "getting_wood", "", 42, null, "stone_age"] as never;
+    expect(restoreAdvancements({ ...sampleSave(), advancements: dirty })).toEqual(["getting_wood", "stone_age"]);
+  });
+
+  test("advancements survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, { ...sampleSave(), advancements: ["diamonds", "dragon_slayer"] }, storage);
+    expect(readSave(KEY, storage)!.advancements).toEqual(["diamonds", "dragon_slayer"]);
   });
 });
 
