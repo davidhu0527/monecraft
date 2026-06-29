@@ -17,6 +17,7 @@ export const CONTAINER_SLOT_BASE = 1000;
 export type Command =
   | { type: "selectSlot"; index: number }
   | { type: "toggleInventory" }
+  | { type: "toggleAdvancements" }
   | { type: "craft"; recipeId: string }
   | { type: "swapSlots"; from: number; to: number }
   | { type: "moveStack"; from: number; to: number }

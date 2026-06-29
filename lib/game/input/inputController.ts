@@ -42,7 +42,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
     pointerLocked: false
   };
 
-  const uiBlocked = () => engine.state.inventoryOpen || engine.state.isDead || engine.state.paused;
+  const uiBlocked = () => engine.state.inventoryOpen || engine.state.advancementsOpen || engine.state.isDead || engine.state.paused;
 
   // Timestamp (ms) of the last discrete Space press, for double-tap-to-fly detection.
   let lastSpaceTapAt = -Infinity;
@@ -58,6 +58,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
     if (evt.code === "Escape") {
       if (engine.state.paused) engine.dispatch({ type: "resume" });
       else if (engine.state.inventoryOpen) engine.dispatch({ type: "toggleInventory" });
+      else if (engine.state.advancementsOpen) engine.dispatch({ type: "toggleAdvancements" });
       else if (!input.pointerLocked) engine.dispatch({ type: "pause" });
       return;
     }
@@ -84,6 +85,13 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
 
     if (evt.code === "KeyI") {
       engine.dispatch({ type: "toggleInventory" });
+      input.keys.clear();
+      if (input.pointerLocked) document.exitPointerLock();
+      return;
+    }
+
+    if (evt.code === "KeyL") {
+      engine.dispatch({ type: "toggleAdvancements" });
       input.keys.clear();
       if (input.pointerLocked) document.exitPointerLock();
       return;

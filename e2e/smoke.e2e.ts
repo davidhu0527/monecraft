@@ -71,6 +71,25 @@ test("inventory opens and crafting works end to end", async ({ gamePage: page })
   await expect(panel).not.toBeVisible();
 });
 
+test("the advancements overlay opens with L, shows progress, switches tabs, and closes", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  // Unlock one advancement deterministically through the engine handle.
+  await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }));
+
+  await page.keyboard.press("l");
+  const overlay = page.getByRole("dialog", { name: "Advancements and statistics" });
+  await expect(overlay).toBeVisible();
+  // "Tool Up" unlocked from the craft above.
+  await expect(overlay.locator('[data-testid="adv-tool_up"]')).toHaveClass(/is-unlocked/);
+
+  // The Statistics tab lists the counters.
+  await overlay.getByRole("button", { name: "Statistics" }).click();
+  await expect(overlay.getByText("Items Crafted")).toBeVisible();
+
+  await page.keyboard.press("l"); // toggle closed
+  await expect(overlay).not.toBeVisible();
+});
+
 test("holding the mouse mines the block underfoot", async ({ gamePage: page }) => {
   await calmDaytime(page);
   await acquirePointerLock(page);

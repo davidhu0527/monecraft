@@ -6,6 +6,7 @@ import BossHealthBar from "@/components/game/BossHealthBar";
 import DeathScreen from "@/components/game/DeathScreen";
 import DebugOverlay from "@/components/game/DebugOverlay";
 import GameOverScreen from "@/components/game/GameOverScreen";
+import AdvancementsPanel from "@/components/game/AdvancementsPanel";
 import Hotbar from "@/components/game/Hotbar";
 import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
@@ -46,6 +47,9 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     setSelectedSlot,
     capsActive,
     inventoryOpen,
+    advancementsOpen,
+    advancementState,
+    toggleAdvancements,
     inventory,
     equippedArmor,
     armorPoints,
@@ -113,7 +117,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     );
   }
 
-  const showClickHint = !locked && !paused && !inventoryOpen && respawnSeconds === 0;
+  const showClickHint = !locked && !paused && !inventoryOpen && !advancementsOpen && respawnSeconds === 0;
 
   return (
     <div className="game-root">
@@ -156,7 +160,9 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
         {usesInventory(gameMode) ? <Hotbar inventory={inventory} selectedSlot={selectedSlot} hotbarSlots={hotbarSlots} onSelectSlot={setSelectedSlot} /> : null}
       </div>
 
-      {inventoryOpen || paused ? <div className="menu-backdrop" /> : null}
+      {inventoryOpen || advancementsOpen || paused ? <div className="menu-backdrop" /> : null}
+
+      {advancementsOpen ? <AdvancementsPanel {...advancementState()} onClose={toggleAdvancements} /> : null}
 
       {inventoryOpen ? (
         <InventoryPanel

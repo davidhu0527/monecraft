@@ -2720,4 +2720,27 @@ describe("advancements (save v13)", () => {
     expect(engine.state.isDead).toBe(true);
     expect(engine.state.advancements.has("tool_up")).toBe(true); // not cleared on death
   });
+
+  test("toggleAdvancements opens the overlay, mutually exclusive with the inventory", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleAdvancements" });
+    expect(engine.getSnapshot().advancementsOpen).toBe(true);
+    // Opening the inventory closes the advancements overlay…
+    engine.dispatch({ type: "toggleInventory" });
+    expect(engine.getSnapshot().advancementsOpen).toBe(false);
+    expect(engine.getSnapshot().inventoryOpen).toBe(true);
+    // …and opening advancements closes the inventory.
+    engine.dispatch({ type: "toggleAdvancements" });
+    expect(engine.getSnapshot().inventoryOpen).toBe(false);
+    expect(engine.getSnapshot().advancementsOpen).toBe(true);
+  });
+
+  test("the snapshot count and advancementState() expose progression to the UI", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }); // unlock tool_up + items_crafted
+    expect(engine.getSnapshot().advancementsUnlocked).toBe(1);
+    const detail = engine.advancementState();
+    expect(detail.unlocked).toContain("tool_up");
+    expect(detail.stats.find((entry) => entry.id === "items_crafted")?.value).toBe(1);
+  });
 });

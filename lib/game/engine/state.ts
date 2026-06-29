@@ -176,6 +176,8 @@ export type GameState = {
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
+  /** True while the advancements & statistics overlay (L key) is open. Session-only. */
+  advancementsOpen: boolean;
   /** Crafting station whose recipes (or the enchanting panel) are unlocked while the inventory is open, or null. */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
@@ -269,6 +271,8 @@ export const IDLE_INPUT: FrameInput = {
 export type GameApi = {
   dispatch(command: Command): void;
   serialize(): SaveData;
+  /** Detailed progression read for the advancements overlay — pulled on render, not projected per-frame into the snapshot. */
+  advancementState(): { stats: Array<{ id: string; value: number }>; unlocked: string[] };
 };
 
 /** Immutable view for the React UI, replaced only when a visible value changes. */
@@ -297,6 +301,10 @@ export type GameSnapshot = {
   hostileCount: number;
   respawnSeconds: number;
   inventoryOpen: boolean;
+  /** True while the advancements & statistics overlay is open — gates its backdrop + panel. */
+  advancementsOpen: boolean;
+  /** Count of unlocked advancements — a low-churn primitive so the snapshot ref bumps on every unlock. */
+  advancementsUnlocked: number;
   paused: boolean;
   debugOpen: boolean;
   debug: DebugInfo | null;

@@ -209,6 +209,7 @@ export class GameEngine {
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
+      advancementsOpen: false,
       craftingStation: null,
       containers: new Map(),
       primedTnt: new Map(),
@@ -376,9 +377,20 @@ export class GameEngine {
       case "toggleInventory": {
         if (!canInteract(state.gameMode)) break; // Spectator has no inventory
         state.inventoryOpen = !state.inventoryOpen;
+        if (state.inventoryOpen) state.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
           state.openContainerIndex = null; // ...and the open chest
+        }
+        break;
+      }
+      case "toggleAdvancements": {
+        // A read-only progression overlay — available in any mode (even Spectator).
+        state.advancementsOpen = !state.advancementsOpen;
+        if (state.advancementsOpen) {
+          state.inventoryOpen = false; // mutually exclusive with the inventory panel
+          state.craftingStation = null;
+          state.openContainerIndex = null;
         }
         break;
       }
@@ -593,7 +605,7 @@ export class GameEngine {
         // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
         // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
         // would stall the sleep timer (step early-returns on paused before sleep).
-        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
+        if (state.inventoryOpen || state.advancementsOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
         state.paused = true;
         state.craftingStation = null;
         state.openContainerIndex = null;
@@ -663,6 +675,18 @@ export class GameEngine {
       xp: state.xp,
       stats: serializeStats(state.stats),
       advancements: [...state.advancements]
+    };
+  }
+
+  /**
+   * Detailed progression read for the advancements overlay. Pulled on render via
+   * the snapshot's stable `api` handle (not projected per-frame into the snapshot),
+   * so play never churns the snapshot with stat values the HUD doesn't show.
+   */
+  advancementState(): { stats: Array<{ id: string; value: number }>; unlocked: string[] } {
+    return {
+      stats: [...this.state.stats].map(([id, value]) => ({ id, value })),
+      unlocked: [...this.state.advancements]
     };
   }
 
@@ -1031,6 +1055,8 @@ export class GameEngine {
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),
       respawnSeconds: state.isDead ? Math.max(0, Math.ceil(state.respawnTimer)) : 0,
       inventoryOpen: state.inventoryOpen,
+      advancementsOpen: state.advancementsOpen,
+      advancementsUnlocked: state.advancements.size,
       paused: state.paused,
       debugOpen: state.debugOpen,
       debug: state.debugInfo,

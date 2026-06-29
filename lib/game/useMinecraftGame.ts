@@ -48,6 +48,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   hostileCount: 0,
   respawnSeconds: 0,
   inventoryOpen: false,
+  advancementsOpen: false,
+  advancementsUnlocked: 0,
   paused: false,
   debugOpen: false,
   debug: null,
@@ -325,6 +327,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "summonFailed") {
           flashMessage("The totem lies dormant — a beast already walks");
         }
+        if (event.type === "advancementUnlocked") {
+          flashMessage(`Advancement Unlocked: ${event.name}`, 2400);
+        }
         renderer.handleEvent(event, gameEngine.state);
         audio.handleEvent(event);
       }
@@ -387,6 +392,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,
     inventoryOpen: snapshot.inventoryOpen,
+    advancementsOpen: snapshot.advancementsOpen,
+    // Pulled live from the engine on render (the panel only mounts while open), so
+    // play never churns the snapshot with stat values the HUD doesn't show.
+    advancementState: () => snapshot.api?.advancementState() ?? { stats: [], unlocked: [] },
+    toggleAdvancements: () => engine?.dispatch({ type: "toggleAdvancements" }),
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
     armorPoints: snapshot.armorPoints,

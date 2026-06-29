@@ -346,3 +346,157 @@
   padding: 18px 22px;
   text-align: center;
 }
+
+/* Advancements & statistics overlay (L key) — a tabbed dark panel, like the
+   pause menu, over the shared menu-backdrop. */
+.adv-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: mc-fade-in 140ms ease-out;
+}
+
+.adv-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(94vw, 560px);
+  max-height: 88vh;
+  padding: 14px 16px;
+  background: var(--mc-tile-panel), var(--mc-panel);
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--mc-bevel-light) var(--mc-bevel-dark) var(--mc-bevel-dark) var(--mc-bevel-light);
+  outline: 2px solid rgba(0, 0, 0, 0.85);
+}
+
+.adv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adv-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.adv-tab {
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.adv-tab[aria-pressed="true"] {
+  border-color: #f0be3c;
+  outline: 1px solid rgba(240, 190, 60, 0.6);
+}
+
+.adv-close {
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.adv-body {
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.adv-progress {
+  color: var(--mc-text-light);
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.adv-group {
+  display: grid;
+  gap: 6px;
+}
+
+.adv-category {
+  color: #f0be3c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.adv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+
+.adv-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--mc-tile-well), var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+}
+
+.adv-entry.is-unlocked {
+  border-color: #f0be3c #8a6a18 #8a6a18 #f0be3c;
+}
+
+.adv-entry.is-locked {
+  opacity: 0.5;
+}
+
+.adv-entry.is-locked img {
+  filter: grayscale(0.9);
+}
+
+.adv-entry-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.adv-entry-title {
+  color: var(--mc-text-light);
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+}
+
+.adv-entry-desc {
+  color: #cfcfcf;
+  font-size: 10px;
+  line-height: 1.3;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.adv-stats {
+  display: grid;
+  gap: 3px;
+}
+
+.adv-stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 8px;
+  background: var(--mc-tile-well), var(--mc-slot-well);
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--mc-bevel-dark) var(--mc-bevel-light) var(--mc-bevel-light) var(--mc-bevel-dark);
+  color: #d8d8d8;
+  font-size: 12px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.adv-stat-value {
+  color: var(--mc-text-light);
+  font-weight: 700;
+}
