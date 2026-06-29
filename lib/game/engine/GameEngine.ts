@@ -66,9 +66,11 @@ import {
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
+  restoreStats,
   serializeContainers,
   serializeEffects,
-  serializeLootedChests
+  serializeLootedChests,
+  serializeStats
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
@@ -98,6 +100,7 @@ import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
 import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
@@ -200,6 +203,7 @@ export class GameEngine {
       oxygen: MAX_OXYGEN,
       effects: new Map(),
       xp: 0,
+      stats: new Map(),
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
@@ -245,6 +249,8 @@ export class GameEngine {
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
+      // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
+      for (const { id, value } of restoreStats(save)) this.state.stats.set(id, value);
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -324,6 +330,8 @@ export class GameEngine {
     const move = tickPlayerMotion(state, input, dt, this.applyDamage);
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
+    // Tick-driven display stats (no event, so out of the advancement path).
+    recordTick(state, dt, move.horizontalDistance);
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
@@ -380,6 +388,9 @@ export class GameEngine {
         const next = inv.craft(state.inventory, recipe);
         if (!next) break;
         state.inventory = next;
+        // A broadly-useful craft signal: drives items_crafted + the craft/brew/trade
+        // advancements. Station recipes still emit `smelted` for the audio director.
+        this.emit({ type: "crafted", recipeId: recipe.id });
         if (recipe.station) this.emit({ type: "smelted" });
         break;
       }
@@ -623,7 +634,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 12,
+      version: 13,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -646,7 +657,8 @@ export class GameEngine {
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedDungeonChests),
       effects: serializeEffects(state.effects),
-      xp: state.xp
+      xp: state.xp,
+      stats: serializeStats(state.stats)
     };
   }
 
@@ -667,6 +679,9 @@ export class GameEngine {
 
   private emit = (event: GameEvent): void => {
     this.events.push(event);
+    // Fold every gameplay event into the statistics counters at the one chokepoint
+    // every system already emits through — no per-system bookkeeping.
+    recordEvent(this.state, event);
   };
 
   /**

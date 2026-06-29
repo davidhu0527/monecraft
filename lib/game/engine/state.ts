@@ -169,6 +169,8 @@ export type GameState = {
   effects: Map<EffectId, number>;
   /** Banked XP points (XP_PER_LEVEL points = 1 level). Persisted (save v7); NOT cleared on death. */
   xp: number;
+  /** Gameplay statistics → running counter (blocks mined, mobs killed, time played, …). Persisted (save v13); NOT cleared on death. */
+  stats: Map<string, number>;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
@@ -364,6 +366,7 @@ export type GameEvent =
   | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
+  | { type: "crafted"; recipeId: string }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };

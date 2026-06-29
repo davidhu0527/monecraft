@@ -14,6 +14,7 @@ import {
   migrateSaveV9toV10,
   migrateSaveV10toV11,
   migrateSaveV11toV12,
+  migrateSaveV12toV13,
   readContainers,
   readLootedChests,
   readSave,
@@ -29,10 +30,12 @@ import {
   restoreInventorySlots,
   restorePlayerPosition,
   restoreSpawnPoint,
+  restoreStats,
   restoreXp,
   serializeContainers,
   serializeEffects,
   serializeLootedChests,
+  serializeStats,
   writeSave
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
@@ -49,7 +52,8 @@ import type {
   SaveDataV8,
   SaveDataV9,
   SaveDataV10,
-  SaveDataV11
+  SaveDataV11,
+  SaveDataV12
 } from "@/lib/game/types";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
@@ -70,7 +74,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 12,
+    version: 13,
     gameMode: "creative",
     difficulty: "hard",
     seed: 1337,
@@ -90,7 +94,12 @@ function sampleSave(): SaveData {
     hearts: 14,
     hunger: 9,
     spawnPoint: { x: 10, y: 40, z: 20 },
-    lootedChests: [100, 200]
+    lootedChests: [100, 200],
+    stats: [
+      { id: "blocks_mined", value: 42 },
+      { id: "play_time", value: 123.5 }
+    ],
+    advancements: ["getting_wood", "stone_age"]
   };
 }
 
@@ -113,7 +122,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(12);
+    expect(parsed!.version).toBe(13);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -135,7 +144,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(12); // chained v1 -> v2 -> … -> v11 -> v12
+    expect(parsed!.version).toBe(13); // chained v1 -> v2 -> … -> v12 -> v13
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -224,11 +233,11 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v12", () => {
+  test("readSave migrates a v2 save through to v13", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(12);
+    expect(parsed!.version).toBe(13);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -265,7 +274,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(12);
+    expect(parsed.version).toBe(13);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -340,7 +349,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(12);
+    expect(parsed.version).toBe(13);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -385,7 +394,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(12);
+    expect(parsed.version).toBe(13);
     expect(restoreEffects(parsed)).toEqual([]);
   });
 
@@ -407,7 +416,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(12);
+    expect(parsed.version).toBe(13);
     expect(restoreGameMode(parsed)).toBe("survival");
   });
 
@@ -434,7 +443,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v8: SaveDataV8 = { ...v5Save(), version: 8 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(12);
+    expect(parsed.version).toBe(13);
     expect(restoreDifficulty(parsed)).toBe("normal");
   });
 
@@ -462,7 +471,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v9: SaveDataV9 = { ...v5Save(), version: 9 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v9) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(12);
+    expect(parsed.version).toBe(13);
     expect(restoreHardcore(parsed)).toBe(false);
     expect(restoreGameOver(parsed)).toBe(false);
   });
@@ -670,6 +679,72 @@ describe("v5 to v6 migration & status effects", () => {
   });
 });
 
+describe("v12 to v13 migration & statistics", () => {
+  function v12Save(overrides: Partial<SaveDataV12> = {}): SaveDataV12 {
+    return {
+      version: 12,
+      seed: 1337,
+      changes: [[42, 0]],
+      inventorySlots: [{ id: "dirt", count: 3 }],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  test("migrateSaveV12toV13 is a pure version bump leaving stats/advancements absent", () => {
+    const migrated = migrateSaveV12toV13(v12Save());
+    expect(migrated.version).toBe(13);
+    expect(migrated.stats).toBeUndefined();
+    expect(migrated.advancements).toBeUndefined();
+    expect(migrated.changes).toEqual([[42, 0]]);
+  });
+
+  test("a pre-progression (v12) save loads with no statistics", () => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v12Save()) });
+    const parsed = readSave(KEY, storage)!;
+    expect(parsed.version).toBe(13);
+    expect(restoreStats(parsed)).toEqual([]);
+  });
+
+  test("serializeStats keeps only positive, finite counters", () => {
+    const out = serializeStats(
+      new Map([
+        ["blocks_mined", 42],
+        ["deaths", 0], // zero reads as absent — dropped
+        ["play_time", 123.5],
+        ["bogus", Number.NaN] // garbage — dropped
+      ])
+    );
+    expect(out).toEqual([
+      { id: "blocks_mined", value: 42 },
+      { id: "play_time", value: 123.5 }
+    ]);
+  });
+
+  test("serializeStats / restoreStats round-trip the counters (fractional values preserved)", () => {
+    const out = serializeStats(new Map([["distance_walked", 17.25]]));
+    expect(restoreStats({ ...sampleSave(), stats: out })).toEqual(out);
+  });
+
+  test("restoreStats rejects a non-array and drops non-string ids / negative / garbage values", () => {
+    expect(restoreStats({ ...sampleSave(), stats: undefined })).toEqual([]);
+    const dirty = [
+      { id: "blocks_mined", value: 5 },
+      { id: 42, value: 3 }, // non-string id → dropped
+      { id: "deaths", value: -1 }, // negative → dropped
+      { id: "jumps", value: Number.POSITIVE_INFINITY } // garbage → dropped
+    ] as never;
+    expect(restoreStats({ ...sampleSave(), stats: dirty })).toEqual([{ id: "blocks_mined", value: 5 }]);
+  });
+
+  test("statistics survive a full save round-trip", () => {
+    const storage = memoryStorage();
+    writeSave(KEY, { ...sampleSave(), stats: [{ id: "fish_caught", value: 9 }] }, storage);
+    expect(readSave(KEY, storage)!.stats).toEqual([{ id: "fish_caught", value: 9 }]);
+  });
+});
+
 describe("stat restoration helpers", () => {
   const base = sampleSave();
 
@@ -714,7 +789,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 13 };
+    const save = { ...sampleSave(), version: 14 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 

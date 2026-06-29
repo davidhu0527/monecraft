@@ -1466,14 +1466,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 12 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is version 13 and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(12);
+    expect(save.version).toBe(13);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -2618,5 +2618,42 @@ describe("armor equipping (dedicated slots)", () => {
     run(engine, 5); // RESPAWN_SECONDS is 3
     expect(state.isDead).toBe(false);
     expect(state.equippedArmor.boots?.id).toBe("boots");
+  });
+});
+
+describe("statistics (save v13)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+
+  test("crafting bumps items_crafted and the per-recipe counter at the emit chokepoint", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    expect(engine.state.stats.get("items_crafted")).toBe(1);
+    expect(engine.state.stats.get("crafted_planks")).toBe(1);
+  });
+
+  test("active play accumulates the tick counters", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    expect(engine.state.stats.get("play_time")).toBeGreaterThan(0);
+    expect(engine.state.stats.get("distance_walked")).toBeGreaterThanOrEqual(0);
+  });
+
+  test("statistics survive serialize -> reload", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.stats.get("items_crafted")).toBe(1);
+    expect(restored.state.stats.get("crafted_planks")).toBe(1);
+  });
+
+  test("statistics survive death — counted, not cleared like effects", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    die(engine);
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.state.stats.get("items_crafted")).toBe(1); // not cleared on death
+    expect(engine.state.stats.get("deaths")).toBe(1); // the death itself is counted
   });
 });

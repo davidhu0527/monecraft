@@ -18,10 +18,12 @@ import type {
   SaveDataV9,
   SaveDataV10,
   SaveDataV11,
+  SaveDataV12,
   SavedContainer,
   SavedEffect,
   SavedEquippedArmor,
   SavedSlot,
+  SavedStat,
   InventorySlot
 } from "@/lib/game/types";
 import { isGameMode, type GameMode } from "@/lib/game/gameModes";
@@ -156,7 +158,7 @@ export function migrateSaveV10toV11(save: SaveDataV10): SaveDataV11 {
  * equips whose item isn't found or isn't valid armor for the slot. Pre-`inventorySlots`
  * (legacy counts-only) saves simply drop the equip map and keep items in inventory.
  */
-export function migrateSaveV11toV12(save: SaveDataV11): SaveData {
+export function migrateSaveV11toV12(save: SaveDataV11): SaveDataV12 {
   const legacy = save.equippedArmor;
   if (!legacy || !Array.isArray(save.inventorySlots)) {
     return { ...save, version: 12, equippedArmor: undefined };
@@ -176,6 +178,15 @@ export function migrateSaveV11toV12(save: SaveDataV11): SaveData {
   return { ...save, version: 12, inventorySlots: slots, equippedArmor: equipped };
 }
 
+/**
+ * Migrates a v12 save to v13 — a pure version bump. `stats` (gameplay counters)
+ * and `advancements` (unlocked ids) are optional, so a pre-progression save
+ * simply loads with no stats and no advancements yet earned.
+ */
+export function migrateSaveV12toV13(save: SaveDataV12): SaveData {
+  return { ...save, version: 13 };
+}
+
 // Storage is injectable so save logic can be tested without a browser.
 export function readSave(saveKey: string, storage: Storage = localStorage): SaveData | null {
   try {
@@ -183,6 +194,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV12
       | SaveDataV11
       | SaveDataV10
       | SaveDataV9
@@ -195,8 +207,19 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV2
       | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveDataV10 | SaveDataV11 | SaveData =
-      parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated:
+      | SaveDataV2
+      | SaveDataV3
+      | SaveDataV4
+      | SaveDataV5
+      | SaveDataV6
+      | SaveDataV7
+      | SaveDataV8
+      | SaveDataV9
+      | SaveDataV10
+      | SaveDataV11
+      | SaveDataV12
+      | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
     if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
@@ -207,7 +230,8 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 9) migrated = migrateSaveV9toV10(migrated);
     if (migrated.version === 10) migrated = migrateSaveV10toV11(migrated);
     if (migrated.version === 11) migrated = migrateSaveV11toV12(migrated);
-    if (migrated.version !== 12) return null;
+    if (migrated.version === 12) migrated = migrateSaveV12toV13(migrated);
+    if (migrated.version !== 13) return null;
     return migrated;
   } catch {
     return null;
@@ -348,6 +372,32 @@ export function restoreEffects(save: SaveData): SavedEffect[] {
     if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_EFFECT_IDS, entry.id)) continue;
     if (!Number.isFinite(entry.remaining) || entry.remaining <= 0) continue;
     out.push({ id: entry.id, remaining: entry.remaining });
+  }
+  return out;
+}
+
+/**
+ * Snapshots the gameplay statistics for persistence. Zero/absent counters carry
+ * no data (an unset stat reads as 0 anyway), so only positive values are written.
+ * Unlike effect ids, stat ids are an open set (per-recipe/per-block counters), so
+ * there's no allow-list — only a finite, positive-value check.
+ */
+export function serializeStats(stats: Map<string, number>): SavedStat[] {
+  const out: SavedStat[] = [];
+  for (const [id, value] of stats) {
+    if (Number.isFinite(value) && value > 0) out.push({ id, value });
+  }
+  return out;
+}
+
+/** Reads gameplay statistics from a save, dropping non-string ids and negative / garbage values. */
+export function restoreStats(save: SaveData): SavedStat[] {
+  if (!Array.isArray(save.stats)) return [];
+  const out: SavedStat[] = [];
+  for (const entry of save.stats) {
+    if (!entry || typeof entry.id !== "string") continue;
+    if (!Number.isFinite(entry.value) || entry.value < 0) continue;
+    out.push({ id: entry.id, value: entry.value });
   }
   return out;
 }
