@@ -16,15 +16,22 @@ import {
   HOSTILE_BURN_ABOVE_DAYLIGHT,
   HOSTILE_CAP,
   MOB_ARROW_KNOCKBACK,
+  MOB_RETARGET_SECONDS,
+  MOB_VS_MOB_KNOCKBACK,
+  MOB_VS_MOB_REACH,
+  PET_FOLLOW_MAX,
+  PET_TELEPORT_DISTANCE,
   SKELETON_ARROW_DAMAGE,
   SKELETON_ARROW_SPEED,
   SKELETON_FIRE_VGAP,
   SKELETON_LEAD_FACTOR,
   SKELETON_STANDOFF_MAX,
   SKELETON_STANDOFF_MIN,
-  SPIDER_AGGRO_BELOW_DAYLIGHT
+  SPIDER_AGGRO_BELOW_DAYLIGHT,
+  VILLAGER_FLEE_RANGE
 } from "@/lib/game/config";
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
+import type { MobFaction } from "@/lib/game/types";
 import { mobsThreaten } from "@/lib/game/gameModes";
 import { mobDamageMultiplier } from "@/lib/game/difficulties";
 import type { EmitGameEvent, GameState, MobState } from "../state";
@@ -42,6 +49,98 @@ const scratchPlayerAim = new THREE.Vector3();
 const scratchRay = new THREE.Vector3();
 const scratchMobFeet = new THREE.Vector3();
 const scratchAim = new THREE.Vector3();
+const scratchToTarget = new THREE.Vector3();
+
+const NO_ENEMIES: ReadonlySet<MobFaction> = new Set<MobFaction>();
+
+/**
+ * The shared enmity table — which factions each faction will attack. "Fighters"
+ * (hostile/raider/ally) hunt enemy-faction mobs; wild animals and villagers never
+ * fight. Hostiles & raiders go after villagers and pets; pets defend against
+ * hostiles & raiders.
+ */
+const ENEMY_FACTIONS: Record<MobFaction, ReadonlySet<MobFaction>> = {
+  wild: NO_ENEMIES,
+  villager: NO_ENEMIES,
+  hostile: new Set<MobFaction>(["villager", "ally"]),
+  raider: new Set<MobFaction>(["villager", "ally"]),
+  ally: new Set<MobFaction>(["hostile", "raider"])
+};
+
+/** Factions a villager flees from. */
+const THREAT_FACTIONS: ReadonlySet<MobFaction> = new Set<MobFaction>(["hostile", "raider"]);
+
+/**
+ * Victim factions whose death credits the player with loot + XP. A pet's kill
+ * still feeds you ("your wolf hunts for you"); a slain villager or pet yields
+ * nothing — which also closes the XP leak of farming mobs that kill each other.
+ */
+const CREDITED_FACTIONS: ReadonlySet<MobFaction> = new Set<MobFaction>(["wild", "hostile", "raider"]);
+
+function horizDistSq(a: MobState, b: MobState): number {
+  const dx = a.position.x - b.position.x;
+  const dz = a.position.z - b.position.z;
+  return dx * dx + dz * dz;
+}
+
+function mobById(state: GameState, id: number): MobState | null {
+  for (const other of state.mobs) if (other.id === id) return other;
+  return null;
+}
+
+/**
+ * The mob (if any) this fighter is hunting. It keeps its cached `targetId` while
+ * that mob is alive, still an enemy, and in range; otherwise it re-scans for the
+ * nearest enemy-faction mob — but only every MOB_RETARGET_SECONDS, so the per-mob
+ * tick stays O(N) and full scans amortize to ~1–2 Hz per fighter. Non-fighters
+ * (wild/villager) have no enemies and return null immediately.
+ */
+function selectMobTarget(state: GameState, mob: MobState): MobState | null {
+  const enemies = ENEMY_FACTIONS[mob.faction];
+  if (enemies.size === 0) return null;
+  const rangeSq = mob.detectRange * mob.detectRange;
+  if (mob.targetId !== null && mob.retargetTimer > 0) {
+    const cached = mobById(state, mob.targetId);
+    if (cached && cached.hp > 0 && enemies.has(cached.faction) && horizDistSq(mob, cached) < rangeSq) return cached;
+  }
+  mob.retargetTimer = MOB_RETARGET_SECONDS;
+  let best: MobState | null = null;
+  let bestSq = rangeSq;
+  for (const other of state.mobs) {
+    if (other === mob || other.hp <= 0 || !enemies.has(other.faction)) continue;
+    const d = horizDistSq(mob, other);
+    if (d < bestSq) {
+      bestSq = d;
+      best = other;
+    }
+  }
+  mob.targetId = best ? best.id : null;
+  return best;
+}
+
+/** Nearest hostile/raider within `range` of a villager (drives its flee), or null. */
+function nearestThreat(state: GameState, mob: MobState, range: number): MobState | null {
+  let best: MobState | null = null;
+  let bestSq = range * range;
+  for (const other of state.mobs) {
+    if (other.hp <= 0 || !THREAT_FACTIONS.has(other.faction)) continue;
+    const d = horizDistSq(mob, other);
+    if (d < bestSq) {
+      bestSq = d;
+      best = other;
+    }
+  }
+  return best;
+}
+
+/** True when nothing solid blocks the segment from a fighter's eye to its target — so it can't bite through a wall/door. */
+function mobVsMobLineOfSight(world: GameState["world"], mob: MobState, dx: number, dy: number, dz: number): boolean {
+  scratchRay.set(dx, dy, dz);
+  if (scratchRay.lengthSq() <= 1e-6) return true;
+  const dist = scratchRay.length();
+  scratchMobEye.set(mob.position.x, mob.position.y + mob.halfHeight * 0.35, mob.position.z);
+  return voxelRaycast(world, scratchMobEye, scratchRay.normalize(), dist) === null;
+}
 
 /**
  * A ranged mob looses an arrow from its eye toward the player's chest, leading a
@@ -120,7 +219,8 @@ function tickBossSummon(state: GameState, mob: MobState, dt: number, deps: MobTi
 export type MobTickDeps = {
   surfaceYAt: SurfaceYAtFn;
   applyDamage: (amount: number) => void;
-  removeMobAt: (index: number) => void;
+  /** Removes the mob (post-loop sweep). `credit` (default true) gates loot + XP to the player. */
+  removeMobAt: (index: number, lootingLevel?: number, credit?: boolean) => void;
   rng: () => number;
   emit: EmitGameEvent;
 };
@@ -143,6 +243,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     if (mob.hp <= 0) continue;
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
+    mob.retargetTimer -= dt;
     const activeHostile = threatened && mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
 
     scratchToPlayer.copy(playerPosition).sub(mob.position).setY(0);
@@ -155,7 +256,16 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     const isRanged = MOB_TEMPLATES[mob.kind].ranged === true;
     let moveSign = 1;
 
-    if (activeHostile && distanceToPlayer < mob.detectRange) {
+    // A fighter that isn't chasing the player hunts the nearest enemy-faction mob
+    // (a hostile after a villager, a pet after a hostile). Creepers stay
+    // player-focused — they detonate rather than bite. A sitting pet does nothing.
+    const sitting = mob.sitting === true;
+    const playerAggro = activeHostile && distanceToPlayer < mob.detectRange;
+    const mobTarget = !sitting && !playerAggro && mob.kind !== "creeper" ? selectMobTarget(state, mob) : null;
+
+    if (sitting) {
+      moveSpeed = 0; // a told-to-stay pet holds its ground
+    } else if (playerAggro) {
       if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
       // Skeletons kite (back off / hold in a standoff band); the boss bears down.
@@ -163,8 +273,40 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
         if (distanceToPlayer < SKELETON_STANDOFF_MIN) moveSign = -1;
         else if (distanceToPlayer <= SKELETON_STANDOFF_MAX) moveSign = 0;
       }
-    } else if (!mob.hostile && mob.kind !== "villager" && distanceToPlayer < 4.2) {
-      // Animals flee when you get close; villagers don't, so you can walk up to trade.
+    } else if (mobTarget) {
+      scratchToTarget.copy(mobTarget.position).sub(mob.position).setY(0);
+      if (scratchToTarget.lengthSq() > 1e-6) mob.direction.lerp(scratchToTarget.normalize(), 0.2).normalize();
+      moveSpeed *= 1.15;
+    } else if (mob.faction === "ally") {
+      // A pet with no enemy nearby follows its owner: recalled (teleported) when it
+      // strays too far, jogging to catch up otherwise, and milling about up close.
+      if (distanceToPlayer > PET_TELEPORT_DISTANCE) {
+        const tx = playerPosition.x + (deps.rng() - 0.5) * 2;
+        const tz = playerPosition.z + (deps.rng() - 0.5) * 2;
+        mob.position.set(tx, deps.surfaceYAt(tx, tz) + mob.halfHeight, tz);
+        mob.moveSpeed = mob.speed;
+        continue; // recalled to the owner — skip the rest of this tick
+      }
+      if (distanceToPlayer > PET_FOLLOW_MAX) {
+        if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
+        moveSpeed *= 1.3;
+      } else if (mob.turnTimer <= 0) {
+        mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
+        mob.turnTimer = 1.5 + deps.rng() * 4;
+      }
+    } else if (mob.faction === "villager") {
+      // Villagers don't fight — they flee the nearest hostile/raider, else mill about.
+      const threat = nearestThreat(state, mob, VILLAGER_FLEE_RANGE);
+      if (threat) {
+        scratchToTarget.copy(mob.position).sub(threat.position).setY(0);
+        if (scratchToTarget.lengthSq() > 1e-6) mob.direction.lerp(scratchToTarget.normalize(), 0.2).normalize();
+        moveSpeed *= 1.3;
+      } else if (mob.turnTimer <= 0) {
+        mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
+        mob.turnTimer = 1.5 + deps.rng() * 4;
+      }
+    } else if (!mob.hostile && distanceToPlayer < 4.2) {
+      // Wild animals flee when you get close (villagers are handled above).
       if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize().multiplyScalar(-1), 0.2).normalize();
       moveSpeed *= 1.15;
     } else if (mob.turnTimer <= 0) {
@@ -239,6 +381,29 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       mob.attackTimer = mob.attackCooldown;
     }
 
+    // Mob-vs-mob melee: a fighter with a live mob target bites it when adjacent.
+    // Independent of the player (it happens through the respawn countdown too) and
+    // of difficulty (dmgScale scales player-facing damage only). No LOS raycast —
+    // A line-of-sight raycast (like the player-facing strike) stops a fighter from
+    // biting through a thin wall or door when within reach. The kill is resolved by
+    // the post-loop sweep, never mid-loop (splice-safety).
+    if (mobTarget && mob.attackDamage > 0 && mob.attackTimer <= 0 && mobTarget.hp > 0) {
+      const dx = mobTarget.position.x - mob.position.x;
+      const dy = mobTarget.position.y - mob.position.y;
+      const dz = mobTarget.position.z - mob.position.z;
+      const horiz = Math.hypot(dx, dz);
+      if (horiz < MOB_VS_MOB_REACH && Math.abs(dy) < 1.6 && mobVsMobLineOfSight(world, mob, dx, dy, dz)) {
+        mobTarget.hp -= mob.attackDamage;
+        if (horiz > 0.001) {
+          const push = MOB_VS_MOB_KNOCKBACK / horiz;
+          mobTarget.position.x += dx * push;
+          mobTarget.position.z += dz * push;
+        }
+        deps.emit({ type: "mobAttacked", kind: mob.kind });
+        mob.attackTimer = mob.attackCooldown;
+      }
+    }
+
     // The boss conjures minions while it is engaged with the player.
     if (!isDead && isBoss && activeHostile && distanceToPlayer < mob.detectRange) {
       tickBossSummon(state, mob, dt, deps);
@@ -273,8 +438,11 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
 
   // Sweep the dead after the loop (descending, so splices don't shift live
   // indices). A post-loop sweep — not per-iteration — also catches mobs killed by
-  // an explosion earlier in the same pass, including the creeper that just blew up.
+  // an explosion (or another mob) earlier in the same pass, including the creeper
+  // that just blew up. Loot + XP go to the player only for credited factions, so a
+  // pet's kill feeds you but a slain villager/pet yields nothing.
   for (let i = mobs.length - 1; i >= 0; i -= 1) {
-    if (mobs[i].hp <= 0) deps.removeMobAt(i);
+    const dead = mobs[i];
+    if (dead.hp <= 0) deps.removeMobAt(i, 0, CREDITED_FACTIONS.has(dead.faction));
   }
 }

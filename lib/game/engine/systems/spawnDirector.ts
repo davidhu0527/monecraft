@@ -11,7 +11,7 @@ import {
   SPAWNER_INTERVAL_SECONDS,
   SPAWNER_LOCAL_CAP
 } from "@/lib/game/config";
-import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import { FACTION_BY_KIND, MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { hostileCapScale, hostileSpawnIntervalScale, hostilesSpawn } from "@/lib/game/difficulties";
 import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
@@ -36,6 +36,9 @@ export function pushMob(state: GameState, kind: MobKind, hostile: boolean, x: nu
     id: state.nextMobId,
     kind,
     hostile,
+    faction: FACTION_BY_KIND[kind],
+    targetId: null,
+    retargetTimer: 0,
     hp: template.hp,
     position: new THREE.Vector3(x, y + halfHeight, z),
     direction: new THREE.Vector3(rng() - 0.5, 0, rng() - 0.5).normalize(),

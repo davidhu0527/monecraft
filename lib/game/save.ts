@@ -19,15 +19,20 @@ import type {
   SaveDataV10,
   SaveDataV11,
   SaveDataV12,
+  SaveDataV13,
   SavedContainer,
   SavedEffect,
   SavedEquippedArmor,
+  SavedMob,
   SavedSlot,
   SavedStat,
-  InventorySlot
+  InventorySlot,
+  MobFaction
 } from "@/lib/game/types";
 import { isGameMode, type GameMode } from "@/lib/game/gameModes";
 import { isDifficulty, type Difficulty } from "@/lib/game/difficulties";
+import { MOB_TEMPLATES } from "@/lib/game/mobs";
+import type { MobState } from "@/lib/game/engine/state";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
@@ -183,8 +188,17 @@ export function migrateSaveV11toV12(save: SaveDataV11): SaveDataV12 {
  * and `advancements` (unlocked ids) are optional, so a pre-progression save
  * simply loads with no stats and no advancements yet earned.
  */
-export function migrateSaveV12toV13(save: SaveDataV12): SaveData {
+export function migrateSaveV12toV13(save: SaveDataV12): SaveDataV13 {
   return { ...save, version: 13 };
+}
+
+/**
+ * Migrates a v13 save to v14 — a pure version bump. `mobs` (persisted pets) is
+ * optional, so a pre-v14 save simply loads with none and the world re-seeds its
+ * wildlife at boot as before.
+ */
+export function migrateSaveV13toV14(save: SaveDataV13): SaveData {
+  return { ...save, version: 14 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -194,6 +208,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV13
       | SaveDataV12
       | SaveDataV11
       | SaveDataV10
@@ -219,6 +234,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV10
       | SaveDataV11
       | SaveDataV12
+      | SaveDataV13
       | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -231,7 +247,8 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 10) migrated = migrateSaveV10toV11(migrated);
     if (migrated.version === 11) migrated = migrateSaveV11toV12(migrated);
     if (migrated.version === 12) migrated = migrateSaveV12toV13(migrated);
-    if (migrated.version !== 13) return null;
+    if (migrated.version === 13) migrated = migrateSaveV13toV14(migrated);
+    if (migrated.version !== 14) return null;
     return migrated;
   } catch {
     return null;
@@ -410,6 +427,60 @@ export function restoreAdvancements(save: SaveData): string[] {
     if (typeof id === "string" && id) seen.add(id);
   }
   return [...seen];
+}
+
+// Every known faction, keyed so a new MobFaction is a compile error here.
+const VALID_MOB_FACTIONS: Record<MobFaction, true> = { wild: true, hostile: true, ally: true, villager: true, raider: true };
+
+/**
+ * Whether a mob survives a save/reload. PR-A persists only tamed pets; the
+ * fungible wild/hostile population (and the loose villagers) is re-seeded each
+ * boot by spawnInitialMobs, so persisting it would just duplicate it. PR-B
+ * widens this to include village residents.
+ */
+export function isPersistentMob(mob: MobState): boolean {
+  return mob.owner != null;
+}
+
+/** Snapshots the persistent mobs (tamed pets) for the save — body-center position + the state a template can't rebuild. */
+export function serializeMobs(mobs: MobState[]): SavedMob[] {
+  const out: SavedMob[] = [];
+  for (const mob of mobs) {
+    if (!isPersistentMob(mob)) continue;
+    const saved: SavedMob = { kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z, hp: mob.hp, faction: mob.faction };
+    if (mob.owner != null) saved.owner = mob.owner;
+    if (mob.sitting) saved.sitting = true;
+    if (mob.ageTimer > 0) saved.ageTimer = mob.ageTimer;
+    out.push(saved);
+  }
+  return out;
+}
+
+/**
+ * Reads persisted mobs from a save into validated SavedMob entries — dropping
+ * unknown kinds, non-finite coords, non-positive/garbage hp, and unknown factions.
+ * The engine rebuilds the live MobState from these (re-grounding y onto current
+ * terrain, assigning fresh ids), so this stays pure data — no THREE / no rng.
+ */
+export function restoreMobs(save: SaveData): SavedMob[] {
+  if (!Array.isArray(save.mobs)) return [];
+  const out: SavedMob[] = [];
+  for (const entry of save.mobs) {
+    if (!entry || typeof entry.kind !== "string" || !MOB_TEMPLATES[entry.kind]) continue;
+    if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z)) continue;
+    if (!Number.isFinite(entry.hp) || entry.hp <= 0) continue;
+    if (typeof entry.faction !== "string" || !Object.hasOwn(VALID_MOB_FACTIONS, entry.faction)) continue;
+    // PR-A only ever persists owned pets (mirrors isPersistentMob), so reject any
+    // other persisted mob — a stale/edited v14 save can't resurrect a "pet zombie".
+    // PR-B relaxes this when village residents (owner-less) join the persistent set.
+    if (entry.owner !== "player" || entry.faction !== "ally") continue;
+    const saved: SavedMob = { kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, hp: entry.hp, faction: entry.faction };
+    if (entry.owner === "player") saved.owner = "player";
+    if (entry.sitting === true) saved.sitting = true;
+    if (Number.isFinite(entry.ageTimer) && (entry.ageTimer ?? 0) > 0) saved.ageTimer = entry.ageTimer;
+    out.push(saved);
+  }
+  return out;
 }
 
 /**

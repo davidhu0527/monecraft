@@ -315,6 +315,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "mobBred":
           backend.play(MOB_BRED_SOUND);
           break;
+        case "mobTamed":
+          backend.play(MOB_BRED_SOUND); // a happy chime — reuses the breeding cue
+          break;
+        case "petSitToggled":
+          backend.play(MOB_FED_SOUND); // a soft acknowledging cue
+          break;
       }
     },
 

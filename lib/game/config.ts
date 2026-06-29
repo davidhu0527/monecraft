@@ -185,6 +185,17 @@ export const HOSTILE_CAP = 16;
 // a creeper — can materialize point-blank and attack before you can react.
 export const HOSTILE_SPAWN_MIN_RADIUS = 16;
 
+// Mob allegiance & mob-vs-mob combat. Mobs carry a `faction` (wild/hostile/ally/
+// villager/raider) that drives who fights whom (see mobAI's enmity table). A
+// "fighter" (hostile/ally/raider) locks onto the nearest enemy-faction mob within
+// its detect range, re-scanning only every RETARGET interval so steering stays
+// O(N); the strike uses the mob's raw attackDamage (difficulty scaling applies to
+// damage dealt to the *player* only). Villagers flee a threat within FLEE_RANGE.
+export const MOB_RETARGET_SECONDS = 0.6;
+export const MOB_VS_MOB_REACH = 1.6;
+export const MOB_VS_MOB_KNOCKBACK = 0.28;
+export const VILLAGER_FLEE_RANGE = 8;
+
 // Dungeon spawners. A spawner drips one hostile every interval while the player
 // is within the activation radius, up to a local cluster cap (and the shared
 // global HOSTILE_CAP). Time-independent — dungeons are dark.
@@ -201,6 +212,17 @@ export const BREED_CHECK_INTERVAL_SECONDS = 0.5;
 export const BABY_GROW_SECONDS = 90;
 export const BABY_SCALE = 0.55;
 export const PASSIVE_CAP = 24;
+
+// Companions (tameable pets). A wild wolf (fed a bone) or cat (raw fish) tames on
+// a TAME_CHANCE roll, becoming an "ally" that follows the owner and fights nearby
+// hostiles (PET_FIGHT_RANGE = its enemy-detect radius once tamed, PET_TAMED_HP its
+// boosted health). It roams freely within PET_FOLLOW_MAX of the owner, jogs to
+// catch up beyond that, and is recalled (teleported) past PET_TELEPORT_DISTANCE.
+export const TAME_CHANCE = 1 / 3;
+export const PET_TAMED_HP = 20;
+export const PET_FIGHT_RANGE = 12;
+export const PET_FOLLOW_MAX = 10;
+export const PET_TELEPORT_DISTANCE = 24;
 
 // Random block ticks (crop growth; the system is extensible to other blocks).
 // Each interval samples N columns within RADIUS of the player and runs the

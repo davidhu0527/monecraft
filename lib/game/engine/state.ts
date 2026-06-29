@@ -3,7 +3,7 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -30,6 +30,16 @@ export type MobState = {
   id: number;
   kind: MobKind;
   hostile: boolean;
+  /** Targeting allegiance (set at spawn from FACTION_BY_KIND; a tamed pet becomes "ally"). Persisted (save v14). */
+  faction: MobFaction;
+  /** Pet owner once tamed (currently always "player"); undefined for wild mobs. Persisted (save v14). */
+  owner?: "player";
+  /** A tamed pet told to stay put (sit/stay) — no follow, wander, or pursuit. Persisted (save v14). */
+  sitting?: boolean;
+  /** Session-only: id of the enemy mob this fighter is attacking, or null. Never serialized. */
+  targetId: number | null;
+  /** Session-only: seconds until the next enemy-mob rescan (throttle). Never serialized. */
+  retargetTimer: number;
   hp: number;
   /** Body center (ground + halfHeight), like the old group.position without bob. */
   position: THREE.Vector3;
@@ -380,6 +390,8 @@ export type GameEvent =
   | { type: "advancementUnlocked"; id: string; name: string }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }
+  | { type: "mobTamed"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "petSitToggled"; kind: MobKind; sitting: boolean }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

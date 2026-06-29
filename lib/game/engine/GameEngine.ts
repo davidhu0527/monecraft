@@ -15,6 +15,7 @@ import {
   ANVIL_COMBINE_COST_LEVELS,
   ANVIL_RENAME_COST_LEVELS,
   ANVIL_REPAIR_COST_LEVELS,
+  BABY_SCALE,
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
@@ -23,6 +24,8 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  PET_FIGHT_RANGE,
+  PET_TAMED_HP,
   POISON_DURATION,
   POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
@@ -68,16 +71,19 @@ import {
   restoreXp,
   restoreStats,
   restoreAdvancements,
+  restoreMobs,
   serializeContainers,
   serializeEffects,
   serializeLootedChests,
+  serializeMobs,
   serializeStats
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
-import type { InventorySlot, SaveData } from "@/lib/game/types";
+import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import type { InventorySlot, SaveData, SavedMob } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
@@ -91,7 +97,7 @@ import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
 import { applyEnchant, canEnchant, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
@@ -100,7 +106,7 @@ import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { pushMob, spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
 import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
@@ -257,6 +263,9 @@ export class GameEngine {
       // Filter against the registry so a corrupt/edited save can't inject bogus ids
       // (which would inflate the unlocked count and round-trip back out forever).
       for (const id of restoreAdvancements(save)) if (ADVANCEMENTS_BY_ID[id]) this.state.advancements.add(id);
+      // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
+      // fungible population, so the world stays alive and pets simply pre-exist.
+      this.restorePersistedMobs(restoreMobs(save));
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -542,7 +551,11 @@ export class GameEngine {
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
+        // Companions: a treat tames a wild wolf/cat; otherwise toggling sit on your
+        // own pet. Both run before feeding so the bone/fish tames rather than feeds.
+        if (tryTameAimedMob(state, this.emit, this.rng)) break;
         if (tryFeedAimedMob(state, this.emit)) break;
+        if (tryToggleSitPet(state, this.emit)) break;
         if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
@@ -651,7 +664,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 13,
+      version: 14,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -676,7 +689,8 @@ export class GameEngine {
       effects: serializeEffects(state.effects),
       xp: state.xp,
       stats: serializeStats(state.stats),
-      advancements: [...state.advancements]
+      advancements: [...state.advancements],
+      mobs: serializeMobs(state.mobs)
     };
   }
 
@@ -819,19 +833,54 @@ export class GameEngine {
     if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
 
-  private removeMobAt = (index: number, lootingLevel = 0): void => {
+  /**
+   * Rebuilds the live MobState for each validated SavedMob: re-grounds onto the
+   * current surface (the world may have changed since the save), assigns a fresh
+   * id via pushMob, then restores the persisted hp/faction/owner/sit/baby state.
+   * hp is clamped to the kind's template max — owned pets get a generous ceiling,
+   * since a tamed pet's hp can exceed the wild template (refined when companions land).
+   */
+  private restorePersistedMobs(saved: SavedMob[]): void {
+    for (const m of saved) {
+      const ground = this.surfaceYAt(m.x, m.z);
+      const hostile = m.faction === "hostile" || m.faction === "raider";
+      pushMob(this.state, m.kind, hostile, m.x, ground, m.z, this.rng);
+      const mob = this.state.mobs[this.state.mobs.length - 1];
+      mob.faction = m.faction;
+      // A tamed pet's hp/detectRange exceed its wild template — restore the pet
+      // ceiling and fight range so it stays a healthy, fighting ally.
+      if (m.owner != null) {
+        mob.owner = m.owner;
+        mob.hp = Math.min(m.hp, PET_TAMED_HP);
+        mob.detectRange = PET_FIGHT_RANGE;
+      } else {
+        mob.hp = Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
+      }
+      if (m.sitting) mob.sitting = true;
+      if (m.ageTimer && m.ageTimer > 0) {
+        mob.ageTimer = m.ageTimer;
+        mob.halfHeight = mobHalfHeight(m.kind) * BABY_SCALE;
+        mob.position.y = ground + mob.halfHeight; // re-center on the shrunk height so a baby doesn't float
+      }
+    }
+  }
+
+  // `credit` (default true) gates loot + XP to the player: player/arrow/spear/
+  // explosion kills credit; the mobAI sweep passes the victim's faction so a pet's
+  // kill still feeds you, but a slain villager or pet yields nothing.
+  private removeMobAt = (index: number, lootingLevel = 0, credit = true): void => {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
     // Babies drop nothing — only grown animals yield loot. `lootingLevel` is the
     // *killing* melee weapon's Looting (forwarded by tryAttackMob); indirect kills
     // (arrows, thrown spears, explosions) pass 0, since Looting is a melee enchant.
-    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
+    const drops = credit && mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
     // XP on kill, baby-gated like drops; the boss pays a jackpot.
-    if (mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
+    if (credit && mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });

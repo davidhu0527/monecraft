@@ -37,6 +37,7 @@ import { addEffect } from "@/lib/game/engine/systems/statusEffects";
 import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
+import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
@@ -1058,6 +1059,9 @@ describe("gameplay events", () => {
       id: state.nextMobId++,
       kind,
       hostile,
+      faction: hostile ? "hostile" : "wild",
+      targetId: null,
+      retargetTimer: 0,
       hp: 50,
       position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
       direction: new THREE.Vector3(0, 0, 1),
@@ -1473,7 +1477,7 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(13);
+    expect(save.version).toBe(14);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -1535,6 +1539,9 @@ describe("beds and sleep", () => {
       id: engine.state.nextMobId++,
       kind: "zombie",
       hostile: true,
+      faction: "hostile",
+      targetId: null,
+      retargetTimer: 0,
       hp: 10,
       position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2076,6 +2083,9 @@ describe("animal breeding", () => {
       id,
       kind: "sheep",
       hostile: false,
+      faction: "wild",
+      targetId: null,
+      retargetTimer: 0,
       hp: 10,
       position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2305,6 +2315,9 @@ describe("villager trading", () => {
       id: state.nextMobId++,
       kind: "villager",
       hostile: false,
+      faction: "villager",
+      targetId: null,
+      retargetTimer: 0,
       hp: 20,
       position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2668,6 +2681,9 @@ describe("advancements (save v13)", () => {
       id: engine.state.nextMobId++,
       kind,
       hostile: true,
+      faction: "hostile",
+      targetId: null,
+      retargetTimer: 0,
       hp: 1,
       position: new THREE.Vector3(p.x, p.y, p.z),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2752,5 +2768,51 @@ describe("advancements (save v13)", () => {
     const detail = engine.advancementState();
     expect(detail.unlocked).toContain("tool_up");
     expect(detail.stats.find((entry) => entry.id === "items_crafted")?.value).toBe(1);
+  });
+});
+
+describe("mob persistence (pets)", () => {
+  test("a tamed pet is restored across reload; the wild population is not duplicated", () => {
+    const engine = makeEngine();
+    // Flag an existing mob as a real tamed pet (taming itself is covered separately);
+    // a pet is a wolf/cat that is owned + ally.
+    const pet = engine.state.mobs[0];
+    pet.kind = "wolf";
+    pet.owner = "player";
+    pet.faction = "ally";
+    pet.hp = 7;
+    pet.position.set(20, 40, 20);
+    const wildCount = engine.state.mobs.length;
+
+    const restored = makeEngine(engine.serialize());
+    const pets = restored.state.mobs.filter((m) => m.owner === "player");
+    expect(pets).toHaveLength(1);
+    expect(pets[0].faction).toBe("ally");
+    expect(pets[0].hp).toBe(7);
+    expect(pets[0].position.x).toBe(20); // x/z survive; y is re-grounded onto current terrain
+    // Only the pet was persisted — the fungible population is re-seeded fresh, so
+    // the restored world has the same wildlife plus the one restored pet.
+    expect(restored.state.mobs.length).toBe(wildCount + 1);
+  });
+
+  test("a fresh world persists no mobs (nothing owned yet)", () => {
+    expect(makeEngine().serialize().mobs ?? []).toEqual([]); // mobs is optional in v14
+  });
+
+  test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {
+    const engine = makeEngine();
+    const wolf = engine.state.mobs[0];
+    wolf.kind = "wolf";
+    wolf.owner = "player";
+    wolf.faction = "ally";
+    wolf.hp = PET_TAMED_HP;
+    wolf.detectRange = PET_FIGHT_RANGE;
+
+    const restored = makeEngine(engine.serialize());
+    const pet = restored.state.mobs.find((m) => m.owner === "player")!;
+    expect(pet.kind).toBe("wolf");
+    expect(pet.faction).toBe("ally");
+    expect(pet.hp).toBe(PET_TAMED_HP);
+    expect(pet.detectRange).toBe(PET_FIGHT_RANGE); // re-armed so the pet still fights
   });
 });

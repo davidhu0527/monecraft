@@ -11,6 +11,10 @@ export const MOB_XP: Record<MobKind, number> = {
   horse: 2,
   cow: 2,
   pig: 1,
+  // Companions yield no XP — paired with their empty drop tables, killing a pet
+  // (or a wild wolf/cat) is never rewarded, so they can't be farmed.
+  wolf: 0,
+  cat: 0,
   // A villager is a trade NPC — no combat reward (and you shouldn't be killing it).
   villager: 0,
   zombie: 5,

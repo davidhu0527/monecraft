@@ -6,9 +6,12 @@ import {
   CHEST_SLOTS,
   EYE_HEIGHT,
   MINE_REACH,
+  PET_FIGHT_RANGE,
+  PET_TAMED_HP,
   SLEEP_ALLOWED_BELOW_DAYLIGHT,
   SLEEP_FADE_SECONDS,
-  SLEEP_HOSTILE_RADIUS
+  SLEEP_HOSTILE_RADIUS,
+  TAME_CHANCE
 } from "@/lib/game/config";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
 import { createEmptySlot } from "@/lib/game/items";
@@ -113,13 +116,21 @@ function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: numb
   return true;
 }
 
-/** What each breedable animal is fed to enter "in love" mode. */
+/** What each breedable animal is fed to enter "in love" mode (pets only breed once owned). */
 const FEED_ITEMS: Partial<Record<MobKind, string>> = {
   sheep: "wheat",
   horse: "wheat",
   cow: "wheat",
   chicken: "seeds",
-  pig: "seeds"
+  pig: "seeds",
+  wolf: "bone",
+  cat: "raw_fish"
+};
+
+/** What item tames each wild companion. Both ids exist in ITEM_DEFS already. */
+const TAME_ITEMS: Partial<Record<MobKind, string>> = {
+  wolf: "bone",
+  cat: "raw_fish"
 };
 
 /**
@@ -134,11 +145,59 @@ export function tryFeedAimedMob(state: GameState, emit: EmitGameEvent): boolean 
   if (index < 0) return false;
   const mob = state.mobs[index];
   if (mob.hostile || FEED_ITEMS[mob.kind] !== slot.id) return false;
+  // A tameable kind only breeds once owned — a wild one is tamed (handled earlier
+  // in the precedence), never put "in love".
+  if (TAME_ITEMS[mob.kind] !== undefined && mob.owner == null) return false;
   if (mob.ageTimer > 0 || mob.fedTimer > 0) return false; // babies and already-in-love animals decline
 
   state.inventory = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot) ?? state.inventory;
   mob.fedTimer = BREED_FED_WINDOW_SECONDS;
   emit({ type: "mobFed", kind: mob.kind });
+  return true;
+}
+
+/**
+ * Right-click a WILD wolf/cat holding its treat (bone / raw fish) to attempt to
+ * tame it. The treat is consumed whether or not the TAME_CHANCE roll succeeds (as
+ * in Minecraft); on success the mob becomes an owned "ally" with boosted hp and an
+ * enemy-detect range so it fights for the player. Runs before feeding/breeding in
+ * the precedence so a bone tames a wild wolf rather than (no-op) feeding it.
+ */
+export function tryTameAimedMob(state: GameState, emit: EmitGameEvent, rng: () => number): boolean {
+  const slot = state.inventory[state.selectedSlot];
+  if (!slot?.id || slot.count <= 0) return false;
+  const index = findAimedMobIndex(state);
+  if (index < 0) return false;
+  const mob = state.mobs[index];
+  if (mob.owner != null || TAME_ITEMS[mob.kind] !== slot.id) return false;
+
+  state.inventory = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot) ?? state.inventory;
+  if (rng() < TAME_CHANCE) {
+    mob.owner = "player";
+    mob.faction = "ally";
+    mob.hp = PET_TAMED_HP;
+    mob.detectRange = PET_FIGHT_RANGE;
+    emit({ type: "mobTamed", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+  }
+  return true; // the treat is eaten either way
+}
+
+/**
+ * Right-click your OWN pet (with anything that isn't its breeding treat) to toggle
+ * its sit/stay. A sitting pet stays put — it won't follow, wander, or fight. Runs
+ * after taming and feeding, so a treat still tames a wild one / breeds an owned one.
+ */
+export function tryToggleSitPet(state: GameState, emit: EmitGameEvent): boolean {
+  const index = findAimedMobIndex(state);
+  if (index < 0) return false;
+  const mob = state.mobs[index];
+  if (mob.owner == null) return false; // only your own pet
+  // Holding the pet's breeding treat means "breed", not "sit" — so a feed that was
+  // declined (a baby, or one already in love) doesn't fall through and flip sitting.
+  const slot = state.inventory[state.selectedSlot];
+  if (slot?.id && FEED_ITEMS[mob.kind] === slot.id) return false;
+  mob.sitting = !mob.sitting;
+  emit({ type: "petSitToggled", kind: mob.kind, sitting: mob.sitting === true });
   return true;
 }
 
