@@ -819,19 +819,22 @@ export class GameEngine {
     if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
 
-  private removeMobAt = (index: number, lootingLevel = 0): void => {
+  // `credit` (default true) gates loot + XP to the player: player/arrow/spear/
+  // explosion kills credit; the mobAI sweep passes the victim's faction so a pet's
+  // kill still feeds you, but a slain villager or pet yields nothing.
+  private removeMobAt = (index: number, lootingLevel = 0, credit = true): void => {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
     // Babies drop nothing — only grown animals yield loot. `lootingLevel` is the
     // *killing* melee weapon's Looting (forwarded by tryAttackMob); indirect kills
     // (arrows, thrown spears, explosions) pass 0, since Looting is a melee enchant.
-    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
+    const drops = credit && mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
     // XP on kill, baby-gated like drops; the boss pays a jackpot.
-    if (mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
+    if (credit && mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });

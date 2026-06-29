@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { VoxelWorld } from "@/lib/world";
 import { CREEPER_FUSE_SECONDS } from "@/lib/game/config";
-import { mobHalfHeight } from "@/lib/game/mobs";
+import { FACTION_BY_KIND, mobHalfHeight } from "@/lib/game/mobs";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
 import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
 import { tickMobs, type MobTickDeps } from "@/lib/game/engine/systems/mobAI";
@@ -13,6 +13,9 @@ function makeMob(kind: MobKind, x: number, y: number, z: number, attackTimer = 0
     id: 1,
     kind,
     hostile: true,
+    faction: FACTION_BY_KIND[kind],
+    targetId: null,
+    retargetTimer: 0,
     hp: 9,
     position: new THREE.Vector3(x, y, z),
     direction: new THREE.Vector3(0, 0, 1),
@@ -216,5 +219,78 @@ describe("villagers", () => {
 
     expect(sheep.moveSpeed).toBeCloseTo(sheep.speed * 1.15, 5); // fled
     expect(villager.moveSpeed).toBeCloseTo(villager.speed, 5); // did not flee
+  });
+});
+
+describe("mob-vs-mob & allegiance", () => {
+  function makeVillager(x: number, z: number): MobState {
+    const v = makeMob("villager", x, 30, z);
+    v.hostile = false;
+    v.faction = "villager";
+    v.detectRange = 0;
+    v.attackDamage = 0;
+    v.speed = 0.6;
+    v.moveSpeed = 0.6;
+    v.hp = 20;
+    return v;
+  }
+
+  test("a hostile with no player in range hunts and bites a nearby villager", () => {
+    // Zombie + villager are ~1 block apart and far (z≈9) from the player at z=24,
+    // so the zombie has no player aggro and falls through to its mob target.
+    const zombie = makeMob("zombie", 24, 30, 9.5);
+    const villager = makeVillager(24, 8.5);
+    const state = makeState([zombie, villager]);
+    state.difficulty = "hard"; // mob-vs-mob uses raw damage — difficulty scales player-facing hits only
+    const { deps, getDamage } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(zombie.targetId).toBe(villager.id);
+    expect(villager.hp).toBe(17); // raw attackDamage 3, NOT ×1.5 for Hard
+    expect(getDamage()).toBe(0); // the player took no damage
+  });
+
+  test("villagers and hostiles never target their own side", () => {
+    const villager = makeVillager(24, 9);
+    const zombieA = makeMob("zombie", 24, 30, 8);
+    const zombieB = makeMob("zombie", 24, 30, 8.6);
+    zombieB.id = 99;
+    const state = makeState([villager, zombieA, zombieB]);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(villager.targetId).toBeNull(); // villagers don't fight
+    expect(zombieA.targetId).toBe(villager.id); // a hostile picks the villager, not zombieB
+  });
+
+  test("a villager flees the nearest hostile (boosted speed, turning away)", () => {
+    const villager = makeVillager(24, 24);
+    const zombie = makeMob("zombie", 26, 30, 26); // diagonal, ~2.8 blocks, within flee range
+    const state = makeState([villager, zombie]);
+    state.player.position.set(0, 30, 0); // keep the player out of it
+    const { deps } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(villager.moveSpeed).toBeCloseTo(villager.speed * 1.3, 5); // flee boost (not the ×1.15 animal flee)
+    expect(villager.direction.x).toBeLessThan(0); // turning away from the zombie at +x
+  });
+
+  test("the death sweep credits hostile/wild kills to the player but not villager deaths", () => {
+    const zombie = makeMob("zombie", 5, 30, 5);
+    zombie.hp = 0; // already dead (e.g. blast/burn), awaiting the sweep
+    const villager = makeVillager(40, 40);
+    villager.hp = 0; // slain by a hostile
+    const state = makeState([zombie, villager]);
+    const calls: Array<{ index: number; credit: boolean }> = [];
+    const { deps } = makeDeps();
+    deps.removeMobAt = (index: number, _looting?: number, credit = true) => calls.push({ index, credit });
+
+    tickMobs(state, 0.05, deps);
+
+    expect(calls.find((c) => c.index === 0)?.credit).toBe(true); // zombie — credited
+    expect(calls.find((c) => c.index === 1)?.credit).toBe(false); // villager — no loot/XP
   });
 });

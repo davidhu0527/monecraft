@@ -88,6 +88,14 @@ export type Recipe = {
 
 export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
 
+/**
+ * A mob's social allegiance — the axis that drives who fights whom (see mobAI's
+ * enmity table), distinct from the `hostile` flag (which still gates caps, the
+ * health-bar, and Peaceful despawn). Set at spawn from FACTION_BY_KIND; a tamed
+ * pet becomes "ally". Persisted with the mob (save v14+).
+ */
+export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
+
 export type MobModel = {
   group: THREE.Group;
   legs: THREE.Mesh[];

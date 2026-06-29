@@ -58,6 +58,12 @@ function spawnBaby(state: GameState, parent: MobState, rng: () => number, surfac
     id: state.nextMobId,
     kind: parent.kind,
     hostile: false,
+    // Inherit allegiance + ownership so a bred pet's offspring is an owned ally
+    // (and persists); wild parents yield wild offspring.
+    faction: parent.faction,
+    owner: parent.owner,
+    targetId: null,
+    retargetTimer: 0,
     hp: template.hp,
     position: new THREE.Vector3(x, surfaceYAt(x, z) + halfHeight, z),
     direction: new THREE.Vector3(rng() - 0.5, 0, rng() - 0.5).normalize(),

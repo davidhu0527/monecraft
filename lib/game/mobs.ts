@@ -1,4 +1,4 @@
-import type { MobKind } from "@/lib/game/types";
+import type { MobFaction, MobKind } from "@/lib/game/types";
 import { createMobModel } from "@/lib/game/mobModel";
 import { BOSS_HP, HOSTILE_MOB_HP } from "@/lib/game/config";
 
@@ -120,6 +120,26 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
  * advancements system to count hostile kills.
  */
 export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "boss"]);
+
+/**
+ * The allegiance each kind spawns with (see MobFaction). The targeting axis, set
+ * once at spawn (spawnDirector.pushMob); taming flips a wolf/cat to "ally". Wild
+ * animals and villagers never fight; hostiles/raiders/allies are the "fighters".
+ * Matches HOSTILE_MOB_KINDS for the monster kinds (which also spawn `hostile:true`).
+ */
+export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
+  sheep: "wild",
+  chicken: "wild",
+  horse: "wild",
+  cow: "wild",
+  pig: "wild",
+  villager: "villager",
+  zombie: "hostile",
+  skeleton: "hostile",
+  spider: "hostile",
+  creeper: "hostile",
+  boss: "hostile"
+};
 
 /**
  * Body-center height above the ground for a mob kind. Mirrors the geometry
