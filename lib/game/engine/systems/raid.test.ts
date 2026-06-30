@@ -39,6 +39,17 @@ describe("startRaid", () => {
     e.state.difficulty = "peaceful";
     expect(startRaid(e.state, 30, 30)).toBe(false); // Peaceful never raids
   });
+
+  test("refuses to start while raiders from a prior raid still roam the village", () => {
+    const e = makeEngine();
+    e.state.mobs = [];
+    pushMob(e.state, "raider", true, 30, 30, 30, () => 0.5); // a straggler at the would-be center
+    expect(startRaid(e.state, 30, 30)).toBe(false); // local raiders block a new raid
+
+    pushMob(e.state, "raider", true, 200, 30, 200, () => 0.5); // one far away doesn't count
+    e.state.mobs = e.state.mobs.filter((m) => Math.hypot(m.position.x - 30, m.position.z - 30) > 50);
+    expect(startRaid(e.state, 30, 30)).toBe(true); // only the distant straggler remains
+  });
 });
 
 describe("tickRaid", () => {

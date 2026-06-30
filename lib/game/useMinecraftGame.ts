@@ -347,6 +347,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "raidStarted") {
           flashMessage(`A raid is coming — defend the village! (${event.totalWaves} waves)`, 2400);
         }
+        if (event.type === "raidFailed") {
+          flashMessage("A raid is already underway");
+        }
         if (event.type === "raidWaveStarted") {
           flashMessage(`Raid wave ${event.wave} / ${event.totalWaves}`, 1800);
         }

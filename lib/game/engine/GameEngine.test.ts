@@ -2388,9 +2388,14 @@ describe("village raids", () => {
     expect(engine.consumeEvents().some((e) => e.type === "raidStarted")).toBe(true);
     expect(countsById(state.inventory).get("ominous_horn")).toBeUndefined(); // consumed
 
-    // A second horn is refused while the raid runs.
+    // A second horn is refused while the raid runs, with a raid-specific event
+    // (not the boss-totem `summonFailed`, which would show the wrong toast).
     state.inventory[slot] = createSlot("ominous_horn", 1);
+    engine.consumeEvents();
     engine.dispatch({ type: "placeBlock" });
+    const events = engine.consumeEvents();
+    expect(events.some((e) => e.type === "raidFailed")).toBe(true);
+    expect(events.some((e) => e.type === "summonFailed")).toBe(false);
     expect(countsById(state.inventory).get("ominous_horn")).toBe(1); // not consumed
   });
 });
@@ -2839,6 +2844,27 @@ describe("mob persistence (pets)", () => {
     expect(mobs.length).toBeGreaterThan(0); // villagers persist now
     expect(mobs.every((m) => m.faction === "villager")).toBe(true); // only residents, nothing owned
     expect(mobs.some((m) => m.owner === "player")).toBe(false);
+  });
+
+  test("a populated village save is not repopulated on reload, even after its villagers are wiped", () => {
+    const engine = makeEngine();
+    expect(engine.state.mobs.some((m) => m.faction === "villager")).toBe(true); // a fresh world seeds residents (fallback at 64³)
+    engine.state.mobs = engine.state.mobs.filter((m) => m.faction !== "villager"); // the player kills them all
+    const save = engine.serialize();
+    expect(save.villagesSeeded).toBe(true);
+
+    const restored = makeEngine(save);
+    expect(restored.state.mobs.some((m) => m.faction === "villager")).toBe(false); // stays empty — not re-seeded
+  });
+
+  test("a pre-village save (no villagesSeeded flag) still seeds villagers on load", () => {
+    const save = makeEngine().serialize();
+    // Simulate a pre-v15 upgrade: the flag is absent and no villagers were persisted.
+    const upgraded = { ...save, villagesSeeded: undefined, mobs: (save.mobs ?? []).filter((m) => m.faction !== "villager") };
+
+    const restored = makeEngine(upgraded);
+    expect(restored.state.mobs.some((m) => m.faction === "villager")).toBe(true); // bootstrap seeded them
+    expect(restored.state.mobs.filter((m) => m.faction === "villager").every((m) => m.profession != null)).toBe(true); // with professions
   });
 
   test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {

@@ -420,6 +420,7 @@ export type GameEvent =
   | { type: "raidWaveStarted"; wave: number; totalWaves: number }
   | { type: "raidWon" }
   | { type: "raidLost" }
+  | { type: "raidFailed" }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

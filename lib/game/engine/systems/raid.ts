@@ -12,28 +12,31 @@ export type RaidDeps = {
   emit: EmitGameEvent;
 };
 
-/** Living raiders in the world. */
-function countRaiders(state: GameState): number {
-  return state.mobs.reduce((n, mob) => n + (mob.faction === "raider" ? 1 : 0), 0);
-}
-
-/** Living villagers within the raid radius of its center — once zero, the village has fallen. */
-function residentsNearCenter(state: GameState, center: { x: number; z: number }): number {
+/** Count mobs of `faction` within the raid radius of `center`. */
+function factionNearCenter(state: GameState, center: { x: number; z: number }, faction: GameState["mobs"][number]["faction"]): number {
   const r2 = RAID_RADIUS * RAID_RADIUS;
   return state.mobs.reduce((n, mob) => {
-    if (mob.faction !== "villager") return n;
+    if (mob.faction !== faction) return n;
     const dx = mob.position.x - center.x;
     const dz = mob.position.z - center.z;
     return n + (dx * dx + dz * dz <= r2 ? 1 : 0);
   }, 0);
 }
 
+/** Living raiders fighting this raid (scoped to its center, so a previous raid's stragglers don't block a new one). */
+const raidersNearCenter = (state: GameState, center: { x: number; z: number }): number => factionNearCenter(state, center, "raider");
+
+/** Living villagers near the center — once zero, the village has fallen. */
+const residentsNearCenter = (state: GameState, center: { x: number; z: number }): number => factionNearCenter(state, center, "villager");
+
 /**
  * Begins a raid centered on (cx, cz). Refused (returns false) when one is already
  * running or hostiles can't spawn (Peaceful). The first wave drops on the next tick.
  */
 export function startRaid(state: GameState, cx: number, cz: number): boolean {
-  if (state.raid || !hostilesSpawn(state.difficulty)) return false;
+  // Refuse while raiders from a prior raid still roam this village — they would
+  // otherwise keep the next raid's wave gate shut.
+  if (state.raid || !hostilesSpawn(state.difficulty) || raidersNearCenter(state, { x: cx, z: cz }) > 0) return false;
   state.raid = { center: { x: cx, z: cz }, wavesSpawned: 0, totalWaves: RAID_WAVE_COUNT, waveTimer: 0 };
   return true;
 }
@@ -72,7 +75,7 @@ export function tickRaid(state: GameState, dt: number, deps: RaidDeps): void {
     return;
   }
 
-  if (countRaiders(state) > 0) return; // a wave is still standing
+  if (raidersNearCenter(state, raid.center) > 0) return; // a wave is still standing
 
   if (raid.wavesSpawned >= raid.totalWaves) {
     // Every wave beaten — the village holds.

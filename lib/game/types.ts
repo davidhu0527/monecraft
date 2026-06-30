@@ -321,7 +321,15 @@ export type SaveDataV14 = Omit<SaveDataV13, "version"> & {
  * now carries an optional `profession` on its `SavedMob`. The field is additive,
  * so the v14→v15 migration is a pure version bump and pre-v15 villagers load
  * professionless (the engine assigns one).
+ *
+ * `villagesSeeded` marks a world whose villages have already been populated (every
+ * save the engine writes sets it). Since `readSave` always migrates to the current
+ * version, the original version isn't recoverable on load — this flag is what lets
+ * the engine tell a genuine v15 save (villagers are authoritative; an emptied
+ * village stays empty) from a fresh world or a pre-village upgrade (which still
+ * need their residents seeded).
  */
 export type SaveData = Omit<SaveDataV14, "version"> & {
   version: 15;
+  villagesSeeded?: boolean;
 };

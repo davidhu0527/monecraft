@@ -312,10 +312,12 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
-    // Seed each village's residents, but only when the world has no villagers yet
-    // — a fresh world, or one upgraded from a pre-village save. A reload of a
-    // populated world restored its residents above, so this is skipped (no double).
-    if (!this.state.mobs.some((mob) => mob.faction === "villager")) {
+    // Seed each village's residents — but only for a world that hasn't populated
+    // its villages yet: a fresh world (no save) or one upgraded from a pre-village
+    // save (no `villagesSeeded` flag). A genuine v15 save's villagers are
+    // authoritative — restored above — so we never re-seed (an emptied village
+    // stays empty, not repopulated on reload).
+    if (!save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
       if (this.state.villageSites.length > 0) {
         spawnVillageResidents(this.state, this.state.villageSites, this.rng, this.surfaceYAt);
       } else {
@@ -324,10 +326,11 @@ export class GameEngine {
         const { x, z } = this.state.player.position;
         spawnMobGroup(this.state, { kind: "villager", hostile: false, count: 3, centerX: x, centerZ: z, radius: RENDER_RADIUS }, this.rng, this.surfaceYAt);
       }
-      // Give the freshly seeded villagers their trade professions (round-robin);
-      // restored residents already carry theirs from the save.
-      assignVillagerProfessions(this.state);
     }
+    // Assign a profession to any villager that lacks one — newly seeded residents,
+    // and (defensively) any restored villager whose profession went missing. Runs
+    // unconditionally so a pre-v15 upgrade's villagers don't stay professionless.
+    assignVillagerProfessions(this.state);
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
     tickWeather(this.state);
@@ -732,7 +735,8 @@ export class GameEngine {
       xp: state.xp,
       stats: serializeStats(state.stats),
       advancements: [...state.advancements],
-      mobs: serializeMobs(state.mobs)
+      mobs: serializeMobs(state.mobs),
+      villagesSeeded: true // this world's villages are populated — don't re-seed on reload
     };
   }
 
@@ -965,7 +969,7 @@ export class GameEngine {
     const slot = state.inventory[state.selectedSlot];
     if (slot?.id !== "ominous_horn" || slot.count <= 0) return false;
     if (state.raid) {
-      this.emit({ type: "summonFailed" });
+      this.emit({ type: "raidFailed" });
       return true;
     }
     const { x, z } = state.player.position;
