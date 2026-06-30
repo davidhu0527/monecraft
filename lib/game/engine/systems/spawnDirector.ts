@@ -94,6 +94,11 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     ["horse", false, 3, passiveRadius],
     ["cow", false, 4, passiveRadius],
     ["pig", false, 4, passiveRadius],
+    // Wild wolves and cats roam with the other animals (passive, flee the player)
+    // until tamed with a bone / raw fish — without these they'd never appear and
+    // companions would be unreachable.
+    ["wolf", false, 4, passiveRadius],
+    ["cat", false, 3, passiveRadius],
     // Villagers no longer scatter loosely — they live in generated villages now
     // (see spawnVillageResidents), so the world's villager population is its
     // settlements. A village-less world (e.g. all-ocean) simply has no villagers.

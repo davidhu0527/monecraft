@@ -42,6 +42,12 @@ describe("spawnInitialMobs difficulty gating (via the constructor)", () => {
     const e = makeEngine("normal");
     expect(hostileCount(e)).toBeGreaterThan(0);
   });
+
+  test("a fresh world seeds tameable wolves and cats (so companions are reachable)", () => {
+    const e = makeEngine("normal");
+    expect(e.state.mobs.some((m) => m.kind === "wolf")).toBe(true);
+    expect(e.state.mobs.some((m) => m.kind === "cat")).toBe(true);
+  });
 });
 
 describe("spawnVillageResidents", () => {
