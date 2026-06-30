@@ -37,6 +37,7 @@ import { addEffect } from "@/lib/game/engine/systems/statusEffects";
 import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
+import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
@@ -112,10 +113,11 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 3 + 8 + 6 + 6 + 4); // sheep/chicken/horse/cow/pig/villager + zombie/skeleton/spider/creeper
+    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4);
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(25);
+    expect(engine.getSnapshot().passiveCount).toBe(32);
     expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
@@ -1058,6 +1060,9 @@ describe("gameplay events", () => {
       id: state.nextMobId++,
       kind,
       hostile,
+      faction: hostile ? "hostile" : "wild",
+      targetId: null,
+      retargetTimer: 0,
       hp: 50,
       position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
       direction: new THREE.Vector3(0, 0, 1),
@@ -1466,14 +1471,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 12 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is version 13 and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(12);
+    expect(save.version).toBe(15);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -1535,6 +1540,9 @@ describe("beds and sleep", () => {
       id: engine.state.nextMobId++,
       kind: "zombie",
       hostile: true,
+      faction: "hostile",
+      targetId: null,
+      retargetTimer: 0,
       hp: 10,
       position: new THREE.Vector3(p.x + offset.x, p.y + offset.y, p.z + offset.z),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2076,6 +2084,9 @@ describe("animal breeding", () => {
       id,
       kind: "sheep",
       hostile: false,
+      faction: "wild",
+      targetId: null,
+      retargetTimer: 0,
       hp: 10,
       position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2305,6 +2316,10 @@ describe("villager trading", () => {
       id: state.nextMobId++,
       kind: "villager",
       hostile: false,
+      faction: "villager",
+      profession: "farmer", // trade_wheat is a farmer trade
+      targetId: null,
+      retargetTimer: 0,
       hp: 20,
       position: new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z - 2),
       direction: new THREE.Vector3(0, 0, 1),
@@ -2340,6 +2355,49 @@ describe("villager trading", () => {
     engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
     expect(countsById(state.inventory).get("emerald")).toBe(1);
     expect(countsById(state.inventory).get("wheat")).toBeUndefined();
+
+    // A trade from another profession (blacksmith's gold→emerald) is refused while
+    // a farmer is open — the profession gate, not just the station gate.
+    const goldSlot = state.inventory.findIndex((s) => !s.id);
+    state.inventory[goldSlot] = createSlot("gold_ore", 1);
+    engine.dispatch({ type: "craft", recipeId: "trade_gold" });
+    expect(countsById(state.inventory).get("gold_ore")).toBe(1); // not consumed
+    expect(state.activeVillagerProfession).toBe("farmer");
+  });
+});
+
+describe("village raids", () => {
+  test("sounding an Ominous Horn near a village starts a raid and consumes the horn", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    state.player.pitch = -1.2; // look up at the sky so no block interaction intercepts
+
+    // A village right where the player stands, and a horn in hand.
+    state.villageSites = [{ x: state.player.position.x, z: state.player.position.z }];
+    const slot = state.inventory.findIndex((s) => !s.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("ominous_horn", 1);
+    state.selectedSlot = slot;
+
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.raid).not.toBeNull();
+    expect(engine.consumeEvents().some((e) => e.type === "raidStarted")).toBe(true);
+    expect(countsById(state.inventory).get("ominous_horn")).toBeUndefined(); // consumed
+
+    // A second horn is refused while the raid runs, with a raid-specific event
+    // (not the boss-totem `summonFailed`, which would show the wrong toast).
+    state.inventory[slot] = createSlot("ominous_horn", 1);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    const events = engine.consumeEvents();
+    expect(events.some((e) => e.type === "raidFailed")).toBe(true);
+    expect(events.some((e) => e.type === "summonFailed")).toBe(false);
+    expect(countsById(state.inventory).get("ominous_horn")).toBe(1); // not consumed
   });
 });
 
@@ -2618,5 +2676,212 @@ describe("armor equipping (dedicated slots)", () => {
     run(engine, 5); // RESPAWN_SECONDS is 3
     expect(state.isDead).toBe(false);
     expect(state.equippedArmor.boots?.id).toBe("boots");
+  });
+});
+
+describe("statistics (save v13)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+
+  test("crafting bumps items_crafted and the per-recipe counter at the emit chokepoint", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    expect(engine.state.stats.get("items_crafted")).toBe(1);
+    expect(engine.state.stats.get("crafted_planks")).toBe(1);
+  });
+
+  test("active play accumulates the tick counters", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    expect(engine.state.stats.get("play_time")).toBeGreaterThan(0);
+    expect(engine.state.stats.get("distance_walked")).toBeGreaterThanOrEqual(0);
+  });
+
+  test("statistics survive serialize -> reload", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.stats.get("items_crafted")).toBe(1);
+    expect(restored.state.stats.get("crafted_planks")).toBe(1);
+  });
+
+  test("statistics survive death — counted, not cleared like effects", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    engine.dispatch({ type: "craft", recipeId: "planks" });
+    die(engine);
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.state.stats.get("items_crafted")).toBe(1); // not cleared on death
+    expect(engine.state.stats.get("deaths")).toBe(1); // the death itself is counted
+  });
+});
+
+describe("advancements (save v13)", () => {
+  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const removeMobAt = (engine: GameEngine, index: number) => (engine as unknown as { removeMobAt: (i: number, looting?: number) => void }).removeMobAt(index);
+
+  function pushHostile(engine: GameEngine, kind: MobKind): void {
+    const p = engine.state.player.position;
+    engine.state.mobs.push({
+      id: engine.state.nextMobId++,
+      kind,
+      hostile: true,
+      faction: "hostile",
+      targetId: null,
+      retargetTimer: 0,
+      hp: 1,
+      position: new THREE.Vector3(p.x, p.y, p.z),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 0,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    });
+  }
+
+  test("crafting a pickaxe unlocks Tool Up once, announcing it", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" });
+    const unlocks = engine.consumeEvents().filter((event) => event.type === "advancementUnlocked");
+    expect(unlocks).toHaveLength(1);
+    expect(unlocks[0]).toMatchObject({ id: "tool_up", name: "Tool Up" });
+    expect(engine.state.advancements.has("tool_up")).toBe(true);
+    // A second pickaxe must not re-announce the already-earned advancement.
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" });
+    expect(engine.consumeEvents().some((event) => event.type === "advancementUnlocked")).toBe(false);
+  });
+
+  test("killing a hostile unlocks Monster Hunter through the emit chokepoint", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    pushHostile(engine, "zombie");
+    removeMobAt(engine, engine.state.mobs.length - 1);
+    expect(engine.consumeEvents().some((event) => event.type === "advancementUnlocked" && event.id === "monster_hunter")).toBe(true);
+    expect(engine.state.advancements.has("monster_hunter")).toBe(true);
+  });
+
+  test("advancements persist through serialize -> reload and survive death", () => {
+    const engine = makeEngine();
+    engine.state.mobs = [];
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }); // unlocks tool_up
+    expect(engine.state.advancements.has("tool_up")).toBe(true);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.advancements.has("tool_up")).toBe(true);
+
+    die(engine);
+    expect(engine.state.isDead).toBe(true);
+    expect(engine.state.advancements.has("tool_up")).toBe(true); // not cleared on death
+  });
+
+  test("a corrupt/unknown advancement id is dropped on load (registry-filtered)", () => {
+    const engine = makeEngine();
+    const save = engine.serialize();
+    save.advancements = ["getting_wood", "totally_bogus"];
+    const restored = makeEngine(save);
+    expect(restored.state.advancements.has("getting_wood")).toBe(true); // real id kept
+    expect(restored.state.advancements.has("totally_bogus")).toBe(false); // bogus id dropped
+    expect(restored.getSnapshot().advancementsUnlocked).toBe(1); // count not inflated
+  });
+
+  test("toggleAdvancements opens the overlay, mutually exclusive with the inventory", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "toggleAdvancements" });
+    expect(engine.getSnapshot().advancementsOpen).toBe(true);
+    // Opening the inventory closes the advancements overlay…
+    engine.dispatch({ type: "toggleInventory" });
+    expect(engine.getSnapshot().advancementsOpen).toBe(false);
+    expect(engine.getSnapshot().inventoryOpen).toBe(true);
+    // …and opening advancements closes the inventory.
+    engine.dispatch({ type: "toggleAdvancements" });
+    expect(engine.getSnapshot().inventoryOpen).toBe(false);
+    expect(engine.getSnapshot().advancementsOpen).toBe(true);
+  });
+
+  test("the snapshot count and advancementState() expose progression to the UI", () => {
+    const engine = makeEngine();
+    engine.dispatch({ type: "craft", recipeId: "wood_pickaxe" }); // unlock tool_up + items_crafted
+    expect(engine.getSnapshot().advancementsUnlocked).toBe(1);
+    const detail = engine.advancementState();
+    expect(detail.unlocked).toContain("tool_up");
+    expect(detail.stats.find((entry) => entry.id === "items_crafted")?.value).toBe(1);
+  });
+});
+
+describe("mob persistence (pets)", () => {
+  test("a tamed pet is restored across reload; the wild population is not duplicated", () => {
+    const engine = makeEngine();
+    // Flag an existing mob as a real tamed pet (taming itself is covered separately);
+    // a pet is a wolf/cat that is owned + ally.
+    const pet = engine.state.mobs[0];
+    pet.kind = "wolf";
+    pet.owner = "player";
+    pet.faction = "ally";
+    pet.hp = 7;
+    pet.position.set(20, 40, 20);
+    const wildCount = engine.state.mobs.length;
+
+    const restored = makeEngine(engine.serialize());
+    const pets = restored.state.mobs.filter((m) => m.owner === "player");
+    expect(pets).toHaveLength(1);
+    expect(pets[0].faction).toBe("ally");
+    expect(pets[0].hp).toBe(7);
+    expect(pets[0].position.x).toBe(20); // x/z survive; y is re-grounded onto current terrain
+    // Only the pet was persisted — the fungible population is re-seeded fresh, so
+    // the restored world has the same wildlife plus the one restored pet.
+    expect(restored.state.mobs.length).toBe(wildCount + 1);
+  });
+
+  test("a fresh world persists its village residents (or fallback villagers) but no pets", () => {
+    const mobs = makeEngine().serialize().mobs ?? [];
+    expect(mobs.length).toBeGreaterThan(0); // villagers persist now
+    expect(mobs.every((m) => m.faction === "villager")).toBe(true); // only residents, nothing owned
+    expect(mobs.some((m) => m.owner === "player")).toBe(false);
+  });
+
+  test("a populated village save is not repopulated on reload, even after its villagers are wiped", () => {
+    const engine = makeEngine();
+    expect(engine.state.mobs.some((m) => m.faction === "villager")).toBe(true); // a fresh world seeds residents (fallback at 64³)
+    engine.state.mobs = engine.state.mobs.filter((m) => m.faction !== "villager"); // the player kills them all
+    const save = engine.serialize();
+    expect(save.villagesSeeded).toBe(true);
+
+    const restored = makeEngine(save);
+    expect(restored.state.mobs.some((m) => m.faction === "villager")).toBe(false); // stays empty — not re-seeded
+  });
+
+  test("a pre-village save (no villagesSeeded flag) still seeds villagers on load", () => {
+    const save = makeEngine().serialize();
+    // Simulate a pre-v15 upgrade: the flag is absent and no villagers were persisted.
+    const upgraded = { ...save, villagesSeeded: undefined, mobs: (save.mobs ?? []).filter((m) => m.faction !== "villager") };
+
+    const restored = makeEngine(upgraded);
+    expect(restored.state.mobs.some((m) => m.faction === "villager")).toBe(true); // bootstrap seeded them
+    expect(restored.state.mobs.filter((m) => m.faction === "villager").every((m) => m.profession != null)).toBe(true); // with professions
+  });
+
+  test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {
+    const engine = makeEngine();
+    const wolf = engine.state.mobs[0];
+    wolf.kind = "wolf";
+    wolf.owner = "player";
+    wolf.faction = "ally";
+    wolf.hp = PET_TAMED_HP;
+    wolf.detectRange = PET_FIGHT_RANGE;
+
+    const restored = makeEngine(engine.serialize());
+    const pet = restored.state.mobs.find((m) => m.owner === "player")!;
+    expect(pet.kind).toBe("wolf");
+    expect(pet.faction).toBe("ally");
+    expect(pet.hp).toBe(PET_TAMED_HP);
+    expect(pet.detectRange).toBe(PET_FIGHT_RANGE); // re-armed so the pet still fights
   });
 });

@@ -142,6 +142,19 @@ export const BOSS_SUMMON_RADIUS = 10; // where the boss appears, around the play
 export const BOSS_MINION_CAP = 4; // boss-summoned minions alive at once
 export const BOSS_SUMMON_INTERVAL_SECONDS = 12;
 
+// Raids. Sounding an Ominous Horn within RAID_TRIGGER_DISTANCE of a village calls
+// down RAID_WAVE_COUNT waves of RAID_WAVE_SIZE raiders, spawned in a ring of
+// RAID_RADIUS around the village center; a new wave starts RAID_WAVE_DELAY_SECONDS
+// after the previous one is cleared. Defending all waves rewards emeralds + XP; if
+// every villager near the center dies first, the raid is lost.
+export const RAID_WAVE_COUNT = 3;
+export const RAID_WAVE_SIZE = 4;
+export const RAID_WAVE_DELAY_SECONDS = 4;
+export const RAID_RADIUS = 24;
+export const RAID_TRIGGER_DISTANCE = 48;
+export const RAID_REWARD_EMERALDS = 5;
+export const RAID_REWARD_XP = 50;
+
 // Creepers, TNT & explosions. An explosion destroys blocks within `power` (with a
 // distance falloff vs each block's blast resistance) and damages the player/mobs
 // out to twice that radius, also with falloff. Damage scales with power, so a
@@ -185,6 +198,17 @@ export const HOSTILE_CAP = 16;
 // a creeper — can materialize point-blank and attack before you can react.
 export const HOSTILE_SPAWN_MIN_RADIUS = 16;
 
+// Mob allegiance & mob-vs-mob combat. Mobs carry a `faction` (wild/hostile/ally/
+// villager/raider) that drives who fights whom (see mobAI's enmity table). A
+// "fighter" (hostile/ally/raider) locks onto the nearest enemy-faction mob within
+// its detect range, re-scanning only every RETARGET interval so steering stays
+// O(N); the strike uses the mob's raw attackDamage (difficulty scaling applies to
+// damage dealt to the *player* only). Villagers flee a threat within FLEE_RANGE.
+export const MOB_RETARGET_SECONDS = 0.6;
+export const MOB_VS_MOB_REACH = 1.6;
+export const MOB_VS_MOB_KNOCKBACK = 0.28;
+export const VILLAGER_FLEE_RANGE = 8;
+
 // Dungeon spawners. A spawner drips one hostile every interval while the player
 // is within the activation radius, up to a local cluster cap (and the shared
 // global HOSTILE_CAP). Time-independent — dungeons are dark.
@@ -201,6 +225,17 @@ export const BREED_CHECK_INTERVAL_SECONDS = 0.5;
 export const BABY_GROW_SECONDS = 90;
 export const BABY_SCALE = 0.55;
 export const PASSIVE_CAP = 24;
+
+// Companions (tameable pets). A wild wolf (fed a bone) or cat (raw fish) tames on
+// a TAME_CHANCE roll, becoming an "ally" that follows the owner and fights nearby
+// hostiles (PET_FIGHT_RANGE = its enemy-detect radius once tamed, PET_TAMED_HP its
+// boosted health). It roams freely within PET_FOLLOW_MAX of the owner, jogs to
+// catch up beyond that, and is recalled (teleported) past PET_TELEPORT_DISTANCE.
+export const TAME_CHANCE = 1 / 3;
+export const PET_TAMED_HP = 20;
+export const PET_FIGHT_RANGE = 12;
+export const PET_FOLLOW_MAX = 10;
+export const PET_TELEPORT_DISTANCE = 24;
 
 // Random block ticks (crop growth; the system is extensible to other blocks).
 // Each interval samples N columns within RADIUS of the player and runs the
@@ -281,13 +316,13 @@ export const SAVE_KEY = "minecraft_save_v7";
 // The deterministic world-generation baseline. Bumped whenever worldgen
 // changes, so old block-diffs (which index against generated terrain) can't be
 // applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
-// lakes; v8 added shallow coal ore. Each world records the WORLDGEN_VERSION it
-// was generated under; a world whose recorded version differs from this constant
-// has its block-diffs discarded and is rebooted from its stored seed
-// (lib/game/worlds.ts). The save *schema* (SaveData, currently v6) is independent
-// of this — lighting is a derived cache and lava is worldgen, so neither is
-// persisted, and additive schema bumps (like v6's status effects) don't touch it.
-export const WORLDGEN_VERSION = 8;
+// lakes; v8 added shallow coal ore; v9 added generated villages. Each world
+// records the WORLDGEN_VERSION it was generated under; a world whose recorded
+// version differs from this constant has its block-diffs discarded and is
+// rebooted from its stored seed (lib/game/worlds.ts). The save *schema* (SaveData)
+// is independent of this — lighting is a derived cache and lava is worldgen, so
+// neither is persisted, and additive schema bumps don't touch it.
+export const WORLDGEN_VERSION = 9;
 
 // Rendering
 export const RENDER_RADIUS = 90;

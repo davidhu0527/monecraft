@@ -6,10 +6,12 @@ import {
   buildGeometryLayersRegion,
   buildGeometryRegion,
   collectDungeonSites,
+  collectVillageSites,
   computeFullLight,
   generateWorld,
   type WorldType
 } from "@/lib/world";
+import { GEN } from "@/lib/world/generation";
 
 /**
  * Worldgen determinism characterization tests.
@@ -59,9 +61,9 @@ function fullWorld(): VoxelWorld {
 
 describe("worldgen determinism", () => {
   test.each([
-    [1337, "b4e2ca0894d0ab7c1f6cadf2579e333364f05080d7311dc1c2b073a531e1a679"],
-    [1, "5e4e21ad716a2d4745f1896ee663543ac74c4eedf2776819548e8bb99cc66b79"],
-    [999999937, "acf5681013bcc13bc7d6a241c1f99df57f9096b0d16e438adcab7ad3dfd64a10"]
+    [1337, "b68e443c2baf43ddb0d522e595a2c66dc5b23f5fc06c25ebae2af07812525f25"],
+    [1, "9af01515475054435df4789163f088c3362f594789629f6c326bed53576961f8"],
+    [999999937, "a17c2e5610b7eb9dbfd6c5952d15e81b968b07e9a22adb9667b6fe5249004852"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -69,7 +71,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("afcd535bf83f487ca54a71c0adee745fcb6e782744bea3575efa947d7382efef");
+      expect(hashBytes(fullWorld().blocks)).toBe("48bf16c8019ef76bb9b034942f88542a88785538d29c09bf6100f8a30d0831f2");
     },
     { timeout: 60000 }
   );
@@ -124,8 +126,8 @@ describe("world types", () => {
   // refactor can't silently corrupt worlds created with it. Re-baseline only on
   // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
   test.each([
-    ["flat", "e613623bff9436cabda91dbf289ab93f8c7678184206f8f7a5dfda0d6c8f0229"],
-    ["amplified", "634544124b5e72743b4ea09ad92acf00d7184526ac5ddc077c55b3a5f2cca4c6"],
+    ["flat", "28e1e3ea69e01b02b8452f27bf88acc8a7b81edcfe24a4293363553379d072d3"],
+    ["amplified", "87ff8cb4f73247a6e62bfc7c8638c86cfa7cfe8a5d90185d6773d390067540a0"],
     ["islands", "e9937c0d947a0952130c79c46c26fc37c9492c7d164e2dc61a626ea9d7d8a662"]
   ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
     expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
@@ -364,6 +366,37 @@ describe("dungeons", () => {
   );
 });
 
+describe("villages", () => {
+  test(
+    "villages build house clusters on flat land clear of spawn, and collectVillageSites reproduces their centers",
+    () => {
+      const world = fullWorld();
+      const sites = collectVillageSites(world);
+      expect(sites.centers.length).toBeGreaterThan(0); // seed 1337 yields at least one village
+
+      // The derive is deterministic — a second pass produces identical centers.
+      expect(collectVillageSites(world)).toEqual(sites);
+
+      const cx = world.sizeX / 2;
+      const cz = world.sizeZ / 2;
+      for (const center of sites.centers) {
+        expect(Math.hypot(center.x - cx, center.z - cz)).toBeGreaterThanOrEqual(GEN.villageMinSpawnDistance);
+        // A house actually stands at the site: brick walls within the footprint.
+        let brick = 0;
+        for (let x = center.x - 14; x <= center.x + 14; x += 1) {
+          for (let z = center.z - 14; z <= center.z + 14; z += 1) {
+            for (let y = 0; y < world.sizeY; y += 1) {
+              if (world.inBounds(x, y, z) && world.get(x, y, z) === BlockId.Brick) brick += 1;
+            }
+          }
+        }
+        expect(brick).toBeGreaterThan(0);
+      }
+    },
+    { timeout: 60000 }
+  );
+});
+
 describe("meshing", () => {
   test(
     "geometry for a generated region is byte-identical",
@@ -371,8 +404,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1300860);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("a6683ea1019a1cf105aafbb8e061e6c058fe0931f1c54b73c0c05c1a931a6db1");
+      expect(positions.count).toBe(1319472);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("b63ca724cc91653c76a01c45980f56cf3bfd2987ab61bc6e0f4fe2de6b7e529b");
     },
     { timeout: 60000 }
   );

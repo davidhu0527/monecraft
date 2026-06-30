@@ -65,6 +65,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | Right-click or `E` | Place/interact, or throw a selected spear                                                                     |
 | `1`–`9`            | Select a hotbar slot                                                                                          |
 | `I`                | Open / close inventory & crafting                                                                             |
+| `L`                | Open / close advancements & statistics                                                                        |
 | `F`                | Eat the selected food, or drink a selected potion                                                             |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
 | `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
@@ -244,6 +245,41 @@ oceans stay clear. At night the sky fills with **stars and a moon**, while cloud
 drift overhead by day. Weather is atmospheric only: it doesn't change how mobs
 spawn or behave, and it isn't saved.
 
+## Companions and animals
+
+**Breeding.** Feed two adult animals of the same kind their food to send them
+"in love" and breed a baby that grows up in about 90 seconds: **wheat** for sheep,
+cows, and horses; **seeds** for chickens and pigs.
+
+**Taming wolves and cats.** Wild **wolves** and **cats** roam the world. Right-click
+one while holding its treat — a **bone** for a wolf, **raw fish** for a cat — to try
+to tame it (about a 1-in-3 chance; the treat is eaten either way, so bring a few).
+A tamed pet becomes your **companion**:
+
+- It **follows you** around, jogging to catch up when it falls behind and teleporting to your side if it gets too far away.
+- It **fights hostiles for you** — it'll lunge at nearby zombies, skeletons, spiders, and creepers on its own, and anything it kills drops loot and XP straight to you.
+- **Right-click your pet** (with something other than its treat in hand) to tell it to **sit and stay** — it'll hold its ground until you right-click it again. Handy before a risky dive.
+- Pets are **saved with your world**, so they're waiting where you left them when you return. Feed two of your own with their treat and they'll breed more.
+
+The world is a little more alive now: monsters will also go after **villagers** (who
+flee), so a wandering trader isn't always safe after dark.
+
+## Villages, trading, and raids
+
+**Villages** are clusters of houses that generate on flat, dry land, home to a few
+resident **villagers** who stay put across reloads. Right-click a villager to
+**trade**: the currency is the **emerald** — sell gathered materials for emeralds,
+then spend them on goods. Each villager has a **profession** (farmer, blacksmith,
+librarian, or cleric, shown by its smock colour) and offers only its own handful of
+deals, so look around the village for the trades you want.
+
+When you're ready for a fight, craft an **Ominous Horn** (3 Gold Ore + 2 Bone +
+4 Gunpowder) and right-click it near a village to trigger a **raid**: waves of
+**raiders** attack the settlement. Beat every wave to defend the village — you're
+rewarded with emeralds and XP — but if the villagers are all killed first, the
+village falls. Raiders go after the villagers, so station a tamed wolf or two among
+them and help hold the line.
+
 ## Mining and building
 
 **Break** a block by holding left-click; a crack overlay shows progress, and harder
@@ -395,6 +431,28 @@ armor selected in your hotbar, **Remove enchantments** strips them all off and
 **refunds XP** (5 points per enchantment level removed). Handy for salvaging XP
 from gear you've outgrown, or clearing an enchant you don't want before
 re-enchanting. It costs nothing to use — it only gives XP back.
+
+## Advancements and statistics
+
+Press **L** any time to open the progress screen — two tabs over your world's
+record.
+
+**Advancements** are a checklist of small goals, one per system the game has to
+offer: chop your first log, mine stone, craft a pickaxe, build a furnace, mine
+sliver and diamond ore, fire a bow, slay a monster, breed animals, harvest
+fully-grown wheat, catch a fish, enchant an item, drink a potion, sleep through a
+night, trade with a villager, and — the big one — defeat the Dragon Lord. Each
+unlocks the moment you do the thing, with a pop-up message and a chime, and
+they're grouped by theme (Mining, Crafting, Combat, Farming, Magic, Adventure).
+They're a tour of what there is to do, not a tech tree — nothing is gated behind
+them.
+
+**Statistics** track totals as you play: blocks mined, monsters slain, animals
+bred, items crafted and enchanted, potions drunk, fish caught, villager trades,
+jumps, deaths, distance travelled, and time played.
+
+Both are **saved with your world and kept when you die** (like XP, unlike potion
+effects), so your record only ever grows.
 
 ## Doors
 

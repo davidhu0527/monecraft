@@ -86,7 +86,36 @@ export type Recipe = {
   station?: "furnace" | "villager" | "brewing";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
+export type MobKind =
+  | "sheep"
+  | "chicken"
+  | "horse"
+  | "cow"
+  | "pig"
+  | "wolf"
+  | "cat"
+  | "zombie"
+  | "skeleton"
+  | "spider"
+  | "creeper"
+  | "raider"
+  | "villager"
+  | "boss";
+
+/**
+ * A mob's social allegiance — the axis that drives who fights whom (see mobAI's
+ * enmity table), distinct from the `hostile` flag (which still gates caps, the
+ * health-bar, and Peaceful despawn). Set at spawn from FACTION_BY_KIND; a tamed
+ * pet becomes "ally". Persisted with the mob (save v14+).
+ */
+export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
+
+/**
+ * A villager's trade profession — it offers only the trades tagged with its
+ * profession (TRADE_PROFESSION in trades.ts) and is tinted accordingly. Assigned
+ * per resident at spawn and persisted with the mob (save v15+).
+ */
+export type Profession = "farmer" | "blacksmith" | "librarian" | "cleric";
 
 export type MobModel = {
   group: THREE.Group;
@@ -230,13 +259,77 @@ export type SaveDataV11 = Omit<SaveDataV10, "version"> & {
 };
 
 /**
- * Current save shape (v12): armor moves to dedicated storage. `equippedArmor` is no
- * longer a by-id reference into the inventory (`SavedArmorById`) but the worn pieces
+ * v12 save shape: armor moves to dedicated storage. `equippedArmor` is no longer a
+ * by-id reference into the inventory (`SavedArmorById`) but the worn pieces
  * themselves (`SavedEquippedArmor`, per-slot `SavedSlot`). The v11→v12 migration
  * moves each legacy by-id equip out of `inventorySlots` into the armor record so a
  * worn piece no longer double-occupies an inventory slot.
  */
-export type SaveData = Omit<SaveDataV11, "version" | "equippedArmor"> & {
+export type SaveDataV12 = Omit<SaveDataV11, "version" | "equippedArmor"> & {
   version: 12;
   equippedArmor?: SavedEquippedArmor;
+};
+
+/** One persisted statistic: its id and accumulated value (kept as a number — play_time/distance are fractional). */
+export type SavedStat = { id: string; value: number };
+
+/**
+ * Save shape (v13): progression meta. `stats` are the running gameplay counters
+ * and `advancements` the unlocked ids. Both are optional, so the v12→v13 migration
+ * is a pure version bump and pre-v13 saves load with none.
+ */
+export type SaveDataV13 = Omit<SaveDataV12, "version"> & {
+  version: 13;
+  stats?: SavedStat[];
+  advancements?: string[];
+};
+
+/**
+ * One persisted mob — only tamed pets are saved in PR-A (village residents join
+ * the persistent set in PR-B; see isPersistentMob). The fungible wild/hostile
+ * population — including the loose villagers spawnInitialMobs seeds — is re-created
+ * each boot, so it is never serialized. Carries just the irreplaceable identity/
+ * state; the rest (speed, ranges, fresh timers) is rebuilt from MOB_TEMPLATES on
+ * restore. `ageTimer` keeps a bred juvenile young; `owner`/`sitting` carry pet
+ * ownership and its sit/stay state.
+ */
+export type SavedMob = {
+  kind: MobKind;
+  x: number;
+  y: number;
+  z: number;
+  hp: number;
+  faction: MobFaction;
+  owner?: "player";
+  sitting?: boolean;
+  ageTimer?: number;
+  /** Villager-only trade profession (added v15); absent on pets. */
+  profession?: Profession;
+};
+
+/**
+ * Save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14 migration
+ * is a pure version bump and pre-v14 saves load with none.
+ */
+export type SaveDataV14 = Omit<SaveDataV13, "version"> & {
+  version: 14;
+  mobs?: SavedMob[];
+};
+
+/**
+ * Current save shape (v15): villager professions. A persisted villager resident
+ * now carries an optional `profession` on its `SavedMob`. The field is additive,
+ * so the v14→v15 migration is a pure version bump and pre-v15 villagers load
+ * professionless (the engine assigns one).
+ *
+ * `villagesSeeded` marks a world whose villages have already been populated (every
+ * save the engine writes sets it). Since `readSave` always migrates to the current
+ * version, the original version isn't recoverable on load — this flag is what lets
+ * the engine tell a genuine v15 save (villagers are authoritative; an emptied
+ * village stays empty) from a fresh world or a pre-village upgrade (which still
+ * need their residents seeded).
+ */
+export type SaveData = Omit<SaveDataV14, "version"> & {
+  version: 15;
+  villagesSeeded?: boolean;
 };

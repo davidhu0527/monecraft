@@ -18,14 +18,23 @@ import type {
   SaveDataV9,
   SaveDataV10,
   SaveDataV11,
+  SaveDataV12,
+  SaveDataV13,
+  SaveDataV14,
   SavedContainer,
   SavedEffect,
   SavedEquippedArmor,
+  SavedMob,
   SavedSlot,
-  InventorySlot
+  SavedStat,
+  InventorySlot,
+  MobFaction
 } from "@/lib/game/types";
 import { isGameMode, type GameMode } from "@/lib/game/gameModes";
 import { isDifficulty, type Difficulty } from "@/lib/game/difficulties";
+import { MOB_TEMPLATES } from "@/lib/game/mobs";
+import { isProfession } from "@/lib/game/trades";
+import type { MobState } from "@/lib/game/engine/state";
 
 /**
  * Migrates a v1 save (40 slots, 10-slot hotbar) to v2 (36 slots, 9-slot
@@ -156,7 +165,7 @@ export function migrateSaveV10toV11(save: SaveDataV10): SaveDataV11 {
  * equips whose item isn't found or isn't valid armor for the slot. Pre-`inventorySlots`
  * (legacy counts-only) saves simply drop the equip map and keep items in inventory.
  */
-export function migrateSaveV11toV12(save: SaveDataV11): SaveData {
+export function migrateSaveV11toV12(save: SaveDataV11): SaveDataV12 {
   const legacy = save.equippedArmor;
   if (!legacy || !Array.isArray(save.inventorySlots)) {
     return { ...save, version: 12, equippedArmor: undefined };
@@ -176,6 +185,33 @@ export function migrateSaveV11toV12(save: SaveDataV11): SaveData {
   return { ...save, version: 12, inventorySlots: slots, equippedArmor: equipped };
 }
 
+/**
+ * Migrates a v12 save to v13 — a pure version bump. `stats` (gameplay counters)
+ * and `advancements` (unlocked ids) are optional, so a pre-progression save
+ * simply loads with no stats and no advancements yet earned.
+ */
+export function migrateSaveV12toV13(save: SaveDataV12): SaveDataV13 {
+  return { ...save, version: 13 };
+}
+
+/**
+ * Migrates a v13 save to v14 — a pure version bump. `mobs` (persisted pets) is
+ * optional, so a pre-v14 save simply loads with none and the world re-seeds its
+ * wildlife at boot as before.
+ */
+export function migrateSaveV13toV14(save: SaveDataV13): SaveDataV14 {
+  return { ...save, version: 14 };
+}
+
+/**
+ * Migrates a v14 save to v15 — a pure version bump. A villager resident's
+ * `profession` is an additive optional field on its `SavedMob`, so a pre-v15 save
+ * simply loads its villagers professionless and the engine assigns one.
+ */
+export function migrateSaveV14toV15(save: SaveDataV14): SaveData {
+  return { ...save, version: 15 };
+}
+
 // Storage is injectable so save logic can be tested without a browser.
 export function readSave(saveKey: string, storage: Storage = localStorage): SaveData | null {
   try {
@@ -183,6 +219,9 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV14
+      | SaveDataV13
+      | SaveDataV12
       | SaveDataV11
       | SaveDataV10
       | SaveDataV9
@@ -195,8 +234,21 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV2
       | SaveDataV1;
     if (!parsed || !Number.isFinite(parsed.seed) || !Array.isArray(parsed.changes)) return null;
-    let migrated: SaveDataV2 | SaveDataV3 | SaveDataV4 | SaveDataV5 | SaveDataV6 | SaveDataV7 | SaveDataV8 | SaveDataV9 | SaveDataV10 | SaveDataV11 | SaveData =
-      parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
+    let migrated:
+      | SaveDataV2
+      | SaveDataV3
+      | SaveDataV4
+      | SaveDataV5
+      | SaveDataV6
+      | SaveDataV7
+      | SaveDataV8
+      | SaveDataV9
+      | SaveDataV10
+      | SaveDataV11
+      | SaveDataV12
+      | SaveDataV13
+      | SaveDataV14
+      | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
     if (migrated.version === 4) migrated = migrateSaveV4toV5(migrated);
@@ -207,7 +259,10 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 9) migrated = migrateSaveV9toV10(migrated);
     if (migrated.version === 10) migrated = migrateSaveV10toV11(migrated);
     if (migrated.version === 11) migrated = migrateSaveV11toV12(migrated);
-    if (migrated.version !== 12) return null;
+    if (migrated.version === 12) migrated = migrateSaveV12toV13(migrated);
+    if (migrated.version === 13) migrated = migrateSaveV13toV14(migrated);
+    if (migrated.version === 14) migrated = migrateSaveV14toV15(migrated);
+    if (migrated.version !== 15) return null;
     return migrated;
   } catch {
     return null;
@@ -348,6 +403,101 @@ export function restoreEffects(save: SaveData): SavedEffect[] {
     if (!entry || typeof entry.id !== "string" || !Object.hasOwn(VALID_EFFECT_IDS, entry.id)) continue;
     if (!Number.isFinite(entry.remaining) || entry.remaining <= 0) continue;
     out.push({ id: entry.id, remaining: entry.remaining });
+  }
+  return out;
+}
+
+/**
+ * Snapshots the gameplay statistics for persistence. Zero/absent counters carry
+ * no data (an unset stat reads as 0 anyway), so only positive values are written.
+ * Unlike effect ids, stat ids are an open set (per-recipe/per-block counters), so
+ * there's no allow-list — only a finite, positive-value check.
+ */
+export function serializeStats(stats: Map<string, number>): SavedStat[] {
+  const out: SavedStat[] = [];
+  for (const [id, value] of stats) {
+    if (Number.isFinite(value) && value > 0) out.push({ id, value });
+  }
+  return out;
+}
+
+/** Reads gameplay statistics from a save, dropping non-string ids and negative / garbage values. */
+export function restoreStats(save: SaveData): SavedStat[] {
+  if (!Array.isArray(save.stats)) return [];
+  const out: SavedStat[] = [];
+  for (const entry of save.stats) {
+    if (!entry || typeof entry.id !== "string") continue;
+    if (!Number.isFinite(entry.value) || entry.value < 0) continue;
+    out.push({ id: entry.id, value: entry.value });
+  }
+  return out;
+}
+
+/** Reads the unlocked advancement ids from a save (non-empty strings only, de-duplicated). */
+export function restoreAdvancements(save: SaveData): string[] {
+  if (!Array.isArray(save.advancements)) return [];
+  const seen = new Set<string>();
+  for (const id of save.advancements) {
+    if (typeof id === "string" && id) seen.add(id);
+  }
+  return [...seen];
+}
+
+// Every known faction, keyed so a new MobFaction is a compile error here.
+const VALID_MOB_FACTIONS: Record<MobFaction, true> = { wild: true, hostile: true, ally: true, villager: true, raider: true };
+
+/**
+ * Whether a mob survives a save/reload: tamed pets (owner set) and village
+ * residents (faction "villager"). The fungible wild/hostile population is
+ * re-seeded each boot by spawnInitialMobs, so persisting it would just duplicate
+ * it. Villagers no longer scatter loosely — they live in villages — so persisting
+ * them is safe and keeps a settlement's population stable across reloads.
+ */
+export function isPersistentMob(mob: MobState): boolean {
+  return mob.owner != null || mob.faction === "villager";
+}
+
+/** Snapshots the persistent mobs (tamed pets) for the save — body-center position + the state a template can't rebuild. */
+export function serializeMobs(mobs: MobState[]): SavedMob[] {
+  const out: SavedMob[] = [];
+  for (const mob of mobs) {
+    if (!isPersistentMob(mob)) continue;
+    const saved: SavedMob = { kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z, hp: mob.hp, faction: mob.faction };
+    if (mob.owner != null) saved.owner = mob.owner;
+    if (mob.sitting) saved.sitting = true;
+    if (mob.ageTimer > 0) saved.ageTimer = mob.ageTimer;
+    if (mob.profession != null) saved.profession = mob.profession;
+    out.push(saved);
+  }
+  return out;
+}
+
+/**
+ * Reads persisted mobs from a save into validated SavedMob entries — dropping
+ * unknown kinds, non-finite coords, non-positive/garbage hp, and unknown factions.
+ * The engine rebuilds the live MobState from these (re-grounding y onto current
+ * terrain, assigning fresh ids), so this stays pure data — no THREE / no rng.
+ */
+export function restoreMobs(save: SaveData): SavedMob[] {
+  if (!Array.isArray(save.mobs)) return [];
+  const out: SavedMob[] = [];
+  for (const entry of save.mobs) {
+    if (!entry || typeof entry.kind !== "string" || !MOB_TEMPLATES[entry.kind]) continue;
+    if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z)) continue;
+    if (!Number.isFinite(entry.hp) || entry.hp <= 0) continue;
+    if (typeof entry.faction !== "string" || !Object.hasOwn(VALID_MOB_FACTIONS, entry.faction)) continue;
+    // Only the two persistent shapes are accepted (mirrors isPersistentMob), so a
+    // stale/edited save can't resurrect e.g. a "pet zombie": an owned ally pet, or
+    // an owner-less villager resident. Anything else is dropped.
+    const isPet = entry.owner === "player" && entry.faction === "ally";
+    const isResident = entry.owner == null && entry.faction === "villager";
+    if (!isPet && !isResident) continue;
+    const saved: SavedMob = { kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, hp: entry.hp, faction: entry.faction };
+    if (entry.owner === "player") saved.owner = "player";
+    if (entry.sitting === true) saved.sitting = true;
+    if (Number.isFinite(entry.ageTimer) && (entry.ageTimer ?? 0) > 0) saved.ageTimer = entry.ageTimer;
+    if (isProfession(entry.profession)) saved.profession = entry.profession;
+    out.push(saved);
   }
   return out;
 }

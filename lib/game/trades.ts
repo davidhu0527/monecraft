@@ -1,4 +1,4 @@
-import type { Recipe } from "@/lib/game/types";
+import type { Profession, Recipe } from "@/lib/game/types";
 
 /**
  * Villager trade offers. A trade is just a station-gated recipe (`station:
@@ -48,3 +48,37 @@ export const TRADES: Recipe[] = [
   },
   { id: "trade_ruby", label: "8 Emerald -> 1 Ruby Ore", cost: [{ slotId: "emerald", count: 8 }], result: { slotId: "ruby_ore", count: 1 }, station: "villager" }
 ];
+
+/** The professions, in assignment order (residents cycle through these). */
+export const PROFESSIONS: readonly Profession[] = ["farmer", "blacksmith", "librarian", "cleric"];
+
+export function isProfession(value: unknown): value is Profession {
+  return typeof value === "string" && (PROFESSIONS as readonly string[]).includes(value);
+}
+
+/**
+ * Which profession offers each trade. Every trade id in TRADES must appear here
+ * (tradeProfessionsCoverAllTrades enforces it); a villager shows only the offers
+ * tagged with its own profession, and the craft gate refuses the rest.
+ */
+export const TRADE_PROFESSION: Record<string, Profession> = {
+  // Farmer — food.
+  trade_wheat: "farmer",
+  trade_bread: "farmer",
+  // Blacksmith — ores & tools.
+  trade_gold: "blacksmith",
+  trade_pickaxe: "blacksmith",
+  trade_sliver: "blacksmith",
+  // Librarian — light & ammunition.
+  trade_coal: "librarian",
+  trade_torch: "librarian",
+  trade_arrows: "librarian",
+  // Cleric — leather & gems.
+  trade_leather: "cleric",
+  trade_ruby: "cleric"
+};
+
+/** The profession a trade belongs to (every villager trade has one). */
+export function tradeProfession(recipeId: string): Profession | undefined {
+  return TRADE_PROFESSION[recipeId];
+}

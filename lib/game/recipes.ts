@@ -532,6 +532,16 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "boss_summoner", count: 1 }
   },
   {
+    id: "ominous_horn",
+    label: "3 Gold Ore + 2 Bone + 4 Gunpowder -> Ominous Horn",
+    cost: [
+      { slotId: "gold_ore", count: 3 },
+      { slotId: "bone", count: 2 },
+      { slotId: "gunpowder", count: 4 }
+    ],
+    result: { slotId: "ominous_horn", count: 1 }
+  },
+  {
     id: "dragon_sword",
     label: "1 Dragon Heart + 2 Diamond Ore -> Dragon Sword",
     cost: [

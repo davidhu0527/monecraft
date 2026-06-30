@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { BlockId } from "@/lib/world";
+import { GEN } from "@/lib/world/generation";
 import {
   BOSS_SUMMON_INTERVAL_SECONDS,
   HOSTILE_CAP,
@@ -11,7 +12,8 @@ import {
   SPAWNER_INTERVAL_SECONDS,
   SPAWNER_LOCAL_CAP
 } from "@/lib/game/config";
-import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import { FACTION_BY_KIND, MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import { PROFESSIONS } from "@/lib/game/trades";
 import { hostileCapScale, hostileSpawnIntervalScale, hostilesSpawn } from "@/lib/game/difficulties";
 import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
@@ -36,6 +38,9 @@ export function pushMob(state: GameState, kind: MobKind, hostile: boolean, x: nu
     id: state.nextMobId,
     kind,
     hostile,
+    faction: FACTION_BY_KIND[kind],
+    targetId: null,
+    retargetTimer: 0,
     hp: template.hp,
     position: new THREE.Vector3(x, y + halfHeight, z),
     direction: new THREE.Vector3(rng() - 0.5, 0, rng() - 0.5).normalize(),
@@ -89,7 +94,14 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     ["horse", false, 3, passiveRadius],
     ["cow", false, 4, passiveRadius],
     ["pig", false, 4, passiveRadius],
-    ["villager", false, 3, passiveRadius],
+    // Wild wolves and cats roam with the other animals (passive, flee the player)
+    // until tamed with a bone / raw fish — without these they'd never appear and
+    // companions would be unreachable.
+    ["wolf", false, 4, passiveRadius],
+    ["cat", false, 3, passiveRadius],
+    // Villagers no longer scatter loosely — they live in generated villages now
+    // (see spawnVillageResidents), so the world's villager population is its
+    // settlements. A village-less world (e.g. all-ocean) simply has no villagers.
     ["zombie", true, 8, hostileRadius],
     ["skeleton", true, 6, hostileRadius],
     ["spider", true, 6, hostileRadius],
@@ -102,6 +114,35 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     // Hostiles keep a minimum standoff so nothing (notably a creeper) starts the
     // game point-blank; passives may roam right up to the spawn area.
     spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius, minRadius: hostile ? HOSTILE_SPAWN_MIN_RADIUS : 0 }, rng, surfaceYAt);
+  }
+}
+
+/**
+ * Seeds each village center with its resident villager population (faction
+ * "villager", so they persist with the world). Called once when a world has no
+ * villagers yet — a fresh world or one upgraded from a pre-village save; a reload
+ * of a populated world restores its residents instead, so they aren't doubled.
+ */
+export function spawnVillageResidents(state: GameState, sites: Array<{ x: number; z: number }>, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
+  for (const site of sites) {
+    for (let i = 0; i < GEN.villagersPerVillage; i += 1) {
+      const pos = randomLandPointNear(state.world, surfaceYAt, site.x, site.z, 8, rng, 0);
+      pushMob(state, "villager", false, pos.x, pos.y, pos.z, rng);
+    }
+  }
+}
+
+/**
+ * Assigns a trade profession (round-robin) to every villager that doesn't have
+ * one yet — newly seeded residents on a fresh world. Restored residents keep
+ * their saved profession, so this skips them (they're not professionless).
+ */
+export function assignVillagerProfessions(state: GameState): void {
+  let next = 0;
+  for (const mob of state.mobs) {
+    if (mob.faction !== "villager" || mob.profession != null) continue;
+    mob.profession = PROFESSIONS[next % PROFESSIONS.length];
+    next += 1;
   }
 }
 

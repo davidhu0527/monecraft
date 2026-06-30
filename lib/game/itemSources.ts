@@ -27,10 +27,13 @@ const MOB_LABELS: Record<MobKind, string> = {
   horse: "a horse",
   cow: "a cow",
   pig: "a pig",
+  wolf: "a wolf",
+  cat: "a cat",
   zombie: "a zombie",
   skeleton: "a skeleton",
   spider: "a spider",
   creeper: "a creeper",
+  raider: "a raider",
   villager: "a villager",
   boss: "the boss"
 };

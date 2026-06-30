@@ -48,6 +48,8 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   hostileCount: 0,
   respawnSeconds: 0,
   inventoryOpen: false,
+  advancementsOpen: false,
+  advancementsUnlocked: 0,
   paused: false,
   debugOpen: false,
   debug: null,
@@ -56,6 +58,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   capsActive: false,
   sleeping: false,
   craftingStation: null,
+  activeVillagerProfession: null,
   container: null,
   boss: null,
   victory: false,
@@ -125,6 +128,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // Pending UI timers (flash messages, world-reload defers) so they can be
   // cancelled on unmount instead of firing setState/onReloadWorld after teardown.
   const pendingTimeoutsRef = useRef<Set<number>>(new Set());
+  // The single in-flight toast-clear timer, so a new message cancels the old one's
+  // clear instead of letting an earlier (shorter) timer wipe it early.
+  const messageClearRef = useRef<number | null>(null);
   // Set by Load/Reset before they force a remount: those want to re-read (or
   // discard) the on-disk save, so the unmount must NOT persist the live state
   // over it. Consumed once by the cleanup; every other unmount saves.
@@ -212,13 +218,23 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     []
   );
 
-  const flashMessage = useCallback(
-    (text: string, durationMs = 1200) => {
-      setSaveMessage(text);
-      scheduleTimeout(() => setSaveMessage(""), durationMs);
-    },
-    [scheduleTimeout]
-  );
+  const flashMessage = useCallback((text: string, durationMs = 1200) => {
+    setSaveMessage(text);
+    // Replace any pending clear: toasts often arrive in the same burst (an unlock
+    // alongside a pickedUp/autosave toast), and an older short timer must not wipe
+    // a newer message — nor this timer clear the message that follows it.
+    if (messageClearRef.current !== null) {
+      window.clearTimeout(messageClearRef.current);
+      pendingTimeoutsRef.current.delete(messageClearRef.current);
+    }
+    const id = window.setTimeout(() => {
+      pendingTimeoutsRef.current.delete(id);
+      messageClearRef.current = null;
+      setSaveMessage("");
+    }, durationMs);
+    pendingTimeoutsRef.current.add(id);
+    messageClearRef.current = id;
+  }, []);
 
   useEffect(() => {
     if (!ctx) return;
@@ -325,6 +341,24 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "summonFailed") {
           flashMessage("The totem lies dormant — a beast already walks");
         }
+        if (event.type === "advancementUnlocked") {
+          flashMessage(`Advancement Unlocked: ${event.name}`, 2400);
+        }
+        if (event.type === "raidStarted") {
+          flashMessage(`A raid is coming — defend the village! (${event.totalWaves} waves)`, 2400);
+        }
+        if (event.type === "raidFailed") {
+          flashMessage("A raid is already underway");
+        }
+        if (event.type === "raidWaveStarted") {
+          flashMessage(`Raid wave ${event.wave} / ${event.totalWaves}`, 1800);
+        }
+        if (event.type === "raidWon") {
+          flashMessage("The village holds! Raid defended.", 2400);
+        }
+        if (event.type === "raidLost") {
+          flashMessage("The village has fallen...", 2400);
+        }
         renderer.handleEvent(event, gameEngine.state);
         audio.handleEvent(event);
       }
@@ -387,6 +421,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     setSelectedSlot: (index: number) => engine?.dispatch({ type: "selectSlot", index }),
     capsActive: snapshot.capsActive,
     inventoryOpen: snapshot.inventoryOpen,
+    advancementsOpen: snapshot.advancementsOpen,
+    // Pulled live from the engine on render (the panel only mounts while open), so
+    // play never churns the snapshot with stat values the HUD doesn't show.
+    advancementState: () => snapshot.api?.advancementState() ?? { stats: [], unlocked: [] },
+    toggleAdvancements: () => engine?.dispatch({ type: "toggleAdvancements" }),
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
     armorPoints: snapshot.armorPoints,
@@ -400,6 +439,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     paused: snapshot.paused,
     sleeping: snapshot.sleeping,
     craftingStation: snapshot.craftingStation,
+    activeVillagerProfession: snapshot.activeVillagerProfession,
     container: snapshot.container,
     boss: snapshot.boss,
     victory: snapshot.victory,

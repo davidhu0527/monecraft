@@ -58,7 +58,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**71 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**72 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -132,6 +132,7 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 | Bow          | 3 Wood + 3 String                   |
 | Arrow (×4)   | 1 Stone + 1 Wood + 1 Feather        |
 | Cursed Totem | 1 Diamond Ore + 2 Bone + 2 Gold Ore |
+| Ominous Horn | 3 Gold Ore + 2 Bone + 4 Gunpowder   |
 
 ### Armor
 
@@ -276,23 +277,28 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 
 ## Mobs
 
-**10 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
-can be bred; the villager is passive but doesn't flee (right-click to trade); hostiles
-hunt at night. Drop counts are inclusive ranges rolled per kill.
+**13 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+can be bred; wolves and cats are passive until **tamed** into fighting companions;
+the villager is passive but doesn't flee (right-click to trade); hostiles hunt at
+night and also attack villagers; **raiders** storm a village in waves when a raid is
+triggered. Drop counts are inclusive ranges rolled per kill.
 
-| Mob      | Type    | HP   | Speed | Detect range | Attack             | Cooldown | Drops                           |
-| -------- | ------- | ---- | ----- | ------------ | ------------------ | -------- | ------------------------------- |
-| Sheep    | passive | 10   | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
-| Chicken  | passive | 7    | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
-| Horse    | passive | 14   | 1.4   | —            | —                  | —        | 1–2 Leather                     |
-| Cow      | passive | 10   | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
-| Pig      | passive | 8    | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
-| Villager | passive | 20   | 0.6   | —            | — (trade partner)  | —        | nothing                         |
-| Zombie   | hostile | 100  | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
-| Skeleton | hostile | 100  | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
-| Spider   | hostile | 100  | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
-| Creeper  | hostile | 100  | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
-| Boss     | hostile | 1000 | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
+| Mob      | Type    | HP           | Speed | Detect range | Attack             | Cooldown | Drops                           |
+| -------- | ------- | ------------ | ----- | ------------ | ------------------ | -------- | ------------------------------- |
+| Sheep    | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
+| Chicken  | passive | 7            | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
+| Horse    | passive | 14           | 1.4   | —            | —                  | —        | 1–2 Leather                     |
+| Cow      | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
+| Pig      | passive | 8            | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
+| Wolf     | passive | 8 (20 tamed) | 1.3   | 12 (tamed)   | 4 (ally, melee)    | 0.9 s    | nothing                         |
+| Cat      | passive | 8 (20 tamed) | 1.35  | 12 (tamed)   | 3 (ally, melee)    | 1.0 s    | nothing                         |
+| Villager | passive | 20           | 0.6   | —            | — (trade partner)  | —        | nothing                         |
+| Zombie   | hostile | 100          | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
+| Skeleton | hostile | 100          | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
+| Spider   | hostile | 100          | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
+| Creeper  | hostile | 100          | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
+| Raider   | hostile | 120          | 1.1   | 16           | 5 melee            | 1.2 s    | 1–2 Arrow                       |
+| Boss     | hostile | 1000         | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
 
 ### Trading
 
@@ -301,18 +307,25 @@ Right-click a **villager** to open its trades (the recipe book switches to a
 emeralds, then spend them on goods. No use caps — trading is bounded only by what
 you can gather. Trades live in `lib/game/trades.ts`.
 
-| Trade             | Give       | Get             |
-| ----------------- | ---------- | --------------- |
-| Sell wheat        | 6 Wheat    | 1 Emerald       |
-| Sell coal         | 3 Coal     | 1 Emerald       |
-| Sell leather      | 2 Leather  | 1 Emerald       |
-| Sell gold ore     | 1 Gold Ore | 1 Emerald       |
-| Buy bread         | 1 Emerald  | 2 Bread         |
-| Buy torches       | 1 Emerald  | 8 Torch         |
-| Buy arrows        | 2 Emerald  | 8 Arrow         |
-| Buy stone pickaxe | 3 Emerald  | 1 Stone Pickaxe |
-| Buy sliver ore    | 5 Emerald  | 1 Sliver Ore    |
-| Buy ruby ore      | 8 Emerald  | 1 Ruby Ore      |
+Each villager has a **profession** and offers only its own trades (its smock is
+tinted to match). The ten offers split four ways:
+
+| Profession | Trades                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------- |
+| Farmer     | sell 6 Wheat → Emerald · buy Emerald → 2 Bread                                         |
+| Blacksmith | sell 1 Gold Ore → Emerald · buy 3 Emerald → Stone Pickaxe · buy 5 Emerald → Sliver Ore |
+| Librarian  | sell 3 Coal → Emerald · buy Emerald → 8 Torch · buy 2 Emerald → 8 Arrow                |
+| Cleric     | sell 2 Leather → Emerald · buy 8 Emerald → Ruby Ore                                    |
+
+### Villages & raids
+
+**Villages** are clusters of houses that generate on flat, dry land, home to a
+small population of **resident villagers** (who persist with the world). Craft an
+**Ominous Horn** (3 Gold Ore + 2 Bone + 4 Gunpowder) and right-click it near a
+village to call down a **raid**: **3 waves** of **raiders** (4 each) storm the
+settlement. Defeat every wave and the village holds — you're paid **5 emeralds +
+50 XP**; if every nearby villager dies first, the village falls. Raiders hunt
+villagers, so a tamed wolf or cat helps defend.
 
 Skeletons are now **ranged** — they kite and fire arrows instead of meleeing.
 **Creepers** chase silently, then light a ~1.5 s fuse when they get within ~2.6
@@ -322,8 +335,21 @@ before it detonates to claim its gunpowder safely. Hostiles never spawn within 1
 blocks of you, so nothing materializes point-blank.
 Spiders are hostile only in the dark (daylight below 0.42); in twilight and day
 they behave like passives. **Breeding:** feed wheat to a sheep, horse, or cow, or
-seeds to a chicken or pig; babies grow up in ~90 s. Passive population is capped at
-24, hostiles at 16.
+seeds to a chicken or pig (tamed wolves breed with a bone, cats with raw fish);
+babies grow up in ~90 s. Passive population is capped at 24, hostiles at 16.
+
+### Companions (wolves & cats)
+
+Wild **wolves** and **cats** roam the world. Right-click one holding its treat — a
+**Bone** for a wolf, **Raw Fish** for a cat — to attempt to tame it; the treat is
+eaten whether or not the ~1-in-3 roll succeeds. A tamed pet becomes your **ally**:
+
+- **Fights for you** — it attacks nearby hostiles (within ~12 blocks) on its own, and its kills drop loot and XP straight to you.
+- **Follows you** — it roams near you, jogs to catch up when it strays, and is recalled (teleported) to your side if it gets more than ~24 blocks away.
+- **Sit / stay** — right-click your own pet (holding anything that isn't its breeding treat) to toggle sitting; a sitting pet stays put and won't follow or fight.
+- **Persists** — pets are the only mobs saved with the world; they (and their bred offspring) survive a reload.
+
+Mobs also now fight **each other**: hostiles hunt villagers (who flee), and your pets defend against them. Mob-vs-mob combat is melee-only.
 
 The **Boss** is summoned, not spawned (see [Endgame](#endgame)): it bears down on
 you, melees up close, fires a 3-arrow spread at range, summons minions, and is
@@ -464,3 +490,53 @@ fight is meant to test full diamond gear plus a bow:
 - Defeating it drops a **Dragon Heart** (+ 2–4 diamond ore), shows a one-time
   **victory screen**, and lets you craft the **Dragon Sword** (60 attack). You
   keep playing afterward; another totem summons it again.
+
+## Advancements
+
+Press **L** to open the advancements & statistics overlay. Advancements unlock
+the moment their goal is met (a toast + chime), persist in the save, and are
+**kept across death**. The registry lives in `lib/game/engine/systems/advancements.ts`;
+each is a declarative `{ stat, threshold }` row, so nothing is gated behind them.
+
+| Advancement    | Category  | How to unlock              |
+| -------------- | --------- | -------------------------- |
+| Getting Wood   | Mining    | Chop down a log            |
+| Stone Age      | Mining    | Mine a block of stone      |
+| Iron-ish       | Mining    | Mine sliver ore            |
+| Diamonds!      | Mining    | Mine diamond ore           |
+| Tool Up        | Crafting  | Craft a pickaxe (any tier) |
+| Hot Topic      | Crafting  | Craft a furnace            |
+| Take Aim       | Combat    | Fire an arrow from a bow   |
+| Monster Hunter | Combat    | Slay a hostile monster     |
+| Dragon Slayer  | Combat    | Defeat the Dragon Lord     |
+| Two by Two     | Farming   | Breed two animals          |
+| Time to Farm   | Farming   | Harvest fully-grown wheat  |
+| Gone Fishing   | Farming   | Reel in a catch            |
+| Enchanter      | Magic     | Enchant an item            |
+| Local Brewery  | Magic     | Drink a potion             |
+| Sleep Tight    | Adventure | Sleep through the night    |
+| Hired Help     | Adventure | Trade with a villager      |
+
+## Statistics
+
+Running counters shown on the overlay's Statistics tab — also persisted and kept
+across death. (Internally more counters are tracked to drive advancements, e.g.
+per-ore mining and per-recipe crafts; these are the ones displayed.)
+
+| Statistic          | Counts                                       |
+| ------------------ | -------------------------------------------- |
+| Time Played        | Seconds of active play                       |
+| Distance Travelled | Blocks moved                                 |
+| Blocks Mined       | Total blocks broken                          |
+| Logs Chopped       | Logs broken                                  |
+| Diamond Ore Mined  | Diamond ore broken                           |
+| Monsters Slain     | Hostile mobs killed                          |
+| Animals Bred       | Successful breedings                         |
+| Items Crafted      | Successful crafts (incl. smelting & trading) |
+| Items Enchanted    | Enchantments applied                         |
+| Potions Drunk      | Potions consumed                             |
+| Fish Caught        | Fishing catches                              |
+| Arrows Fired       | Bow shots                                    |
+| Villager Trades    | Trades made with a villager                  |
+| Jumps              | Times jumped                                 |
+| Deaths             | Times died                                   |

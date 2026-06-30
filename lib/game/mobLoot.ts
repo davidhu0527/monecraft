@@ -33,10 +33,16 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
     { itemId: "raw_beef", min: 1, max: 1 }
   ],
   pig: [{ itemId: "raw_porkchop", min: 1, max: 1 }],
+  // Pets drop nothing — you don't harvest your companions. Empty tables are allowed.
+  wolf: [],
+  cat: [],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
   spider: [{ itemId: "string", min: 0, max: 2 }],
   creeper: [{ itemId: "gunpowder", min: 1, max: 2 }],
+  // Pillagers drop spent arrows; the emerald payout comes from winning the raid
+  // (so "Trade for it" stays the emerald hint, not "hunt a raider").
+  raider: [{ itemId: "arrow", min: 1, max: 2 }],
   // Villagers are non-combat trade NPCs — killing one yields nothing (don't murder
   // your shopkeeper). The empty table is intentional; mobLoot.test.ts allows it.
   villager: [],

@@ -275,6 +275,24 @@ export class GameRenderer {
           size: 0.18
         });
         break;
+      case "mobTamed":
+        // A puff of pink hearts when a pet bonds with you.
+        this.particles.emitBurst({
+          x: event.x,
+          y: event.y + 0.6,
+          z: event.z,
+          count: 10,
+          color: [0.95, 0.35, 0.55],
+          speed: 1.4,
+          spread: 0.8,
+          gravity: -3,
+          drag: 2,
+          life: [0.5, 0.9],
+          size: 0.16,
+          upBias: 0.7,
+          colorJitter: 0.06
+        });
+        break;
       case "mobSpawned":
         // A dark smoke puff conjured from the spawner.
         this.particles.emitBurst({

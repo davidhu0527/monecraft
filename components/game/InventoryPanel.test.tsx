@@ -7,7 +7,7 @@ import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
 import type { GameMode } from "@/lib/game/gameModes";
-import type { InventorySlot } from "@/lib/game/types";
+import type { InventorySlot, Profession } from "@/lib/game/types";
 
 function makeInventory(...items: Array<[string, number] | null>): InventorySlot[] {
   const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
@@ -24,7 +24,8 @@ function renderPanel(overrides: Partial<Parameters<typeof InventoryPanel>[0]> = 
     selectedHotbarSlot: 0,
     hotbarSlots: HOTBAR_SLOTS,
     recipes: RECIPES,
-    craftingStation: null as "furnace" | "enchanting" | "anvil" | "grindstone" | null,
+    craftingStation: null as "furnace" | "villager" | "enchanting" | "anvil" | "grindstone" | null,
+    activeVillagerProfession: null as Profession | null,
     gameMode: "survival" as GameMode,
     container: null as InventorySlot[] | null,
     xpLevel: 0,
@@ -200,6 +201,12 @@ describe("InventoryPanel", () => {
     expect(button.getAttribute("aria-disabled")).toBe("false");
     await user.click(button);
     expect(props.onCraft).toHaveBeenCalledWith(cook);
+  });
+
+  test("an open villager shows only its profession's trades", () => {
+    renderPanel({ craftingStation: "villager", activeVillagerProfession: "farmer" });
+    expect(screen.queryByRole("button", { name: "6 Wheat -> 1 Emerald" })).not.toBeNull(); // a farmer trade
+    expect(screen.queryByRole("button", { name: "1 Gold Ore -> 1 Emerald" })).toBeNull(); // a blacksmith trade — hidden
   });
 
   test("hovering an unaffordable recipe shows missing ingredients and how to obtain them", async () => {

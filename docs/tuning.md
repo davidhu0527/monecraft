@@ -329,6 +329,46 @@ longer. Bone meal short-circuits the wait: `BONE_MEAL_PER_BONE` (3) is the grind
 yield, and one application advances a crop a random `1..BONE_MEAL_CROP_STAGES_MAX`
 (2) stages or grows a sapling instantly.
 
+## Companions & mob allegiance
+
+Taming: `TAME_CHANCE`, `PET_TAMED_HP`, `PET_FIGHT_RANGE`, `PET_FOLLOW_MAX`, `PET_TELEPORT_DISTANCE`.
+Mob-vs-mob: `MOB_RETARGET_SECONDS`, `MOB_VS_MOB_REACH`, `MOB_VS_MOB_KNOCKBACK`, `VILLAGER_FLEE_RANGE`.
+
+Read by `systems/interact.ts` (taming) and `systems/mobAI.ts` (allegiance & the ally
+state machine). `TAME_CHANCE` (1/3) is the per-feed odds a wild wolf/cat tames — the
+treat is consumed either way, so a lower value just costs more bones/fish. A tamed
+pet's `PET_TAMED_HP` (20) makes it tankier than its wild template (8), and
+`PET_FIGHT_RANGE` (12) is how far it spots hostiles to engage. `PET_FOLLOW_MAX` (10)
+and `PET_TELEPORT_DISTANCE` (24) shape its leash: it roams freely within the first,
+jogs to catch up beyond it, and is recalled (teleported next to you) past the second
+— raise the teleport distance to let it wander farther before snapping back.
+
+`MOB_RETARGET_SECONDS` (0.6) throttles how often a "fighter" (hostile/ally/raider)
+re-scans for the nearest enemy mob; it's the lever that keeps the per-frame mob tick
+O(N) as the population grows — raise it for cheaper scans at the cost of slower target
+switching. `MOB_VS_MOB_REACH` (1.6) / `MOB_VS_MOB_KNOCKBACK` (0.28) are the melee
+reach and shove when one mob bites another (using the mob's raw `attackDamage` —
+difficulty's `mobDamageMultiplier` scales hits on the **player** only). `VILLAGER_FLEE_RANGE`
+(8) is how close a hostile/raider must get before a villager bolts.
+
+## Villages & raids
+
+Villages (in `lib/world/generation.ts`, under `GEN`): `villageCount` (12 placement
+attempts), `villageHouseCount` (5 houses each), `villagersPerVillage` (4 residents),
+`villageMinSpawnDistance` (30, clear of spawn), `villageFlatnessTolerance` (2, how
+uneven the footprint may be — raise it for more but uglier villages, lower it for
+rarer, flatter ones). Yield is naturally low (most random points are ocean or
+rough), so `villageCount` is high to make a village or two reliable; a village-less
+seed falls back to a few wandering villagers near spawn.
+
+Raids (`systems/raid.ts`): `RAID_WAVE_COUNT` (3), `RAID_WAVE_SIZE` (4 raiders/wave),
+`RAID_WAVE_DELAY_SECONDS` (4, the lull between cleared waves), `RAID_RADIUS` (24, the
+raider spawn ring and the resident-presence radius that decides "village fell"),
+`RAID_TRIGGER_DISTANCE` (48, how near a village the Ominous Horn must be sounded),
+and the win payout `RAID_REWARD_EMERALDS` (5) / `RAID_REWARD_XP` (50). Raiders are
+`hostile`, so they count against `HOSTILE_CAP` and Peaceful clears (and cancels) a
+raid; bump the wave size/count for a harder siege.
+
 ## Fishing
 
 `FISHING_REACH`, `FISHING_BITE_MIN_SECONDS`, `FISHING_BITE_MAX_SECONDS`,

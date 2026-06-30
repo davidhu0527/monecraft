@@ -3,6 +3,18 @@ import { BABY_SCALE } from "@/lib/game/config";
 import { createMobModelForKind, MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { MobModel } from "@/lib/game/types";
 import type { MobState } from "@/lib/game/engine/state";
+import type { Profession } from "@/lib/game/types";
+
+/** How much a sitting pet shrinks (and is lowered) to read as crouched. */
+const SIT_SCALE = 0.7;
+
+/** Smock colour per villager profession — recoloured onto the body material at model creation. */
+const PROFESSION_TINT: Record<Profession, number> = {
+  farmer: 0x8a7d3a, // straw
+  blacksmith: 0x4a4a52, // dark iron
+  librarian: 0xd9cfa8, // parchment
+  cleric: 0x7a4fa0 // priestly purple
+};
 
 type HealthBar = {
   group: THREE.Group;
@@ -66,6 +78,10 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         let visual = visuals.get(mob.id);
         if (!visual) {
           const model = createMobModelForKind(mob.kind);
+          // Tint a villager's smock (the body material) to its trade profession.
+          if (mob.kind === "villager" && mob.profession) {
+            (model.materials[0] as THREE.MeshStandardMaterial).color.setHex(PROFESSION_TINT[mob.profession]);
+          }
           const healthBar = mob.hostile ? createHealthBar(mob.kind) : null;
           if (healthBar) model.group.add(healthBar.group);
           visual = { model, healthBar };
@@ -74,7 +90,10 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         }
         const { model, healthBar } = visual;
 
-        const bob = Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
+        // A told-to-stay pet sits still: no bob, hunkered down (lowered so the 0.7
+        // scale crouches it onto the ground rather than lifting its feet, the same
+        // position/scale coupling a scaled-down baby uses), legs at rest.
+        const bob = mob.sitting ? -mob.halfHeight * (1 - SIT_SCALE) : Math.sin(timeMs * 0.008 + mob.bobSeed) * 0.04;
         model.group.position.set(mob.position.x, mob.position.y + bob, mob.position.z);
         model.group.rotation.y = mob.yaw;
 
@@ -87,6 +106,7 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
           const flash = primed ? 0.35 + 0.55 * wave : 0;
           for (const material of model.materials) (material as THREE.MeshStandardMaterial).emissive.setScalar(flash);
         }
+        if (mob.sitting) scale *= SIT_SCALE;
         model.group.scale.setScalar(scale);
 
         if (healthBar) {
@@ -95,7 +115,7 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
           healthBar.fill.position.x = -(healthBar.width - healthBar.fill.scale.x) * 0.5;
         }
 
-        const gait = Math.sin(timeMs * 0.015 * mob.moveSpeed + mob.bobSeed) * 0.3;
+        const gait = mob.sitting ? 0 : Math.sin(timeMs * 0.015 * mob.moveSpeed + mob.bobSeed) * 0.3;
         if (model.legs.length === 4) {
           model.legs[0].rotation.x = gait;
           model.legs[1].rotation.x = -gait;

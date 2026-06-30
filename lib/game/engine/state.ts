@@ -3,7 +3,7 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobKind, SaveData } from "@/lib/game/types";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -30,6 +30,18 @@ export type MobState = {
   id: number;
   kind: MobKind;
   hostile: boolean;
+  /** Targeting allegiance (set at spawn from FACTION_BY_KIND; a tamed pet becomes "ally"). Persisted (save v14). */
+  faction: MobFaction;
+  /** Pet owner once tamed (currently always "player"); undefined for wild mobs. Persisted (save v14). */
+  owner?: "player";
+  /** A tamed pet told to stay put (sit/stay) — no follow, wander, or pursuit. Persisted (save v14). */
+  sitting?: boolean;
+  /** Villager-only: trade profession (drives its trade subset + tint). Persisted (save v15). */
+  profession?: Profession;
+  /** Session-only: id of the enemy mob this fighter is attacking, or null. Never serialized. */
+  targetId: number | null;
+  /** Session-only: seconds until the next enemy-mob rescan (throttle). Never serialized. */
+  retargetTimer: number;
   hp: number;
   /** Body center (ground + halfHeight), like the old group.position without bob. */
   position: THREE.Vector3;
@@ -144,6 +156,20 @@ export type GameTimers = {
 export type WeatherKind = "clear" | "rain" | "snow";
 export type WeatherState = { kind: WeatherKind; intensity: number };
 
+/**
+ * An in-progress village raid — session-only, never serialized (like the boss).
+ * A reload cancels it. Waves of raiders spawn around `center`; once a wave is
+ * cleared, `waveTimer` counts down to the next, until all `totalWaves` are beaten.
+ */
+export type RaidState = {
+  center: { x: number; z: number };
+  /** Waves spawned so far (0 before the first spawns, up to totalWaves). */
+  wavesSpawned: number;
+  totalWaves: number;
+  /** Seconds until the next wave once the current one is cleared. */
+  waveTimer: number;
+};
+
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
@@ -169,11 +195,19 @@ export type GameState = {
   effects: Map<EffectId, number>;
   /** Banked XP points (XP_PER_LEVEL points = 1 level). Persisted (save v7); NOT cleared on death. */
   xp: number;
+  /** Gameplay statistics → running counter (blocks mined, mobs killed, time played, …). Persisted (save v13); NOT cleared on death. */
+  stats: Map<string, number>;
+  /** Unlocked advancement ids. Persisted (save v13); NOT cleared on death. */
+  advancements: Set<string>;
   isDead: boolean;
   respawnTimer: number;
   inventoryOpen: boolean;
+  /** True while the advancements & statistics overlay (L key) is open. Session-only. */
+  advancementsOpen: boolean;
   /** Crafting station whose recipes (or the enchanting panel) are unlocked while the inventory is open, or null. */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's trade profession while a "villager" station is up (gates which trades show + craft), else null. Session-only. */
+  activeVillagerProfession: Profession | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
   /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
@@ -186,6 +220,8 @@ export type GameState = {
   dungeonSpawnerIndices: Set<number>;
   /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
   lootedDungeonChests: Set<number>;
+  /** Village center (x,z) sites (session; re-derived from the seed each load) — seed the resident villager population. */
+  villageSites: Array<{ x: number; z: number }>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;
@@ -217,6 +253,8 @@ export type GameState = {
   worldMeshDirty: boolean;
   /** True once the boss has been defeated — drives the one-shot victory screen (session-only). */
   victory: boolean;
+  /** The active village raid, or null. Session-only (a reload cancels it). */
+  raid: RaidState | null;
 };
 
 export function createTimers(): GameTimers {
@@ -265,6 +303,8 @@ export const IDLE_INPUT: FrameInput = {
 export type GameApi = {
   dispatch(command: Command): void;
   serialize(): SaveData;
+  /** Detailed progression read for the advancements overlay — pulled on render, not projected per-frame into the snapshot. */
+  advancementState(): { stats: Array<{ id: string; value: number }>; unlocked: string[] };
 };
 
 /** Immutable view for the React UI, replaced only when a visible value changes. */
@@ -293,6 +333,10 @@ export type GameSnapshot = {
   hostileCount: number;
   respawnSeconds: number;
   inventoryOpen: boolean;
+  /** True while the advancements & statistics overlay is open — gates its backdrop + panel. */
+  advancementsOpen: boolean;
+  /** Count of unlocked advancements — a low-churn primitive so the snapshot ref bumps on every unlock. */
+  advancementsUnlocked: number;
   paused: boolean;
   debugOpen: boolean;
   debug: DebugInfo | null;
@@ -304,6 +348,8 @@ export type GameSnapshot = {
   sleeping: boolean;
   /** Open crafting station (gates smelting recipes, or opens the enchanting panel). */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's profession (filters the Trading panel to its offers), or null. */
+  activeVillagerProfession: Profession | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
@@ -364,8 +410,17 @@ export type GameEvent =
   | { type: "doorToggled"; open: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
+  | { type: "crafted"; recipeId: string }
+  | { type: "advancementUnlocked"; id: string; name: string }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }
+  | { type: "mobTamed"; kind: MobKind; x: number; y: number; z: number }
+  | { type: "petSitToggled"; kind: MobKind; sitting: boolean }
+  | { type: "raidStarted"; totalWaves: number }
+  | { type: "raidWaveStarted"; wave: number; totalWaves: number }
+  | { type: "raidWon" }
+  | { type: "raidLost" }
+  | { type: "raidFailed" }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

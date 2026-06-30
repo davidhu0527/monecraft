@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectVillageSites,
   collidesAt,
   computeFullLight,
   generateWorld,
@@ -15,6 +16,7 @@ import {
   ANVIL_COMBINE_COST_LEVELS,
   ANVIL_RENAME_COST_LEVELS,
   ANVIL_REPAIR_COST_LEVELS,
+  BABY_SCALE,
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
@@ -23,10 +25,14 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  PET_FIGHT_RANGE,
+  PET_TAMED_HP,
   POISON_DURATION,
   POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
+  RAID_TRIGGER_DISTANCE,
+  RAID_WAVE_COUNT,
   RENDER_RADIUS,
   ROTTEN_FLESH_POISON_CHANCE,
   STUCK_RESET_SECONDS,
@@ -46,6 +52,7 @@ import {
 } from "@/lib/game/anvil";
 import { canStripEnchantments, enchantRefund, stripEnchantments } from "@/lib/game/grindstone";
 import { RECIPES } from "@/lib/game/recipes";
+import { tradeProfession } from "@/lib/game/trades";
 import * as inv from "@/lib/game/inventory";
 import {
   inventorySlotsSnapshot,
@@ -66,15 +73,21 @@ import {
   restoreSelectedSlot,
   restoreSpawnPoint,
   restoreXp,
+  restoreStats,
+  restoreAdvancements,
+  restoreMobs,
   serializeContainers,
   serializeEffects,
-  serializeLootedChests
+  serializeLootedChests,
+  serializeMobs,
+  serializeStats
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
-import type { InventorySlot, SaveData } from "@/lib/game/types";
+import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
+import type { InventorySlot, SaveData, SavedMob } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
@@ -88,7 +101,7 @@ import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
 import { applyEnchant, canEnchant, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
+import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
@@ -97,7 +110,18 @@ import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { startRaid, tickRaid } from "./systems/raid";
+import {
+  assignVillagerProfessions,
+  pushMob,
+  spawnBoss,
+  spawnInitialMobs,
+  spawnMobGroup,
+  spawnVillageResidents,
+  tickHostileSpawnDirector,
+  tickSpawnerDirector
+} from "./systems/spawnDirector";
+import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
   /** A parsed save to restore, or null for a fresh world. */
@@ -155,6 +179,8 @@ export class GameEngine {
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
     const dungeonSites = collectDungeonSites(world, this.worldType);
+    // Likewise re-derive village centers, so resident villagers can be seeded there.
+    const villageSites = collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
@@ -200,16 +226,21 @@ export class GameEngine {
       oxygen: MAX_OXYGEN,
       effects: new Map(),
       xp: 0,
+      stats: new Map(),
+      advancements: new Set(),
       isDead: false,
       respawnTimer: 0,
       inventoryOpen: false,
+      advancementsOpen: false,
       craftingStation: null,
+      activeVillagerProfession: null,
       containers: new Map(),
       primedTnt: new Map(),
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
       lootedDungeonChests: new Set(),
+      villageSites: villageSites.centers,
       paused: false,
       debugOpen: false,
       debugInfo: null,
@@ -231,7 +262,8 @@ export class GameEngine {
       mining: { targetKey: "", progress: 0 },
       timers: createTimers(),
       worldMeshDirty: true,
-      victory: false
+      victory: false,
+      raid: null
     };
 
     if (save) {
@@ -245,6 +277,14 @@ export class GameEngine {
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
+      // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
+      for (const { id, value } of restoreStats(save)) this.state.stats.set(id, value);
+      // Filter against the registry so a corrupt/edited save can't inject bogus ids
+      // (which would inflate the unlocked count and round-trip back out forever).
+      for (const id of restoreAdvancements(save)) if (ADVANCEMENTS_BY_ID[id]) this.state.advancements.add(id);
+      // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
+      // fungible population, so the world stays alive and pets simply pre-exist.
+      this.restorePersistedMobs(restoreMobs(save));
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -272,6 +312,25 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
+    // Seed each village's residents — but only for a world that hasn't populated
+    // its villages yet: a fresh world (no save) or one upgraded from a pre-village
+    // save (no `villagesSeeded` flag). A genuine v15 save's villagers are
+    // authoritative — restored above — so we never re-seed (an emptied village
+    // stays empty, not repopulated on reload).
+    if (!save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
+      if (this.state.villageSites.length > 0) {
+        spawnVillageResidents(this.state, this.state.villageSites, this.rng, this.surfaceYAt);
+      } else {
+        // A village-less seed (rough/ocean terrain) still gets a few wandering
+        // villagers near spawn so trading is never wholly unavailable.
+        const { x, z } = this.state.player.position;
+        spawnMobGroup(this.state, { kind: "villager", hostile: false, count: 3, centerX: x, centerZ: z, radius: RENDER_RADIUS }, this.rng, this.surfaceYAt);
+      }
+    }
+    // Assign a profession to any villager that lacks one — newly seeded residents,
+    // and (defensively) any restored villager whose profession went missing. Runs
+    // unconditionally so a pre-v15 upgrade's villagers don't stay professionless.
+    assignVillagerProfessions(this.state);
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
     tickWeather(this.state);
@@ -324,6 +383,8 @@ export class GameEngine {
     const move = tickPlayerMotion(state, input, dt, this.applyDamage);
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
+    // Tick-driven display stats (no event, so out of the advancement path).
+    recordTick(state, dt, move.horizontalDistance);
     tickHungerDrain(state, move);
     tickHealthRegen(state, dt);
     // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
@@ -347,6 +408,7 @@ export class GameEngine {
     tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
+    tickRaid(state, dt, { surfaceYAt: this.surfaceYAt, rng: this.rng, emit: this.emit });
     this.tickDebugInfo(dt);
 
     this.refreshSnapshot();
@@ -365,9 +427,22 @@ export class GameEngine {
       case "toggleInventory": {
         if (!canInteract(state.gameMode)) break; // Spectator has no inventory
         state.inventoryOpen = !state.inventoryOpen;
+        if (state.inventoryOpen) state.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
+          state.activeVillagerProfession = null; // ...and the open villager's trades
           state.openContainerIndex = null; // ...and the open chest
+        }
+        break;
+      }
+      case "toggleAdvancements": {
+        // A read-only progression overlay — available in any mode (even Spectator).
+        state.advancementsOpen = !state.advancementsOpen;
+        if (state.advancementsOpen) {
+          state.inventoryOpen = false; // mutually exclusive with the inventory panel
+          state.craftingStation = null;
+          state.activeVillagerProfession = null;
+          state.openContainerIndex = null;
         }
         break;
       }
@@ -377,9 +452,15 @@ export class GameEngine {
         // Station recipes (e.g. furnace smelting) require that station to be open.
         // The UI gates these too, but dispatch is the spoofable surface to guard.
         if (recipe.station && recipe.station !== state.craftingStation) break;
+        // A villager trade additionally requires the open villager's profession —
+        // you can't craft a blacksmith trade while talking to a farmer.
+        if (recipe.station === "villager" && tradeProfession(recipe.id) !== state.activeVillagerProfession) break;
         const next = inv.craft(state.inventory, recipe);
         if (!next) break;
         state.inventory = next;
+        // A broadly-useful craft signal: drives items_crafted + the craft/brew/trade
+        // advancements. Station recipes still emit `smelted` for the audio director.
+        this.emit({ type: "crafted", recipeId: recipe.id });
         if (recipe.station) this.emit({ type: "smelted" });
         break;
       }
@@ -514,10 +595,15 @@ export class GameEngine {
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
+        // Companions: a treat tames a wild wolf/cat; otherwise toggling sit on your
+        // own pet. Both run before feeding so the bone/fish tames rather than feeds.
+        if (tryTameAimedMob(state, this.emit, this.rng)) break;
         if (tryFeedAimedMob(state, this.emit)) break;
+        if (tryToggleSitPet(state, this.emit)) break;
         if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
+        if (this.tryStartRaid()) break;
         if (tryFish(state, this.emit, this.rng)) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
@@ -579,7 +665,7 @@ export class GameEngine {
         // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
         // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
         // would stall the sleep timer (step early-returns on paused before sleep).
-        if (state.inventoryOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
+        if (state.inventoryOpen || state.advancementsOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
         state.paused = true;
         state.craftingStation = null;
         state.openContainerIndex = null;
@@ -623,7 +709,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 12,
+      version: 15,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -646,7 +732,23 @@ export class GameEngine {
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedDungeonChests),
       effects: serializeEffects(state.effects),
-      xp: state.xp
+      xp: state.xp,
+      stats: serializeStats(state.stats),
+      advancements: [...state.advancements],
+      mobs: serializeMobs(state.mobs),
+      villagesSeeded: true // this world's villages are populated — don't re-seed on reload
+    };
+  }
+
+  /**
+   * Detailed progression read for the advancements overlay. Pulled on render via
+   * the snapshot's stable `api` handle (not projected per-frame into the snapshot),
+   * so play never churns the snapshot with stat values the HUD doesn't show.
+   */
+  advancementState(): { stats: Array<{ id: string; value: number }>; unlocked: string[] } {
+    return {
+      stats: [...this.state.stats].map(([id, value]) => ({ id, value })),
+      unlocked: [...this.state.advancements]
     };
   }
 
@@ -667,7 +769,23 @@ export class GameEngine {
 
   private emit = (event: GameEvent): void => {
     this.events.push(event);
+    // Observe progress at the one chokepoint every system already emits through —
+    // but guard against recursion: observing an unlock re-enters emit.
+    if (event.type !== "advancementUnlocked") this.observeProgress(event);
   };
+
+  /**
+   * Folds a gameplay event into the statistics counters, then unlocks any
+   * advancement whose threshold the new stats just crossed — adding it to the set
+   * (before the emit, so a re-entrant observe is idempotent) and announcing it.
+   */
+  private observeProgress(event: GameEvent): void {
+    recordEvent(this.state, event);
+    for (const id of evaluateAdvancements(this.state)) {
+      this.state.advancements.add(id);
+      this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title });
+    }
+  }
 
   /**
    * Moves a slot between the player inventory and the open chest. Indices at or
@@ -761,19 +879,55 @@ export class GameEngine {
     if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
 
-  private removeMobAt = (index: number, lootingLevel = 0): void => {
+  /**
+   * Rebuilds the live MobState for each validated SavedMob: re-grounds onto the
+   * current surface (the world may have changed since the save), assigns a fresh
+   * id via pushMob, then restores the persisted hp/faction/owner/sit/baby state.
+   * hp is clamped to the kind's template max — owned pets get a generous ceiling,
+   * since a tamed pet's hp can exceed the wild template (refined when companions land).
+   */
+  private restorePersistedMobs(saved: SavedMob[]): void {
+    for (const m of saved) {
+      const ground = this.surfaceYAt(m.x, m.z);
+      const hostile = m.faction === "hostile" || m.faction === "raider";
+      pushMob(this.state, m.kind, hostile, m.x, ground, m.z, this.rng);
+      const mob = this.state.mobs[this.state.mobs.length - 1];
+      mob.faction = m.faction;
+      // A tamed pet's hp/detectRange exceed its wild template — restore the pet
+      // ceiling and fight range so it stays a healthy, fighting ally.
+      if (m.owner != null) {
+        mob.owner = m.owner;
+        mob.hp = Math.min(m.hp, PET_TAMED_HP);
+        mob.detectRange = PET_FIGHT_RANGE;
+      } else {
+        mob.hp = Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
+      }
+      if (m.sitting) mob.sitting = true;
+      if (m.profession) mob.profession = m.profession;
+      if (m.ageTimer && m.ageTimer > 0) {
+        mob.ageTimer = m.ageTimer;
+        mob.halfHeight = mobHalfHeight(m.kind) * BABY_SCALE;
+        mob.position.y = ground + mob.halfHeight; // re-center on the shrunk height so a baby doesn't float
+      }
+    }
+  }
+
+  // `credit` (default true) gates loot + XP to the player: player/arrow/spear/
+  // explosion kills credit; the mobAI sweep passes the victim's faction so a pet's
+  // kill still feeds you, but a slain villager or pet yields nothing.
+  private removeMobAt = (index: number, lootingLevel = 0, credit = true): void => {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
     // Babies drop nothing — only grown animals yield loot. `lootingLevel` is the
     // *killing* melee weapon's Looting (forwarded by tryAttackMob); indirect kills
     // (arrows, thrown spears, explosions) pass 0, since Looting is a melee enchant.
-    const drops = mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
+    const drops = credit && mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
     for (const drop of drops) {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
     // XP on kill, baby-gated like drops; the boss pays a jackpot.
-    if (mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
+    if (credit && mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
@@ -801,6 +955,36 @@ export class GameEngine {
     spawnBoss(state, point.x, point.y, point.z, this.rng);
     state.inventory = inv.adjustSlotCount(state.inventory, "boss_summoner", -1, state.selectedSlot) ?? state.inventory;
     this.emit({ type: "bossSummoned", x: point.x, y: point.y, z: point.z });
+    return true;
+  }
+
+  /**
+   * Sounds a held Ominous Horn at the nearest village (within RAID_TRIGGER_DISTANCE)
+   * to start a raid, consuming the horn. Refuses (keeping it) when a raid is already
+   * running; does nothing (returns false, so placement falls through) when no village
+   * is in range or the difficulty is Peaceful.
+   */
+  private tryStartRaid(): boolean {
+    const state = this.state;
+    const slot = state.inventory[state.selectedSlot];
+    if (slot?.id !== "ominous_horn" || slot.count <= 0) return false;
+    if (state.raid) {
+      this.emit({ type: "raidFailed" });
+      return true;
+    }
+    const { x, z } = state.player.position;
+    let nearest: { x: number; z: number } | null = null;
+    let bestSq = RAID_TRIGGER_DISTANCE * RAID_TRIGGER_DISTANCE;
+    for (const site of state.villageSites) {
+      const d = (site.x - x) * (site.x - x) + (site.z - z) * (site.z - z);
+      if (d < bestSq) {
+        bestSq = d;
+        nearest = site;
+      }
+    }
+    if (!nearest || !startRaid(state, nearest.x, nearest.z)) return false;
+    state.inventory = inv.adjustSlotCount(state.inventory, "ominous_horn", -1, state.selectedSlot) ?? state.inventory;
+    this.emit({ type: "raidStarted", totalWaves: RAID_WAVE_COUNT });
     return true;
   }
 
@@ -999,6 +1183,8 @@ export class GameEngine {
       hostileCount: state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0),
       respawnSeconds: state.isDead ? Math.max(0, Math.ceil(state.respawnTimer)) : 0,
       inventoryOpen: state.inventoryOpen,
+      advancementsOpen: state.advancementsOpen,
+      advancementsUnlocked: state.advancements.size,
       paused: state.paused,
       debugOpen: state.debugOpen,
       debug: state.debugInfo,
@@ -1007,6 +1193,7 @@ export class GameEngine {
       capsActive: state.capsActive,
       sleeping: state.sleepTimer > 0,
       craftingStation: state.craftingStation,
+      activeVillagerProfession: state.activeVillagerProfession,
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
       victory: state.victory,

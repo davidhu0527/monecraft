@@ -3,6 +3,7 @@ import { BREAK_HARDNESS } from "@/lib/game/items";
 import type { GameEvent, GameState } from "@/lib/game/engine/state";
 import { materialGroupFor } from "./materials";
 import {
+  ADVANCEMENT_SOUND,
   ARROW_HIT_SOUND,
   BONE_MEAL_SOUND,
   BOSS_ROAR_SOUND,
@@ -216,6 +217,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "enchanted":
           backend.play(ENCHANT_SOUND);
           break;
+        case "advancementUnlocked":
+          backend.play(ADVANCEMENT_SOUND);
+          break;
         case "anvilCombined":
         case "anvilRepaired":
           backend.play(ENCHANT_SOUND);
@@ -255,6 +259,16 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "bossDefeated":
           backend.play(VICTORY_SOUND);
+          break;
+        case "raidStarted":
+        case "raidWaveStarted":
+          backend.play(BOSS_ROAR_SOUND); // an ominous horn-like blast
+          break;
+        case "raidWon":
+          backend.play(VICTORY_SOUND);
+          break;
+        case "raidLost":
+          backend.play(DEATH_SOUND);
           break;
         case "explosion":
           backend.play(EXPLOSION_SOUND);
@@ -310,6 +324,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "mobBred":
           backend.play(MOB_BRED_SOUND);
+          break;
+        case "mobTamed":
+          backend.play(MOB_BRED_SOUND); // a happy chime — reuses the breeding cue
+          break;
+        case "petSitToggled":
+          backend.play(MOB_FED_SOUND); // a soft acknowledging cue
           break;
       }
     },
