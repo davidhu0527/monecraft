@@ -41,6 +41,17 @@ export const GEN = Object.freeze({
   cactusChance: 0.012,
   houseCount: 120,
   dungeonCount: 28,
+  // Villages: clusters of houses (reusing placeHouse) on flat, dry land, placed on
+  // their own decoupled PRNG (villageRand) so they never shift the shared stream.
+  // Each valid site seeds a small resident villager population at boot.
+  villageCount: 12,
+  villageHouseCount: 5,
+  villagersPerVillage: 4,
+  villageMinSpawnDistance: 30,
+  // A village only lands where the seed-pure surface across its footprint stays
+  // within this many blocks (so it sits on flat plains/desert, not a mountainside);
+  // a small terrace then levels the rest, keeping the build natural-looking.
+  villageFlatnessTolerance: 2,
   oreConfigs: Object.freeze([
     { id: BlockId.SliverOre, attempts: 120000, minY: 3, maxYOffset: 10, minSize: 3, maxSize: 10 },
     { id: BlockId.RubyOre, attempts: 52000, minY: 2, maxYOffset: 16, minSize: 3, maxSize: 10 },
@@ -155,6 +166,10 @@ export function generateWorld(world: VoxelWorld, worldType: WorldType = "default
   placeCacti(world);
   placeStructures(world, rand);
   placeDungeons(world, cfg);
+  // Villages run LAST on their own decoupled PRNG (villageRand), so they add
+  // structures without shifting any other stream — every pass above stays
+  // byte-identical to a village-less world of the same seed.
+  placeVillages(world, cfg);
 }
 
 function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
@@ -466,6 +481,16 @@ function placeHouse(world: VoxelWorld, cx: number, cz: number): void {
     }
   }
 
+  buildHouseShell(world, cx, cz, floorY);
+}
+
+/**
+ * Builds the house itself at a pre-validated `floorY` (cobblestone floor pad,
+ * brick walls with glass windows, wood corner posts, a door gap, and a plank
+ * roof). Split out of placeHouse so villages can level a pad and build on it.
+ */
+function buildHouseShell(world: VoxelWorld, cx: number, cz: number, floorY: number): void {
+  const half = 3;
   for (let x = cx - half; x <= cx + half; x += 1) {
     for (let z = cz - half; z <= cz + half; z += 1) world.set(x, floorY - 1, z, BlockId.Cobblestone);
   }
@@ -606,4 +631,120 @@ export function collectDungeonSites(world: VoxelWorld, worldType: WorldType = "d
   const spawnerIndices: number[] = [];
   buildDungeons(world, false, { chest: (idx) => chestIndices.push(idx), spawner: (idx) => spawnerIndices.push(idx) }, terrainConfigFor(worldType));
   return { chestIndices, spawnerIndices };
+}
+
+// ── Villages ────────────────────────────────────────────────────────────────
+// Clusters of houses on flat, dry land. Like dungeons, the world's block diff
+// can't carry the resident villagers, so the engine re-derives each village's
+// center on load (collectVillageSites) and seeds residents there. The same two
+// invariants keep build and derive in lockstep: a dedicated PRNG seeded only from
+// world.seed, with a fixed number of draws per village; and seed-pure validation
+// via terrainTopY (never highestSolidY, which caves/edits could shift).
+
+/** Resident-spawn centers a village contributes (one per placed village). */
+type VillageSink = (cx: number, cz: number) => void;
+const NOOP_VILLAGE_SINK: VillageSink = () => {};
+
+/** House offsets from the village center — a tidy cross (center + four arms), spaced so 7-wide footprints don't overlap. */
+const VILLAGE_HOUSE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [9, 0],
+  [-9, 0],
+  [0, 9],
+  [0, -9],
+  [9, 9],
+  [-9, -9],
+  [9, -9],
+  [-9, 9]
+];
+
+/** A PRNG seeded only from the world seed, decoupled from the main gen and dungeon streams. */
+function villageRand(seed: number): () => number {
+  let t = (seed ^ 0x85ebca6b) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Seed-pure flatness gate: true when the surface under every house in the village
+ * stays within villageFlatnessTolerance of the center's floor. Reads only
+ * terrainTopY (no blocks), so build and derive agree on which villages exist.
+ */
+function villageGroundFlat(world: VoxelWorld, cx: number, cz: number, baseSurface: number, cfg: TerrainConfig): boolean {
+  for (let h = 0; h < GEN.villageHouseCount; h += 1) {
+    const [ox, oz] = VILLAGE_HOUSE_OFFSETS[h];
+    if (!world.inBounds(cx + ox, baseSurface, cz + oz)) return false;
+    if (Math.abs(terrainTopY(world, cx + ox, cz + oz, cfg) - baseSurface) > GEN.villageFlatnessTolerance) return false;
+  }
+  return true;
+}
+
+/** Levels a 9×9 pad to `floorY-1` (clearing terrain bumps above, filling just below) and builds a house on it. */
+function buildVillageHouse(world: VoxelWorld, cx: number, cz: number, floorY: number): void {
+  const pad = 4; // house footprint half-width plus its border
+  for (let x = cx - pad; x <= cx + pad; x += 1) {
+    for (let z = cz - pad; z <= cz + pad; z += 1) {
+      if (!world.inBounds(x, floorY - 1, z)) return;
+      world.set(x, floorY - 2, z, BlockId.Dirt);
+      world.set(x, floorY - 1, z, BlockId.Grass);
+      for (let y = floorY; y <= floorY + 5; y += 1) world.set(x, y, z, BlockId.Air);
+    }
+  }
+  buildHouseShell(world, cx, cz, floorY);
+}
+
+function buildVillages(world: VoxelWorld, write: boolean, sink: VillageSink, cfg: TerrainConfig): void {
+  const rand = villageRand(world.seed);
+  const centerX = world.sizeX / 2;
+  const centerZ = world.sizeZ / 2;
+  for (let i = 0; i < GEN.villageCount; i += 1) {
+    // Draw every random up front so the stream advances identically whether or
+    // not this village turns out to be placeable.
+    const cx = 20 + Math.floor(rand() * (world.sizeX - 40));
+    const cz = 20 + Math.floor(rand() * (world.sizeZ - 40));
+
+    const surface = terrainTopY(world, cx, cz, cfg);
+    // Dry, buildable land only (above sea level, not into the sky), clear of the
+    // spawn area, and flat enough across the whole footprint — all seed-pure, so
+    // the record pass derives the exact same set of villages the write pass built.
+    if (surface <= cfg.seaLevel || surface >= world.sizeY - 8) continue;
+    if (Math.hypot(cx - centerX, cz - centerZ) < GEN.villageMinSpawnDistance) continue;
+    if (!villageGroundFlat(world, cx, cz, surface, cfg)) continue;
+
+    if (write) {
+      const floorY = surface + 1;
+      for (let h = 0; h < GEN.villageHouseCount; h += 1) {
+        const [ox, oz] = VILLAGE_HOUSE_OFFSETS[h];
+        buildVillageHouse(world, cx + ox, cz + oz, floorY);
+      }
+      // Cobblestone paths along the cross arms tie the houses into one settlement.
+      for (let d = -9; d <= 9; d += 1) {
+        if (world.inBounds(cx + d, floorY - 1, cz)) world.set(cx + d, floorY - 1, cz, BlockId.Cobblestone);
+        if (world.inBounds(cx, floorY - 1, cz + d)) world.set(cx, floorY - 1, cz + d, BlockId.Cobblestone);
+      }
+    }
+    sink(cx, cz);
+  }
+}
+
+function placeVillages(world: VoxelWorld, cfg: TerrainConfig): void {
+  buildVillages(world, true, NOOP_VILLAGE_SINK, cfg);
+}
+
+export type VillageSites = { centers: Array<{ x: number; z: number }> };
+
+/**
+ * Re-derives every village's center WITHOUT writing blocks, by replaying
+ * buildVillages' placement math. The engine calls this once after regenerating
+ * the world on load to rebuild the session-only village sites that seed resident
+ * villagers. Must be passed the same worldType the world was generated with.
+ */
+export function collectVillageSites(world: VoxelWorld, worldType: WorldType = "default"): VillageSites {
+  const centers: Array<{ x: number; z: number }> = [];
+  buildVillages(world, false, (x, z) => centers.push({ x, z }), terrainConfigFor(worldType));
+  return { centers };
 }

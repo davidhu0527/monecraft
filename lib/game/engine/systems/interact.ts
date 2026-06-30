@@ -249,9 +249,13 @@ function interactGrindstone(state: GameState, emit: EmitGameEvent): boolean {
  */
 export function tryTradeAimedVillager(state: GameState, emit: EmitGameEvent): boolean {
   const index = findAimedMobIndex(state);
-  if (index < 0 || state.mobs[index].kind !== "villager") return false;
+  const mob = index < 0 ? null : state.mobs[index];
+  if (!mob || mob.kind !== "villager") return false;
   state.inventoryOpen = true;
   state.craftingStation = "villager";
+  // The open villager's profession filters the Trading panel to its offers and
+  // gates which trades the craft command will accept.
+  state.activeVillagerProfession = mob.profession ?? null;
   emit({ type: "openedStation", station: "villager" });
   return true;
 }

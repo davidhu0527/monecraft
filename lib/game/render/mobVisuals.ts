@@ -3,9 +3,18 @@ import { BABY_SCALE } from "@/lib/game/config";
 import { createMobModelForKind, MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { MobModel } from "@/lib/game/types";
 import type { MobState } from "@/lib/game/engine/state";
+import type { Profession } from "@/lib/game/types";
 
 /** How much a sitting pet shrinks (and is lowered) to read as crouched. */
 const SIT_SCALE = 0.7;
+
+/** Smock colour per villager profession — recoloured onto the body material at model creation. */
+const PROFESSION_TINT: Record<Profession, number> = {
+  farmer: 0x8a7d3a, // straw
+  blacksmith: 0x4a4a52, // dark iron
+  librarian: 0xd9cfa8, // parchment
+  cleric: 0x7a4fa0 // priestly purple
+};
 
 type HealthBar = {
   group: THREE.Group;
@@ -69,6 +78,10 @@ export function createMobVisuals(scene: THREE.Scene): MobVisuals {
         let visual = visuals.get(mob.id);
         if (!visual) {
           const model = createMobModelForKind(mob.kind);
+          // Tint a villager's smock (the body material) to its trade profession.
+          if (mob.kind === "villager" && mob.profession) {
+            (model.materials[0] as THREE.MeshStandardMaterial).color.setHex(PROFESSION_TINT[mob.profession]);
+          }
           const healthBar = mob.hostile ? createHealthBar(mob.kind) : null;
           if (healthBar) model.group.add(healthBar.group);
           visual = { model, healthBar };

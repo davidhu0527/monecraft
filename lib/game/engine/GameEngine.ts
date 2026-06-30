@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectVillageSites,
   collidesAt,
   computeFullLight,
   generateWorld,
@@ -30,6 +31,8 @@ import {
   POISON_FLOOR_HP,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
+  RAID_TRIGGER_DISTANCE,
+  RAID_WAVE_COUNT,
   RENDER_RADIUS,
   ROTTEN_FLESH_POISON_CHANCE,
   STUCK_RESET_SECONDS,
@@ -49,6 +52,7 @@ import {
 } from "@/lib/game/anvil";
 import { canStripEnchantments, enchantRefund, stripEnchantments } from "@/lib/game/grindstone";
 import { RECIPES } from "@/lib/game/recipes";
+import { tradeProfession } from "@/lib/game/trades";
 import * as inv from "@/lib/game/inventory";
 import {
   inventorySlotsSnapshot,
@@ -106,7 +110,17 @@ import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
-import { pushMob, spawnBoss, spawnInitialMobs, tickHostileSpawnDirector, tickSpawnerDirector } from "./systems/spawnDirector";
+import { startRaid, tickRaid } from "./systems/raid";
+import {
+  assignVillagerProfessions,
+  pushMob,
+  spawnBoss,
+  spawnInitialMobs,
+  spawnMobGroup,
+  spawnVillageResidents,
+  tickHostileSpawnDirector,
+  tickSpawnerDirector
+} from "./systems/spawnDirector";
 import { ADVANCEMENTS_BY_ID, evaluateAdvancements, recordEvent, recordTick } from "./systems/advancements";
 
 export type GameEngineOptions = {
@@ -165,6 +179,8 @@ export class GameEngine {
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
     const dungeonSites = collectDungeonSites(world, this.worldType);
+    // Likewise re-derive village centers, so resident villagers can be seeded there.
+    const villageSites = collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
     if (save) blockChanges.applySavedChanges(save.changes);
@@ -217,12 +233,14 @@ export class GameEngine {
       inventoryOpen: false,
       advancementsOpen: false,
       craftingStation: null,
+      activeVillagerProfession: null,
       containers: new Map(),
       primedTnt: new Map(),
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
       lootedDungeonChests: new Set(),
+      villageSites: villageSites.centers,
       paused: false,
       debugOpen: false,
       debugInfo: null,
@@ -244,7 +262,8 @@ export class GameEngine {
       mining: { targetKey: "", progress: 0 },
       timers: createTimers(),
       worldMeshDirty: true,
-      victory: false
+      victory: false,
+      raid: null
     };
 
     if (save) {
@@ -293,6 +312,25 @@ export class GameEngine {
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
+    // Seed each village's residents — but only for a world that hasn't populated
+    // its villages yet: a fresh world (no save) or one upgraded from a pre-village
+    // save (no `villagesSeeded` flag). A genuine v15 save's villagers are
+    // authoritative — restored above — so we never re-seed (an emptied village
+    // stays empty, not repopulated on reload).
+    if (!save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
+      if (this.state.villageSites.length > 0) {
+        spawnVillageResidents(this.state, this.state.villageSites, this.rng, this.surfaceYAt);
+      } else {
+        // A village-less seed (rough/ocean terrain) still gets a few wandering
+        // villagers near spawn so trading is never wholly unavailable.
+        const { x, z } = this.state.player.position;
+        spawnMobGroup(this.state, { kind: "villager", hostile: false, count: 3, centerX: x, centerZ: z, radius: RENDER_RADIUS }, this.rng, this.surfaceYAt);
+      }
+    }
+    // Assign a profession to any villager that lacks one — newly seeded residents,
+    // and (defensively) any restored villager whose profession went missing. Runs
+    // unconditionally so a pre-v15 upgrade's villagers don't stay professionless.
+    assignVillagerProfessions(this.state);
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
     tickWeather(this.state);
@@ -370,6 +408,7 @@ export class GameEngine {
     tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
+    tickRaid(state, dt, { surfaceYAt: this.surfaceYAt, rng: this.rng, emit: this.emit });
     this.tickDebugInfo(dt);
 
     this.refreshSnapshot();
@@ -391,6 +430,7 @@ export class GameEngine {
         if (state.inventoryOpen) state.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
         if (!state.inventoryOpen) {
           state.craftingStation = null; // leaving the panel closes the station
+          state.activeVillagerProfession = null; // ...and the open villager's trades
           state.openContainerIndex = null; // ...and the open chest
         }
         break;
@@ -401,6 +441,7 @@ export class GameEngine {
         if (state.advancementsOpen) {
           state.inventoryOpen = false; // mutually exclusive with the inventory panel
           state.craftingStation = null;
+          state.activeVillagerProfession = null;
           state.openContainerIndex = null;
         }
         break;
@@ -411,6 +452,9 @@ export class GameEngine {
         // Station recipes (e.g. furnace smelting) require that station to be open.
         // The UI gates these too, but dispatch is the spoofable surface to guard.
         if (recipe.station && recipe.station !== state.craftingStation) break;
+        // A villager trade additionally requires the open villager's profession —
+        // you can't craft a blacksmith trade while talking to a farmer.
+        if (recipe.station === "villager" && tradeProfession(recipe.id) !== state.activeVillagerProfession) break;
         const next = inv.craft(state.inventory, recipe);
         if (!next) break;
         state.inventory = next;
@@ -559,6 +603,7 @@ export class GameEngine {
         if (tryTradeAimedVillager(state, this.emit)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
+        if (this.tryStartRaid()) break;
         if (tryFish(state, this.emit, this.rng)) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
@@ -664,7 +709,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 14,
+      version: 15,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -690,7 +735,8 @@ export class GameEngine {
       xp: state.xp,
       stats: serializeStats(state.stats),
       advancements: [...state.advancements],
-      mobs: serializeMobs(state.mobs)
+      mobs: serializeMobs(state.mobs),
+      villagesSeeded: true // this world's villages are populated — don't re-seed on reload
     };
   }
 
@@ -857,6 +903,7 @@ export class GameEngine {
         mob.hp = Math.min(m.hp, MOB_TEMPLATES[m.kind].hp);
       }
       if (m.sitting) mob.sitting = true;
+      if (m.profession) mob.profession = m.profession;
       if (m.ageTimer && m.ageTimer > 0) {
         mob.ageTimer = m.ageTimer;
         mob.halfHeight = mobHalfHeight(m.kind) * BABY_SCALE;
@@ -908,6 +955,36 @@ export class GameEngine {
     spawnBoss(state, point.x, point.y, point.z, this.rng);
     state.inventory = inv.adjustSlotCount(state.inventory, "boss_summoner", -1, state.selectedSlot) ?? state.inventory;
     this.emit({ type: "bossSummoned", x: point.x, y: point.y, z: point.z });
+    return true;
+  }
+
+  /**
+   * Sounds a held Ominous Horn at the nearest village (within RAID_TRIGGER_DISTANCE)
+   * to start a raid, consuming the horn. Refuses (keeping it) when a raid is already
+   * running; does nothing (returns false, so placement falls through) when no village
+   * is in range or the difficulty is Peaceful.
+   */
+  private tryStartRaid(): boolean {
+    const state = this.state;
+    const slot = state.inventory[state.selectedSlot];
+    if (slot?.id !== "ominous_horn" || slot.count <= 0) return false;
+    if (state.raid) {
+      this.emit({ type: "raidFailed" });
+      return true;
+    }
+    const { x, z } = state.player.position;
+    let nearest: { x: number; z: number } | null = null;
+    let bestSq = RAID_TRIGGER_DISTANCE * RAID_TRIGGER_DISTANCE;
+    for (const site of state.villageSites) {
+      const d = (site.x - x) * (site.x - x) + (site.z - z) * (site.z - z);
+      if (d < bestSq) {
+        bestSq = d;
+        nearest = site;
+      }
+    }
+    if (!nearest || !startRaid(state, nearest.x, nearest.z)) return false;
+    state.inventory = inv.adjustSlotCount(state.inventory, "ominous_horn", -1, state.selectedSlot) ?? state.inventory;
+    this.emit({ type: "raidStarted", totalWaves: RAID_WAVE_COUNT });
     return true;
   }
 
@@ -1116,6 +1193,7 @@ export class GameEngine {
       capsActive: state.capsActive,
       sleeping: state.sleepTimer > 0,
       craftingStation: state.craftingStation,
+      activeVillagerProfession: state.activeVillagerProfession,
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
       victory: state.victory,

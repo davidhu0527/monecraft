@@ -1477,7 +1477,7 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(14);
+    expect(save.version).toBe(15);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -2316,6 +2316,7 @@ describe("villager trading", () => {
       kind: "villager",
       hostile: false,
       faction: "villager",
+      profession: "farmer", // trade_wheat is a farmer trade
       targetId: null,
       retargetTimer: 0,
       hp: 20,
@@ -2353,6 +2354,49 @@ describe("villager trading", () => {
     engine.dispatch({ type: "craft", recipeId: "trade_wheat" });
     expect(countsById(state.inventory).get("emerald")).toBe(1);
     expect(countsById(state.inventory).get("wheat")).toBeUndefined();
+
+    // A trade from another profession (blacksmith's gold→emerald) is refused while
+    // a farmer is open — the profession gate, not just the station gate.
+    const goldSlot = state.inventory.findIndex((s) => !s.id);
+    state.inventory[goldSlot] = createSlot("gold_ore", 1);
+    engine.dispatch({ type: "craft", recipeId: "trade_gold" });
+    expect(countsById(state.inventory).get("gold_ore")).toBe(1); // not consumed
+    expect(state.activeVillagerProfession).toBe("farmer");
+  });
+});
+
+describe("village raids", () => {
+  test("sounding an Ominous Horn near a village starts a raid and consumes the horn", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    state.player.pitch = -1.2; // look up at the sky so no block interaction intercepts
+
+    // A village right where the player stands, and a horn in hand.
+    state.villageSites = [{ x: state.player.position.x, z: state.player.position.z }];
+    const slot = state.inventory.findIndex((s) => !s.id);
+    state.inventory = [...state.inventory];
+    state.inventory[slot] = createSlot("ominous_horn", 1);
+    state.selectedSlot = slot;
+
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(state.raid).not.toBeNull();
+    expect(engine.consumeEvents().some((e) => e.type === "raidStarted")).toBe(true);
+    expect(countsById(state.inventory).get("ominous_horn")).toBeUndefined(); // consumed
+
+    // A second horn is refused while the raid runs, with a raid-specific event
+    // (not the boss-totem `summonFailed`, which would show the wrong toast).
+    state.inventory[slot] = createSlot("ominous_horn", 1);
+    engine.consumeEvents();
+    engine.dispatch({ type: "placeBlock" });
+    const events = engine.consumeEvents();
+    expect(events.some((e) => e.type === "raidFailed")).toBe(true);
+    expect(events.some((e) => e.type === "summonFailed")).toBe(false);
+    expect(countsById(state.inventory).get("ominous_horn")).toBe(1); // not consumed
   });
 });
 
@@ -2795,8 +2839,32 @@ describe("mob persistence (pets)", () => {
     expect(restored.state.mobs.length).toBe(wildCount + 1);
   });
 
-  test("a fresh world persists no mobs (nothing owned yet)", () => {
-    expect(makeEngine().serialize().mobs ?? []).toEqual([]); // mobs is optional in v14
+  test("a fresh world persists its village residents (or fallback villagers) but no pets", () => {
+    const mobs = makeEngine().serialize().mobs ?? [];
+    expect(mobs.length).toBeGreaterThan(0); // villagers persist now
+    expect(mobs.every((m) => m.faction === "villager")).toBe(true); // only residents, nothing owned
+    expect(mobs.some((m) => m.owner === "player")).toBe(false);
+  });
+
+  test("a populated village save is not repopulated on reload, even after its villagers are wiped", () => {
+    const engine = makeEngine();
+    expect(engine.state.mobs.some((m) => m.faction === "villager")).toBe(true); // a fresh world seeds residents (fallback at 64³)
+    engine.state.mobs = engine.state.mobs.filter((m) => m.faction !== "villager"); // the player kills them all
+    const save = engine.serialize();
+    expect(save.villagesSeeded).toBe(true);
+
+    const restored = makeEngine(save);
+    expect(restored.state.mobs.some((m) => m.faction === "villager")).toBe(false); // stays empty — not re-seeded
+  });
+
+  test("a pre-village save (no villagesSeeded flag) still seeds villagers on load", () => {
+    const save = makeEngine().serialize();
+    // Simulate a pre-v15 upgrade: the flag is absent and no villagers were persisted.
+    const upgraded = { ...save, villagesSeeded: undefined, mobs: (save.mobs ?? []).filter((m) => m.faction !== "villager") };
+
+    const restored = makeEngine(upgraded);
+    expect(restored.state.mobs.some((m) => m.faction === "villager")).toBe(true); // bootstrap seeded them
+    expect(restored.state.mobs.filter((m) => m.faction === "villager").every((m) => m.profession != null)).toBe(true); // with professions
   });
 
   test("a tamed wolf restores as a fighting ally (boosted hp + detect range)", () => {

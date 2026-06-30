@@ -17,6 +17,7 @@ import {
   migrateSaveV11toV12,
   migrateSaveV12toV13,
   migrateSaveV13toV14,
+  migrateSaveV14toV15,
   isPersistentMob,
   readContainers,
   readLootedChests,
@@ -61,6 +62,7 @@ import type {
   SaveDataV11,
   SaveDataV12,
   SaveDataV13,
+  SaveDataV14,
   SavedMob
 } from "@/lib/game/types";
 import type { MobState } from "@/lib/game/engine/state";
@@ -83,7 +85,7 @@ const KEY = "test_save";
 
 function sampleSave(): SaveData {
   return {
-    version: 14,
+    version: 15,
     gameMode: "creative",
     difficulty: "hard",
     seed: 1337,
@@ -131,7 +133,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(14);
+    expect(parsed!.version).toBe(15);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.inventorySlots).toBeUndefined();
   });
@@ -153,7 +155,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(14); // chained v1 -> v2 -> … -> v13 -> v14
+    expect(parsed!.version).toBe(15); // chained v1 -> v2 -> … -> v14 -> v15
     expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -246,7 +248,7 @@ describe("v2 to v3 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(14);
+    expect(parsed!.version).toBe(15);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -283,7 +285,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -358,7 +360,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -403,7 +405,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(restoreEffects(parsed)).toEqual([]);
   });
 
@@ -425,7 +427,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(restoreGameMode(parsed)).toBe("survival");
   });
 
@@ -452,7 +454,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v8: SaveDataV8 = { ...v5Save(), version: 8 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(restoreDifficulty(parsed)).toBe("normal");
   });
 
@@ -480,7 +482,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v9: SaveDataV9 = { ...v5Save(), version: 9 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v9) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(restoreHardcore(parsed)).toBe(false);
     expect(restoreGameOver(parsed)).toBe(false);
   });
@@ -712,7 +714,7 @@ describe("v12 to v13 migration & statistics", () => {
   test("a pre-progression (v12) save loads with no statistics", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v12Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(restoreStats(parsed)).toEqual([]);
   });
 
@@ -754,7 +756,7 @@ describe("v12 to v13 migration & statistics", () => {
   });
 
   test("migrateSaveV12toV13 leaves a v12 save with no advancements", () => {
-    expect(restoreAdvancements(migrateSaveV13toV14(migrateSaveV12toV13(v12Save())))).toEqual([]);
+    expect(restoreAdvancements(migrateSaveV14toV15(migrateSaveV13toV14(migrateSaveV12toV13(v12Save()))))).toEqual([]);
   });
 
   test("restoreAdvancements rejects a non-array and drops non-string / empty ids, de-duplicating", () => {
@@ -814,7 +816,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 15 };
+    const save = { ...sampleSave(), version: 16 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
@@ -899,14 +901,14 @@ describe("v13 to v14 migration & mob persistence", () => {
   test("a pre-mob (v13) save loads with no persisted mobs", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v13Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
     expect(restoreMobs(parsed)).toEqual([]);
   });
 
-  test("isPersistentMob keeps only owned mobs (pets); residents join in PR-B", () => {
-    expect(isPersistentMob(makeMob({ owner: "player", faction: "ally" }))).toBe(true);
+  test("isPersistentMob keeps owned pets and village residents, not the fungible population", () => {
+    expect(isPersistentMob(makeMob({ owner: "player", faction: "ally" }))).toBe(true); // pet
+    expect(isPersistentMob(makeMob({ kind: "villager", faction: "villager" }))).toBe(true); // village resident
     expect(isPersistentMob(makeMob({ faction: "wild" }))).toBe(false);
-    expect(isPersistentMob(makeMob({ kind: "villager", faction: "villager" }))).toBe(false);
     expect(isPersistentMob(makeMob({ hostile: true, faction: "hostile" }))).toBe(false);
   });
 
@@ -942,5 +944,65 @@ describe("v13 to v14 migration & mob persistence", () => {
     const pet = makeMob({ owner: "player", faction: "ally", hp: 16, position: new THREE.Vector3(9, 30, 9) });
     writeSave(KEY, { ...sampleSave(), mobs: serializeMobs([pet]) }, storage);
     expect(readSave(KEY, storage)!.mobs).toEqual([{ kind: "sheep", x: 9, y: 30, z: 9, hp: 16, faction: "ally", owner: "player" }]);
+  });
+});
+
+describe("v14 to v15 migration & villager professions", () => {
+  function v14Save(overrides: Partial<SaveDataV14> = {}): SaveDataV14 {
+    return {
+      version: 14,
+      seed: 1337,
+      changes: [[42, 0]],
+      inventorySlots: [{ id: "dirt", count: 3 }],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  function resident(profession: string): MobState {
+    return {
+      id: 1,
+      kind: "villager",
+      hostile: false,
+      faction: "villager",
+      profession,
+      targetId: null,
+      retargetTimer: 0,
+      hp: 20,
+      position: new THREE.Vector3(8, 30, 9),
+      direction: new THREE.Vector3(0, 0, 1),
+      yaw: 0,
+      turnTimer: 0,
+      speed: 0.6,
+      moveSpeed: 0.6,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 0,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    } as unknown as MobState;
+  }
+
+  test("migrateSaveV14toV15 is a pure version bump", () => {
+    const migrated = migrateSaveV14toV15(v14Save());
+    expect(migrated.version).toBe(15);
+    expect(migrated.changes).toEqual([[42, 0]]);
+  });
+
+  test("a village resident's profession round-trips through serialize/restore", () => {
+    const saved = serializeMobs([resident("librarian")]);
+    expect(saved).toEqual([{ kind: "villager", x: 8, y: 30, z: 9, hp: 20, faction: "villager", profession: "librarian" }]);
+    expect(restoreMobs({ ...sampleSave(), mobs: saved })).toEqual([
+      { kind: "villager", x: 8, y: 30, z: 9, hp: 20, faction: "villager", profession: "librarian" }
+    ]);
+  });
+
+  test("restoreMobs drops an invalid profession but keeps the resident professionless", () => {
+    const dirty = [{ kind: "villager", x: 1, y: 1, z: 1, hp: 20, faction: "villager", profession: "wizard" }] as unknown as SavedMob[];
+    expect(restoreMobs({ ...sampleSave(), mobs: dirty })).toEqual([{ kind: "villager", x: 1, y: 1, z: 1, hp: 20, faction: "villager" }]);
   });
 });

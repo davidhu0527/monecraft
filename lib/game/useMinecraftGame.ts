@@ -58,6 +58,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   capsActive: false,
   sleeping: false,
   craftingStation: null,
+  activeVillagerProfession: null,
   container: null,
   boss: null,
   victory: false,
@@ -343,6 +344,21 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "advancementUnlocked") {
           flashMessage(`Advancement Unlocked: ${event.name}`, 2400);
         }
+        if (event.type === "raidStarted") {
+          flashMessage(`A raid is coming — defend the village! (${event.totalWaves} waves)`, 2400);
+        }
+        if (event.type === "raidFailed") {
+          flashMessage("A raid is already underway");
+        }
+        if (event.type === "raidWaveStarted") {
+          flashMessage(`Raid wave ${event.wave} / ${event.totalWaves}`, 1800);
+        }
+        if (event.type === "raidWon") {
+          flashMessage("The village holds! Raid defended.", 2400);
+        }
+        if (event.type === "raidLost") {
+          flashMessage("The village has fallen...", 2400);
+        }
         renderer.handleEvent(event, gameEngine.state);
         audio.handleEvent(event);
       }
@@ -423,6 +439,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     paused: snapshot.paused,
     sleeping: snapshot.sleeping,
     craftingStation: snapshot.craftingStation,
+    activeVillagerProfession: snapshot.activeVillagerProfession,
     container: snapshot.container,
     boss: snapshot.boss,
     victory: snapshot.victory,

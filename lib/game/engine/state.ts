@@ -3,7 +3,7 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, SaveData } from "@/lib/game/types";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -36,6 +36,8 @@ export type MobState = {
   owner?: "player";
   /** A tamed pet told to stay put (sit/stay) — no follow, wander, or pursuit. Persisted (save v14). */
   sitting?: boolean;
+  /** Villager-only: trade profession (drives its trade subset + tint). Persisted (save v15). */
+  profession?: Profession;
   /** Session-only: id of the enemy mob this fighter is attacking, or null. Never serialized. */
   targetId: number | null;
   /** Session-only: seconds until the next enemy-mob rescan (throttle). Never serialized. */
@@ -154,6 +156,20 @@ export type GameTimers = {
 export type WeatherKind = "clear" | "rain" | "snow";
 export type WeatherState = { kind: WeatherKind; intensity: number };
 
+/**
+ * An in-progress village raid — session-only, never serialized (like the boss).
+ * A reload cancels it. Waves of raiders spawn around `center`; once a wave is
+ * cleared, `waveTimer` counts down to the next, until all `totalWaves` are beaten.
+ */
+export type RaidState = {
+  center: { x: number; z: number };
+  /** Waves spawned so far (0 before the first spawns, up to totalWaves). */
+  wavesSpawned: number;
+  totalWaves: number;
+  /** Seconds until the next wave once the current one is cleared. */
+  waveTimer: number;
+};
+
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
@@ -190,6 +206,8 @@ export type GameState = {
   advancementsOpen: boolean;
   /** Crafting station whose recipes (or the enchanting panel) are unlocked while the inventory is open, or null. */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's trade profession while a "villager" station is up (gates which trades show + craft), else null. Session-only. */
+  activeVillagerProfession: Profession | null;
   /** Chest contents (block-entities) keyed by the block's voxel index. */
   containers: Map<number, InventorySlot[]>;
   /** Lit TNT keyed by voxel index → seconds left on its fuse (session-only, never serialized). */
@@ -202,6 +220,8 @@ export type GameState = {
   dungeonSpawnerIndices: Set<number>;
   /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
   lootedDungeonChests: Set<number>;
+  /** Village center (x,z) sites (session; re-derived from the seed each load) — seed the resident villager population. */
+  villageSites: Array<{ x: number; z: number }>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
   paused: boolean;
   debugOpen: boolean;
@@ -233,6 +253,8 @@ export type GameState = {
   worldMeshDirty: boolean;
   /** True once the boss has been defeated — drives the one-shot victory screen (session-only). */
   victory: boolean;
+  /** The active village raid, or null. Session-only (a reload cancels it). */
+  raid: RaidState | null;
 };
 
 export function createTimers(): GameTimers {
@@ -326,6 +348,8 @@ export type GameSnapshot = {
   sleeping: boolean;
   /** Open crafting station (gates smelting recipes, or opens the enchanting panel). */
   craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's profession (filters the Trading panel to its offers), or null. */
+  activeVillagerProfession: Profession | null;
   /** Contents of the open chest, or null when no chest is open. */
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
@@ -392,6 +416,11 @@ export type GameEvent =
   | { type: "mobBred"; kind: MobKind }
   | { type: "mobTamed"; kind: MobKind; x: number; y: number; z: number }
   | { type: "petSitToggled"; kind: MobKind; sitting: boolean }
+  | { type: "raidStarted"; totalWaves: number }
+  | { type: "raidWaveStarted"; wave: number; totalWaves: number }
+  | { type: "raidWon" }
+  | { type: "raidLost" }
+  | { type: "raidFailed" }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
 export type EmitGameEvent = (event: GameEvent) => void;

@@ -63,6 +63,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     paused,
     sleeping,
     craftingStation,
+    activeVillagerProfession,
     container,
     boss,
     victory,
@@ -183,6 +184,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
           hotbarSlots={hotbarSlots}
           recipes={recipes}
           craftingStation={craftingStation}
+          activeVillagerProfession={activeVillagerProfession}
           gameMode={gameMode}
           container={container}
           xpLevel={xpLevel}

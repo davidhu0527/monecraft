@@ -260,6 +260,16 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "bossDefeated":
           backend.play(VICTORY_SOUND);
           break;
+        case "raidStarted":
+        case "raidWaveStarted":
+          backend.play(BOSS_ROAR_SOUND); // an ominous horn-like blast
+          break;
+        case "raidWon":
+          backend.play(VICTORY_SOUND);
+          break;
+        case "raidLost":
+          backend.play(DEATH_SOUND);
+          break;
         case "explosion":
           backend.play(EXPLOSION_SOUND);
           break;

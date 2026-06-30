@@ -254,6 +254,8 @@ export const ITEM_DEFS: ItemDef[] = [
   // Endgame: a diamond-gated totem summons the boss; its Dragon Heart drop
   // crafts the best-in-game Dragon Sword.
   { id: "boss_summoner", label: "Cursed Totem", kind: "material" },
+  // Sounded at a village to call down a raid (systems/raid.ts).
+  { id: "ominous_horn", label: "Ominous Horn", kind: "material" },
   { id: "dragon_heart", label: "Dragon Heart", kind: "material" },
   { id: "dragon_sword", label: "Dragon Sword", kind: "weapon", attack: 60, maxDurability: 1200 },
   { id: "helmet", label: "Helmet", kind: "armor", armorSlot: "helmet", defense: 2, maxDurability: 260 },

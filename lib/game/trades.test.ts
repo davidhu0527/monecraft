@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createEmptySlot, createSlot, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { canCraft, countsById, craft } from "@/lib/game/inventory";
-import { TRADES } from "@/lib/game/trades";
+import { isProfession, PROFESSIONS, TRADE_PROFESSION, TRADES, tradeProfession } from "@/lib/game/trades";
 import type { InventorySlot } from "@/lib/game/types";
 
 function inventory(items: Array<[string, number]>): InventorySlot[] {
@@ -52,5 +52,34 @@ describe("villager trades", () => {
 
   test("a trade you can't afford is not craftable", () => {
     expect(canCraft(inventory([["emerald", 4]]), trade("trade_ruby"))).toBe(false); // needs 8
+  });
+});
+
+describe("trade professions", () => {
+  test("every trade is tagged with a valid profession", () => {
+    for (const t of TRADES) {
+      const prof = tradeProfession(t.id);
+      expect(prof).toBeDefined();
+      expect(isProfession(prof)).toBe(true);
+    }
+  });
+
+  test("TRADE_PROFESSION has no entries for non-existent trades", () => {
+    const ids = new Set(TRADES.map((t) => t.id));
+    for (const id of Object.keys(TRADE_PROFESSION)) expect(ids.has(id)).toBe(true);
+  });
+
+  test("every profession has a two-sided economy (a sell and a buy offer)", () => {
+    for (const prof of PROFESSIONS) {
+      const offers = TRADES.filter((t) => tradeProfession(t.id) === prof);
+      expect(offers.some((t) => t.result.slotId === "emerald")).toBe(true); // a SELL (→ emerald)
+      expect(offers.some((t) => t.cost.some((c) => c.slotId === "emerald"))).toBe(true); // a BUY (emerald →)
+    }
+  });
+
+  test("isProfession rejects unknown strings", () => {
+    expect(isProfession("farmer")).toBe(true);
+    expect(isProfession("wizard")).toBe(false);
+    expect(isProfession(undefined)).toBe(false);
   });
 });

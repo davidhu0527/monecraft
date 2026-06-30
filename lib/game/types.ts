@@ -86,7 +86,21 @@ export type Recipe = {
   station?: "furnace" | "villager" | "brewing";
 };
 
-export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "wolf" | "cat" | "zombie" | "skeleton" | "spider" | "creeper" | "villager" | "boss";
+export type MobKind =
+  | "sheep"
+  | "chicken"
+  | "horse"
+  | "cow"
+  | "pig"
+  | "wolf"
+  | "cat"
+  | "zombie"
+  | "skeleton"
+  | "spider"
+  | "creeper"
+  | "raider"
+  | "villager"
+  | "boss";
 
 /**
  * A mob's social allegiance — the axis that drives who fights whom (see mobAI's
@@ -95,6 +109,13 @@ export type MobKind = "sheep" | "chicken" | "horse" | "cow" | "pig" | "wolf" | "
  * pet becomes "ally". Persisted with the mob (save v14+).
  */
 export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
+
+/**
+ * A villager's trade profession — it offers only the trades tagged with its
+ * profession (TRADE_PROFESSION in trades.ts) and is tinted accordingly. Assigned
+ * per resident at spawn and persisted with the mob (save v15+).
+ */
+export type Profession = "farmer" | "blacksmith" | "librarian" | "cleric";
 
 export type MobModel = {
   group: THREE.Group;
@@ -282,15 +303,33 @@ export type SavedMob = {
   owner?: "player";
   sitting?: boolean;
   ageTimer?: number;
+  /** Villager-only trade profession (added v15); absent on pets. */
+  profession?: Profession;
 };
 
 /**
- * Current save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14
- * migration is a pure version bump and pre-v14 saves load with none (the world
- * still re-seeds its wildlife at boot). Like `xp`/`stats`, persisted pets are
- * long-term; unlike `effects` they are NOT cleared on death.
+ * Save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14 migration
+ * is a pure version bump and pre-v14 saves load with none.
  */
-export type SaveData = Omit<SaveDataV13, "version"> & {
+export type SaveDataV14 = Omit<SaveDataV13, "version"> & {
   version: 14;
   mobs?: SavedMob[];
+};
+
+/**
+ * Current save shape (v15): villager professions. A persisted villager resident
+ * now carries an optional `profession` on its `SavedMob`. The field is additive,
+ * so the v14→v15 migration is a pure version bump and pre-v15 villagers load
+ * professionless (the engine assigns one).
+ *
+ * `villagesSeeded` marks a world whose villages have already been populated (every
+ * save the engine writes sets it). Since `readSave` always migrates to the current
+ * version, the original version isn't recoverable on load — this flag is what lets
+ * the engine tell a genuine v15 save (villagers are authoritative; an emptied
+ * village stays empty) from a fresh world or a pre-village upgrade (which still
+ * need their residents seeded).
+ */
+export type SaveData = Omit<SaveDataV14, "version"> & {
+  version: 15;
+  villagesSeeded?: boolean;
 };

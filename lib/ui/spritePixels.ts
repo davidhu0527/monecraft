@@ -651,6 +651,7 @@ const FOOD_PALETTE: PixelPalette = {
 const WOOL_PALETTE: PixelPalette = { m: [236, 236, 236], M: [198, 198, 200], l: [252, 252, 252] };
 const FEATHER_PALETTE: PixelPalette = { w: [246, 247, 250], s: [176, 182, 194], l: [255, 255, 255] };
 const BONE_PALETTE: PixelPalette = { w: [236, 233, 220], l: [198, 194, 178] };
+const OMINOUS_HORN_PALETTE: PixelPalette = { w: [120, 70, 150], l: [70, 40, 95] }; // a cursed purple horn (reuses the bone shape)
 const LEATHER_PALETTE: PixelPalette = { m: [150, 95, 55], M: [98, 60, 33] };
 const STRING_PALETTE: PixelPalette = { s: [224, 221, 208] };
 const RAW_CHICKEN_PALETTE: PixelPalette = { m: [236, 200, 182], M: [198, 150, 132], r: [242, 184, 174], w: [250, 232, 218] };
@@ -773,6 +774,7 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   bow: { grid: BOW_GRID, palette: BOW_PALETTE },
   arrow: { grid: ARROW_GRID, palette: ARROW_PALETTE },
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
+  ominous_horn: { grid: BONE_GRID, palette: OMINOUS_HORN_PALETTE },
   dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },
   empty_bottle: { grid: BOTTLE_GRID, palette: EMPTY_BOTTLE_PALETTE },
   potion_speed: { grid: BOTTLE_GRID, palette: POTION_SPEED_PALETTE },
