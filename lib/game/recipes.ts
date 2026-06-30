@@ -512,6 +512,25 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "fishing_rod", count: 1 }
   },
   {
+    id: "raft",
+    label: "4 Planks + 2 Wood -> Raft",
+    cost: [
+      { slotId: "planks", count: 4 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "raft", count: 1 }
+  },
+  {
+    id: "ship",
+    label: "8 Planks + 3 Wood + 2 String -> Ship",
+    cost: [
+      { slotId: "planks", count: 8 },
+      { slotId: "wood", count: 3 },
+      { slotId: "string", count: 2 }
+    ],
+    result: { slotId: "ship", count: 1 }
+  },
+  {
     id: "arrow",
     label: "1 Stone + 1 Wood + 1 Feather -> 4 Arrows",
     cost: [
@@ -628,7 +647,8 @@ const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   armor: "Armor",
   block: "Building",
   food: "Food",
-  material: "Materials"
+  material: "Materials",
+  vehicle: "Tools"
 };
 
 /**

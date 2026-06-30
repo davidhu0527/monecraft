@@ -87,6 +87,16 @@ function calmDaytime(engine: GameEngine): void {
   engine.state.dayClock = 60;
 }
 
+function makeWaterPatch(engine: GameEngine, centerX = 20, waterY = 10, centerZ = 20): void {
+  for (let z = centerZ - 5; z <= centerZ + 5; z += 1) {
+    for (let x = centerX - 5; x <= centerX + 5; x += 1) {
+      engine.state.blockChanges.set(x, waterY - 1, z, BlockId.Stone);
+      engine.state.blockChanges.set(x, waterY, z, BlockId.Water);
+      for (let y = waterY + 1; y <= waterY + 4; y += 1) engine.state.blockChanges.set(x, y, z, BlockId.Air);
+    }
+  }
+}
+
 describe("world types", () => {
   test("an islands world spawns the player on dry land above the sea", () => {
     const engine = new GameEngine({ seed: 1337, worldType: "islands", rng: mulberry32(42), worldSize: { x: 96, y: 150, z: 96 } });
@@ -1471,14 +1481,14 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
-  test("save format is version 13 and carries clock, stats, spawn point, and game mode", () => {
+  test("save format is current and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
     engine.state.hearts = 14;
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(15);
+    expect(save.version).toBe(16);
     expect(save.gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -1489,6 +1499,73 @@ describe("persistence", () => {
     expect(restored.state.spawnPoint).toEqual({ x: 12, y: 40, z: 8 });
     // Daylight is re-derived from the restored clock, not left at dawn.
     expect(restored.state.daylight).toBeCloseTo(daylightAt(123), 5);
+  });
+
+  test("right-click places a raft on water and consumes the item", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    makeWaterPatch(engine);
+    engine.state.player.position.set(20.5, 11, 24.5);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = -0.55;
+    engine.state.inventory[engine.state.selectedSlot] = createSlot("raft", 1);
+
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(engine.state.vehicles).toHaveLength(1);
+    expect(engine.state.vehicles[0].kind).toBe("raft");
+    expect(engine.state.inventory[engine.state.selectedSlot].count).toBe(0);
+  });
+
+  test("a raft boards by right-click while a ship auto-boards when stepped onto", () => {
+    const raftEngine = makeEngine();
+    calmDaytime(raftEngine);
+    makeWaterPatch(raftEngine);
+    raftEngine.state.player.position.set(20.5, 11, 24.5);
+    raftEngine.state.player.yaw = 0;
+    raftEngine.state.player.pitch = -0.55;
+    raftEngine.state.inventory[raftEngine.state.selectedSlot] = createSlot("raft", 1);
+    raftEngine.dispatch({ type: "placeBlock" });
+    expect(raftEngine.state.mountedVehicleId).toBeNull();
+    raftEngine.dispatch({ type: "placeBlock" });
+    expect(raftEngine.state.mountedVehicleId).toBe(raftEngine.state.vehicles[0].id);
+
+    const shipEngine = makeEngine();
+    calmDaytime(shipEngine);
+    makeWaterPatch(shipEngine);
+    shipEngine.state.player.position.set(20.5, 11, 24.5);
+    shipEngine.state.player.yaw = 0;
+    shipEngine.state.player.pitch = -0.55;
+    shipEngine.state.inventory[shipEngine.state.selectedSlot] = createSlot("ship", 1);
+    shipEngine.dispatch({ type: "placeBlock" });
+    const ship = shipEngine.state.vehicles[0];
+    shipEngine.state.player.position.set(ship.position.x, ship.position.y + 0.16, ship.position.z);
+    shipEngine.step(1 / 60, input());
+    expect(shipEngine.state.mountedVehicleId).toBe(ship.id);
+  });
+
+  test("a mounted ship moves over water and persists across save/load", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    makeWaterPatch(engine);
+    engine.state.player.position.set(20.5, 11, 24.5);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = -0.55;
+    engine.state.inventory[engine.state.selectedSlot] = createSlot("ship", 1);
+    engine.dispatch({ type: "placeBlock" });
+    const ship = engine.state.vehicles[0];
+    engine.state.player.position.set(ship.position.x, ship.position.y + 0.16, ship.position.z);
+    engine.step(1 / 60, input());
+    const startZ = ship.position.z;
+
+    run(engine, 0.4, input({ keys: ["KeyW"] }));
+
+    expect(ship.position.z).toBeLessThan(startZ);
+    expect(engine.state.player.position.z).toBeCloseTo(ship.position.z, 4);
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.vehicles).toHaveLength(1);
+    expect(restored.state.vehicles[0].kind).toBe("ship");
+    expect(restored.state.vehicles[0].position.z).toBeCloseTo(ship.position.z, 4);
   });
 
   test("active status effects round-trip through serialize and restore", () => {

@@ -17,6 +17,7 @@ import { createCaughtItemVisuals, type CaughtItemVisuals } from "./caughtItemVis
 import { createPrecipitation, type PrecipitationView } from "./precipitation";
 import { createSkyView, type SkyView } from "./skyView";
 import { createSpearVisuals, type SpearVisuals } from "./spearVisuals";
+import { createVehicleVisuals, type VehicleVisuals } from "./vehicleVisuals";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
@@ -87,6 +88,7 @@ export class GameRenderer {
   private readonly crackOverlay: CrackOverlayView;
   private readonly mobVisuals: MobVisuals;
   private readonly spearVisuals: SpearVisuals;
+  private readonly vehicleVisuals: VehicleVisuals;
   private readonly projectileVisuals: ProjectileVisuals;
   private readonly bobberVisuals: BobberVisuals;
   private readonly bobberTip = new THREE.Vector3();
@@ -162,6 +164,7 @@ export class GameRenderer {
     this.crackOverlay = createCrackOverlay(this.scene);
     this.mobVisuals = createMobVisuals(this.scene);
     this.spearVisuals = createSpearVisuals(this.scene);
+    this.vehicleVisuals = createVehicleVisuals(this.scene);
     this.projectileVisuals = createProjectileVisuals(this.scene);
     this.bobberVisuals = createBobberVisuals(this.scene);
     this.caughtItems = createCaughtItemVisuals(this.scene);
@@ -204,6 +207,7 @@ export class GameRenderer {
     });
     this.crackOverlay.update(state.mining, state.world);
     this.mobVisuals.sync(state.mobs, timeMs);
+    this.vehicleVisuals.sync(state.vehicles);
     this.spearVisuals.sync(state.thrownSpears);
     this.projectileVisuals.sync(state.projectiles);
     // Body must sync before the rod-tip read so the third-person hand matrices are fresh.
@@ -558,6 +562,7 @@ export class GameRenderer {
     this.particles.dispose();
     this.playerVisuals.dispose();
     this.spearVisuals.dispose();
+    this.vehicleVisuals.dispose();
     this.projectileVisuals.dispose();
     this.bobberVisuals.dispose();
     this.caughtItems.dispose();

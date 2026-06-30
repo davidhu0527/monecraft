@@ -24,6 +24,19 @@ above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what bu
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
 changing them affects which gaps the player fits through.
 
+## Water vehicles
+
+`VEHICLE_BOARD_REACH`, `VEHICLE_TURN_RATE`, `VEHICLE_DISMOUNT_RADIUS`,
+`RAFT_SPEED`, `RAFT_HALF_WIDTH`, `RAFT_HALF_LENGTH`, `SHIP_SPEED`,
+`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`.
+
+Read by `systems/vehicles.ts`. Rafts are intentionally compact and slow; ships
+are larger and faster. The half-width/half-length values are both gameplay
+footprints and water-support checks, so raising them makes a vehicle feel larger
+but also requires more open water to place and move. `VEHICLE_TURN_RATE` controls
+steering responsiveness while mounted, and `VEHICLE_DISMOUNT_RADIUS` is the search
+radius for a safe crouch dismount beside the vehicle.
+
 ## Game modes — flight
 
 `FLY_SPEED`, `FLY_DOUBLE_TAP_WINDOW_SECONDS`.

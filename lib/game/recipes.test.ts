@@ -213,6 +213,34 @@ describe("fishing recipes", () => {
   });
 });
 
+describe("vehicle recipes", () => {
+  test("rafts and ships craft from wood materials in the Tools section", () => {
+    const raft = recipe("raft");
+    const ship = recipe("ship");
+    expect(recipeCategory(raft)).toBe("Tools");
+    expect(recipeCategory(ship)).toBe("Tools");
+    expect(
+      canCraft(
+        inventory([
+          ["planks", 4],
+          ["wood", 2]
+        ]),
+        raft
+      )
+    ).toBe(true);
+    expect(
+      canCraft(
+        inventory([
+          ["planks", 8],
+          ["wood", 3],
+          ["string", 2]
+        ]),
+        ship
+      )
+    ).toBe(true);
+  });
+});
+
 describe("coal & fuel economy", () => {
   test("charcoal smelts from a single wood at a furnace", () => {
     const r = recipe("charcoal");

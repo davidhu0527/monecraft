@@ -3,7 +3,7 @@ import { BlockId, type WorldType } from "@/lib/world";
 import type { GameMode } from "./gameModes";
 import type { Difficulty } from "./difficulties";
 
-export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material";
+export type ItemKind = "block" | "weapon" | "tool" | "armor" | "food" | "material" | "vehicle";
 export type ArmorSlot = "helmet" | "face_mask" | "neck_protection" | "chestplate" | "leggings" | "boots";
 /** The worn armor pieces, one per slot — the actual item instance (or null). Equipping moves the piece here, out of the inventory. */
 export type EquippedArmor = Record<ArmorSlot, InventorySlot | null>;
@@ -116,6 +116,8 @@ export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
  * per resident at spawn and persisted with the mob (save v15+).
  */
 export type Profession = "farmer" | "blacksmith" | "librarian" | "cleric";
+
+export type VehicleKind = "raft" | "ship";
 
 export type MobModel = {
   group: THREE.Group;
@@ -307,6 +309,14 @@ export type SavedMob = {
   profession?: Profession;
 };
 
+export type SavedVehicle = {
+  kind: VehicleKind;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+};
+
 /**
  * Save shape (v14): persisted mobs. `mobs` is optional, so the v13→v14 migration
  * is a pure version bump and pre-v14 saves load with none.
@@ -329,7 +339,16 @@ export type SaveDataV14 = Omit<SaveDataV13, "version"> & {
  * village stays empty) from a fresh world or a pre-village upgrade (which still
  * need their residents seeded).
  */
-export type SaveData = Omit<SaveDataV14, "version"> & {
+export type SaveDataV15 = Omit<SaveDataV14, "version"> & {
   version: 15;
   villagesSeeded?: boolean;
+};
+
+/**
+ * Current save shape (v16): persistent placed water vehicles. The live rider
+ * link is session-only; saves carry only the placed entity's kind and pose.
+ */
+export type SaveData = Omit<SaveDataV15, "version"> & {
+  version: 16;
+  vehicles?: SavedVehicle[];
 };

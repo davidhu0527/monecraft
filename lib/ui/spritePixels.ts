@@ -707,6 +707,52 @@ const SUMMONER_PALETTE: PixelPalette = {
 };
 const DRAGON_HEART_PALETTE: PixelPalette = { m: [196, 60, 168], M: [120, 30, 104], l: [236, 150, 230], w: [255, 240, 255] };
 
+const RAFT_GRID = [
+  "................",
+  "................",
+  "...MMMMMMMMMM...",
+  "..MmmmmmmmmmmM..",
+  "..MllllllllllM..",
+  "..MmmmmmmmmmmM..",
+  "..MmmmmmmmmmmM..",
+  "...HHHHHHHHHH...",
+  "..MmmmmmmmmmmM..",
+  "..MmmmmmmmmmmM..",
+  "..MllllllllllM..",
+  "..MmmmmmmmmmmM..",
+  "...MMMMMMMMMM...",
+  "................",
+  "................",
+  "................"
+];
+
+const SHIP_GRID = [
+  "................",
+  "......SSSS......",
+  "......SllS......",
+  "......SllS......",
+  "......SllS......",
+  ".....MMMMMM.....",
+  "....MmmmmmmM....",
+  "...MmlmmmmmmM...",
+  "..MmmllllllmmM..",
+  ".MmmmmmmmmmmmmM.",
+  ".MmmmmmmmmmmmmM.",
+  "..MmmmmmmmmmmM..",
+  "...MMMMMMMMMM...",
+  ".....HHHHHH.....",
+  "................",
+  "................"
+];
+
+const VEHICLE_PALETTE: PixelPalette = {
+  m: [150, 98, 48],
+  M: [82, 52, 30],
+  l: [198, 146, 82],
+  H: [48, 34, 24],
+  S: [222, 218, 184]
+};
+
 // A round flask: dark outline (o), cork (C), glass neck (g) and an `L`/`h`
 // liquid fill recolored per potion. Empty bottles reuse a glass tint for L/h.
 const BOTTLE_GRID = [
@@ -773,6 +819,8 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   door: { grid: DOOR_GRID, palette: DOOR_PALETTE },
   bow: { grid: BOW_GRID, palette: BOW_PALETTE },
   arrow: { grid: ARROW_GRID, palette: ARROW_PALETTE },
+  raft: { grid: RAFT_GRID, palette: VEHICLE_PALETTE },
+  ship: { grid: SHIP_GRID, palette: VEHICLE_PALETTE },
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
   ominous_horn: { grid: BONE_GRID, palette: OMINOUS_HORN_PALETTE },
   dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },

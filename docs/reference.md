@@ -58,7 +58,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**72 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**74 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -92,17 +92,19 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 
 ### Tools
 
-| Result           | Ingredients             |
-| ---------------- | ----------------------- |
-| Wood Hoe         | 2 Planks + 1 Wood       |
-| Fishing Rod      | 3 Wood + 2 String       |
-| Wood Pickaxe     | 2 Planks + 2 Wood       |
-| Stone Pickaxe    | 2 Cobble + 1 Wood       |
-| Sliver Pickaxe   | 2 Sliver Ore + 1 Wood   |
-| Ruby Pickaxe     | 2 Ruby Ore + 1 Wood     |
-| Sapphire Pickaxe | 2 Sapphire Ore + 1 Wood |
-| Gold Pickaxe     | 2 Gold Ore + 1 Wood     |
-| Diamond Pickaxe  | 2 Diamond Ore + 1 Wood  |
+| Result           | Ingredients                  |
+| ---------------- | ---------------------------- |
+| Wood Hoe         | 2 Planks + 1 Wood            |
+| Fishing Rod      | 3 Wood + 2 String            |
+| Raft             | 4 Planks + 2 Wood            |
+| Ship             | 8 Planks + 3 Wood + 2 String |
+| Wood Pickaxe     | 2 Planks + 2 Wood            |
+| Stone Pickaxe    | 2 Cobble + 1 Wood            |
+| Sliver Pickaxe   | 2 Sliver Ore + 1 Wood        |
+| Ruby Pickaxe     | 2 Ruby Ore + 1 Wood          |
+| Sapphire Pickaxe | 2 Sapphire Ore + 1 Wood      |
+| Gold Pickaxe     | 2 Gold Ore + 1 Wood          |
+| Diamond Pickaxe  | 2 Diamond Ore + 1 Wood       |
 
 ### Weapons
 

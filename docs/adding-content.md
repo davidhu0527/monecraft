@@ -15,7 +15,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 
 ## A new item or recipe
 
-- Add to `ITEM_DEFS` in `lib/game/items.ts` — tools take `minePower`/`mineTier`/`maxDurability`, weapons `attack`/`maxDurability`, armor `armorSlot`/`defense`/`maxDurability`. `kind: "food"` items take a `hunger` value (restored on eat); `kind: "material"` items are inert craft ingredients.
+- Add to `ITEM_DEFS` in `lib/game/items.ts` — tools take `minePower`/`mineTier`/`maxDurability`, weapons `attack`/`maxDurability`, armor `armorSlot`/`defense`/`maxDurability`. `kind: "food"` items take a `hunger` value (restored on eat); `kind: "material"` items are inert craft ingredients; `kind: "vehicle"` items are handled by `systems/vehicles.ts`.
 - Give it an inventory sprite in `lib/ui/spritePixels.ts`: pickaxes, swords, and
   spears get one for free when named `<material>_pickaxe`, `<material>_sword`, or
   `<material>_spear` and the material exists in `MATERIAL_PALETTES`;

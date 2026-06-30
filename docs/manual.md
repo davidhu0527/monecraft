@@ -170,6 +170,15 @@ touching it burns you **immediately** for 3 hearts every half-second — no grac
 period — and you keep burning for a few seconds even after you scramble off. Armor
 doesn't help. Bridge over it carefully.
 
+### Rafts and ships
+
+Craft a **raft** (4 planks + 2 wood) or a **ship** (8 planks + 3 wood + 2 string)
+to travel over water without swimming. Hold the vehicle and **right-click a water
+surface** to place it. A raft is compact and slow; aim at it and right-click again
+to board. A ship is larger and faster — step onto its deck and you board
+automatically. While aboard, steer with the movement keys; crouch dismounts when
+there is room beside the vehicle.
+
 ### Hunger
 
 You have **20 hunger**, shown as **10 drumsticks**. Activity burns it:
@@ -346,7 +355,7 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **65 recipes** in the [reference](reference.md#recipes).
+See the full list of **74 recipes** in the [reference](reference.md#recipes).
 
 ## Brewing and potions
 

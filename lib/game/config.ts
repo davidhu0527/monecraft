@@ -11,6 +11,17 @@ export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
 export const WORLD_BORDER_PADDING = 1.2;
 
+// Water vehicles. Rafts are compact and slower; ships are larger and faster.
+export const VEHICLE_BOARD_REACH = 4.5;
+export const VEHICLE_TURN_RATE = 2.8; // radians/sec at full turn input
+export const VEHICLE_DISMOUNT_RADIUS = 1.7;
+export const RAFT_SPEED = 3.2;
+export const RAFT_HALF_WIDTH = 0.6;
+export const RAFT_HALF_LENGTH = 0.8;
+export const SHIP_SPEED = 5.4;
+export const SHIP_HALF_WIDTH = 1.0;
+export const SHIP_HALF_LENGTH = 1.6;
+
 // Game modes / flight — Creative & Spectator fly with direct vertical control
 // (Space ascends, crouch descends); a double-tap of Space toggles flight.
 export const FLY_SPEED = 11; // blocks/sec vertical while flying

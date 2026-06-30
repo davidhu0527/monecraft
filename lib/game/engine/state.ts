@@ -3,7 +3,7 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData } from "@/lib/game/types";
+import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData, VehicleKind } from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -112,6 +112,15 @@ export type FishingState = {
   position: THREE.Vector3;
   timer: number;
   biting: boolean;
+};
+
+export type VehicleState = {
+  id: number;
+  kind: VehicleKind;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  yaw: number;
+  rider: "player" | null;
 };
 
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
@@ -237,6 +246,9 @@ export type GameState = {
   nextProjectileId: number;
   /** The active fishing cast, or null when not fishing (session-only). */
   fishing: FishingState | null;
+  vehicles: VehicleState[];
+  nextVehicleId: number;
+  mountedVehicleId: number | null;
   dayClock: number;
   /** Derived from dayClock every tick; 0.04–1.0. */
   daylight: number;
@@ -400,6 +412,7 @@ export type GameEvent =
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
+  | { type: "vehiclePlaced"; kind: VehicleKind }
   | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" }
   | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "anvilCombined" }

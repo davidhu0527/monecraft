@@ -8,6 +8,7 @@ import type { ItemKind } from "@/lib/game/types";
 const KIND_SECTIONS: ReadonlyArray<{ kind: ItemKind; label: string }> = [
   { kind: "block", label: "Blocks" },
   { kind: "tool", label: "Tools" },
+  { kind: "vehicle", label: "Vehicles" },
   { kind: "weapon", label: "Weapons" },
   { kind: "armor", label: "Armor" },
   { kind: "food", label: "Food" },

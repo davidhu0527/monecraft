@@ -76,11 +76,13 @@ import {
   restoreStats,
   restoreAdvancements,
   restoreMobs,
+  restoreVehicles,
   serializeContainers,
   serializeEffects,
   serializeLootedChests,
   serializeMobs,
-  serializeStats
+  serializeStats,
+  serializeVehicles
 } from "@/lib/game/save";
 import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
@@ -105,6 +107,7 @@ import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tr
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
+import { restoreVehicle, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
 import { tickMobs } from "./systems/mobAI";
 import { tickPrimedTnt } from "./systems/explosion";
 import { tickProjectiles } from "./systems/projectileAI";
@@ -253,6 +256,9 @@ export class GameEngine {
       projectiles: [],
       nextProjectileId: 1,
       fishing: null,
+      vehicles: [],
+      nextVehicleId: 1,
+      mountedVehicleId: null,
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
@@ -285,6 +291,9 @@ export class GameEngine {
       // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
       // fungible population, so the world stays alive and pets simply pre-exist.
       this.restorePersistedMobs(restoreMobs(save));
+      for (const vehicle of restoreVehicles(save)) {
+        restoreVehicle(this.state, vehicle.kind, vehicle.x, vehicle.y, vehicle.z, vehicle.yaw);
+      }
 
       // Restore chest contents only for indices that still hold a Chest block.
       for (const { index, slots } of readContainers(save)) {
@@ -380,7 +389,18 @@ export class GameEngine {
       return;
     }
 
-    const move = tickPlayerMotion(state, input, dt, this.applyDamage);
+    const mounted = state.mountedVehicleId !== null;
+    const move = mounted
+      ? {
+          didSprint: false,
+          didWalk: false,
+          didJump: false,
+          didLand: false,
+          landImpact: 0,
+          horizontalDistance: tickVehicles(state, input, dt).horizontalDistance
+        }
+      : tickPlayerMotion(state, input, dt, this.applyDamage);
+    if (!mounted) tickVehicles(state, input, dt);
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     // Tick-driven display stats (no event, so out of the advancement path).
@@ -601,10 +621,12 @@ export class GameEngine {
         if (tryFeedAimedMob(state, this.emit)) break;
         if (tryToggleSitPet(state, this.emit)) break;
         if (tryTradeAimedVillager(state, this.emit)) break;
+        if (tryBoardAimedVehicle(state)) break;
         if (tryInteractBlock(state, this.emit)) break;
         if (this.trySummonBoss()) break;
         if (this.tryStartRaid()) break;
         if (tryFish(state, this.emit, this.rng)) break;
+        if (tryPlaceVehicle(state, this.emit)) break;
         if (tryUseHeldItem(state, this.emit, this.rng)) break;
         placeSelectedBlock(state, this.emit);
         break;
@@ -709,7 +731,7 @@ export class GameEngine {
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 15,
+      version: 16,
       seed: state.world.seed,
       worldType: this.worldType,
       gameMode: state.gameMode,
@@ -736,6 +758,7 @@ export class GameEngine {
       stats: serializeStats(state.stats),
       advancements: [...state.advancements],
       mobs: serializeMobs(state.mobs),
+      vehicles: serializeVehicles(state.vehicles),
       villagesSeeded: true // this world's villages are populated — don't re-seed on reload
     };
   }

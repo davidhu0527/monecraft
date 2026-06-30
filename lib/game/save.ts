@@ -21,14 +21,17 @@ import type {
   SaveDataV12,
   SaveDataV13,
   SaveDataV14,
+  SaveDataV15,
   SavedContainer,
   SavedEffect,
   SavedEquippedArmor,
   SavedMob,
+  SavedVehicle,
   SavedSlot,
   SavedStat,
   InventorySlot,
-  MobFaction
+  MobFaction,
+  VehicleKind
 } from "@/lib/game/types";
 import { isGameMode, type GameMode } from "@/lib/game/gameModes";
 import { isDifficulty, type Difficulty } from "@/lib/game/difficulties";
@@ -208,8 +211,16 @@ export function migrateSaveV13toV14(save: SaveDataV13): SaveDataV14 {
  * `profession` is an additive optional field on its `SavedMob`, so a pre-v15 save
  * simply loads its villagers professionless and the engine assigns one.
  */
-export function migrateSaveV14toV15(save: SaveDataV14): SaveData {
+export function migrateSaveV14toV15(save: SaveDataV14): SaveDataV15 {
   return { ...save, version: 15 };
+}
+
+/**
+ * Migrates a v15 save to v16 — a pure version bump. `vehicles` is optional, so
+ * older saves load with no placed rafts/ships.
+ */
+export function migrateSaveV15toV16(save: SaveDataV15): SaveData {
+  return { ...save, version: 16 };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -219,6 +230,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV15
       | SaveDataV14
       | SaveDataV13
       | SaveDataV12
@@ -248,6 +260,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV12
       | SaveDataV13
       | SaveDataV14
+      | SaveDataV15
       | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -262,11 +275,33 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 12) migrated = migrateSaveV12toV13(migrated);
     if (migrated.version === 13) migrated = migrateSaveV13toV14(migrated);
     if (migrated.version === 14) migrated = migrateSaveV14toV15(migrated);
-    if (migrated.version !== 15) return null;
+    if (migrated.version === 15) migrated = migrateSaveV15toV16(migrated);
+    if (migrated.version !== 16) return null;
     return migrated;
   } catch {
     return null;
   }
+}
+
+const VALID_VEHICLE_KINDS: Record<VehicleKind, true> = { raft: true, ship: true };
+
+export function serializeVehicles(vehicles: Array<{ kind: VehicleKind; position: { x: number; y: number; z: number }; yaw: number }>): SavedVehicle[] {
+  const out: SavedVehicle[] = [];
+  for (const vehicle of vehicles) {
+    out.push({ kind: vehicle.kind, x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw });
+  }
+  return out;
+}
+
+export function restoreVehicles(save: SaveData): SavedVehicle[] {
+  if (!Array.isArray(save.vehicles)) return [];
+  const out: SavedVehicle[] = [];
+  for (const entry of save.vehicles) {
+    if (!entry || typeof entry.kind !== "string" || !Object.hasOwn(VALID_VEHICLE_KINDS, entry.kind)) continue;
+    if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z) || !Number.isFinite(entry.yaw)) continue;
+    out.push({ kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, yaw: entry.yaw });
+  }
+  return out;
 }
 
 export function writeSave(saveKey: string, data: SaveData, storage: Storage = localStorage): void {
