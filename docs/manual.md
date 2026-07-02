@@ -177,7 +177,9 @@ to travel over water without swimming. Hold the vehicle and **right-click a wate
 surface** to place it. A raft is compact and slow; aim at it and right-click again
 to board. A ship is larger and faster — step onto its deck and you board
 automatically. While aboard, steer with the movement keys; crouch dismounts when
-there is room beside the vehicle.
+there is room beside the vehicle. Placing needs open water within reach — aim
+somewhere that can't hold a boat and you'll hear a dull "can't place here" thud
+instead. Rafts and ships appear in their own **Vehicles** crafting category.
 
 ### Hunger
 

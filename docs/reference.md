@@ -92,19 +92,24 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 
 ### Tools
 
-| Result           | Ingredients                  |
-| ---------------- | ---------------------------- |
-| Wood Hoe         | 2 Planks + 1 Wood            |
-| Fishing Rod      | 3 Wood + 2 String            |
-| Raft             | 4 Planks + 2 Wood            |
-| Ship             | 8 Planks + 3 Wood + 2 String |
-| Wood Pickaxe     | 2 Planks + 2 Wood            |
-| Stone Pickaxe    | 2 Cobble + 1 Wood            |
-| Sliver Pickaxe   | 2 Sliver Ore + 1 Wood        |
-| Ruby Pickaxe     | 2 Ruby Ore + 1 Wood          |
-| Sapphire Pickaxe | 2 Sapphire Ore + 1 Wood      |
-| Gold Pickaxe     | 2 Gold Ore + 1 Wood          |
-| Diamond Pickaxe  | 2 Diamond Ore + 1 Wood       |
+| Result           | Ingredients             |
+| ---------------- | ----------------------- |
+| Wood Hoe         | 2 Planks + 1 Wood       |
+| Fishing Rod      | 3 Wood + 2 String       |
+| Wood Pickaxe     | 2 Planks + 2 Wood       |
+| Stone Pickaxe    | 2 Cobble + 1 Wood       |
+| Sliver Pickaxe   | 2 Sliver Ore + 1 Wood   |
+| Ruby Pickaxe     | 2 Ruby Ore + 1 Wood     |
+| Sapphire Pickaxe | 2 Sapphire Ore + 1 Wood |
+| Gold Pickaxe     | 2 Gold Ore + 1 Wood     |
+| Diamond Pickaxe  | 2 Diamond Ore + 1 Wood  |
+
+### Vehicles
+
+| Result | Ingredients                  |
+| ------ | ---------------------------- |
+| Raft   | 4 Planks + 2 Wood            |
+| Ship   | 8 Planks + 3 Wood + 2 String |
 
 ### Weapons
 
@@ -525,20 +530,20 @@ Running counters shown on the overlay's Statistics tab — also persisted and ke
 across death. (Internally more counters are tracked to drive advancements, e.g.
 per-ore mining and per-recipe crafts; these are the ones displayed.)
 
-| Statistic          | Counts                                       |
-| ------------------ | -------------------------------------------- |
-| Time Played        | Seconds of active play                       |
-| Distance Travelled | Blocks moved                                 |
-| Blocks Mined       | Total blocks broken                          |
-| Logs Chopped       | Logs broken                                  |
-| Diamond Ore Mined  | Diamond ore broken                           |
-| Monsters Slain     | Hostile mobs killed                          |
-| Animals Bred       | Successful breedings                         |
-| Items Crafted      | Successful crafts (incl. smelting & trading) |
-| Items Enchanted    | Enchantments applied                         |
-| Potions Drunk      | Potions consumed                             |
-| Fish Caught        | Fishing catches                              |
-| Arrows Fired       | Bow shots                                    |
-| Villager Trades    | Trades made with a villager                  |
-| Jumps              | Times jumped                                 |
-| Deaths             | Times died                                   |
+| Statistic          | Counts                                            |
+| ------------------ | ------------------------------------------------- |
+| Time Played        | Seconds of active play                            |
+| Distance Travelled | Blocks walked on foot (boat travel isn't counted) |
+| Blocks Mined       | Total blocks broken                               |
+| Logs Chopped       | Logs broken                                       |
+| Diamond Ore Mined  | Diamond ore broken                                |
+| Monsters Slain     | Hostile mobs killed                               |
+| Animals Bred       | Successful breedings                              |
+| Items Crafted      | Successful crafts (incl. smelting & trading)      |
+| Items Enchanted    | Enchantments applied                              |
+| Potions Drunk      | Potions consumed                                  |
+| Fish Caught        | Fishing catches                                   |
+| Arrows Fired       | Bow shots                                         |
+| Villager Trades    | Trades made with a villager                       |
+| Jumps              | Times jumped                                      |
+| Deaths             | Times died                                        |
