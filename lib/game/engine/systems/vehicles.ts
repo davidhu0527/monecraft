@@ -4,6 +4,7 @@ import {
   EYE_HEIGHT,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
+  MAX_VEHICLES,
   RAFT_HALF_LENGTH,
   RAFT_HALF_WIDTH,
   RAFT_SPEED,
@@ -46,29 +47,51 @@ function makeVehicle(state: GameState, kind: VehicleKind, x: number, y: number, 
     id: state.nextVehicleId++,
     kind,
     position: new THREE.Vector3(x, y, z),
-    velocity: new THREE.Vector3(),
     yaw,
     rider: null
   };
 }
 
 export function restoreVehicle(state: GameState, kind: VehicleKind, x: number, y: number, z: number, yaw: number): void {
-  const vehicle = makeVehicle(state, kind, x, y, z, yaw);
-  if (vehicleHasWaterSupport(state, vehicle) && !vehicleOverlapsAny(state, vehicle)) state.vehicles.push(vehicle);
+  // Restore unconditionally — the pose was already field-validated in restoreVehicles.
+  // We deliberately do NOT re-check water support or overlap here: the world under a
+  // parked boat may have changed since it was saved (the player dug the water, built a
+  // pier, etc.), and silently deleting a persisted, crafted entity is worse than keeping
+  // a stuck one. Movement stays gated by canOccupy, so a beached boat still can't drive
+  // onto land — it simply sits until the player frees it.
+  state.vehicles.push(makeVehicle(state, kind, x, y, z, yaw));
 }
+
+// The four rotated footprint corners plus the center, reused across frames. The lone
+// consumer (vehicleHasWaterSupport) reads it fully before returning and nothing else
+// calls vehicleCorners concurrently, so a shared, allocation-free buffer is safe — in
+// line with the scratch* vectors above and the engine's no-alloc-per-tick convention.
+const scratchCorners: Array<[number, number]> = [
+  [0, 0],
+  [0, 0],
+  [0, 0],
+  [0, 0],
+  [0, 0]
+];
 
 function vehicleCorners(vehicle: VehicleState): Array<[number, number]> {
   const spec = specFor(vehicle.kind);
   const sin = Math.sin(vehicle.yaw);
   const cos = Math.cos(vehicle.yaw);
-  const points: Array<[number, number]> = [];
-  for (const lx of [-spec.halfWidth, spec.halfWidth]) {
-    for (const lz of [-spec.halfLength, spec.halfLength]) {
-      points.push([vehicle.position.x + lx * cos - lz * sin, vehicle.position.z + lx * sin + lz * cos]);
-    }
-  }
-  points.push([vehicle.position.x, vehicle.position.z]);
-  return points;
+  const { x, z } = vehicle.position;
+  const hw = spec.halfWidth;
+  const hl = spec.halfLength;
+  scratchCorners[0][0] = x - hw * cos + hl * sin;
+  scratchCorners[0][1] = z - hw * sin - hl * cos;
+  scratchCorners[1][0] = x - hw * cos - hl * sin;
+  scratchCorners[1][1] = z - hw * sin + hl * cos;
+  scratchCorners[2][0] = x + hw * cos + hl * sin;
+  scratchCorners[2][1] = z + hw * sin - hl * cos;
+  scratchCorners[3][0] = x + hw * cos - hl * sin;
+  scratchCorners[3][1] = z + hw * sin + hl * cos;
+  scratchCorners[4][0] = x;
+  scratchCorners[4][1] = z;
+  return scratchCorners;
 }
 
 function vehicleHasWaterSupport(state: GameState, vehicle: VehicleState): boolean {
@@ -152,7 +175,9 @@ function dismountVehicle(state: GameState, vehicle: VehicleState): boolean {
 
 function syncPlayerToVehicle(state: GameState, vehicle: VehicleState): void {
   state.player.position.set(vehicle.position.x, vehicle.position.y + 0.16, vehicle.position.z);
-  state.player.velocity.copy(vehicle.velocity);
+  // The rider's own velocity is inert while mounted (player motion is skipped); keep it
+  // zeroed so a later dismount starts from rest rather than inheriting a stale value.
+  state.player.velocity.set(0, 0, 0);
   state.player.onGround = true;
 }
 
@@ -189,24 +214,32 @@ export function tryPlaceVehicle(state: GameState, emit: EmitGameEvent): boolean 
   const slot = state.inventory[state.selectedSlot];
   if (slot?.id !== "raft" && slot?.id !== "ship") return false;
   const kind = slot.id;
+  if (state.vehicles.length >= MAX_VEHICLES) {
+    emit({ type: "vehiclePlaceFailed" }); // world is at the vehicle cap — refuse to keep saves bounded
+    return true;
+  }
   scratchEye.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z);
   lookDirection(state.player.yaw, state.player.pitch, scratchDir);
   const water = waterSurfaceRaycast(state.world, scratchEye, scratchDir, VEHICLE_BOARD_REACH);
-  if (!water) return true;
+  if (!water) {
+    emit({ type: "vehiclePlaceFailed" }); // no water in reach — cue the "can't place here" thud
+    return true;
+  }
   const vehicle = makeVehicle(state, kind, water.x + 0.5, water.y + 1, water.z + 0.5, state.player.yaw);
-  if (!canOccupy(state, vehicle)) return true;
+  if (!canOccupy(state, vehicle)) {
+    emit({ type: "vehiclePlaceFailed" }); // spot is blocked, out of bounds, or overlaps another boat
+    return true;
+  }
   state.vehicles.push(vehicle);
   if (state.gameMode !== "creative") state.inventory = adjustSlotCount(state.inventory, kind, -1, state.selectedSlot) ?? state.inventory;
   emit({ type: "vehiclePlaced", kind });
   return true;
 }
 
-export function tickVehicles(state: GameState, input: FrameInput, dt: number): { horizontalDistance: number } {
-  for (const vehicle of state.vehicles) vehicle.velocity.set(0, 0, 0);
-
+export function tickVehicles(state: GameState, input: FrameInput, dt: number): void {
   const mounted = state.mountedVehicleId === null ? null : (state.vehicles.find((vehicle) => vehicle.id === state.mountedVehicleId) ?? null);
   if (mounted) {
-    if (input.keys.has("KeyC") && dismountVehicle(state, mounted)) return { horizontalDistance: 0 };
+    if (input.keys.has("KeyC") && dismountVehicle(state, mounted)) return;
     const forwardInput = (input.keys.has("KeyW") ? 1 : 0) - (input.keys.has("KeyS") ? 1 : 0);
     const turnInput = (input.keys.has("KeyD") ? 1 : 0) - (input.keys.has("KeyA") ? 1 : 0);
     mounted.yaw -= turnInput * VEHICLE_TURN_RATE * dt;
@@ -220,9 +253,8 @@ export function tickVehicles(state: GameState, input: FrameInput, dt: number): {
       mounted.position.x = prevX;
       mounted.position.z = prevZ;
     }
-    mounted.velocity.set((mounted.position.x - prevX) / Math.max(dt, 1e-6), 0, (mounted.position.z - prevZ) / Math.max(dt, 1e-6));
     syncPlayerToVehicle(state, mounted);
-    return { horizontalDistance: Math.hypot(mounted.position.x - prevX, mounted.position.z - prevZ) };
+    return;
   }
 
   for (const vehicle of state.vehicles) {
@@ -239,5 +271,4 @@ export function tickVehicles(state: GameState, input: FrameInput, dt: number): {
       break;
     }
   }
-  return { horizontalDistance: 0 };
 }

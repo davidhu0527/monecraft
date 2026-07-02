@@ -21,6 +21,7 @@ export const RAFT_HALF_LENGTH = 0.8;
 export const SHIP_SPEED = 5.4;
 export const SHIP_HALF_WIDTH = 1.0;
 export const SHIP_HALF_LENGTH = 1.6;
+export const MAX_VEHICLES = 64; // cap on persisted rafts+ships per world — bounds save size (creative placement never consumes)
 
 // Game modes / flight — Creative & Spectator fly with direct vertical control
 // (Space ascends, crouch descends); a double-tap of Space toggles flight.

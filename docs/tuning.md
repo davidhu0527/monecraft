@@ -28,14 +28,17 @@ changing them affects which gaps the player fits through.
 
 `VEHICLE_BOARD_REACH`, `VEHICLE_TURN_RATE`, `VEHICLE_DISMOUNT_RADIUS`,
 `RAFT_SPEED`, `RAFT_HALF_WIDTH`, `RAFT_HALF_LENGTH`, `SHIP_SPEED`,
-`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`.
+`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`, `MAX_VEHICLES`.
 
 Read by `systems/vehicles.ts`. Rafts are intentionally compact and slow; ships
 are larger and faster. The half-width/half-length values are both gameplay
 footprints and water-support checks, so raising them makes a vehicle feel larger
 but also requires more open water to place and move. `VEHICLE_TURN_RATE` controls
 steering responsiveness while mounted, and `VEHICLE_DISMOUNT_RADIUS` is the search
-radius for a safe crouch dismount beside the vehicle.
+radius for a safe crouch dismount beside the vehicle. `MAX_VEHICLES` (64) caps how
+many placed rafts/ships a world can hold — placement is refused (with a denial
+cue) at the cap, which bounds save size since creative placement never consumes
+the item.
 
 ## Game modes — flight
 

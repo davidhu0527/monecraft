@@ -1253,6 +1253,23 @@ export const FISHING_REEL_EMPTY_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** Low, muffled thud when a raft/ship can't be placed — no water, blocked, or at the cap. */
+export const VEHICLE_DENIED_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.32,
+    randomness: 0.1,
+    frequency: 150,
+    sustain: 0.03,
+    release: 0.09,
+    shape: 0,
+    slide: -3,
+    sustainVolume: 0.4,
+    decay: 0.02,
+    filter: -420
+  }),
+  minRetriggerMs: 160
+};
+
 /** Soft munch when an animal is fed. */
 export const MOB_FED_SOUND: SoundDef = {
   params: zz({
