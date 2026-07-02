@@ -53,8 +53,13 @@ function makeVehicle(state: GameState, kind: VehicleKind, x: number, y: number, 
 }
 
 export function restoreVehicle(state: GameState, kind: VehicleKind, x: number, y: number, z: number, yaw: number): void {
-  const vehicle = makeVehicle(state, kind, x, y, z, yaw);
-  if (vehicleHasWaterSupport(state, vehicle) && !vehicleOverlapsAny(state, vehicle)) state.vehicles.push(vehicle);
+  // Restore unconditionally — the pose was already field-validated in restoreVehicles.
+  // We deliberately do NOT re-check water support or overlap here: the world under a
+  // parked boat may have changed since it was saved (the player dug the water, built a
+  // pier, etc.), and silently deleting a persisted, crafted entity is worse than keeping
+  // a stuck one. Movement stays gated by canOccupy, so a beached boat still can't drive
+  // onto land — it simply sits until the player frees it.
+  state.vehicles.push(makeVehicle(state, kind, x, y, z, yaw));
 }
 
 function vehicleCorners(vehicle: VehicleState): Array<[number, number]> {

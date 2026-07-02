@@ -1568,6 +1568,29 @@ describe("persistence", () => {
     expect(restored.state.vehicles[0].position.z).toBeCloseTo(ship.position.z, 4);
   });
 
+  test("a saved boat survives reload even after the water beneath it is removed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    makeWaterPatch(engine);
+    engine.state.player.position.set(20.5, 11, 24.5);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = -0.55;
+    engine.state.inventory[engine.state.selectedSlot] = createSlot("raft", 1);
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.vehicles).toHaveLength(1);
+
+    // Drain the lake: the water that supported the raft is now air. An earlier version
+    // re-checked water support at load and silently deleted the persisted raft (and its
+    // crafting cost); it must now survive the reload and simply sit beached.
+    for (let z = 15; z <= 25; z += 1) {
+      for (let x = 15; x <= 25; x += 1) engine.state.blockChanges.set(x, 10, z, BlockId.Air);
+    }
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.vehicles).toHaveLength(1);
+    expect(restored.state.vehicles[0].kind).toBe("raft");
+  });
+
   test("active status effects round-trip through serialize and restore", () => {
     const engine = makeEngine();
     engine.state.effects.set("speed", 25);
