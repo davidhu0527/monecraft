@@ -5,9 +5,11 @@ export { DOOR_BLOCK_IDS, doorBlock, doorBounds, doorFacingFromYaw, doorState, is
 export {
   generateWorld,
   collectDungeonSites,
+  collectShipwreckSites,
   collectVillageSites,
   terrainConfigFor,
   type DungeonSites,
+  type ShipwreckSites,
   type TerrainConfig,
   type VillageSites
 } from "./generation";

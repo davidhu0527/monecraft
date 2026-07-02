@@ -262,6 +262,9 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "arrow", label: "Arrow", kind: "material" },
   { id: "raft", label: "Raft", kind: "vehicle" },
   { id: "ship", label: "Ship", kind: "vehicle" },
+  // Looted from shipwrecks (and rarely fished up): while held, a compass HUD
+  // points to the nearest unearthed buried-treasure chest (see bossTracking.ts).
+  { id: "treasure_map", label: "Treasure Map", kind: "material" },
   // Endgame: a diamond-gated totem summons the boss; its Dragon Heart drop
   // crafts the best-in-game Dragon Sword.
   { id: "boss_summoner", label: "Cursed Totem", kind: "material" },

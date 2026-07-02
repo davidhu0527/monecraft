@@ -6,7 +6,7 @@ import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/ga
 import { canEditBlocks, freeBuild } from "@/lib/game/gameModes";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { efficiencyMultiplier, fortuneLevel } from "@/lib/game/enchantments";
-import { fillDungeonChestIfUnlooted } from "./dungeon";
+import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
 import { hasteMultiplier } from "./statusEffects";
@@ -59,7 +59,7 @@ function addBlockDrop(state: GameState, block: BlockId, rng: () => number, tool:
  */
 function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): boolean {
   // Breaking an unopened dungeon chest still pays out its loot.
-  fillDungeonChestIfUnlooted(state, idx);
+  fillWorldgenChestIfUnlooted(state, idx);
   const container = state.containers.get(idx);
   const items = container?.filter((slot) => slot.id && slot.count > 0) ?? [];
   if (items.length > 0) {

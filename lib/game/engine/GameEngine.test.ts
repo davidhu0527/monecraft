@@ -41,7 +41,7 @@ import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
 import { MAX_VEHICLES } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
-import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
+import { fillWorldgenChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
 import type { FrameInput } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
@@ -689,8 +689,8 @@ describe("chests", () => {
     const idx = engine.state.world.index(22, 40, 22);
     engine.state.dungeonChestIndices.add(idx);
 
-    fillDungeonChestIfUnlooted(engine.state, idx);
-    expect(engine.state.lootedDungeonChests.has(idx)).toBe(true);
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
 
     // Emptying it and re-accessing must not re-roll: the looted set is the gate.
@@ -698,7 +698,7 @@ describe("chests", () => {
       idx,
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
-    fillDungeonChestIfUnlooted(engine.state, idx);
+    fillWorldgenChestIfUnlooted(engine.state, idx);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
 
@@ -708,7 +708,7 @@ describe("chests", () => {
     engine.state.blockChanges.set(20, 40, 20, BlockId.Chest);
     engine.state.dungeonChestIndices.add(idx);
 
-    fillDungeonChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
+    fillWorldgenChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
     // Player loots everything; the now-empty container drops out of the save.
     engine.state.containers.set(
@@ -721,9 +721,9 @@ describe("chests", () => {
     // would normally be among them, so simulate that — the point under test is
     // that the *persisted looted set*, not the chest's emptiness, blocks re-roll.
     restored.state.dungeonChestIndices.add(idx);
-    expect(restored.state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(restored.state.lootedWorldgenChests.has(idx)).toBe(true);
 
-    fillDungeonChestIfUnlooted(restored.state, idx);
+    fillWorldgenChestIfUnlooted(restored.state, idx);
     const after = restored.state.containers.get(idx) ?? [];
     expect(after.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
@@ -740,9 +740,36 @@ describe("chests", () => {
     run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
-    expect(state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
     expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
+  });
+
+  test("a shipwreck chest fills from the shipwreck table, once, from its own seed family", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(24, 40, 24);
+    engine.state.shipwreckChestIndices.add(idx);
+
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
+    const slots = engine.state.containers.get(idx)!;
+    // Planks are the shipwreck table's guaranteed salvage (bone is the dungeon one).
+    expect(slots.some((slot) => slot.id === "planks" && slot.count > 0)).toBe(true);
+
+    // The same index registered as a dungeon chest instead rolls different loot —
+    // the family picks both the table and the seed constant.
+    const other = makeEngine();
+    other.state.dungeonChestIndices.add(idx);
+    fillWorldgenChestIfUnlooted(other.state, idx);
+    expect(other.state.containers.get(idx)!.some((slot) => slot.id === "bone" && slot.count > 0)).toBe(true);
+
+    // Re-access after emptying never re-rolls (the shared looted set gates it).
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
 });
 

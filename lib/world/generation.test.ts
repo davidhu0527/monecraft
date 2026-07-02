@@ -6,6 +6,7 @@ import {
   buildGeometryLayersRegion,
   buildGeometryRegion,
   collectDungeonSites,
+  collectShipwreckSites,
   collectVillageSites,
   computeFullLight,
   generateWorld,
@@ -74,7 +75,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("dbbf3d129e59ecba5fb13a1b9cf4b16749c1467e730339cd090271acc5f6553c");
+      expect(hashBytes(fullWorld().blocks)).toBe("0b1dc4631e07fb0eff82c82ecd733f5affbfecf120d5f98dfb822b696060e505");
     },
     { timeout: 60000 }
   );
@@ -373,7 +374,8 @@ describe("dungeons", () => {
       expect(sites.chestIndices.length).toBeGreaterThan(0);
       expect(sites.spawnerIndices.length).toBeGreaterThan(0);
 
-      const chestSet = new Set(sites.chestIndices);
+      const dungeonChests = new Set(sites.chestIndices);
+      const wreckChests = new Set(collectShipwreckSites(world).chestIndices);
       const spawnerSet = new Set(sites.spawnerIndices);
       const cx = world.sizeX / 2;
       const cz = world.sizeZ / 2;
@@ -387,10 +389,12 @@ describe("dungeons", () => {
             const block = world.get(x, y, z);
             if (block === BlockId.Chest) {
               chests += 1;
-              // Every generated chest must be a known dungeon site — this is what
-              // gates lazy loot fill, so a mismatch would mean re-rollable loot.
-              expect(chestSet.has(world.index(x, y, z))).toBe(true);
-              // No dungeon loot in the immediate spawn area.
+              // Every generated chest must be a known dungeon or shipwreck site —
+              // this is what gates lazy loot fill, so a mismatch would mean
+              // re-rollable (or never-filled) loot.
+              const idx = world.index(x, y, z);
+              expect(dungeonChests.has(idx) || wreckChests.has(idx)).toBe(true);
+              // No worldgen loot in the immediate spawn area.
               expect(Math.hypot(x - cx, z - cz)).toBeGreaterThanOrEqual(30);
             } else if (block === BlockId.Spawner) {
               spawners += 1;
@@ -404,6 +408,36 @@ describe("dungeons", () => {
       expect(chests).toBeGreaterThan(0);
       expect(spawners).toBeGreaterThan(0);
       expect(mossy).toBeGreaterThan(0);
+    },
+    { timeout: 60000 }
+  );
+});
+
+describe("shipwrecks", () => {
+  test(
+    "wrecks sink fully below the sea with chests at every derived site",
+    () => {
+      const world = fullWorld();
+      const sites = collectShipwreckSites(world);
+      expect(sites.chestIndices.length).toBeGreaterThan(0); // seed 1337 yields wrecks
+
+      // The derive is deterministic — a second pass produces identical indices.
+      expect(collectShipwreckSites(world)).toEqual(sites);
+
+      const layer = world.sizeX * world.sizeZ;
+      for (const idx of sites.chestIndices) {
+        // A chest block actually stands at each derived site (build/derive lockstep).
+        expect(world.blocks[idx]).toBe(BlockId.Chest);
+        const y = Math.floor(idx / layer);
+        const rem = idx - y * layer;
+        const z = Math.floor(rem / world.sizeX);
+        const x = rem - z * world.sizeX;
+        // Fully submerged: the chest sits in ocean below sea level with water above
+        // the hull (the mast cap keeps the whole wreck under the surface).
+        expect(world.getBiome(x, z)).toBe(BiomeId.Ocean);
+        expect(y).toBeLessThan(GEN.seaLevel);
+        expect(world.get(x, GEN.seaLevel, z)).toBe(BlockId.Water);
+      }
     },
     { timeout: 60000 }
   );

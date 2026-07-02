@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectShipwreckSites,
   collectVillageSites,
   collidesAt,
   computeFullLight,
@@ -183,7 +184,9 @@ export class GameEngine {
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
     const dungeonSites = collectDungeonSites(world, this.worldType);
-    // Likewise re-derive village centers, so resident villagers can be seeded there.
+    // Likewise re-derive shipwreck chests (they share the lazy loot fill) and
+    // village centers, so resident villagers can be seeded there.
+    const shipwreckSites = collectShipwreckSites(world, this.worldType);
     const villageSites = collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
@@ -243,7 +246,8 @@ export class GameEngine {
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
-      lootedDungeonChests: new Set(),
+      shipwreckChestIndices: new Set(shipwreckSites.chestIndices),
+      lootedWorldgenChests: new Set(),
       villageSites: villageSites.centers,
       paused: false,
       debugOpen: false,
@@ -280,7 +284,7 @@ export class GameEngine {
       this.state.hearts = restoreHearts(save) ?? this.state.hearts;
       this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
       this.state.spawnPoint = restoreSpawnPoint(save);
-      this.state.lootedDungeonChests = new Set(readLootedChests(save));
+      this.state.lootedWorldgenChests = new Set(readLootedChests(save));
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
@@ -756,7 +760,7 @@ export class GameEngine {
       hunger: state.hunger,
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
-      lootedChests: serializeLootedChests(state.lootedDungeonChests),
+      lootedChests: serializeLootedChests(state.lootedWorldgenChests),
       effects: serializeEffects(state.effects),
       xp: state.xp,
       stats: serializeStats(state.stats),

@@ -227,8 +227,10 @@ export type GameState = {
   dungeonChestIndices: Set<number>;
   /** Worldgen dungeon spawner voxel indices (session; re-derived from the seed each load). */
   dungeonSpawnerIndices: Set<number>;
-  /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
-  lootedDungeonChests: Set<number>;
+  /** Worldgen shipwreck chest voxel indices (session; re-derived from the seed each load). */
+  shipwreckChestIndices: Set<number>;
+  /** Worldgen chests (dungeon/shipwreck) already opened/broken (persisted as `lootedChests`) — gates one-time lazy loot fill. */
+  lootedWorldgenChests: Set<number>;
   /** Village center (x,z) sites (session; re-derived from the seed each load) — seed the resident villager population. */
   villageSites: Array<{ x: number; z: number }>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
