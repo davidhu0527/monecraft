@@ -61,18 +61,36 @@ export function restoreVehicle(state: GameState, kind: VehicleKind, x: number, y
   state.vehicles.push(makeVehicle(state, kind, x, y, z, yaw));
 }
 
+// The four rotated footprint corners plus the center, reused across frames. The lone
+// consumer (vehicleHasWaterSupport) reads it fully before returning and nothing else
+// calls vehicleCorners concurrently, so a shared, allocation-free buffer is safe — in
+// line with the scratch* vectors above and the engine's no-alloc-per-tick convention.
+const scratchCorners: Array<[number, number]> = [
+  [0, 0],
+  [0, 0],
+  [0, 0],
+  [0, 0],
+  [0, 0]
+];
+
 function vehicleCorners(vehicle: VehicleState): Array<[number, number]> {
   const spec = specFor(vehicle.kind);
   const sin = Math.sin(vehicle.yaw);
   const cos = Math.cos(vehicle.yaw);
-  const points: Array<[number, number]> = [];
-  for (const lx of [-spec.halfWidth, spec.halfWidth]) {
-    for (const lz of [-spec.halfLength, spec.halfLength]) {
-      points.push([vehicle.position.x + lx * cos - lz * sin, vehicle.position.z + lx * sin + lz * cos]);
-    }
-  }
-  points.push([vehicle.position.x, vehicle.position.z]);
-  return points;
+  const { x, z } = vehicle.position;
+  const hw = spec.halfWidth;
+  const hl = spec.halfLength;
+  scratchCorners[0][0] = x - hw * cos + hl * sin;
+  scratchCorners[0][1] = z - hw * sin - hl * cos;
+  scratchCorners[1][0] = x - hw * cos - hl * sin;
+  scratchCorners[1][1] = z - hw * sin + hl * cos;
+  scratchCorners[2][0] = x + hw * cos + hl * sin;
+  scratchCorners[2][1] = z + hw * sin - hl * cos;
+  scratchCorners[3][0] = x + hw * cos - hl * sin;
+  scratchCorners[3][1] = z + hw * sin + hl * cos;
+  scratchCorners[4][0] = x;
+  scratchCorners[4][1] = z;
+  return scratchCorners;
 }
 
 function vehicleHasWaterSupport(state: GameState, vehicle: VehicleState): boolean {
