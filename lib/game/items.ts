@@ -76,7 +76,10 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Spawner]: 30,
   [BlockId.Torch]: 1,
   [BlockId.Tnt]: 1,
-  [BlockId.Sapling]: 1
+  [BlockId.Sapling]: 1,
+  [BlockId.Kelp]: 1,
+  [BlockId.CoralPink]: 2,
+  [BlockId.CoralBlue]: 2
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -167,6 +170,12 @@ export const ITEM_DEFS: ItemDef[] = [
   // Farming
   { id: "wood_hoe", label: "Wood Hoe", kind: "tool", minePower: 1.0, mineTier: 0, maxDurability: 90 },
   { id: "sapling", label: "Sapling", kind: "block", blockId: BlockId.Sapling },
+  // Ocean flora — kelp is harvested from ocean-floor stalks and dries into a
+  // light snack at a furnace; corals are decorative reef blocks.
+  { id: "kelp", label: "Kelp", kind: "block", blockId: BlockId.Kelp },
+  { id: "coral_pink", label: "Pink Coral", kind: "block", blockId: BlockId.CoralPink },
+  { id: "coral_blue", label: "Blue Coral", kind: "block", blockId: BlockId.CoralBlue },
+  { id: "dried_kelp", label: "Dried Kelp", kind: "food", hunger: 2 },
   { id: "seeds", label: "Wheat Seeds", kind: "material" },
   { id: "wheat", label: "Wheat", kind: "material" },
   { id: "bread", label: "Bread", kind: "food", hunger: 6 },
@@ -383,6 +392,9 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Torch]: "torch",
   [BlockId.Tnt]: "tnt",
   [BlockId.Sapling]: "sapling",
+  [BlockId.Kelp]: "kelp",
+  [BlockId.CoralPink]: "coral_pink",
+  [BlockId.CoralBlue]: "coral_blue",
   [BlockId.DoorNorthLower]: "door",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",

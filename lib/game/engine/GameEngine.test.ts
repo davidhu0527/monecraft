@@ -462,6 +462,37 @@ describe("mining", () => {
     run(engine, 4, input({ leftMouseHeld: true, pointerLocked: false }));
     expect(engine.state.blockChanges.changes().length).toBe(0);
   });
+
+  test("breaking a submerged kelp cell breaks the stalk above it and refills with water", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    // A clear lane at eye height into a 3-tall kelp stalk topped with water; the
+    // ray hits the stalk's MIDDLE cell (ey), so the cascade must take ey+1 too.
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Air);
+    state.blockChanges.set(ex, ey - 1, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey + 1, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey + 2, ez - 2, BlockId.Water);
+
+    const before = countsById(state.inventory).get("kelp") ?? 0;
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    // The hit cell and everything above it turned to water (no air pocket)...
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Water);
+    expect(state.world.get(ex, ey + 1, ez - 2)).toBe(BlockId.Water);
+    // ...the stalk base below the hit survives, and both cells dropped kelp.
+    expect(state.world.get(ex, ey - 1, ez - 2)).toBe(BlockId.Kelp);
+    expect(countsById(state.inventory).get("kelp")).toBe(before + 2);
+  });
 });
 
 describe("chests", () => {

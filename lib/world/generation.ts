@@ -63,7 +63,13 @@ export const GEN = Object.freeze({
   // shifts the shared `rand` stream — existing ores, trees, and structures stay
   // byte-identical to before coal, exactly as deep-cave lava did. It is the
   // shallowest, most common ore: large veins reaching near the surface.
-  coalConfig: Object.freeze({ attempts: 160000, minY: 4, maxYOffset: 8, minSize: 4, maxSize: 12 })
+  coalConfig: Object.freeze({ attempts: 160000, minY: 4, maxYOffset: 8, minSize: 4, maxSize: 12 }),
+  // Ocean flora (kelp stalks and reef coral), hash-gated per ocean-floor column
+  // like cacti so density follows the actual ocean area. kelpSurfaceClearance is
+  // the water that must remain above a stalk's top — kelp is a solid block, so
+  // the clearance keeps boats, fishing casts, and the water surface clear of it
+  // (random-tick growth enforces the same invariant, see randomTicks.ts).
+  oceanFlora: Object.freeze({ kelpChance: 0.03, coralChance: 0.006, kelpMaxHeight: 6, kelpSurfaceClearance: 3 })
 });
 
 /**
@@ -166,10 +172,13 @@ export function generateWorld(world: VoxelWorld, worldType: WorldType = "default
   placeCacti(world);
   placeStructures(world, rand);
   placeDungeons(world, cfg);
-  // Villages run LAST on their own decoupled PRNG (villageRand), so they add
+  // Villages run on their own decoupled PRNG (villageRand), so they add
   // structures without shifting any other stream — every pass above stays
   // byte-identical to a village-less world of the same seed.
   placeVillages(world, cfg);
+  // Ocean flora runs last: hash-gated like cacti (consumes no shared PRNG), so
+  // every earlier pass stays byte-identical to a kelp-less world of the same seed.
+  placeOceanFlora(world, cfg);
 }
 
 function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
@@ -456,6 +465,42 @@ function placeCacti(world: VoxelWorld): void {
 
       const height = 2 + (hash2D(z * 3.1, x * 1.3) > 0.5 ? 1 : 0);
       for (let y = 1; y <= height; y += 1) world.set(x, topY + y, z, BlockId.Cactus);
+    }
+  }
+}
+
+/**
+ * Kelp stalks and reef coral on the ocean floor. Hash-gated column scan like
+ * placeCacti (no shared-PRNG draws): each sandy ocean-floor column deep enough
+ * under the sea rolls for a kelp stalk or a lone coral block. Stalk heights cap
+ * so at least kelpSurfaceClearance water remains above the top — kelp is solid,
+ * and the clearance keeps the water surface (boats, fishing) clear of it.
+ */
+function placeOceanFlora(world: VoxelWorld, cfg: TerrainConfig): void {
+  const { kelpChance, coralChance, kelpMaxHeight, kelpSurfaceClearance } = GEN.oceanFlora;
+  for (let x = 4; x < world.sizeX - 4; x += 1) {
+    for (let z = 4; z < world.sizeZ - 4; z += 1) {
+      if (world.getBiome(x, z) !== BiomeId.Ocean) continue;
+
+      const topY = world.highestSolidY(x, z);
+      if (world.get(x, topY, z) !== BlockId.Sand) continue;
+      // Need room for at least one flora block plus the clearance band above it.
+      const depth = cfg.seaLevel - topY;
+      if (depth < kelpSurfaceClearance + 1) continue;
+
+      const roll = hash2D(x * 2.9 + 5.7, z * 1.9 - 3.3);
+      if (roll < kelpChance) {
+        const maxHeight = Math.min(kelpMaxHeight, depth - kelpSurfaceClearance);
+        const height = 1 + Math.floor(hash2D(z * 3.7 + 1.9, x * 4.3 - 2.7) * maxHeight);
+        for (let y = 1; y <= height; y += 1) {
+          if (world.get(x, topY + y, z) !== BlockId.Water) break;
+          world.set(x, topY + y, z, BlockId.Kelp);
+        }
+      } else if (roll < kelpChance + coralChance) {
+        if (world.get(x, topY + 1, z) !== BlockId.Water) continue;
+        const pink = hash2D(x * 5.3 - 3.1, z * 2.7 + 9.9) > 0.5;
+        world.set(x, topY + 1, z, pink ? BlockId.CoralPink : BlockId.CoralBlue);
+      }
     }
   }
 }

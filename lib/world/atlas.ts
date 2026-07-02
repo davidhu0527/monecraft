@@ -176,6 +176,20 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
             c = tone([0.5, 0.36, 0.2], 0.88 + n * 0.2); // wooden frame
           }
         }
+        if (block === BlockId.Kelp) {
+          // A swaying sea plant: a dark central stalk with paler fronds fanning
+          // out to the sides. Like wheat, a full cube painted to read as a plant.
+          const stalk = x >= 7 && x <= 8;
+          const frond = (x + y * 2) % 5 === 0 || (ATLAS_TILE_SIZE - 1 - x + y * 2) % 5 === 0;
+          c = stalk ? tone([0.13, 0.34, 0.2], 0.85 + n * 0.25) : frond ? tone([0.3, 0.58, 0.32], 0.8 + n * 0.35) : tone([0.1, 0.26, 0.18], 0.85 + n * 0.25);
+        }
+        if (block === BlockId.CoralPink || block === BlockId.CoralBlue) {
+          // Reef coral: bright branching arms over a darker base, with pale polyp
+          // flecks where the hash noise peaks.
+          const branch = (x * 3 + y * 5 + block * 7) % 9 < 3;
+          c = branch ? tone(base, 1.1 + n * 0.15) : tone(base, 0.6 + n * 0.2);
+          if (n > 0.88) c = tone([0.95, 0.93, 0.88], 0.95);
+        }
         if (isDoorBlock(block)) {
           const state = doorState(block)!;
           const panelY = state.upper ? y : y + ATLAS_TILE_SIZE;

@@ -145,6 +145,18 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
     if (other && other.upper !== door.upper) {
       state.blockChanges.set(bx, door.upper ? by - 1 : by + 1, bz, BlockId.Air);
     }
+  } else if (targetBlock === BlockId.Kelp) {
+    // Breaking a kelp cell breaks the whole stalk above it (each cell drops),
+    // and a submerged stalk refills with water — never air — so harvesting
+    // doesn't leave air pockets in the ocean. The targeted cell's own drop
+    // rides the shared addBlockDrop call below.
+    let top = by;
+    while (world.get(bx, top + 1, bz) === BlockId.Kelp) top += 1;
+    const fill = world.get(bx, top + 1, bz) === BlockId.Water ? BlockId.Water : BlockId.Air;
+    for (let y = by; y <= top; y += 1) {
+      state.blockChanges.set(bx, y, bz, fill);
+      if (!creative && y > by) addBlockDrop(state, BlockId.Kelp, rng, tool);
+    }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
   }

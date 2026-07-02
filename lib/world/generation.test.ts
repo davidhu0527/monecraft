@@ -60,10 +60,13 @@ function fullWorld(): VoxelWorld {
 }
 
 describe("worldgen determinism", () => {
+  // Ocean flora (worldgen v10) re-baselined the seed-999999937 and full-size
+  // digests; the seed-1337/1 128-block maps have no Ocean biome columns, so
+  // their bytes (and the world-type/meshing snapshots below) are unchanged.
   test.each([
     [1337, "b68e443c2baf43ddb0d522e595a2c66dc5b23f5fc06c25ebae2af07812525f25"],
     [1, "9af01515475054435df4789163f088c3362f594789629f6c326bed53576961f8"],
-    [999999937, "a17c2e5610b7eb9dbfd6c5952d15e81b968b07e9a22adb9667b6fe5249004852"]
+    [999999937, "39cec267e6f440af669b82e14235752f214d7b5b371fabcf9c7316a03d837a7d"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -71,7 +74,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("48bf16c8019ef76bb9b034942f88542a88785538d29c09bf6100f8a30d0831f2");
+      expect(hashBytes(fullWorld().blocks)).toBe("dbbf3d129e59ecba5fb13a1b9cf4b16749c1467e730339cd090271acc5f6553c");
     },
     { timeout: 60000 }
   );
@@ -316,6 +319,46 @@ describe("world content balance", () => {
       expect(coal).toBeGreaterThan(diamond * 4);
       // Coal veins can sit higher (closer to the surface) than the deep ores.
       expect(maxCoalY).toBeGreaterThan(maxDiamondY);
+    },
+    { timeout: 60000 }
+  );
+});
+
+describe("ocean flora", () => {
+  test(
+    "kelp and coral grow on the sandy ocean floor, capped below the surface clearance band",
+    () => {
+      const world = fullWorld();
+      const seaLevel = GEN.seaLevel;
+      const clearance = GEN.oceanFlora.kelpSurfaceClearance;
+
+      let kelp = 0;
+      let coral = 0;
+      for (let x = 0; x < world.sizeX; x += 1) {
+        for (let z = 0; z < world.sizeZ; z += 1) {
+          for (let y = 0; y < world.sizeY; y += 1) {
+            const block = world.get(x, y, z);
+            if (block === BlockId.Kelp) {
+              kelp += 1;
+              // Every kelp cell keeps the clearance band: its top can reach at
+              // most seaLevel - clearance, so boats and casts stay clear.
+              expect(y).toBeLessThanOrEqual(seaLevel - clearance);
+              // A stalk stands on sand or on more kelp, never floats.
+              const below = world.get(x, y - 1, z);
+              expect(below === BlockId.Kelp || below === BlockId.Sand).toBe(true);
+              // Water (or more stalk) above — kelp never breaches into air.
+              const above = world.get(x, y + 1, z);
+              expect(above === BlockId.Kelp || above === BlockId.Water).toBe(true);
+            } else if (block === BlockId.CoralPink || block === BlockId.CoralBlue) {
+              coral += 1;
+              expect(world.get(x, y - 1, z)).toBe(BlockId.Sand);
+              expect(world.get(x, y + 1, z)).toBe(BlockId.Water);
+            }
+          }
+        }
+      }
+      expect(kelp).toBeGreaterThan(100); // the ocean floor is actually planted
+      expect(coral).toBeGreaterThan(10); // both reef blocks appear
     },
     { timeout: 60000 }
   );

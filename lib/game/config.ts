@@ -266,6 +266,11 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 export const SAPLING_GROWTH_CHANCE = 0.12;
 export const LEAVES_SAPLING_DROP_CHANCE = 0.08;
 export const GRASS_SPREAD_CHANCE = 0.18;
+// Kelp regrowth: the per-sampled-tick odds a kelp stalk's top grows one block
+// up into the water above. Height and surface clearance reuse the worldgen
+// invariants in GEN.oceanFlora (generation.ts) so grown and generated stalks
+// obey the same caps.
+export const KELP_GROWTH_CHANCE = 0.2;
 // Bone meal: how many units one bone grinds into, and how many crop stages a
 // single application advances (a random 1..BONE_MEAL_CROP_STAGES_MAX, like
 // Minecraft); on a sapling it grows the tree instantly.
@@ -328,13 +333,14 @@ export const SAVE_KEY = "minecraft_save_v7";
 // The deterministic world-generation baseline. Bumped whenever worldgen
 // changes, so old block-diffs (which index against generated terrain) can't be
 // applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
-// lakes; v8 added shallow coal ore; v9 added generated villages. Each world
+// lakes; v8 added shallow coal ore; v9 added generated villages; v10 added
+// ocean flora (kelp/coral) and the aquatic-update structures. Each world
 // records the WORLDGEN_VERSION it was generated under; a world whose recorded
 // version differs from this constant has its block-diffs discarded and is
 // rebooted from its stored seed (lib/game/worlds.ts). The save *schema* (SaveData)
 // is independent of this — lighting is a derived cache and lava is worldgen, so
 // neither is persisted, and additive schema bumps don't touch it.
-export const WORLDGEN_VERSION = 9;
+export const WORLDGEN_VERSION = 10;
 
 // Rendering
 export const RENDER_RADIUS = 90;

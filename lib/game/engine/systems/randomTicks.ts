@@ -1,7 +1,9 @@
 import { BlockId } from "@/lib/world";
+import { GEN } from "@/lib/world/generation";
 import {
   CROP_GROWTH_CHANCE,
   GRASS_SPREAD_CHANCE,
+  KELP_GROWTH_CHANCE,
   RANDOM_TICK_INTERVAL_SECONDS,
   RANDOM_TICK_RADIUS,
   RANDOM_TICK_SAMPLES,
@@ -56,13 +58,37 @@ function spreadGrass(state: GameState, x: number, y: number, z: number, rng: () 
   }
 }
 
+/**
+ * A kelp stalk's top grows one block up into the water above. Growth keeps the
+ * worldgen invariants (GEN.oceanFlora): the stalk caps at kelpMaxHeight, and
+ * kelpSurfaceClearance water blocks must remain above the new top — kelp is a
+ * solid block, so the clearance keeps boats and fishing casts clear of it.
+ */
+function growKelp(state: GameState, x: number, y: number, z: number, rng: () => number): void {
+  if (rng() >= KELP_GROWTH_CHANCE) return;
+  const { world } = state;
+  const { kelpMaxHeight, kelpSurfaceClearance } = GEN.oceanFlora;
+
+  let height = 1;
+  while (world.get(x, y - height, z) === BlockId.Kelp) height += 1;
+  if (height >= kelpMaxHeight) return;
+
+  // The growth target plus the clearance band above it must all be water.
+  for (let dy = 1; dy <= kelpSurfaceClearance + 1; dy += 1) {
+    if (world.get(x, y + dy, z) !== BlockId.Water) return;
+  }
+  state.blockChanges.set(x, y + 1, z, BlockId.Kelp);
+  state.worldMeshDirty = true;
+}
+
 const RANDOM_TICK_HANDLERS: Partial<Record<BlockId, RandomTickHandler>> = {
   [BlockId.WheatStage0]: growCrop,
   [BlockId.WheatStage1]: growCrop,
   [BlockId.WheatStage2]: growCrop,
   // WheatStage3 has no handler — mature crops stop growing.
   [BlockId.Sapling]: growSapling,
-  [BlockId.Dirt]: spreadGrass
+  [BlockId.Dirt]: spreadGrass,
+  [BlockId.Kelp]: growKelp
 };
 
 export function tickRandomBlocks(state: GameState, dt: number, rng: () => number): void {
