@@ -1,5 +1,7 @@
+import { BURIED_TREASURE_LOOT } from "@/lib/game/buriedTreasureLoot";
 import { DUNGEON_LOOT } from "@/lib/game/dungeonLoot";
 import { FISHING_LOOT } from "@/lib/game/fishingLoot";
+import { SHIPWRECK_LOOT } from "@/lib/game/shipwreckLoot";
 import { BLOCK_TO_SLOT, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { MOB_DROPS } from "@/lib/game/mobLoot";
 import { RECIPES } from "@/lib/game/recipes";
@@ -57,8 +59,8 @@ const labelFor = (itemId: string): string => ITEM_DEF_BY_ID[itemId]?.label ?? it
 /**
  * itemId → single best "how to obtain" hint, precomputed once from the static
  * tables. Priority is chosen so each item points at its most natural, repeatable
- * source: hunt a common mob (not the one-off boss) → craft → mine → fish → dungeon
- * → boss. Hunting comes before crafting so a raw drop like wool says "hunt a
+ * source: hunt a common mob (not the one-off boss) → craft → mine → shipwreck →
+ * fish → dungeon/buried chest → boss. Hunting comes before crafting so a raw drop like wool says "hunt a
  * sheep" rather than the obscure craft-from-string path; the boss is last so its
  * drops (e.g. diamond ore) prefer mining and only surface the boss for its
  * trophy. The first source set for an item wins.
@@ -81,13 +83,21 @@ const SOURCE_HINTS: Map<string, string> = (() => {
     if (itemId) set(itemId, MINE_OVERRIDES[itemId] ?? `Mine ${labelFor(itemId)}`);
   }
   for (const [itemId, hint] of Object.entries(MINE_OVERRIDES)) set(itemId, hint);
-  // 4. Fish.
+  // 4. Shipwreck chests — before fishing, so the treasure map (also a rare
+  // catch) points at its main, repeatable source: diving wrecks.
+  for (const tier of Object.values(SHIPWRECK_LOOT)) {
+    for (const entry of tier) set(entry.itemId, "Find it in a shipwreck");
+  }
+  // 5. Fish.
   for (const entry of FISHING_LOOT) set(entry.itemId, "Catch it while fishing");
-  // 5. Dungeon chests.
+  // 6. Dungeon and buried-treasure chests.
   for (const tier of Object.values(DUNGEON_LOOT)) {
     for (const entry of tier) set(entry.itemId, "Find it in a dungeon chest");
   }
-  // 6. Boss (last resort — only its trophy drops with no other source reach here).
+  for (const tier of Object.values(BURIED_TREASURE_LOOT)) {
+    for (const entry of tier) set(entry.itemId, "Dig up buried treasure");
+  }
+  // 7. Boss (last resort — only its trophy drops with no other source reach here).
   for (const drop of MOB_DROPS.boss) set(drop.itemId, "Defeat the boss");
   return hints;
 })();

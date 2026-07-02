@@ -23,7 +23,8 @@ export const FISHING_LOOT: FishingLootEntry[] = [
   { itemId: "rotten_flesh", weight: 5 },
   // Treasure (rare).
   { itemId: "emerald", weight: 3 },
-  { itemId: "leather", weight: 3 }
+  { itemId: "leather", weight: 3 },
+  { itemId: "treasure_map", weight: 2 }
 ];
 
 const clampUnit = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);

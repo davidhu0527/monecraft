@@ -58,8 +58,8 @@ function addBlockDrop(state: GameState, block: BlockId, rng: () => number, tool:
  * removed and a pickedUp toast announces what was retrieved.
  */
 function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): boolean {
-  // Breaking an unopened dungeon chest still pays out its loot.
-  fillWorldgenChestIfUnlooted(state, idx);
+  // Breaking an unopened worldgen chest still pays out its loot.
+  fillWorldgenChestIfUnlooted(state, idx, emit);
   const container = state.containers.get(idx);
   const items = container?.filter((slot) => slot.id && slot.count > 0) ?? [];
   if (items.length > 0) {

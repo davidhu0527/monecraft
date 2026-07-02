@@ -1,9 +1,10 @@
 import { CHEST_SLOTS } from "@/lib/game/config";
 import { rollDungeonLoot, seededRng } from "@/lib/game/dungeonLoot";
 import { rollShipwreckLoot } from "@/lib/game/shipwreckLoot";
+import { rollBuriedTreasureLoot } from "@/lib/game/buriedTreasureLoot";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { tryInsertSlots } from "@/lib/game/inventory";
-import type { GameState } from "../state";
+import type { EmitGameEvent, GameState } from "../state";
 
 /**
  * Fills a worldgen loot chest (dungeon or shipwreck) on its FIRST access (open
@@ -21,13 +22,17 @@ import type { GameState } from "../state";
  *
  * A no-op for player-placed chests (in no site set) and for chests already looted.
  */
-export function fillWorldgenChestIfUnlooted(state: GameState, idx: number): void {
+export function fillWorldgenChestIfUnlooted(state: GameState, idx: number, emit?: EmitGameEvent): void {
   if (state.lootedWorldgenChests.has(idx)) return;
   let loot: Array<{ itemId: string; count: number }>;
+  let unearthedTreasure = false;
   if (state.dungeonChestIndices.has(idx)) {
     loot = rollDungeonLoot(seededRng((state.world.seed ^ idx ^ 0x9e3779b1) >>> 0));
   } else if (state.shipwreckChestIndices.has(idx)) {
     loot = rollShipwreckLoot(seededRng((state.world.seed ^ idx ^ 0x68e31da4) >>> 0));
+  } else if (state.buriedTreasureChestIndices.has(idx)) {
+    loot = rollBuriedTreasureLoot(seededRng((state.world.seed ^ idx ^ 0x94d049bb) >>> 0));
+    unearthedTreasure = true;
   } else {
     return;
   }
@@ -39,4 +44,8 @@ export function fillWorldgenChestIfUnlooted(state: GameState, idx: number): void
   // drop loot here.
   state.containers.set(idx, tryInsertSlots(slots, incoming) ?? slots);
   state.lootedWorldgenChests.add(idx);
+  // First access to a buried chest is the map hunt's payoff — feeds the
+  // "X Marks the Spot" advancement (and retargets the compass, which only
+  // tracks unlooted sites).
+  if (unearthedTreasure) emit?.({ type: "treasureUnearthed" });
 }

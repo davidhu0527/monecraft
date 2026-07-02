@@ -7,6 +7,7 @@ import {
   buildGeometryRegion,
   collectDungeonSites,
   collectShipwreckSites,
+  collectTreasureSites,
   collectVillageSites,
   computeFullLight,
   generateWorld,
@@ -61,12 +62,12 @@ function fullWorld(): VoxelWorld {
 }
 
 describe("worldgen determinism", () => {
-  // Ocean flora (worldgen v10) re-baselined the seed-999999937 and full-size
-  // digests; the seed-1337/1 128-block maps have no Ocean biome columns, so
-  // their bytes (and the world-type/meshing snapshots below) are unchanged.
+  // Worldgen v10 (ocean flora, shipwrecks, buried treasure) re-baselined every
+  // digest except flat (no water, so no flora/wrecks/treasure) and 999999937
+  // (its small map yields no buried-treasure site).
   test.each([
-    [1337, "b68e443c2baf43ddb0d522e595a2c66dc5b23f5fc06c25ebae2af07812525f25"],
-    [1, "9af01515475054435df4789163f088c3362f594789629f6c326bed53576961f8"],
+    [1337, "7da958b085877874a085d614651d725c879008843f5ae097e643a6825be72567"],
+    [1, "0f3951fb2ec22ef4dc01dd29f6f666a3c71a0ae3af65e62710a172e9a9e7a793"],
     [999999937, "39cec267e6f440af669b82e14235752f214d7b5b371fabcf9c7316a03d837a7d"]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
@@ -75,7 +76,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("0b1dc4631e07fb0eff82c82ecd733f5affbfecf120d5f98dfb822b696060e505");
+      expect(hashBytes(fullWorld().blocks)).toBe("ac72eaa21d71185c498f2115fa0684a06da3cbbe5a10205611de1a73e8a9efae");
     },
     { timeout: 60000 }
   );
@@ -131,8 +132,8 @@ describe("world types", () => {
   // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
   test.each([
     ["flat", "28e1e3ea69e01b02b8452f27bf88acc8a7b81edcfe24a4293363553379d072d3"],
-    ["amplified", "87ff8cb4f73247a6e62bfc7c8638c86cfa7cfe8a5d90185d6773d390067540a0"],
-    ["islands", "e9937c0d947a0952130c79c46c26fc37c9492c7d164e2dc61a626ea9d7d8a662"]
+    ["amplified", "9089c6d843f599746cbacc401d0ce2853fd9981cb12b13123a9487955b0ca9e0"],
+    ["islands", "b46ea3f79d23f9b254a499f886a4ec4430e678c48c58f4f3fdb04f89997a4cec"]
   ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
     expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
   });
@@ -365,6 +366,35 @@ describe("ocean flora", () => {
   );
 });
 
+describe("buried treasure", () => {
+  test(
+    "chests bury two blocks under sand in the beach band, at every derived site",
+    () => {
+      const world = fullWorld();
+      const { sites } = collectTreasureSites(world);
+      expect(sites.length).toBeGreaterThan(0); // seed 1337 yields buried hoards
+
+      // The derive is deterministic — a second pass produces identical sites.
+      expect(collectTreasureSites(world)).toEqual({ sites });
+
+      for (const site of sites) {
+        // A chest actually sits at each derived site (build/derive lockstep),
+        // buried under the sand cap the write pass placed.
+        expect(world.get(site.x, site.y, site.z)).toBe(BlockId.Chest);
+        expect(world.index(site.x, site.y, site.z)).toBe(site.index);
+        expect(world.get(site.x, site.y + 1, site.z)).toBe(BlockId.Sand);
+        expect(world.get(site.x, site.y + 2, site.z)).toBe(BlockId.Sand);
+        // Shoreline: the chest hides just under the surface near sea level,
+        // never in open ocean.
+        expect(world.getBiome(site.x, site.z)).not.toBe(BiomeId.Ocean);
+        expect(site.y).toBeGreaterThanOrEqual(GEN.seaLevel - GEN.beachDepthBelowSea - 2);
+        expect(site.y).toBeLessThanOrEqual(GEN.seaLevel + GEN.beachMaxAboveSea - 2);
+      }
+    },
+    { timeout: 60000 }
+  );
+});
+
 describe("dungeons", () => {
   test(
     "dungeons generate underground with chests, spawners, and mossy cobble, clear of spawn",
@@ -376,6 +406,7 @@ describe("dungeons", () => {
 
       const dungeonChests = new Set(sites.chestIndices);
       const wreckChests = new Set(collectShipwreckSites(world).chestIndices);
+      const buriedChests = new Set(collectTreasureSites(world).sites.map((site) => site.index));
       const spawnerSet = new Set(sites.spawnerIndices);
       const cx = world.sizeX / 2;
       const cz = world.sizeZ / 2;
@@ -389,11 +420,11 @@ describe("dungeons", () => {
             const block = world.get(x, y, z);
             if (block === BlockId.Chest) {
               chests += 1;
-              // Every generated chest must be a known dungeon or shipwreck site —
-              // this is what gates lazy loot fill, so a mismatch would mean
-              // re-rollable (or never-filled) loot.
+              // Every generated chest must be a known dungeon, shipwreck, or
+              // buried-treasure site — this is what gates lazy loot fill, so a
+              // mismatch would mean re-rollable (or never-filled) loot.
               const idx = world.index(x, y, z);
-              expect(dungeonChests.has(idx) || wreckChests.has(idx)).toBe(true);
+              expect(dungeonChests.has(idx) || wreckChests.has(idx) || buriedChests.has(idx)).toBe(true);
               // No worldgen loot in the immediate spawn area.
               expect(Math.hypot(x - cx, z - cz)).toBeGreaterThanOrEqual(30);
             } else if (block === BlockId.Spawner) {
@@ -481,8 +512,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1319472);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("b63ca724cc91653c76a01c45980f56cf3bfd2987ab61bc6e0f4fe2de6b7e529b");
+      expect(positions.count).toBe(1319712);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("c3b761dcf72419627068b090c78bc0357eeb06eacee35c1af77809356b70aefb");
     },
     { timeout: 60000 }
   );

@@ -108,8 +108,8 @@ function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: numb
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
   }
-  // A worldgen dungeon chest rolls its loot here, on first open (then never again).
-  fillWorldgenChestIfUnlooted(state, idx);
+  // A worldgen chest (dungeon/shipwreck/buried) rolls its loot here, on first open (then never again).
+  fillWorldgenChestIfUnlooted(state, idx, emit);
   state.openContainerIndex = idx;
   state.inventoryOpen = true;
   emit({ type: "openedContainer" });

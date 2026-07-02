@@ -26,6 +26,11 @@ describe("itemSourceHint", () => {
     expect(itemSourceHint("raw_fish")).toBe("Hunt a cod");
   });
 
+  test("the treasure map points at diving shipwrecks, its main source", () => {
+    // Shipwreck chests outrank the fishing fallback (the map is also a rare catch).
+    expect(itemSourceHint("treasure_map")).toBe("Find it in a shipwreck");
+  });
+
   test("the boss is a last resort, only for its trophy drops", () => {
     expect(itemSourceHint("dragon_heart")).toBe("Defeat the boss");
   });

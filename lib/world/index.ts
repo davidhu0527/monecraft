@@ -6,11 +6,13 @@ export {
   generateWorld,
   collectDungeonSites,
   collectShipwreckSites,
+  collectTreasureSites,
   collectVillageSites,
   terrainConfigFor,
   type DungeonSites,
   type ShipwreckSites,
   type TerrainConfig,
+  type TreasureSites,
   type VillageSites
 } from "./generation";
 export { isWorldType, WORLD_TYPE_IDS, type WorldType } from "./worldTypes";

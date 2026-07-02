@@ -29,8 +29,8 @@ describe("fishing loot", () => {
   });
 
   test("a high roll reaches the rare treasure tier", () => {
-    // Weights sum to 100; the treasure entries sit at the top of the range.
+    // The treasure entries (emerald/leather/treasure map) sit at the top of the range.
     const result = rollFishingCatch(seq(0.99, 0));
-    expect(["emerald", "leather"]).toContain(result[0].itemId);
+    expect(["emerald", "leather", "treasure_map"]).toContain(result[0].itemId);
   });
 });

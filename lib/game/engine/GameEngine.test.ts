@@ -43,7 +43,7 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillWorldgenChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
-import type { FrameInput } from "@/lib/game/engine/state";
+import type { FrameInput, GameEvent } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
 /**
@@ -743,6 +743,44 @@ describe("chests", () => {
     expect(state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
     expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
+  });
+
+  test("the treasure-map compass targets the nearest unlooted buried chest and retargets after digging", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.mobs = [];
+    // Two hand-injected buried sites (the 64³ test world derives none — all
+    // candidates fall inside the spawn-clearance radius, like dungeons).
+    const near = { x: Math.floor(state.player.position.x) + 10, y: 20, z: Math.floor(state.player.position.z), index: 0 };
+    near.index = state.world.index(near.x, near.y, near.z);
+    const far = { x: near.x + 20, y: 20, z: near.z, index: 0 };
+    far.index = state.world.index(far.x, far.y, far.z);
+    state.treasureSites = [far, near];
+    state.buriedTreasureChestIndices.add(near.index).add(far.index);
+
+    // No map held → no compass.
+    expect(engine.getSnapshot().treasure).toBeNull();
+
+    // Holding the map targets the NEAREST unlooted site.
+    state.inventory[state.selectedSlot] = createSlot("treasure_map", 1);
+    engine.step(0.01, input());
+    const first = engine.getSnapshot().treasure;
+    expect(first).not.toBeNull();
+    expect(Math.abs(first!.distanceBlocks - 10)).toBeLessThanOrEqual(1);
+
+    // Digging up the near chest (first fill) emits the unearthed event and
+    // retargets the compass to the remaining site.
+    const events: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(state, near.index, (e) => events.push(e));
+    expect(events.some((e) => e.type === "treasureUnearthed")).toBe(true);
+    engine.step(0.01, input());
+    const second = engine.getSnapshot().treasure;
+    expect(Math.abs(second!.distanceBlocks - 30)).toBeLessThanOrEqual(1);
+
+    // Both looted → the compass goes dark.
+    fillWorldgenChestIfUnlooted(state, far.index);
+    engine.step(0.01, input());
+    expect(engine.getSnapshot().treasure).toBeNull();
   });
 
   test("a shipwreck chest fills from the shipwreck table, once, from its own seed family", () => {
