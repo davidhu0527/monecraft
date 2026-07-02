@@ -118,7 +118,6 @@ export type VehicleState = {
   id: number;
   kind: VehicleKind;
   position: THREE.Vector3;
-  velocity: THREE.Vector3;
   yaw: number;
   rider: "player" | null;
 };

@@ -46,7 +46,6 @@ function makeVehicle(state: GameState, kind: VehicleKind, x: number, y: number, 
     id: state.nextVehicleId++,
     kind,
     position: new THREE.Vector3(x, y, z),
-    velocity: new THREE.Vector3(),
     yaw,
     rider: null
   };
@@ -157,7 +156,9 @@ function dismountVehicle(state: GameState, vehicle: VehicleState): boolean {
 
 function syncPlayerToVehicle(state: GameState, vehicle: VehicleState): void {
   state.player.position.set(vehicle.position.x, vehicle.position.y + 0.16, vehicle.position.z);
-  state.player.velocity.copy(vehicle.velocity);
+  // The rider's own velocity is inert while mounted (player motion is skipped); keep it
+  // zeroed so a later dismount starts from rest rather than inheriting a stale value.
+  state.player.velocity.set(0, 0, 0);
   state.player.onGround = true;
 }
 
@@ -206,12 +207,10 @@ export function tryPlaceVehicle(state: GameState, emit: EmitGameEvent): boolean 
   return true;
 }
 
-export function tickVehicles(state: GameState, input: FrameInput, dt: number): { horizontalDistance: number } {
-  for (const vehicle of state.vehicles) vehicle.velocity.set(0, 0, 0);
-
+export function tickVehicles(state: GameState, input: FrameInput, dt: number): void {
   const mounted = state.mountedVehicleId === null ? null : (state.vehicles.find((vehicle) => vehicle.id === state.mountedVehicleId) ?? null);
   if (mounted) {
-    if (input.keys.has("KeyC") && dismountVehicle(state, mounted)) return { horizontalDistance: 0 };
+    if (input.keys.has("KeyC") && dismountVehicle(state, mounted)) return;
     const forwardInput = (input.keys.has("KeyW") ? 1 : 0) - (input.keys.has("KeyS") ? 1 : 0);
     const turnInput = (input.keys.has("KeyD") ? 1 : 0) - (input.keys.has("KeyA") ? 1 : 0);
     mounted.yaw -= turnInput * VEHICLE_TURN_RATE * dt;
@@ -225,9 +224,8 @@ export function tickVehicles(state: GameState, input: FrameInput, dt: number): {
       mounted.position.x = prevX;
       mounted.position.z = prevZ;
     }
-    mounted.velocity.set((mounted.position.x - prevX) / Math.max(dt, 1e-6), 0, (mounted.position.z - prevZ) / Math.max(dt, 1e-6));
     syncPlayerToVehicle(state, mounted);
-    return { horizontalDistance: Math.hypot(mounted.position.x - prevX, mounted.position.z - prevZ) };
+    return;
   }
 
   for (const vehicle of state.vehicles) {
@@ -244,5 +242,4 @@ export function tickVehicles(state: GameState, input: FrameInput, dt: number): {
       break;
     }
   }
-  return { horizontalDistance: 0 };
 }

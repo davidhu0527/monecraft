@@ -96,7 +96,7 @@ import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type Gam
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
-import { tickPlayerMotion } from "./systems/playerMotion";
+import { tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickStarvation, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
@@ -389,18 +389,20 @@ export class GameEngine {
       return;
     }
 
+    // While mounted, the vehicle drives the player and normal walking physics are
+    // skipped; otherwise player motion runs first, then vehicles tick (so a ship can
+    // auto-board the player at their post-motion position). tickVehicles is called
+    // exactly once per frame in either case. Boating reports zero horizontalDistance so
+    // it doesn't inflate the walked-distance stat.
     const mounted = state.mountedVehicleId !== null;
-    const move = mounted
-      ? {
-          didSprint: false,
-          didWalk: false,
-          didJump: false,
-          didLand: false,
-          landImpact: 0,
-          horizontalDistance: tickVehicles(state, input, dt).horizontalDistance
-        }
-      : tickPlayerMotion(state, input, dt, this.applyDamage);
-    if (!mounted) tickVehicles(state, input, dt);
+    let move: MoveTickResult;
+    if (mounted) {
+      tickVehicles(state, input, dt);
+      move = { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
+    } else {
+      move = tickPlayerMotion(state, input, dt, this.applyDamage);
+      tickVehicles(state, input, dt);
+    }
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     // Tick-driven display stats (no event, so out of the advancement path).
