@@ -63,8 +63,8 @@ All use the always-available crafting grid except the **furnace** smelting recip
 (need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
 
-In-game, the recipe book groups recipes into the sections below (Tools, Weapons,
-Armor, Building, Food, Materials, then Smelting, Brewing, and Trades), listing the
+In-game, the recipe book groups recipes into the sections below (Tools, Vehicles,
+Weapons, Armor, Building, Food, Materials, then Smelting, Brewing, and Trades), listing the
 recipes you can currently afford first within each section. Hovering a recipe you
 can't afford shows each ingredient as have / need plus a "how to obtain it" hint
 for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
