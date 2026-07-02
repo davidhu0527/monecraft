@@ -412,6 +412,7 @@ export type GameEvent =
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
   | { type: "vehiclePlaced"; kind: VehicleKind }
+  | { type: "vehiclePlaceFailed" }
   | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" }
   | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "anvilCombined" }

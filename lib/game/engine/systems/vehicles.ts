@@ -216,9 +216,15 @@ export function tryPlaceVehicle(state: GameState, emit: EmitGameEvent): boolean 
   scratchEye.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z);
   lookDirection(state.player.yaw, state.player.pitch, scratchDir);
   const water = waterSurfaceRaycast(state.world, scratchEye, scratchDir, VEHICLE_BOARD_REACH);
-  if (!water) return true;
+  if (!water) {
+    emit({ type: "vehiclePlaceFailed" }); // no water in reach — cue the "can't place here" thud
+    return true;
+  }
   const vehicle = makeVehicle(state, kind, water.x + 0.5, water.y + 1, water.z + 0.5, state.player.yaw);
-  if (!canOccupy(state, vehicle)) return true;
+  if (!canOccupy(state, vehicle)) {
+    emit({ type: "vehiclePlaceFailed" }); // spot is blocked, out of bounds, or overlaps another boat
+    return true;
+  }
   state.vehicles.push(vehicle);
   if (state.gameMode !== "creative") state.inventory = adjustSlotCount(state.inventory, kind, -1, state.selectedSlot) ?? state.inventory;
   emit({ type: "vehiclePlaced", kind });

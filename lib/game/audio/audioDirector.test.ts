@@ -4,7 +4,7 @@ import type { FrameInput } from "@/lib/game/engine/state";
 import { createAudioDirector, DEFAULT_AUDIO_SETTINGS, type AudioGraph } from "./audioDirector";
 import type { MusicMood } from "./musicBrain";
 import type { PlayOptions, SynthBackend } from "./synth";
-import { BREAK_SOUNDS, HIT_TICK_SOUNDS, HURT_SOUND, JUMP_SOUND, LAND_SOUND, PLACE_SOUNDS, FOOTSTEP_SOUNDS, type SoundDef } from "./soundParams";
+import { BREAK_SOUNDS, HIT_TICK_SOUNDS, HURT_SOUND, JUMP_SOUND, LAND_SOUND, PLACE_SOUNDS, FOOTSTEP_SOUNDS, VEHICLE_DENIED_SOUND, type SoundDef } from "./soundParams";
 import { BlockId } from "@/lib/world";
 
 function mulberry32(seed: number): () => number {
@@ -110,6 +110,14 @@ describe("audio director", () => {
     expect(played[2].def).toBe(PLACE_SOUNDS.wood);
     expect(played[2].opts.gain).toBe(0.8);
     expect(played[3].def).toBe(HURT_SOUND);
+  });
+
+  test("placing a vehicle thunks like wood; a failed placement plays the denial cue", async () => {
+    const { director, played } = await createUnlockedDirector();
+    director.handleEvent({ type: "vehiclePlaced", kind: "raft" });
+    director.handleEvent({ type: "vehiclePlaceFailed" });
+    expect(played[0].def).toBe(PLACE_SOUNDS.wood);
+    expect(played[1].def).toBe(VEHICLE_DENIED_SOUND);
   });
 
   test("landing volume scales with impact", async () => {
