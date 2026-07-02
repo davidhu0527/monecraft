@@ -639,7 +639,18 @@ export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];
 export type RecipeCategory = "Tools" | "Vehicles" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Brewing" | "Trades";
 
 /** Fixed display order; `groupRecipes` emits sections in this sequence. */
-export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Vehicles", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Brewing", "Trades"];
+export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = [
+  "Tools",
+  "Vehicles",
+  "Weapons",
+  "Armor",
+  "Building",
+  "Food",
+  "Materials",
+  "Smelting",
+  "Brewing",
+  "Trades"
+];
 
 const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   tool: "Tools",

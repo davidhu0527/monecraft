@@ -4,7 +4,17 @@ import type { FrameInput } from "@/lib/game/engine/state";
 import { createAudioDirector, DEFAULT_AUDIO_SETTINGS, type AudioGraph } from "./audioDirector";
 import type { MusicMood } from "./musicBrain";
 import type { PlayOptions, SynthBackend } from "./synth";
-import { BREAK_SOUNDS, HIT_TICK_SOUNDS, HURT_SOUND, JUMP_SOUND, LAND_SOUND, PLACE_SOUNDS, FOOTSTEP_SOUNDS, VEHICLE_DENIED_SOUND, type SoundDef } from "./soundParams";
+import {
+  BREAK_SOUNDS,
+  HIT_TICK_SOUNDS,
+  HURT_SOUND,
+  JUMP_SOUND,
+  LAND_SOUND,
+  PLACE_SOUNDS,
+  FOOTSTEP_SOUNDS,
+  VEHICLE_DENIED_SOUND,
+  type SoundDef
+} from "./soundParams";
 import { BlockId } from "@/lib/world";
 
 function mulberry32(seed: number): () => number {
