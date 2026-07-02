@@ -68,6 +68,35 @@ export function randomLandPoint(world: VoxelWorld, surfaceYAt: SurfaceYAtFn, rng
   return new THREE.Vector3(world.sizeX / 2, 12, world.sizeZ / 2);
 }
 
+/**
+ * A random swim point in open water near (centerX, centerZ): a column whose
+ * floor holds at least `minDepth` water above it, at mid-depth so the fish
+ * starts fully submerged. Returns null when no water is found (a dry world or
+ * an inland center) — callers must fail closed rather than spawn on land.
+ */
+export function randomWaterPointNear(
+  world: VoxelWorld,
+  centerX: number,
+  centerZ: number,
+  radius: number,
+  rng: () => number = Math.random,
+  minDepth = 2
+): THREE.Vector3 | null {
+  for (let i = 0; i < 50; i += 1) {
+    const x = Math.max(10, Math.min(world.sizeX - 10, centerX + (rng() * 2 - 1) * radius));
+    const z = Math.max(10, Math.min(world.sizeZ - 10, centerZ + (rng() * 2 - 1) * radius));
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+    const floor = world.highestSolidY(ix, iz);
+    let depth = 0;
+    while (world.get(ix, floor + 1 + depth, iz) === BlockId.Water) depth += 1;
+    if (depth < minDepth) continue;
+    const y = floor + 1 + Math.floor(depth / 2) + 0.5;
+    return new THREE.Vector3(x, y, z);
+  }
+  return null;
+}
+
 export function randomLandPointNear(
   world: VoxelWorld,
   surfaceYAt: SurfaceYAtFn,

@@ -124,11 +124,11 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4);
+    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper + cod/salmon
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4 + 6 + 4);
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(32);
+    expect(engine.getSnapshot().passiveCount).toBe(42); // land passives + villagers + 10 fish
     expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 

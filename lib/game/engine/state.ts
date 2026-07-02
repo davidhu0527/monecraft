@@ -151,6 +151,7 @@ export type GameTimers = {
   effectPoisonTimer: number;
   stuckTimer: number;
   hostileSpawnTimer: number;
+  aquaticSpawnTimer: number;
   spawnerTimer: number;
   daylightHudTimer: number;
   debugHudTimer: number;
@@ -285,6 +286,7 @@ export function createTimers(): GameTimers {
     effectPoisonTimer: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
+    aquaticSpawnTimer: 0,
     spawnerTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,

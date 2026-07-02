@@ -1,7 +1,9 @@
 import * as THREE from "three";
-import { collidesAt, voxelRaycast } from "@/lib/world";
+import { BlockId, collidesAt, voxelRaycast } from "@/lib/world";
 import {
   ARROW_TTL,
+  FISH_FLEE_RANGE,
+  FISH_SUFFOCATION_HP_PER_SECOND,
   BOSS_ARROW_DAMAGE,
   BOSS_ARROW_SPEED,
   BOSS_MELEE_DAMAGE,
@@ -225,6 +227,53 @@ export type MobTickDeps = {
   emit: EmitGameEvent;
 };
 
+/**
+ * An aquatic mob's whole tick — it swims in 3D and bypasses every land
+ * assumption in the main loop (the surfaceYAt ground clamp, border bounce, and
+ * the collidesAt foot test): each move is instead gated on the destination cell
+ * being water, so a fish can never swim into land, air, or out of bounds. It
+ * flees the player in 3D within FISH_FLEE_RANGE, wanders with a gentle pitch
+ * otherwise, and out of water it lies beached, suffocating until it dies (or a
+ * knockback returns it to water).
+ */
+function tickAquaticMob(state: GameState, mob: MobState, dt: number, deps: MobTickDeps): void {
+  const { world } = state;
+
+  const inWater = world.get(Math.floor(mob.position.x), Math.floor(mob.position.y), Math.floor(mob.position.z)) === BlockId.Water;
+  if (!inWater) {
+    mob.moveSpeed = 0;
+    mob.position.y = deps.surfaceYAt(mob.position.x, mob.position.z) + mob.halfHeight * 0.5;
+    mob.hp -= FISH_SUFFOCATION_HP_PER_SECOND * dt;
+    return;
+  }
+
+  scratchToPlayer3D.copy(state.player.position).sub(mob.position);
+  const distanceToPlayer = scratchToPlayer3D.length();
+  let moveSpeed = mob.speed;
+  if (distanceToPlayer < FISH_FLEE_RANGE) {
+    if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer3D.normalize().multiplyScalar(-1), 0.25).normalize();
+    moveSpeed *= 1.6;
+  } else if (mob.turnTimer <= 0) {
+    const angle = deps.rng() * Math.PI * 2;
+    const pitch = (deps.rng() - 0.5) * 0.7;
+    mob.direction.set(Math.cos(angle) * Math.cos(pitch), Math.sin(pitch), Math.sin(angle) * Math.cos(pitch)).normalize();
+    mob.turnTimer = 1.5 + deps.rng() * 3;
+  }
+  mob.moveSpeed = moveSpeed;
+
+  const nx = mob.position.x + mob.direction.x * moveSpeed * dt;
+  const ny = mob.position.y + mob.direction.y * moveSpeed * dt;
+  const nz = mob.position.z + mob.direction.z * moveSpeed * dt;
+  const inBounds = nx >= 2 && nz >= 2 && nx <= world.sizeX - 2 && nz <= world.sizeZ - 2 && ny >= 1 && ny <= world.sizeY - 2;
+  if (inBounds && world.get(Math.floor(nx), Math.floor(ny), Math.floor(nz)) === BlockId.Water) {
+    mob.position.set(nx, ny, nz);
+  } else {
+    mob.direction.multiplyScalar(-1);
+    mob.turnTimer = 1;
+  }
+  mob.yaw = Math.atan2(mob.direction.x, mob.direction.z);
+}
+
 export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void {
   const { world, daylight, mobs, isDead } = state;
   const playerPosition = state.player.position;
@@ -244,6 +293,14 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
     mob.retargetTimer -= dt;
+
+    // Aquatic mobs swim on their own dedicated tick — before any land logic
+    // (ground clamp, wander, flee) can leak in.
+    if (MOB_TEMPLATES[mob.kind].aquatic === true) {
+      tickAquaticMob(state, mob, dt, deps);
+      continue;
+    }
+
     const activeHostile = threatened && mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
 
     scratchToPlayer.copy(playerPosition).sub(mob.position).setY(0);

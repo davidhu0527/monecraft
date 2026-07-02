@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { HOSTILE_CAP } from "@/lib/game/config";
-import { VoxelWorld, generateWorld } from "@/lib/world";
+import { BlockId, VoxelWorld, generateWorld } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { createSurfaceYAt } from "@/lib/game/spawn";
 import {
   assignVillagerProfessions,
   pushMob,
+  spawnAquaticGroup,
   spawnVillageResidents,
   tickHostileSpawnDirector,
   tickSpawnerDirector
@@ -153,5 +154,39 @@ describe("tickSpawnerDirector", () => {
     e.state.timers.spawnerTimer = 1000;
     tickSpawnerDirector(e.state, 0.1, mulberry32(5), () => {});
     expect(hostileCount(e)).toBe(0);
+  });
+});
+
+describe("spawnAquaticGroup", () => {
+  test("spawns fish fully submerged in a water pool", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    // A sand basin (floor y=10) holding 4 blocks of water (y 11..14).
+    for (let x = 20; x <= 44; x += 1) {
+      for (let z = 20; z <= 44; z += 1) {
+        world.set(x, 10, z, BlockId.Sand);
+        for (let y = 11; y <= 14; y += 1) world.set(x, y, z, BlockId.Water);
+      }
+    }
+    const state = { world, mobs: [], nextMobId: 1 } as unknown as GameState;
+
+    spawnAquaticGroup(state, "cod", 5, 32, 32, 10, mulberry32(7));
+
+    expect(state.mobs).toHaveLength(5);
+    for (const mob of state.mobs) {
+      expect(mob.kind).toBe("cod");
+      expect(mob.hostile).toBe(false);
+      const cell = world.get(Math.floor(mob.position.x), Math.floor(mob.position.y), Math.floor(mob.position.z));
+      expect(cell).toBe(BlockId.Water);
+    }
+  });
+
+  test("fails closed on a dry world: zero fish, no land spawns", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    for (let x = 0; x < 64; x += 1) for (let z = 0; z < 64; z += 1) world.set(x, 10, z, BlockId.Grass);
+    const state = { world, mobs: [], nextMobId: 1 } as unknown as GameState;
+
+    spawnAquaticGroup(state, "salmon", 5, 32, 32, 10, mulberry32(7));
+
+    expect(state.mobs).toHaveLength(0);
   });
 });

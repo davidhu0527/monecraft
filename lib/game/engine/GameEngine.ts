@@ -121,6 +121,7 @@ import {
   spawnInitialMobs,
   spawnMobGroup,
   spawnVillageResidents,
+  tickAquaticSpawnDirector,
   tickHostileSpawnDirector,
   tickSpawnerDirector
 } from "./systems/spawnDirector";
@@ -425,6 +426,7 @@ export class GameEngine {
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
+    tickAquaticSpawnDirector(state, dt, this.rng);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
     tickPrimedTnt(state, dt, this.mobTickDeps);

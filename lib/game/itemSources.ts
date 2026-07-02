@@ -29,6 +29,8 @@ const MOB_LABELS: Record<MobKind, string> = {
   pig: "a pig",
   wolf: "a wolf",
   cat: "a cat",
+  cod: "a cod",
+  salmon: "a salmon",
   zombie: "a zombie",
   skeleton: "a skeleton",
   spider: "a spider",

@@ -20,8 +20,10 @@ describe("itemSourceHint", () => {
     expect(itemSourceHint("coal")).toBe("Mine coal ore"); // override: item differs from the block
   });
 
-  test("fishing-only loot points at the rod", () => {
-    expect(itemSourceHint("raw_fish")).toBe("Catch it while fishing");
+  test("raw fish points at hunting cod now that fish mobs swim the oceans", () => {
+    // Hunt-first priority: cod drop raw fish, which beats the fishing fallback
+    // (every FISHING_LOOT item now has an earlier-priority source).
+    expect(itemSourceHint("raw_fish")).toBe("Hunt a cod");
   });
 
   test("the boss is a last resort, only for its trophy drops", () => {

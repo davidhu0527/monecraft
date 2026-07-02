@@ -277,6 +277,16 @@ export const KELP_GROWTH_CHANCE = 0.2;
 export const BONE_MEAL_PER_BONE = 3;
 export const BONE_MEAL_CROP_STAGES_MAX = 2;
 
+// Fish mobs (cod/salmon). Passive swimmers confined to water (the aquatic
+// branch in mobAI): they flee the player in 3D within FISH_FLEE_RANGE and
+// suffocate out of water at FISH_SUFFOCATION_HP_PER_SECOND. The aquatic spawn
+// director trickles schools in around the player (up to AQUATIC_CAP within
+// range) so sailed-to oceans are populated, not just the spawn area.
+export const FISH_FLEE_RANGE = 5;
+export const FISH_SUFFOCATION_HP_PER_SECOND = 2;
+export const AQUATIC_CAP = 24;
+export const AQUATIC_SPAWN_INTERVAL_SECONDS = 8;
+
 // Fishing. Cast a bobber at water within FISHING_REACH; after a random wait in
 // [BITE_MIN, BITE_MAX] the bobber dips for FISHING_BITE_WINDOW_SECONDS — reel in
 // (right-click) during that window to catch, else a new wait begins. The cast is
