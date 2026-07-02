@@ -636,10 +636,10 @@ export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];
  * own group (a furnace smelts, a villager trades); everything else is grouped by
  * the kind of item it produces.
  */
-export type RecipeCategory = "Tools" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Brewing" | "Trades";
+export type RecipeCategory = "Tools" | "Vehicles" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Brewing" | "Trades";
 
 /** Fixed display order; `groupRecipes` emits sections in this sequence. */
-export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Brewing", "Trades"];
+export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Vehicles", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Brewing", "Trades"];
 
 const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   tool: "Tools",
@@ -648,7 +648,7 @@ const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   block: "Building",
   food: "Food",
   material: "Materials",
-  vehicle: "Tools"
+  vehicle: "Vehicles"
 };
 
 /**
