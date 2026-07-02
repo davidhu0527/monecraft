@@ -38,6 +38,7 @@ import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
 import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
+import { MAX_VEHICLES } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
@@ -1566,6 +1567,28 @@ describe("persistence", () => {
     expect(restored.state.vehicles).toHaveLength(1);
     expect(restored.state.vehicles[0].kind).toBe("ship");
     expect(restored.state.vehicles[0].position.z).toBeCloseTo(ship.position.z, 4);
+  });
+
+  test("placement is refused once the vehicle cap is reached", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    makeWaterPatch(engine);
+    engine.state.player.position.set(20.5, 11, 24.5);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = -0.55;
+    engine.state.inventory[engine.state.selectedSlot] = createSlot("raft", 2);
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.vehicles).toHaveLength(1);
+
+    // Saturate the world to the cap (reusing the one real vehicle instance is fine — the
+    // guard only reads length), then try to place the second raft.
+    const placed = engine.state.vehicles[0];
+    while (engine.state.vehicles.length < MAX_VEHICLES) engine.state.vehicles.push(placed);
+    const heldBefore = engine.state.inventory[engine.state.selectedSlot].count;
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(engine.state.vehicles).toHaveLength(MAX_VEHICLES);
+    expect(engine.state.inventory[engine.state.selectedSlot].count).toBe(heldBefore); // not consumed
   });
 
   test("a saved boat survives reload even after the water beneath it is removed", () => {

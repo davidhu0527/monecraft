@@ -4,6 +4,7 @@ import {
   EYE_HEIGHT,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
+  MAX_VEHICLES,
   RAFT_HALF_LENGTH,
   RAFT_HALF_WIDTH,
   RAFT_SPEED,
@@ -213,6 +214,10 @@ export function tryPlaceVehicle(state: GameState, emit: EmitGameEvent): boolean 
   const slot = state.inventory[state.selectedSlot];
   if (slot?.id !== "raft" && slot?.id !== "ship") return false;
   const kind = slot.id;
+  if (state.vehicles.length >= MAX_VEHICLES) {
+    emit({ type: "vehiclePlaceFailed" }); // world is at the vehicle cap — refuse to keep saves bounded
+    return true;
+  }
   scratchEye.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z);
   lookDirection(state.player.yaw, state.player.pitch, scratchDir);
   const water = waterSurfaceRaycast(state.world, scratchEye, scratchDir, VEHICLE_BOARD_REACH);
