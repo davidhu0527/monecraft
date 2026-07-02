@@ -586,10 +586,33 @@ A calm, renewable way to feed yourself — and the odd lucky find:
    that's a bite. **Right-click again right away** (within about a second) to reel
    it in. Miss the moment and the catch gets away, but the bobber keeps fishing.
 4. You'll mostly land **raw fish** (cook it at a furnace for more hunger), sometimes
-   junk (string, bone, seeds, rotten flesh), and once in a while a treasure.
+   junk (string, bone, seeds, rotten flesh), and once in a while a treasure —
+   including, very rarely, a **treasure map** (see [The ocean](#the-ocean)).
 
 Wandering too far from the bobber, putting the rod away, or draining the water all
 retract the line.
+
+## The ocean
+
+The sea is worth sailing (see [Rafts and ships](#rafts-and-ships)):
+
+- **Fish.** Schools of **cod and salmon** swim the open water. They flee when you
+  get close and drop **raw fish** when killed — the same fish the rod catches and
+  cats are tamed with. A fish knocked onto land flops helplessly and suffocates.
+- **Kelp and coral.** The sandy ocean floor grows swaying **kelp stalks** and
+  scattered pink/blue **coral**. Kelp breaks instantly (breaking one cell takes
+  the whole stalk above it, and the water fills back in), regrows over time, and
+  **smelts into dried kelp** — a cheap snack (2 hunger, 3 per fuel). Kelp stalks
+  always leave a few blocks of clear water at the surface, so boats never snag.
+- **Shipwrecks.** Broken plank hulls lie sunken on the deep ocean floor. Dive
+  down (mind your breath — a Water Breathing potion helps) and loot their chests
+  for salvage: emeralds, materials, food, and often a **treasure map**.
+- **Buried treasure.** While you hold a treasure map, a **compass pill** at the
+  top of the screen points to the nearest unearthed hoard (bearing and distance),
+  and red **X** marks appear on the minimap. Head to the beach it points at and
+  **dig two blocks under the sand** for the richest chest in the game — emeralds
+  guaranteed, diamonds often. Digging one up retargets the map to the next; the
+  first unlocks the **X Marks the Spot** advancement.
 
 ## Beds and sleeping
 
