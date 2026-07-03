@@ -124,6 +124,7 @@ export function nearestTargetablePlayer(state: GameState, x: number, z: number):
   let best: PlayerState | null = null;
   let bestSq = Infinity;
   for (const player of state.players.values()) {
+    if (player.isDead) continue; // don't let mobs hunt a corpse over nearby live players
     if (!mobsThreaten(player.gameMode)) continue;
     const dx = player.position.x - x;
     const dz = player.position.z - z;

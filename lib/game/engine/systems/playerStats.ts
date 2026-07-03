@@ -71,7 +71,9 @@ export function tickHungerDrain(player: PlayerState, move: MoveTickResult): void
  */
 export function tickHealthRegen(state: GameState, player: PlayerState, dt: number): void {
   if (!takesDamage(player.gameMode)) {
-    player.hearts = MAX_HEARTS;
+    // A hardcore game-over player is an invulnerable Spectator but keeps its
+    // final hearts=0 (withered display) — don't top it back up.
+    if (!player.gameOver) player.hearts = MAX_HEARTS;
     player.timers.regenTimer = 0;
     return;
   }

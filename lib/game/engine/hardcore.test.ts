@@ -79,6 +79,11 @@ describe("hardcore permadeath", () => {
     const events = e.consumeEvents();
     expect(hasEvent(events, "gameOver")).toBe(true);
     expect(hasEvent(events, "died")).toBe(false);
+
+    // The game-over spectator keeps hearts=0 (withered display) — regen must
+    // not top it back to full the way it does for a live Creative/Spectator.
+    for (let i = 0; i < 5; i += 1) e.step(0.05);
+    expect(e.state.hearts).toBe(0);
   });
 
   test("a normal world's lethal hit still respawns (died, not game-over)", () => {

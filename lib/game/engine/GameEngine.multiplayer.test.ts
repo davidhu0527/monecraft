@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { frameInput } from "@/lib/game/engine/testSupport";
 import { LOCAL_PLAYER_ID } from "@/lib/game/engine/state";
-import { allEligiblePlayersSleeping } from "@/lib/game/engine/players";
-import { createSlot } from "@/lib/game/items";
+import { allEligiblePlayersSleeping, nearestTargetablePlayer } from "@/lib/game/engine/players";
+import { createEmptySlot, createSlot } from "@/lib/game/items";
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -53,6 +53,47 @@ describe("players map", () => {
     const engine = makeEngine();
     expect(engine.removePlayer(LOCAL_PLAYER_ID)).toBeNull();
     expect(engine.state.players.size).toBe(1);
+  });
+
+  test("moveStack acts on the commanding player's inventory, not the primary alias", () => {
+    const engine = makeEngine();
+    const second = engine.addPlayer({ id: "acct-2" });
+    const primary = engine.state.player;
+    second.inventory = [...second.inventory];
+    second.inventory[0] = createSlot("emerald", 5);
+    second.inventory[1] = createEmptySlot();
+    const primarySlot0 = primary.inventory[0];
+
+    engine.dispatch({ type: "moveStack", from: 0, to: 1 }, "acct-2");
+    expect(second.inventory[1]).toMatchObject({ id: "emerald", count: 5 }); // moved for acct-2
+    expect(second.inventory[0]?.id).not.toBe("emerald"); // vacated
+    expect(primary.inventory[0]).toBe(primarySlot0); // the primary's inventory was untouched
+  });
+
+  test("restore brings back a joined player's persisted gameMode and gameOver", () => {
+    const engine = makeEngine();
+    const creative = engine.addPlayer({ id: "c" });
+    creative.gameMode = "creative";
+    const savedCreative = engine.removePlayer("c");
+    expect(engine.addPlayer({ id: "c", restore: savedCreative }).gameMode).toBe("creative");
+
+    const dead = engine.addPlayer({ id: "d" });
+    dead.gameOver = true;
+    const savedDead = engine.removePlayer("d");
+    const rejoinedDead = engine.addPlayer({ id: "d", restore: savedDead });
+    expect(rejoinedDead.gameOver).toBe(true);
+    expect(rejoinedDead.gameMode).toBe("spectator"); // a dead world spectates
+  });
+
+  test("mobs don't target a dead player over a live one", () => {
+    const engine = makeEngine();
+    const primary = engine.state.player;
+    const second = engine.addPlayer({ id: "acct-2" });
+    primary.position.set(10, 40, 10);
+    second.position.set(12, 40, 12);
+    primary.isDead = true; // the nearer player is a corpse
+    const target = nearestTargetablePlayer(engine.state, 11, 11);
+    expect(target?.id).toBe("acct-2"); // the live (farther) player is chosen
   });
 
   test("serialize() carries every player; the world save round-trips a two-player world", () => {

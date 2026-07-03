@@ -40,6 +40,7 @@ import {
   RAID_WAVE_COUNT,
   RENDER_RADIUS,
   ROTTEN_FLESH_POISON_CHANCE,
+  SLEEP_FADE_SECONDS,
   SPRINT_SPEED,
   STUCK_RESET_SECONDS,
   WAKE_DAY_PHASE
@@ -111,7 +112,7 @@ import {
   type PlayerId,
   type PlayerState
 } from "./state";
-import { installPlayerAliases, mustGetPlayer, nearestPlayerTo } from "./players";
+import { allEligiblePlayersSleeping, installPlayerAliases, mustGetPlayer, nearestPlayerTo } from "./players";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
@@ -187,6 +188,9 @@ export type GameEngineOptions = {
    */
   replica?: boolean;
 };
+
+/** Upper bound on the gap `applyRemotePose` scales its speed clamps by, so a withheld-pose gap can't inflate them. */
+const MAX_REMOTE_POSE_ELAPSED = 0.5;
 
 /**
  * The framework-agnostic game core. Owns all simulation state, advances it in
@@ -437,7 +441,10 @@ export class GameEngine {
     elapsedSeconds: number
   ): { accepted: boolean } {
     const player = mustGetPlayer(this.state, playerId);
-    const elapsed = Math.max(elapsedSeconds, 0.01);
+    // Cap elapsed as defense-in-depth: the clamps below scale linearly with it,
+    // so an unbounded gap (a client withholding accepted poses) would inflate
+    // the speed ceiling until any jump passes. 0.5s covers real catch-up bursts.
+    const elapsed = Math.min(Math.max(elapsedSeconds, 0.01), MAX_REMOTE_POSE_ELAPSED);
     // A mounted player's pose belongs to the vehicle (server-side); ignore the stream.
     if (player.mountedVehicleId !== null) return { accepted: false };
 
@@ -717,7 +724,7 @@ export class GameEngine {
       }
       case "moveStack": {
         if (!canInteract(player.gameMode)) break;
-        this.applyMoveStack(command.from, command.to);
+        this.applyMoveStack(player, command.from, command.to);
         break;
       }
       case "toggleEquipArmor": {
@@ -1041,6 +1048,9 @@ export class GameEngine {
     }
     const saved = this.serializePlayer(player);
     state.players.delete(id);
+    // If the departing player was the last one awake, the remaining sleepers
+    // would otherwise wait forever — re-run the gate the bed uses.
+    if (state.sleepTimer === 0 && allEligiblePlayersSleeping(state)) state.sleepTimer = SLEEP_FADE_SECONDS;
     this.emit({ type: "playerLeft", playerId: id });
     return saved;
   }
@@ -1068,6 +1078,11 @@ export class GameEngine {
 
   /** Restores one player's persisted slice onto a live PlayerState (the mirror of serializePlayer). */
   private restorePlayerFields(player: PlayerState, saved: SavedPlayer): void {
+    // Resolve mode the same way the constructor does for the primary: a dead
+    // hardcore world spectates, hardcore forces survival, else the saved mode.
+    player.gameOver = saved.gameOver === true;
+    player.gameMode = player.gameOver ? "spectator" : this.state.hardcore ? "survival" : restoreGameMode(saved);
+    player.isFlying = player.gameMode === "spectator";
     player.inventory = restoreInventorySlots(saved) ?? player.inventory;
     player.equippedArmor = restoreEquippedArmor(saved) ?? player.equippedArmor;
     player.selectedSlot = restoreSelectedSlot(saved) ?? player.selectedSlot;
@@ -1163,12 +1178,13 @@ export class GameEngine {
    * above CONTAINER_SLOT_BASE address the container; below it, the inventory.
    * Writes back whichever of the two arrays the move touched.
    */
-  private applyMoveStack(from: number, to: number): void {
+  private applyMoveStack(player: PlayerState, from: number, to: number): void {
     const state = this.state;
-    const container = state.openContainerIndex !== null ? state.containers.get(state.openContainerIndex) : undefined;
+    const openIndex = player.openContainerIndex;
+    const container = openIndex !== null ? state.containers.get(openIndex) : undefined;
     const resolve = (index: number): { arr: InventorySlot[]; local: number } | null => {
       if (index >= CONTAINER_SLOT_BASE) return container ? { arr: container, local: index - CONTAINER_SLOT_BASE } : null;
-      return { arr: state.inventory, local: index };
+      return { arr: player.inventory, local: index };
     };
     const a = resolve(from);
     const b = resolve(to);
@@ -1177,13 +1193,13 @@ export class GameEngine {
     if (!moved) return;
 
     // Resolve each side's destination BEFORE writing: the first write reassigns
-    // state.inventory, which would make a later `arr === state.inventory` check
+    // player.inventory, which would make a later `arr === player.inventory` check
     // stale and misroute an inventory↔inventory move into the open chest.
-    const aIsInventory = a.arr === state.inventory;
-    const bIsInventory = b.arr === state.inventory;
+    const aIsInventory = a.arr === player.inventory;
+    const bIsInventory = b.arr === player.inventory;
     const writeBack = (isInventory: boolean, next: InventorySlot[]): void => {
-      if (isInventory) state.inventory = next;
-      else if (state.openContainerIndex !== null) state.containers.set(state.openContainerIndex, next);
+      if (isInventory) player.inventory = next;
+      else if (openIndex !== null) state.containers.set(openIndex, next);
     };
     writeBack(aIsInventory, moved.a);
     writeBack(bIsInventory, moved.b);
