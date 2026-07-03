@@ -1,4 +1,4 @@
-import { rollTieredLoot, type LootEntry, type LootTier } from "@/lib/game/dungeonLoot";
+import { rollTieredLoot, type LootDrop, type LootEntry, type LootTier } from "@/lib/game/dungeonLoot";
 
 /**
  * Buried-treasure chest loot — the payoff at the end of a treasure-map hunt,
@@ -25,6 +25,6 @@ export const BURIED_TREASURE_LOOT: Record<LootTier, LootEntry[]> = {
 };
 
 /** Rolls one buried-treasure chest (see dungeonLoot.rollTieredLoot). */
-export function rollBuriedTreasureLoot(rng: () => number): Array<{ itemId: string; count: number }> {
+export function rollBuriedTreasureLoot(rng: () => number): LootDrop[] {
   return rollTieredLoot(BURIED_TREASURE_LOOT, rng);
 }

@@ -1,5 +1,5 @@
 import { CHEST_SLOTS } from "@/lib/game/config";
-import { rollDungeonLoot, seededRng } from "@/lib/game/dungeonLoot";
+import { rollDungeonLoot, seededRng, type LootDrop } from "@/lib/game/dungeonLoot";
 import { rollShipwreckLoot } from "@/lib/game/shipwreckLoot";
 import { rollBuriedTreasureLoot } from "@/lib/game/buriedTreasureLoot";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
@@ -7,12 +7,13 @@ import { tryInsertSlots } from "@/lib/game/inventory";
 import type { EmitGameEvent, GameState } from "../state";
 
 /**
- * Fills a worldgen loot chest (dungeon or shipwreck) on its FIRST access (open
- * or break) and marks it looted. The chest's family — which site set holds its
- * voxel index — picks the loot table, and each family mixes a distinct constant
- * into the seed so a dungeon chest and a shipwreck chest at a colliding index
- * could never share a roll. The loot is seeded from the world seed + the
- * chest's voxel index, so it is reproducible until the chest is accessed.
+ * Fills a worldgen loot chest (dungeon, shipwreck, or buried treasure) on its
+ * FIRST access (open or break) and marks it looted. The chest's family — which
+ * site set holds its voxel index — picks the loot table, and each family mixes
+ * a distinct constant into the seed so chests from different families at a
+ * colliding index could never share a roll. The loot is seeded from the world
+ * seed + the chest's voxel index, so it is reproducible until the chest is
+ * accessed.
  *
  * Marking the index in the persisted `lootedWorldgenChests` set (the save's
  * `lootedChests` field) — rather than relying on the chest being non-empty — is
@@ -24,7 +25,7 @@ import type { EmitGameEvent, GameState } from "../state";
  */
 export function fillWorldgenChestIfUnlooted(state: GameState, idx: number, emit?: EmitGameEvent): void {
   if (state.lootedWorldgenChests.has(idx)) return;
-  let loot: Array<{ itemId: string; count: number }>;
+  let loot: LootDrop[];
   let unearthedTreasure = false;
   if (state.dungeonChestIndices.has(idx)) {
     loot = rollDungeonLoot(seededRng((state.world.seed ^ idx ^ 0x9e3779b1) >>> 0));

@@ -758,7 +758,9 @@ describe("chests", () => {
     state.treasureSites = [far, near];
     state.buriedTreasureChestIndices.add(near.index).add(far.index);
 
-    // No map held → no compass.
+    // No map held → no compass. (getSnapshot returns the cached snapshot, so
+    // step once to rebuild it against the injected sites.)
+    engine.step(0.01, input());
     expect(engine.getSnapshot().treasure).toBeNull();
 
     // Holding the map targets the NEAREST unlooted site.

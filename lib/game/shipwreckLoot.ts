@@ -1,4 +1,4 @@
-import { rollTieredLoot, type LootEntry, type LootTier } from "@/lib/game/dungeonLoot";
+import { rollTieredLoot, type LootDrop, type LootEntry, type LootTier } from "@/lib/game/dungeonLoot";
 
 /**
  * Shipwreck chest loot — the same tiered shape as dungeon chests (see
@@ -29,6 +29,6 @@ export const SHIPWRECK_LOOT: Record<LootTier, LootEntry[]> = {
 };
 
 /** Rolls one shipwreck chest (see dungeonLoot.rollTieredLoot). */
-export function rollShipwreckLoot(rng: () => number): Array<{ itemId: string; count: number }> {
+export function rollShipwreckLoot(rng: () => number): LootDrop[] {
   return rollTieredLoot(SHIPWRECK_LOOT, rng);
 }
