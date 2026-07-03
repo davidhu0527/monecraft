@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-03
+
 ### Added
 
 - **The aquatic update**: the ocean the new rafts and ships sail is now worth sailing — fish, flora, wrecks to dive, and treasure to hunt, all on **zero binary assets**. Bumps **`WORLDGEN_VERSION` 9→10** (kelp/coral/wrecks/buried chests write generated blocks, so existing worlds reboot from their seed and every worldgen/world-type/meshing digest except flat was re-baselined per docs/testing.md) with **no save-schema change** — the schema stays **v16**.
