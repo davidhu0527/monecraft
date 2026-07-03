@@ -94,8 +94,10 @@ describe("per-player stepping", () => {
     expect(second.respawnTimer).toBeLessThan(3);
   });
 
-  test("setPlayerInput moves only that player", () => {
-    const engine = makeEngine("server");
+  test("under local authority, setPlayerInput moves only that player", () => {
+    // Local authority integrates motion from stored intents (the SP model,
+    // extended to N players); server authority never does — see below.
+    const engine = makeEngine("local");
     calm(engine);
     const second = engine.addPlayer({ id: "acct-2" });
     const start = second.position.clone();
@@ -105,6 +107,31 @@ describe("per-player stepping", () => {
     expect(second.position.distanceTo(start)).toBeGreaterThan(0.5);
     expect(engine.state.player.position.x).toBeCloseTo(primaryStart.x, 3);
     expect(engine.state.player.position.z).toBeCloseTo(primaryStart.z, 3);
+  });
+
+  test("under server authority, walking is pose-driven: clamps accept honest moves and reject teleports", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    const second = engine.addPlayer({ id: "acct-2" });
+    const { x, y, z } = second.position;
+
+    // An honest one-tick step is accepted and applied…
+    const ok = engine.applyRemotePose("acct-2", { x: x + 0.3, y, z, yaw: 1, pitch: 0, onGround: true }, 0.05);
+    expect(ok.accepted).toBe(true);
+    expect(second.position.x).toBeCloseTo(x + 0.3, 6);
+    expect(second.yaw).toBe(1);
+
+    // …a teleport-sized jump is rejected and NOT applied (caller force-poses)…
+    const hack = engine.applyRemotePose("acct-2", { x: x + 50, y, z: z + 50, yaw: 0, pitch: 0, onGround: true }, 0.05);
+    expect(hack.accepted).toBe(false);
+    expect(second.position.x).toBeCloseTo(x + 0.3, 6);
+
+    // …and intents alone never move a server-authority player.
+    engine.setPlayerInput("acct-2", frameInput({ keys: ["KeyW"] }));
+    const before = second.position.clone();
+    for (let i = 0; i < 20; i += 1) engine.step(0.05);
+    expect(second.position.x).toBeCloseTo(before.x, 6);
+    expect(second.position.z).toBeCloseTo(before.z, 6);
   });
 
   test("hostiles hunt the nearest targetable player", () => {
@@ -142,12 +169,15 @@ describe("per-player stepping", () => {
       fedTimer: 0,
       ageTimer: 0
     });
-    const before = engine.state.mobs[0].position.distanceTo(second.position);
+    const horizontal = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+    const before = horizontal(engine.state.mobs[0].position, second.position);
     for (let i = 0; i < 30; i += 1) engine.step(0.05);
     const mob = engine.state.mobs.find((m) => m.id === 999)!;
-    // …closes on the second player, not the faraway primary.
-    expect(mob.position.distanceTo(second.position)).toBeLessThan(before);
-    expect(mob.position.distanceTo(engine.state.player.position)).toBeGreaterThan(30);
+    // …closes on the second player, not the faraway primary. (Horizontal
+    // distance: the mob ground-clamps to terrain while the un-posed player
+    // hangs at spawn height, so 3D distance would measure the wrong thing.)
+    expect(horizontal(mob.position, second.position)).toBeLessThan(before);
+    expect(horizontal(mob.position, engine.state.player.position)).toBeGreaterThan(30);
   });
 
   test("the night skips only once every eligible player sleeps", () => {

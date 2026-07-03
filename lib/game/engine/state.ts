@@ -82,6 +82,12 @@ export type PlayerState = {
    * latest packet here via setPlayerInput. Session-only.
    */
   input: FrameInput;
+  /**
+   * Server authority only: movement synthesized from this tick's accepted
+   * client pose (distance/sprint/jump/landing), consumed by stepPlayer for
+   * hunger/stats in place of tickPlayerMotion's result. Session-only.
+   */
+  remoteMove: { didSprint: boolean; didWalk: boolean; didJump: boolean; didLand: boolean; landImpact: number; horizontalDistance: number } | null;
   timers: PlayerTimers;
 };
 

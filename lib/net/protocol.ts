@@ -207,9 +207,7 @@ export function readCommand(v: unknown): Command | null {
     case "toggleEquipArmor":
       return isNum(c.index) ? { type: "toggleEquipArmor", index: Math.floor(c.index) } : null;
     case "unequipArmor":
-      return c.slot === "helmet" || c.slot === "chestplate" || c.slot === "leggings" || c.slot === "boots"
-        ? { type: "unequipArmor", slot: c.slot }
-        : null;
+      return c.slot === "helmet" || c.slot === "chestplate" || c.slot === "leggings" || c.slot === "boots" ? { type: "unequipArmor", slot: c.slot } : null;
     case "anvilRename":
       return isStr(c.name) ? { type: "anvilRename", name: c.name.slice(0, 64) } : null;
     case "enchant":

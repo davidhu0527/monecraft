@@ -22,6 +22,9 @@ import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
+  FLY_SPEED,
+  GRAVITY,
+  JUMP_VELOCITY,
   ENCHANT_COST_LEVELS,
   HOTBAR_SLOTS,
   MAX_HUNGER,
@@ -37,6 +40,7 @@ import {
   RAID_WAVE_COUNT,
   RENDER_RADIUS,
   ROTTEN_FLESH_POISON_CHANCE,
+  SPRINT_SPEED,
   STUCK_RESET_SECONDS,
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
@@ -107,16 +111,16 @@ import {
   type PlayerId,
   type PlayerState
 } from "./state";
-import { installPlayerAliases, mustGetPlayer } from "./players";
+import { installPlayerAliases, mustGetPlayer, nearestPlayerTo } from "./players";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickStarvation, tickWaterExposure } from "./systems/playerStats";
-import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
+import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, jumpBoostBonus, speedMultiplier, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
-import { applyEnchant, canEnchant, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
+import { applyEnchant, canEnchant, featherFallingReduction, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
 import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
@@ -168,6 +172,12 @@ export type GameEngineOptions = {
   authority?: "local" | "server";
   /** Skip snapshot building entirely (no React shell attached — a server room). */
   headless?: boolean;
+  /**
+   * Create the boot "local" player (default true — the SP shell). A server
+   * room passes false: it starts EMPTY and populates purely via addPlayer on
+   * join, so no phantom player ever exists in a shared world.
+   */
+  bootPlayer?: boolean;
 };
 
 /**
@@ -244,6 +254,7 @@ export class GameEngine {
     // A restored save's own (possibly switched) mode wins; hardcore forces Survival,
     // except after game-over, where the player spectates their dead world.
     const gameMode = gameOver ? "spectator" : hardcore ? "survival" : savedLocal ? restoreGameMode(savedLocal) : (options.gameMode ?? "survival");
+    const bootPlayer = options.bootPlayer ?? true;
     const localPlayer: PlayerState = {
       id: LOCAL_PLAYER_ID,
       position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
@@ -277,13 +288,14 @@ export class GameEngine {
       openContainerIndex: null,
       sleeping: false,
       input: createIdleInput(),
+      remoteMove: null,
       timers: createPlayerTimers()
     };
 
     this.state = installPlayerAliases({
       world,
       blockChanges,
-      players: new Map([[LOCAL_PLAYER_ID, localPlayer]]),
+      players: bootPlayer ? new Map([[LOCAL_PLAYER_ID, localPlayer]]) : new Map(),
       primaryPlayerId: LOCAL_PLAYER_ID,
       difficulty,
       hardcore,
@@ -321,7 +333,7 @@ export class GameEngine {
     });
 
     if (save) {
-      if (savedLocal) this.restorePlayerFields(localPlayer, savedLocal);
+      if (bootPlayer && savedLocal) this.restorePlayerFields(localPlayer, savedLocal);
       this.state.lootedWorldgenChests = new Set(readLootedChests(save));
       // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
       // fungible population, so the world stays alive and pets simply pre-exist.
@@ -347,8 +359,9 @@ export class GameEngine {
     // Safety check: if stuck after load, relocate to a plain — but never for a
     // Spectator, who legitimately loads inside terrain (or low) while noclipping.
     if (
-      !isNoclip(this.state.gameMode) &&
-      (collidesAt(world, this.state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || this.state.player.position.y < 2)
+      bootPlayer &&
+      !isNoclip(localPlayer.gameMode) &&
+      (collidesAt(world, localPlayer.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || localPlayer.position.y < 2)
     ) {
       this.forceUnstuck(localPlayer);
     }
@@ -365,7 +378,8 @@ export class GameEngine {
       } else {
         // A village-less seed (rough/ocean terrain) still gets a few wandering
         // villagers near spawn so trading is never wholly unavailable.
-        const { x, z } = this.state.player.position;
+        const anchor = nearestPlayerTo(this.state, world.sizeX / 2, world.sizeZ / 2);
+        const { x, z } = anchor ? anchor.position : { x: world.sizeX / 2, z: world.sizeZ / 2 };
         spawnMobGroup(this.state, { kind: "villager", hostile: false, count: 3, centerX: x, centerZ: z, radius: RENDER_RADIUS }, this.rng, this.surfaceYAt);
       }
     }
@@ -376,12 +390,79 @@ export class GameEngine {
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
     tickWeather(this.state);
-    this.snapshot = this.buildSnapshot();
+    // A headless room never serves a snapshot (and may have zero players, so
+    // building one would dereference the primary-player aliases).
+    this.snapshot = this.headless ? ({} as GameSnapshot) : this.buildSnapshot();
   }
 
   /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
   setPlayerInput(playerId: PlayerId, input: FrameInput): void {
     mustGetPlayer(this.state, playerId).input = input;
+  }
+
+  /**
+   * Applies one client-authoritative pose (server authority): sanity-clamped
+   * — horizontal speed against the sprint ceiling, vertical against jump/fall
+   * physics — and rejected wholesale on a teleport-sized jump, in which case
+   * the caller snaps the client back (forcePose). Accepted movement is
+   * synthesized into the same summary tickPlayerMotion would have produced,
+   * so hunger drain, distance stats, and fall damage stay server-authoritative
+   * even though walking isn't.
+   *
+   * `elapsedSeconds` is the time since this player's last ACCEPTED pose.
+   */
+  applyRemotePose(
+    playerId: PlayerId,
+    pose: { x: number; y: number; z: number; yaw: number; pitch: number; onGround: boolean },
+    elapsedSeconds: number
+  ): { accepted: boolean } {
+    const player = mustGetPlayer(this.state, playerId);
+    const elapsed = Math.max(elapsedSeconds, 0.01);
+    // A mounted player's pose belongs to the vehicle (server-side); ignore the stream.
+    if (player.mountedVehicleId !== null) return { accepted: false };
+
+    const dx = pose.x - player.position.x;
+    const dz = pose.z - player.position.z;
+    const dy = pose.y - player.position.y;
+    const horizontal = Math.hypot(dx, dz);
+
+    const free = isNoclip(player.gameMode) || (player.isFlying && player.gameMode === "creative");
+    // Generous ceilings: jitter, knockback, and catch-up bursts must not
+    // false-positive; a speedhack is an order of magnitude out anyway.
+    const maxHorizontal = (free ? FLY_SPEED : SPRINT_SPEED * speedMultiplier(player)) * 1.6 * elapsed + 0.5;
+    const maxUp = free ? FLY_SPEED * 1.6 * elapsed + 0.5 : (JUMP_VELOCITY + jumpBoostBonus(player)) * elapsed * 1.6 + 0.6;
+    const maxDown = free ? FLY_SPEED * 1.6 * elapsed + 0.5 : GRAVITY * 2 * Math.max(elapsed, 0.5) * elapsed + 2;
+
+    if (horizontal > maxHorizontal || dy > maxUp || -dy > maxDown) return { accepted: false };
+
+    const wasGrounded = player.onGround;
+    const verticalSpeed = dy / elapsed;
+    player.position.set(pose.x, pose.y, pose.z);
+    player.yaw = pose.yaw;
+    player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pose.pitch));
+    player.onGround = pose.onGround;
+
+    // Landing: the same threshold/formula as tickPlayerMotion, on the
+    // velocity the pose stream implies (Feather Falling honored, armor path).
+    const didLand = !wasGrounded && pose.onGround && verticalSpeed < 0;
+    if (!free && didLand && verticalSpeed < -14) {
+      const raw = Math.min(19, Math.floor((-verticalSpeed - 13) * 0.5));
+      const softened = raw * (1 - featherFallingReduction(player.equippedArmor.boots));
+      this.damageCombat(player, Math.max(1, Math.round(softened)));
+    }
+
+    const moving = horizontal > 1e-3;
+    const didSprint = moving && player.input.move.sprint && !player.input.move.crouch;
+    const previous = player.remoteMove;
+    player.remoteMove = {
+      didSprint,
+      didWalk: moving && !didSprint,
+      didJump: (previous?.didJump ?? false) || (wasGrounded && !pose.onGround && verticalSpeed > 2),
+      didLand: (previous?.didLand ?? false) || didLand,
+      landImpact: didLand ? -verticalSpeed : (previous?.landImpact ?? 0),
+      horizontalDistance: (previous?.horizontalDistance ?? 0) + horizontal
+    };
+    return { accepted: true };
   }
 
   /**
@@ -481,11 +562,19 @@ export class GameEngine {
     // auto-board the player at their post-motion position). tickVehicles is called
     // exactly once per player per frame in either case. Boating reports zero
     // horizontalDistance so it doesn't inflate the walked-distance stat.
+    //
+    // Server authority: each avatar's walking is CLIENT-owned (the pose stream,
+    // clamped by applyRemotePose), so the server never integrates it — it
+    // consumes the movement summary the accepted poses synthesized instead.
     const mounted = player.mountedVehicleId !== null;
     let move: MoveTickResult;
     if (mounted) {
       tickVehicles(state, player, input, dt);
       move = { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
+    } else if (this.authority === "server") {
+      move = player.remoteMove ?? { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
+      player.remoteMove = null;
+      tickVehicles(state, player, input, dt);
     } else {
       move = tickPlayerMotion(state, player, input, dt, (amount) => this.damageCombat(player, amount));
       tickVehicles(state, player, input, dt);
@@ -824,6 +913,11 @@ export class GameEngine {
     this.refreshSnapshot();
   }
 
+  /** The world-type preset this world generates with (a server's welcome message names it). */
+  get worldTypeName(): WorldType {
+    return this.worldType;
+  }
+
   /** Mouse-look: applied directly by the input controller (radians). A server passes the sender's id. */
   applyLook(deltaYaw: number, deltaPitch: number, playerId: PlayerId = this.state.primaryPlayerId): void {
     const player = mustGetPlayer(this.state, playerId);
@@ -874,6 +968,7 @@ export class GameEngine {
       openContainerIndex: null,
       sleeping: false,
       input: createIdleInput(),
+      remoteMove: null,
       timers: createPlayerTimers()
     };
     if (spec.restore) this.restorePlayerFields(player, spec.restore);
@@ -1000,11 +1095,17 @@ export class GameEngine {
    * Folds a gameplay event into the statistics counters, then unlocks any
    * advancement whose threshold the new stats just crossed — adding it to the set
    * (before the emit, so a re-entrant observe is idempotent) and announcing it.
+   *
+   * Progress accrues to the PRIMARY player (SP: the player). On a server the
+   * primary may not exist — per-player attribution of world-event progress is
+   * a known multiplayer refinement; until then a shared world tracks none.
    */
   private observeProgress(event: GameEvent): void {
-    recordEvent(this.state.player, event);
-    for (const id of evaluateAdvancements(this.state.player)) {
-      this.state.advancements.add(id);
+    const primary = this.state.players.get(this.state.primaryPlayerId);
+    if (!primary) return;
+    recordEvent(primary, event);
+    for (const id of evaluateAdvancements(primary)) {
+      primary.advancements.add(id);
       this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title });
     }
   }

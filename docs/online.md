@@ -75,3 +75,23 @@ fixture DDL and the schema module honest against each other.
   mount builds lazily, so `next build` needs no env.
 - **Fly.io** (game server, phase 4): shares `DATABASE_URL` and
   `GAME_TICKET_SECRET` with the web app.
+
+## Game server operations
+
+`server/index.ts` (Bun, no build step — `bun server/index.ts`). One process
+hosts up to `MAX_ROOMS` worlds; each room is an authoritative `GameEngine`
+on the drift-corrected 20 Hz ticker. Rooms load from Postgres on first join,
+persist every 60 s (when dirty), on last-leave, and on SIGTERM (deploys
+drain, ≤60 s loss crash-safe); five idle minutes evicts a room from memory.
+See [protocol.md](protocol.md) for the wire format.
+
+- `GET /health` — liveness (Fly checks hit this).
+- `GET /rooms` — per-room diagnostics (players, tick, slowest-tick ms);
+  requires `Authorization: Bearer $ADMIN_TOKEN`.
+- `PERSISTENCE=memory` runs with no database — local iteration, the
+  Playwright multiplayer spec, and `bun scripts/netProbe.ts` (a CLI client
+  that joins, walks, and tallies traffic — point it at localhost or staging).
+
+Deploy: `server/Dockerfile` + `server/fly.toml` (see file comments). The
+container is platform-neutral — anything that runs a long-lived container
+with WebSocket ingress works.
