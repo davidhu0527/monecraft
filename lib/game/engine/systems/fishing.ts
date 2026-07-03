@@ -11,7 +11,7 @@ import {
 } from "@/lib/game/config";
 import { rollFishingCatch } from "@/lib/game/fishingLoot";
 import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
-import type { EmitGameEvent, GameState } from "../state";
+import type { EmitGameEvent, GameState, PlayerState } from "../state";
 import { lookDirection } from "./playerMotion";
 import { awardXp } from "./xp";
 
@@ -22,8 +22,8 @@ function nextBiteDelay(rng: () => number): number {
   return FISHING_BITE_MIN_SECONDS + rng() * (FISHING_BITE_MAX_SECONDS - FISHING_BITE_MIN_SECONDS);
 }
 
-function isHoldingRod(state: GameState): boolean {
-  const slot = state.inventory[state.selectedSlot];
+function isHoldingRod(player: PlayerState): boolean {
+  const slot = player.inventory[player.selectedSlot];
   return slot?.id === "fishing_rod" && slot.count > 0;
 }
 
@@ -33,34 +33,34 @@ function isHoldingRod(state: GameState): boolean {
  * Returns true whenever a rod is held (it always consumes the right-click), false
  * for any other item so the normal held-item/placement path runs.
  */
-export function tryFish(state: GameState, emit: EmitGameEvent, rng: () => number): boolean {
-  if (!isHoldingRod(state)) return false;
+export function tryFish(state: GameState, player: PlayerState, emit: EmitGameEvent, rng: () => number): boolean {
+  if (!isHoldingRod(player)) return false;
 
-  if (state.fishing) {
-    if (state.fishing.biting) {
+  if (player.fishing) {
+    if (player.fishing.biting) {
       const items = rollFishingCatch(rng);
-      const { x, y, z } = state.fishing.position;
+      const { x, y, z } = player.fishing.position;
       for (const drop of items) {
-        state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+        player.inventory = adjustSlotCount(player.inventory, drop.itemId, drop.count) ?? player.inventory;
       }
-      state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
-      awardXp(state.player, FISHING_XP, emit);
+      player.inventory = consumeToolDurability(player.inventory, player.selectedSlot, 1, rng) ?? player.inventory;
+      awardXp(player, FISHING_XP, emit);
       emit({ type: "fishingCaught", items, x, y, z });
     } else {
       emit({ type: "fishingReeledEmpty" });
     }
-    state.fishing = null;
+    player.fishing = null;
     return true;
   }
 
-  const { world, player } = state;
+  const { world } = state;
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
   lookDirection(player.yaw, player.pitch, scratchDir);
   const cell = waterSurfaceRaycast(world, scratchEye, scratchDir, FISHING_REACH);
   if (!cell) return true; // the rod still claims the click; there's just no water to cast at
 
   const position = new THREE.Vector3(cell.x + 0.5, cell.y + 1, cell.z + 0.5);
-  state.fishing = { position, timer: nextBiteDelay(rng), biting: false };
+  player.fishing = { position, timer: nextBiteDelay(rng), biting: false };
   emit({ type: "fishingCast", x: position.x, y: position.y, z: position.z });
   return true;
 }
@@ -71,20 +71,20 @@ export function tryFish(state: GameState, emit: EmitGameEvent, rng: () => number
  * the cast when the rod is no longer held, the player dies, the targeted water is
  * gone, or the player wanders past the tether.
  */
-export function tickFishing(state: GameState, dt: number, rng: () => number, emit: EmitGameEvent): void {
-  const fishing = state.fishing;
+export function tickFishing(state: GameState, player: PlayerState, dt: number, rng: () => number, emit: EmitGameEvent): void {
+  const fishing = player.fishing;
   if (!fishing) return;
 
   const wx = Math.floor(fishing.position.x);
   const wy = Math.floor(fishing.position.y) - 1;
   const wz = Math.floor(fishing.position.z);
   if (
-    state.isDead ||
-    !isHoldingRod(state) ||
+    player.isDead ||
+    !isHoldingRod(player) ||
     state.world.get(wx, wy, wz) !== BlockId.Water ||
-    state.player.position.distanceTo(fishing.position) > FISHING_TETHER_DISTANCE
+    player.position.distanceTo(fishing.position) > FISHING_TETHER_DISTANCE
   ) {
-    state.fishing = null;
+    player.fishing = null;
     return;
   }
 

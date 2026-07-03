@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { EYE_HEIGHT, PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { countsById } from "@/lib/game/inventory";
-import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState, MobState, PlayerState } from "@/lib/game/engine/state";
 import { tryTameAimedMob, tryToggleSitPet } from "@/lib/game/engine/systems/interact";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
 
@@ -13,13 +13,20 @@ function inventory(items: Array<[string, number]>): InventorySlot[] {
   return slots;
 }
 
-function makeState(slots: InventorySlot[], mob: MobState): GameState {
-  return {
-    player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+function makeState(slots: InventorySlot[], mob: MobState): GameState & PlayerState {
+  const state = {
+    position: new THREE.Vector3(0, 64, 0),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true,
     inventory: slots,
     selectedSlot: 0,
     mobs: [mob]
-  } as unknown as GameState;
+  } as unknown as GameState & PlayerState;
+  // The flat fixture IS its own player (the old single-player shape).
+  (state as { player: unknown }).player = state;
+  return state;
 }
 
 /** A mob two blocks ahead (down -Z) at eye height — directly in the aim cone. */
@@ -43,6 +50,7 @@ describe("tryTameAimedMob", () => {
 
     const consumed = tryTameAimedMob(
       state,
+      state,
       (e) => events.push(e),
       () => 0
     ); // 0 < TAME_CHANCE → success
@@ -63,6 +71,7 @@ describe("tryTameAimedMob", () => {
 
     const consumed = tryTameAimedMob(
       state,
+      state,
       (e) => events.push(e),
       () => 0.9
     ); // 0.9 ≥ TAME_CHANCE → fail
@@ -79,6 +88,7 @@ describe("tryTameAimedMob", () => {
     expect(
       tryTameAimedMob(
         wrong,
+        wrong,
         () => {},
         () => 0
       )
@@ -89,6 +99,7 @@ describe("tryTameAimedMob", () => {
     const owned = makeState(inventory([["bone", 1]]), ownedWolf);
     expect(
       tryTameAimedMob(
+        owned,
         owned,
         () => {},
         () => 0
@@ -104,25 +115,25 @@ describe("tryToggleSitPet", () => {
     const state = makeState(inventory([["diamond_sword", 1]]), pet);
     const events: GameEvent[] = [];
 
-    expect(tryToggleSitPet(state, (e) => events.push(e))).toBe(true);
+    expect(tryToggleSitPet(state, state, (e) => events.push(e))).toBe(true);
     expect(pet.sitting).toBe(true);
     expect(events.some((e) => e.type === "petSitToggled" && e.sitting === true)).toBe(true);
 
-    expect(tryToggleSitPet(state, () => {})).toBe(true);
+    expect(tryToggleSitPet(state, state, () => {})).toBe(true);
     expect(pet.sitting).toBe(false); // toggles back
   });
 
   test("declines a mob you don't own", () => {
     const wild = mobInFront("wolf");
     const state = makeState(inventory([["diamond_sword", 1]]), wild);
-    expect(tryToggleSitPet(state, () => {})).toBe(false);
+    expect(tryToggleSitPet(state, state, () => {})).toBe(false);
     expect(wild.sitting).toBeUndefined();
   });
 
   test("declines while holding the pet's breeding treat (so a breed attempt doesn't flip sitting)", () => {
     const pet = mobInFront("wolf", { owner: "player", faction: "ally" });
     const state = makeState(inventory([["bone", 1]]), pet); // bone is the wolf's breed/tame treat
-    expect(tryToggleSitPet(state, () => {})).toBe(false);
+    expect(tryToggleSitPet(state, state, () => {})).toBe(false);
     expect(pet.sitting).toBeUndefined();
   });
 });

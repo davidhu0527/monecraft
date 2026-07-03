@@ -447,9 +447,9 @@ export class GameEngine {
     tickLavaExposure(state, state.player, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "fire_resistance"));
     tickOxygen(state, state.player, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "water_breathing"));
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
-    tickMining(state, input, dt, this.emit, this.rng);
-    tickThrownSpears(state, dt, this.removeMobAt, this.emit);
-    tickFishing(state, dt, this.rng, this.emit);
+    tickMining(state, state.player, input, dt, this.emit, this.rng);
+    tickThrownSpears(state, state.player, dt, this.removeMobAt, this.emit);
+    tickFishing(state, state.player, dt, this.rng, this.emit);
     tickDayNight(state, dt);
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
@@ -643,24 +643,24 @@ export class GameEngine {
       case "placeBlock": {
         if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
         // Spears consume the right-click/E action before all world interaction.
-        if (tryThrowSelectedSpear(state, this.emit, this.rng)) break;
+        if (tryThrowSelectedSpear(state, state.player, this.emit, this.rng)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
         // Companions: a treat tames a wild wolf/cat; otherwise toggling sit on your
         // own pet. Both run before feeding so the bone/fish tames rather than feeds.
-        if (tryTameAimedMob(state, this.emit, this.rng)) break;
-        if (tryFeedAimedMob(state, this.emit)) break;
-        if (tryToggleSitPet(state, this.emit)) break;
-        if (tryTradeAimedVillager(state, this.emit)) break;
+        if (tryTameAimedMob(state, state.player, this.emit, this.rng)) break;
+        if (tryFeedAimedMob(state, state.player, this.emit)) break;
+        if (tryToggleSitPet(state, state.player, this.emit)) break;
+        if (tryTradeAimedVillager(state, state.player, this.emit)) break;
         if (tryBoardAimedVehicle(state)) break;
-        if (tryInteractBlock(state, this.emit)) break;
+        if (tryInteractBlock(state, state.player, this.emit)) break;
         if (this.trySummonBoss()) break;
         if (this.tryStartRaid()) break;
-        if (tryFish(state, this.emit, this.rng)) break;
+        if (tryFish(state, state.player, this.emit, this.rng)) break;
         if (tryPlaceVehicle(state, this.emit)) break;
-        if (tryUseHeldItem(state, this.emit, this.rng)) break;
-        placeSelectedBlock(state, this.emit);
+        if (tryUseHeldItem(state, state.player, this.emit, this.rng)) break;
+        placeSelectedBlock(state, state.player, this.emit);
         break;
       }
       case "attack": {
@@ -669,22 +669,23 @@ export class GameEngine {
         // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
         // cooldown or with no arrows, but the swing animation still plays.
         if (isBow(state.inventory[state.selectedSlot])) {
-          tryFireBow(state, this.emit, this.rng);
+          tryFireBow(state, state.player, this.emit, this.rng);
           break;
         }
         const heldWeapon = state.inventory[state.selectedSlot];
         const hitKind = tryAttackMob(
           state,
-          weaponDamage(state) + strengthBonus(state.player) + sharpnessBonus(heldWeapon),
+          state.player,
+          weaponDamage(state.player) + strengthBonus(state.player) + sharpnessBonus(heldWeapon),
           this.removeMobAt,
-          weaponReach(state),
+          weaponReach(state.player),
           knockbackBonus(heldWeapon),
           lootingLevel(heldWeapon)
         );
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
           state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
-          resetMining(state);
+          resetMining(state.player);
         }
         break;
       }
@@ -879,7 +880,7 @@ export class GameEngine {
     if (died) {
       if (this.state.hardcore) return void this.triggerGameOver();
       clearEffects(this.state.player);
-      resetMining(this.state);
+      resetMining(this.state.player);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
       this.emit({ type: "playerHurt" });
@@ -892,7 +893,7 @@ export class GameEngine {
     if (died) {
       if (this.state.hardcore) return void this.triggerGameOver();
       clearEffects(this.state.player);
-      resetMining(this.state);
+      resetMining(this.state.player);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
       this.emit({ type: "playerHurt" });
@@ -916,7 +917,7 @@ export class GameEngine {
     state.respawnTimer = 0;
     state.hearts = 0; // the run's final state (bars are hidden in spectator anyway)
     clearEffects(state.player);
-    resetMining(state);
+    resetMining(state.player);
     state.inventoryOpen = false;
     state.craftingStation = null;
     state.openContainerIndex = null;
@@ -1078,7 +1079,7 @@ export class GameEngine {
     state.oxygen = MAX_OXYGEN;
 
     state.isFlying = next === "spectator";
-    resetMining(state);
+    resetMining(state.player);
     state.inventoryOpen = false;
     state.craftingStation = null;
     state.openContainerIndex = null;
@@ -1142,7 +1143,7 @@ export class GameEngine {
     state.player.velocity.set(0, 0, 0);
     state.player.pitch = 0;
     clearEffects(state.player);
-    resetMining(state);
+    resetMining(state.player);
     state.thrownSpears = [];
     state.fishing = null;
     state.worldMeshDirty = true;

@@ -4,14 +4,14 @@ import { BlockId, VoxelWorld } from "@/lib/world";
 import { FISHING_BITE_MAX_SECONDS, FISHING_BITE_MIN_SECONDS, FISHING_BITE_WINDOW_SECONDS } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptyArmorEquipment, createEmptySlot, createSlot } from "@/lib/game/items";
-import type { GameEvent, GameState } from "../state";
+import type { GameEvent, GameState, PlayerState } from "../state";
 import { tickFishing, tryFish } from "./fishing";
 
 /**
  * Minimal GameState with just the fields the fishing system reads. A water surface
  * sits at (8,7,5); the player at (8.5,6,8.5) looking -Z aims straight at it.
  */
-function makeState(): GameState {
+function makeState(): GameState & PlayerState {
   const world = new VoxelWorld(16, 16, 16, 1);
   world.set(8, 7, 5, BlockId.Water); // air above by default → a castable surface
   const inventory = Array.from({ length: 9 }, () => createEmptySlot());
@@ -29,7 +29,7 @@ function makeState(): GameState {
     yaw: 0,
     pitch: 0,
     onGround: true
-  } as unknown as GameState;
+  } as unknown as GameState & PlayerState;
   // The flat fixture IS its own player (the old single-player shape): flat
   // reads and player-scoped helpers bridged via state.player hit one object.
   (state as { player: unknown }).player = state;
@@ -45,7 +45,7 @@ describe("fishing", () => {
   test("right-clicking the rod at water casts a bobber and emits fishingCast", () => {
     const state = makeState();
     const { emit, events } = collector();
-    expect(tryFish(state, emit, () => 0.5)).toBe(true);
+    expect(tryFish(state, state, emit, () => 0.5)).toBe(true);
     expect(state.fishing).not.toBeNull();
     expect(state.fishing!.biting).toBe(false);
     // The cast event carries the bobber position (drives the splash particle).
@@ -60,6 +60,7 @@ describe("fishing", () => {
     const low = makeState();
     tryFish(
       low,
+      low,
       () => {},
       () => 0
     );
@@ -67,6 +68,7 @@ describe("fishing", () => {
 
     const high = makeState();
     tryFish(
+      high,
       high,
       () => {},
       () => 0.999
@@ -79,7 +81,7 @@ describe("fishing", () => {
     const state = makeState();
     state.player.pitch = 1.4; // look up at the sky
     const { emit, events } = collector();
-    expect(tryFish(state, emit, () => 0.5)).toBe(true);
+    expect(tryFish(state, state, emit, () => 0.5)).toBe(true);
     expect(state.fishing).toBeNull();
     expect(events.some((e) => e.type === "fishingCast")).toBe(false);
   });
@@ -88,18 +90,19 @@ describe("fishing", () => {
     const state = makeState();
     state.inventory[0] = createSlot("dirt", 10);
     const { emit } = collector();
-    expect(tryFish(state, emit, () => 0.5)).toBe(false);
+    expect(tryFish(state, state, emit, () => 0.5)).toBe(false);
   });
 
   test("the bobber bites after the delay and emits fishingBite", () => {
     const state = makeState();
     tryFish(
       state,
+      state,
       () => {},
       () => 0
     ); // timer = bite min
     const { emit, events } = collector();
-    tickFishing(state, 5, () => 0, emit); // dt past the whole delay
+    tickFishing(state, state, 5, () => 0, emit); // dt past the whole delay
     expect(state.fishing!.biting).toBe(true);
     expect(events.some((e) => e.type === "fishingBite")).toBe(true);
   });
@@ -108,7 +111,7 @@ describe("fishing", () => {
     const state = makeState();
     state.fishing = { position: new THREE.Vector3(8.5, 8, 5.5), timer: 1, biting: true };
     const { emit, events } = collector();
-    tryFish(state, emit, () => 0); // rng 0 → the common raw fish
+    tryFish(state, state, emit, () => 0); // rng 0 → the common raw fish
     expect(countsById(state.inventory).get("raw_fish")).toBe(1);
     expect(state.inventory[0].durability).toBe(state.inventory[0].maxDurability! - 1);
     expect(state.fishing).toBeNull();
@@ -119,7 +122,7 @@ describe("fishing", () => {
     const state = makeState();
     state.fishing = { position: new THREE.Vector3(8.5, 8, 5.5), timer: 2, biting: false };
     const { emit, events } = collector();
-    tryFish(state, emit, () => 0);
+    tryFish(state, state, emit, () => 0);
     expect(countsById(state.inventory).get("raw_fish")).toBeUndefined();
     expect(state.inventory[0].durability).toBe(state.inventory[0].maxDurability!); // no wear on an empty reel
     expect(state.fishing).toBeNull();
@@ -130,6 +133,7 @@ describe("fishing", () => {
     const state = makeState();
     state.fishing = { position: new THREE.Vector3(8.5, 8, 5.5), timer: 0.01, biting: true };
     tickFishing(
+      state,
       state,
       1,
       () => 0,
@@ -146,6 +150,7 @@ describe("fishing", () => {
     state.selectedSlot = 1; // empty slot
     tickFishing(
       state,
+      state,
       0.1,
       () => 0,
       () => {}
@@ -159,6 +164,7 @@ describe("fishing", () => {
     state.world.set(8, 7, 5, BlockId.Air); // the water under the bobber is gone
     tickFishing(
       state,
+      state,
       0.1,
       () => 0,
       () => {}
@@ -171,6 +177,7 @@ describe("fishing", () => {
     state.fishing = { position: new THREE.Vector3(8.5, 8, 5.5), timer: 2, biting: false };
     state.player.position.set(8.5, 6, 60);
     tickFishing(
+      state,
       state,
       0.1,
       () => 0,
