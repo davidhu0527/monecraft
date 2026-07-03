@@ -16,15 +16,24 @@ function makeState(): GameState {
   world.set(8, 7, 5, BlockId.Water); // air above by default → a castable surface
   const inventory = Array.from({ length: 9 }, () => createEmptySlot());
   inventory[0] = createSlot("fishing_rod", 1);
-  return {
+  const state = {
     world,
     inventory,
     selectedSlot: 0,
     equippedArmor: createEmptyArmorEquipment(),
     fishing: null,
     isDead: false,
-    player: { position: new THREE.Vector3(8.5, 6, 8.5), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true }
+    xp: 0,
+    position: new THREE.Vector3(8.5, 6, 8.5),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true
   } as unknown as GameState;
+  // The flat fixture IS its own player (the old single-player shape): flat
+  // reads and player-scoped helpers bridged via state.player hit one object.
+  (state as { player: unknown }).player = state;
+  return state;
 }
 
 function collector(): { emit: (e: GameEvent) => void; events: GameEvent[] } {

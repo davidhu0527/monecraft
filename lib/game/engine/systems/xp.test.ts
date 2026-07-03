@@ -5,11 +5,11 @@ import { applyEnchant } from "@/lib/game/enchantments";
 import { createEmptyArmorEquipment, createSlot } from "@/lib/game/items";
 import { MOB_XP, xpForMob } from "@/lib/game/mobXp";
 import { awardXp, spendXpLevels, xpForBlock, xpLevel, xpProgress } from "@/lib/game/engine/systems/xp";
-import type { GameEvent, GameState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState, PlayerState } from "@/lib/game/engine/state";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
 
-function makeState(xp = 0, inventory: InventorySlot[] = [], selectedSlot = 0): GameState {
-  return { xp, inventory, selectedSlot, equippedArmor: createEmptyArmorEquipment() } as unknown as GameState;
+function makeState(xp = 0, inventory: InventorySlot[] = [], selectedSlot = 0): GameState & PlayerState {
+  return { xp, inventory, selectedSlot, equippedArmor: createEmptyArmorEquipment() } as unknown as GameState & PlayerState;
 }
 
 describe("xp levels & progress", () => {

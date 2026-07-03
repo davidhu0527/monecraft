@@ -271,7 +271,7 @@ describe("movement and stats", () => {
     const engine = makeEngine();
     calmDaytime(engine);
     run(engine, 1); // settle on the ground
-    addEffect(engine.state, "jump_boost", 60);
+    addEffect(engine.state.player, "jump_boost", 60);
     engine.step(1 / 60, input({ keys: ["Space"] }));
     expect(engine.state.player.velocity.y).toBeCloseTo(JUMP_VELOCITY + EFFECT_JUMP_BOOST_VELOCITY, 5);
   });
@@ -438,7 +438,7 @@ describe("mining", () => {
       state.player.position.z = pz + 0.5;
       state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
       state.inventory[state.selectedSlot] = createSlot("wood_pickaxe", 1);
-      if (haste) addEffect(state, "haste", 60);
+      if (haste) addEffect(state.player, "haste", 60);
       run(engine, 0.5, input({ mineHeld: true }));
       return state.mining.progress;
     };

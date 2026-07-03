@@ -14,7 +14,7 @@ import {
 } from "@/lib/game/config";
 import { BlockId } from "@/lib/world";
 import { createEmptyArmorEquipment } from "@/lib/game/items";
-import { createTimers, type GameEvent, type GameState } from "@/lib/game/engine/state";
+import { createTimers, type GameEvent, type GameState, type PlayerState } from "@/lib/game/engine/state";
 import {
   addEffect,
   clearEffects,
@@ -32,7 +32,7 @@ import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage } fr
 import { tickLavaExposure, tickOxygen } from "@/lib/game/engine/systems/playerStats";
 import type { EffectId } from "@/lib/game/types";
 
-function makeState(overrides: Partial<GameState> = {}): GameState {
+function makeState(overrides: Partial<GameState> = {}): GameState & PlayerState {
   return {
     player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
     gameMode: "survival",
@@ -43,7 +43,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     effects: new Map<EffectId, number>(),
     timers: createTimers(),
     ...overrides
-  } as unknown as GameState;
+  } as unknown as GameState & PlayerState;
 }
 
 /** A world stub whose every cell is `block` — enough for the lava/oxygen gates. */

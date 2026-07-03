@@ -46,7 +46,7 @@ describe("spectator", () => {
   test("is invulnerable", () => {
     const e = makeEngine("spectator");
     e.state.hearts = 6;
-    expect(applyDamageWithArmor(e.state, 100)).toBe(false);
+    expect(applyDamageWithArmor(e.state.player, 100)).toBe(false);
     expect(e.state.hearts).toBe(6);
   });
 

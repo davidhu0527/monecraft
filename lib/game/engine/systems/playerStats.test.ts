@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { HEALTH_REGEN_INTERVAL_SECONDS, MAX_HEARTS, MAX_OXYGEN, STARVATION_INTERVAL_SECONDS } from "@/lib/game/config";
-import { createTimers, type GameState } from "@/lib/game/engine/state";
+import { createTimers, type GameState, type PlayerState } from "@/lib/game/engine/state";
 import { tickHealthRegen, tickStarvation } from "@/lib/game/engine/systems/playerStats";
 import { applyNonLethalDamage, applyUnmitigatedDamage } from "@/lib/game/engine/systems/playerLife";
 import type { Difficulty } from "@/lib/game/difficulties";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { EffectId } from "@/lib/game/types";
 
-function makeState(overrides: Partial<GameState> = {}): GameState {
+function makeState(overrides: Partial<GameState> = {}): GameState & PlayerState {
   return {
     player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
     gameMode: "survival" as GameMode,
@@ -20,16 +20,16 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     effects: new Map<EffectId, number>(),
     timers: createTimers(),
     ...overrides
-  } as unknown as GameState;
+  } as unknown as GameState & PlayerState;
 }
 
 // The same wiring the engine uses: Easy/Normal floor via applyNonLethalDamage,
 // Hard (floor 0) kills via applyUnmitigatedDamage.
-const applyFloored = (state: GameState) => (amount: number, floorHp: number) => void applyNonLethalDamage(state, amount, floorHp);
-const applyLethal = (state: GameState) => (amount: number) => void applyUnmitigatedDamage(state, amount);
+const applyFloored = (state: GameState & PlayerState) => (amount: number, floorHp: number) => void applyNonLethalDamage(state, amount, floorHp);
+const applyLethal = (state: GameState & PlayerState) => (amount: number) => void applyUnmitigatedDamage(state, amount);
 
 /** Advances starvation by `seconds` of game time in one call. */
-function starve(state: GameState, seconds: number): void {
+function starve(state: GameState & PlayerState, seconds: number): void {
   tickStarvation(state, seconds, applyFloored(state), applyLethal(state));
 }
 

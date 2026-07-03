@@ -122,7 +122,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
 
   if (!creative) {
     const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
-    mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(state);
+    mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(state.player);
     if (mining.progress < hardness) return;
   }
 
@@ -164,7 +164,7 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   if (tool && !creative) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
   if (!creative) {
     addBlockDrop(state, targetBlock as BlockId, rng, tool); // Fortune on the tool multiplies ore drops
-    awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
+    awardXp(state.player, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
   }
   state.worldMeshDirty = true;
   resetMining(state);

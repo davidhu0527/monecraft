@@ -30,7 +30,7 @@ describe("adventure", () => {
   test("takes damage like survival (not invulnerable)", () => {
     const e = makeEngine("adventure");
     const before = e.state.hearts;
-    applyDamageWithArmor(e.state, 4);
+    applyDamageWithArmor(e.state.player, 4);
     expect(e.state.hearts).toBe(before - 4);
   });
 

@@ -35,9 +35,9 @@ describe("creative invulnerability", () => {
   test("every damage path no-ops and never kills", () => {
     const e = makeEngine("creative");
     e.state.hearts = 8;
-    expect(applyDamageWithArmor(e.state, 100)).toBe(false);
-    expect(applyUnmitigatedDamage(e.state, 100)).toBe(false);
-    expect(applyNonLethalDamage(e.state, 100, 1)).toBe(false);
+    expect(applyDamageWithArmor(e.state.player, 100)).toBe(false);
+    expect(applyUnmitigatedDamage(e.state.player, 100)).toBe(false);
+    expect(applyNonLethalDamage(e.state.player, 100, 1)).toBe(false);
     expect(e.state.hearts).toBe(8);
     expect(e.state.isDead).toBe(false);
   });

@@ -90,7 +90,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   const canSprint = state.hunger > SPRINT_MIN_HUNGER;
   const sprinting = canSprint && forwardInput > 0 && move.sprint && !crouching;
   const baseSpeed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
-  const speed = baseSpeed * speedMultiplier(state);
+  const speed = baseSpeed * speedMultiplier(player);
 
   player.velocity.x = scratchMoveDir.x * speed;
   player.velocity.z = scratchMoveDir.z * speed;
@@ -106,7 +106,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   } else {
     player.velocity.y -= GRAVITY * dt;
     if (wantsJump && player.onGround && !crouching) {
-      player.velocity.y = JUMP_VELOCITY + jumpBoostBonus(state);
+      player.velocity.y = JUMP_VELOCITY + jumpBoostBonus(player);
       player.onGround = false;
       didJump = true;
     }

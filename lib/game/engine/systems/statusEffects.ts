@@ -11,10 +11,10 @@ import {
   POISON_INTERVAL
 } from "@/lib/game/config";
 import type { EffectId } from "@/lib/game/types";
-import type { EmitGameEvent, GameState } from "../state";
+import type { EmitGameEvent, PlayerState } from "../state";
 
 /**
- * Status-effect core. Effects live in `state.effects` (a Map of id → remaining
+ * Status-effect core. Effects live in `player.effects` (a Map of id → remaining
  * seconds) — session-state that persists across reload (save v6) but is cleared
  * on death. Each effect is read by exactly one seam: Speed multiplies movement
  * (`playerMotion`), Strength adds melee damage (`GameEngine` attack dispatch),
@@ -36,50 +36,50 @@ export const EFFECT_ORDER: readonly EffectId[] = [
   "poison"
 ];
 
-export function hasEffect(state: GameState, id: EffectId): boolean {
-  return (state.effects.get(id) ?? 0) > 0;
+export function hasEffect(player: PlayerState, id: EffectId): boolean {
+  return (player.effects.get(id) ?? 0) > 0;
 }
 
-export function effectRemaining(state: GameState, id: EffectId): number {
-  return state.effects.get(id) ?? 0;
+export function effectRemaining(player: PlayerState, id: EffectId): number {
+  return player.effects.get(id) ?? 0;
 }
 
 /** Adds (or refreshes) an effect to at least `seconds` remaining — never shortens a longer one. */
-export function addEffect(state: GameState, id: EffectId, seconds: number): void {
+export function addEffect(player: PlayerState, id: EffectId, seconds: number): void {
   if (seconds <= 0) return;
-  state.effects.set(id, Math.max(state.effects.get(id) ?? 0, seconds));
+  player.effects.set(id, Math.max(player.effects.get(id) ?? 0, seconds));
 }
 
 /** Drops every active effect and resets the periodic accumulators — used on death/respawn. */
-export function clearEffects(state: GameState): void {
-  state.effects.clear();
-  state.timers.effectRegenTimer = 0;
-  state.timers.effectPoisonTimer = 0;
+export function clearEffects(player: PlayerState): void {
+  player.effects.clear();
+  player.timers.effectRegenTimer = 0;
+  player.timers.effectPoisonTimer = 0;
 }
 
 /** Movement-speed multiplier from the Speed effect (1 when inactive). */
-export function speedMultiplier(state: GameState): number {
-  return hasEffect(state, "speed") ? EFFECT_SPEED_MULTIPLIER : 1;
+export function speedMultiplier(player: PlayerState): number {
+  return hasEffect(player, "speed") ? EFFECT_SPEED_MULTIPLIER : 1;
 }
 
 /** Extra melee damage per hit from the Strength effect (0 when inactive). */
-export function strengthBonus(state: GameState): number {
-  return hasEffect(state, "strength") ? EFFECT_STRENGTH_BONUS : 0;
+export function strengthBonus(player: PlayerState): number {
+  return hasEffect(player, "strength") ? EFFECT_STRENGTH_BONUS : 0;
 }
 
 /** Mining-speed multiplier from the Haste effect (1 when inactive). */
-export function hasteMultiplier(state: GameState): number {
-  return hasEffect(state, "haste") ? EFFECT_HASTE_MULTIPLIER : 1;
+export function hasteMultiplier(player: PlayerState): number {
+  return hasEffect(player, "haste") ? EFFECT_HASTE_MULTIPLIER : 1;
 }
 
 /** Incoming armor-mitigated combat-damage multiplier from the Resistance effect (1 when inactive). */
-export function resistanceMultiplier(state: GameState): number {
-  return hasEffect(state, "resistance") ? EFFECT_RESISTANCE_MULTIPLIER : 1;
+export function resistanceMultiplier(player: PlayerState): number {
+  return hasEffect(player, "resistance") ? EFFECT_RESISTANCE_MULTIPLIER : 1;
 }
 
 /** Extra jump launch velocity from the Jump Boost effect (0 when inactive). */
-export function jumpBoostBonus(state: GameState): number {
-  return hasEffect(state, "jump_boost") ? EFFECT_JUMP_BOOST_VELOCITY : 0;
+export function jumpBoostBonus(player: PlayerState): number {
+  return hasEffect(player, "jump_boost") ? EFFECT_JUMP_BOOST_VELOCITY : 0;
 }
 
 export type StatusEffectDeps = {
@@ -95,36 +95,36 @@ export type StatusEffectDeps = {
  * and before the environmental ticks so the fire-resist / water-breathing gates
  * are current when lava / oxygen read them.
  */
-export function tickStatusEffects(state: GameState, dt: number, deps: StatusEffectDeps): void {
-  for (const [id, remaining] of state.effects) {
+export function tickStatusEffects(player: PlayerState, dt: number, deps: StatusEffectDeps): void {
+  for (const [id, remaining] of player.effects) {
     const next = remaining - dt;
     if (next <= 0) {
-      state.effects.delete(id);
+      player.effects.delete(id);
       deps.emit({ type: "effectExpired", effect: id });
     } else {
-      state.effects.set(id, next);
+      player.effects.set(id, next);
     }
   }
 
   // Regeneration: heal on an independent accumulator, ignoring the hunger gate.
-  if (hasEffect(state, "regeneration")) {
-    state.timers.effectRegenTimer += dt;
-    while (state.timers.effectRegenTimer >= EFFECT_REGEN_INTERVAL) {
-      state.timers.effectRegenTimer -= EFFECT_REGEN_INTERVAL;
-      if (state.hearts < MAX_HEARTS) state.hearts = Math.min(MAX_HEARTS, state.hearts + EFFECT_REGEN_HP);
+  if (hasEffect(player, "regeneration")) {
+    player.timers.effectRegenTimer += dt;
+    while (player.timers.effectRegenTimer >= EFFECT_REGEN_INTERVAL) {
+      player.timers.effectRegenTimer -= EFFECT_REGEN_INTERVAL;
+      if (player.hearts < MAX_HEARTS) player.hearts = Math.min(MAX_HEARTS, player.hearts + EFFECT_REGEN_HP);
     }
   } else {
-    state.timers.effectRegenTimer = 0;
+    player.timers.effectRegenTimer = 0;
   }
 
   // Poison: never-lethal damage over time (the deps wrapper floors at half a heart).
-  if (hasEffect(state, "poison")) {
-    state.timers.effectPoisonTimer += dt;
-    while (state.timers.effectPoisonTimer >= POISON_INTERVAL) {
-      state.timers.effectPoisonTimer -= POISON_INTERVAL;
+  if (hasEffect(player, "poison")) {
+    player.timers.effectPoisonTimer += dt;
+    while (player.timers.effectPoisonTimer >= POISON_INTERVAL) {
+      player.timers.effectPoisonTimer -= POISON_INTERVAL;
       deps.applyPoisonDamage(POISON_HP);
     }
   } else {
-    state.timers.effectPoisonTimer = 0;
+    player.timers.effectPoisonTimer = 0;
   }
 }

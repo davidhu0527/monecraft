@@ -398,7 +398,7 @@ export class GameEngine {
 
     // Death: only mobs and the respawn countdown tick while dead.
     if (state.isDead) {
-      if (tickRespawnTimer(state, dt)) this.respawn();
+      if (tickRespawnTimer(state.player, dt)) this.respawn();
       else {
         tickMobs(state, dt, this.mobTickDeps);
         // Keep ticking so lit fuses and in-flight arrows resolve instead of
@@ -442,10 +442,10 @@ export class GameEngine {
     // Hard (floor 0) can kill via the environmental-damage path.
     tickStarvation(state, dt, this.applyStarvationFloored, this.applyEnvironmentalDamage);
     // Status effects tick here so the fire-resist / water-breathing gates below are current.
-    tickStatusEffects(state, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
+    tickStatusEffects(state.player, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
     tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
-    tickLavaExposure(state, dt, this.applyEnvironmentalDamage, hasEffect(state, "fire_resistance"));
-    tickOxygen(state, dt, this.applyEnvironmentalDamage, hasEffect(state, "water_breathing"));
+    tickLavaExposure(state, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "fire_resistance"));
+    tickOxygen(state, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "water_breathing"));
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
@@ -555,7 +555,7 @@ export class GameEngine {
         // Rotten flesh sometimes poisons — a never-lethal nibble of risk on the
         // most desperate food. Uses the injected rng so the roll is deterministic.
         if (slot.id === "rotten_flesh" && this.rng() < ROTTEN_FLESH_POISON_CHANCE) {
-          addEffect(state, "poison", POISON_DURATION);
+          addEffect(state.player, "poison", POISON_DURATION);
         }
         this.emit({ type: "ateFood" });
         break;
@@ -567,7 +567,7 @@ export class GameEngine {
         const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
         if (!next) break;
         state.inventory = next;
-        addEffect(state, slot.effect.id, slot.effect.durationSeconds);
+        addEffect(state.player, slot.effect.id, slot.effect.durationSeconds);
         this.emit({ type: "drankPotion" });
         break;
       }
@@ -576,7 +576,7 @@ export class GameEngine {
         if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "enchanting") break;
         const slot = state.inventory[state.selectedSlot];
         if (!canEnchant(slot, command.enchant)) break;
-        if (!spendXpLevels(state, ENCHANT_COST_LEVELS)) break; // too few levels
+        if (!spendXpLevels(state.player, ENCHANT_COST_LEVELS)) break; // too few levels
         const next = [...state.inventory];
         next[state.selectedSlot] = applyEnchant(slot, command.enchant);
         state.inventory = next;
@@ -591,7 +591,7 @@ export class GameEngine {
         if (!isAnvilGear(target)) break;
         const sacrifice = findSacrificeIndex(state.inventory, i);
         if (sacrifice < 0 || !wouldCombineHelp(target, state.inventory[sacrifice])) break;
-        if (!spendXpLevels(state, ANVIL_COMBINE_COST_LEVELS)) break;
+        if (!spendXpLevels(state.player, ANVIL_COMBINE_COST_LEVELS)) break;
         const next = [...state.inventory];
         next[i] = combineSlots(target, state.inventory[sacrifice]);
         next[sacrifice] = createEmptySlot();
@@ -606,7 +606,7 @@ export class GameEngine {
         const target = state.inventory[i];
         if (!canMaterialRepair(target, state.inventory)) break;
         const material = repairMaterialFor(target)!;
-        if (!spendXpLevels(state, ANVIL_REPAIR_COST_LEVELS)) break;
+        if (!spendXpLevels(state.player, ANVIL_REPAIR_COST_LEVELS)) break;
         const consumed = inv.adjustSlotCount(state.inventory, material, -1);
         if (!consumed) break; // belt-and-braces: canMaterialRepair already verified stock
         consumed[i] = materialRepair(target);
@@ -621,7 +621,7 @@ export class GameEngine {
         if (!isAnvilGear(slot)) break;
         const name = sanitizeCustomName(command.name);
         if ((slot.customName ?? "") === name) break; // no-op: nothing to charge for
-        if (!spendXpLevels(state, ANVIL_RENAME_COST_LEVELS)) break;
+        if (!spendXpLevels(state.player, ANVIL_RENAME_COST_LEVELS)) break;
         const next = [...state.inventory];
         next[state.selectedSlot] = { ...slot, customName: name || undefined };
         state.inventory = next;
@@ -675,7 +675,7 @@ export class GameEngine {
         const heldWeapon = state.inventory[state.selectedSlot];
         const hitKind = tryAttackMob(
           state,
-          weaponDamage(state) + strengthBonus(state) + sharpnessBonus(heldWeapon),
+          weaponDamage(state) + strengthBonus(state.player) + sharpnessBonus(heldWeapon),
           this.removeMobAt,
           weaponReach(state),
           knockbackBonus(heldWeapon),
@@ -875,10 +875,10 @@ export class GameEngine {
 
   private applyDamage = (amount: number): void => {
     const heartsBefore = this.state.hearts;
-    const died = applyDamageWithArmor(this.state, amount, this.rng);
+    const died = applyDamageWithArmor(this.state.player, amount, this.rng);
     if (died) {
       if (this.state.hardcore) return void this.triggerGameOver();
-      clearEffects(this.state);
+      clearEffects(this.state.player);
       resetMining(this.state);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
@@ -888,10 +888,10 @@ export class GameEngine {
 
   private applyEnvironmentalDamage = (amount: number): void => {
     const heartsBefore = this.state.hearts;
-    const died = applyUnmitigatedDamage(this.state, amount);
+    const died = applyUnmitigatedDamage(this.state.player, amount);
     if (died) {
       if (this.state.hardcore) return void this.triggerGameOver();
-      clearEffects(this.state);
+      clearEffects(this.state.player);
       resetMining(this.state);
       this.emit({ type: "died" });
     } else if (this.state.hearts < heartsBefore) {
@@ -915,7 +915,7 @@ export class GameEngine {
     state.isDead = false;
     state.respawnTimer = 0;
     state.hearts = 0; // the run's final state (bars are hidden in spectator anyway)
-    clearEffects(state);
+    clearEffects(state.player);
     resetMining(state);
     state.inventoryOpen = false;
     state.craftingStation = null;
@@ -926,12 +926,12 @@ export class GameEngine {
 
   /** Poison damage: armor-bypassing but never lethal (floors at half a heart). */
   private applyPoisonDamage = (amount: number): void => {
-    if (applyNonLethalDamage(this.state, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
+    if (applyNonLethalDamage(this.state.player, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
   };
 
   /** Starvation chip on Easy/Normal: armor-bypassing, floored at the difficulty's HP (Hard kills via applyEnvironmentalDamage). */
   private applyStarvationFloored = (amount: number, floorHp: number): void => {
-    if (applyNonLethalDamage(this.state, amount, floorHp)) this.emit({ type: "playerHurt" });
+    if (applyNonLethalDamage(this.state.player, amount, floorHp)) this.emit({ type: "playerHurt" });
   };
 
   /**
@@ -982,7 +982,7 @@ export class GameEngine {
       state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
     }
     // XP on kill, baby-gated like drops; the boss pays a jackpot.
-    if (credit && mob.ageTimer <= 0) awardXp(state, xpForMob(mob.kind), this.emit);
+    if (credit && mob.ageTimer <= 0) awardXp(state.player, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
@@ -1141,7 +1141,7 @@ export class GameEngine {
     }
     state.player.velocity.set(0, 0, 0);
     state.player.pitch = 0;
-    clearEffects(state);
+    clearEffects(state.player);
     resetMining(state);
     state.thrownSpears = [];
     state.fishing = null;
