@@ -100,6 +100,22 @@ export function nearestPlayerTo(state: GameState, x: number, z: number): PlayerS
 }
 
 /**
+ * True when every player who COULD sleep is in bed — the gate for the sleep
+ * fade. Dead players and spectators don't count against the night skip (a
+ * spectator can't reach a bed; a dead player is about to respawn anyway).
+ * Single-player: the one player climbing into bed satisfies it immediately.
+ */
+export function allEligiblePlayersSleeping(state: GameState): boolean {
+  let sleepers = 0;
+  for (const player of state.players.values()) {
+    if (player.isDead || player.gameMode === "spectator") continue;
+    if (!player.sleeping) return false;
+    sleepers += 1;
+  }
+  return sleepers > 0;
+}
+
+/**
  * Nearest player hostiles may hunt — Creative/Spectator players aren't a
  * threat target (mobsThreaten), so they're skipped. Null when nobody is
  * huntable (or the world is empty, e.g. an idle server room).

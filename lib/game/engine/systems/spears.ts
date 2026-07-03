@@ -50,8 +50,7 @@ function segmentHitFraction(spear: ThrownSpearState, displacement: THREE.Vector3
   return scratchClosest.distanceToSquared(mobPosition) <= radius * radius ? fraction : null;
 }
 
-export function tickThrownSpears(state: GameState, player: PlayerState, dt: number, removeMobAt: (index: number) => void, emit: EmitGameEvent): void {
-  player.timers.spearThrowCooldown = Math.max(0, player.timers.spearThrowCooldown - dt);
+export function tickThrownSpears(state: GameState, dt: number, removeMobAt: (index: number) => void, emit: EmitGameEvent): void {
   if (state.thrownSpears.length === 0) return;
 
   const survivors: ThrownSpearState[] = [];

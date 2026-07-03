@@ -95,6 +95,7 @@ import type { InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/
 import { createBlockChangeTracker } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import {
+  createIdleInput,
   createPlayerTimers,
   createWorldTimers,
   LOCAL_PLAYER_ID,
@@ -103,9 +104,10 @@ import {
   type GameEvent,
   type GameSnapshot,
   type GameState,
+  type PlayerId,
   type PlayerState
 } from "./state";
-import { installPlayerAliases } from "./players";
+import { installPlayerAliases, mustGetPlayer } from "./players";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
@@ -157,6 +159,15 @@ export type GameEngineOptions = {
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
   worldSize?: { x: number; y: number; z: number };
+  /**
+   * Who owns pause semantics: "local" (default) honors the pause command and
+   * freezes the world while the primary player is dead — the single-player
+   * feel. "server" ignores pause and never freezes for one death (a shared
+   * world keeps running); weather stays clear (clients derive their own).
+   */
+  authority?: "local" | "server";
+  /** Skip snapshot building entirely (no React shell attached — a server room). */
+  headless?: boolean;
 };
 
 /**
@@ -167,6 +178,9 @@ export type GameEngineOptions = {
  */
 export class GameEngine {
   readonly state: GameState;
+  /** See GameEngineOptions.authority — "local" is the single-player shell. */
+  readonly authority: "local" | "server";
+  private readonly headless: boolean;
   private readonly rng: () => number;
   private readonly worldType: WorldType;
   private readonly surfaceYAt: SurfaceYAtFn;
@@ -186,6 +200,8 @@ export class GameEngine {
   constructor(options: GameEngineOptions = {}) {
     const save = options.save ?? null;
     this.rng = options.rng ?? Math.random;
+    this.authority = options.authority ?? "local";
+    this.headless = options.headless ?? false;
 
     const seed = save?.seed ?? options.seed ?? Math.floor(Math.random() * 2147483647);
     // A restored save's own type wins (the block-diffs were recorded against it);
@@ -259,6 +275,8 @@ export class GameEngine {
       craftingStation: null,
       activeVillagerProfession: null,
       openContainerIndex: null,
+      sleeping: false,
+      input: createIdleInput(),
       timers: createPlayerTimers()
     };
 
@@ -332,7 +350,7 @@ export class GameEngine {
       !isNoclip(this.state.gameMode) &&
       (collidesAt(world, this.state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || this.state.player.position.y < 2)
     ) {
-      this.forceUnstuck();
+      this.forceUnstuck(localPlayer);
     }
 
     spawnInitialMobs(this.state, this.rng, this.surfaceYAt);
@@ -361,36 +379,39 @@ export class GameEngine {
     this.snapshot = this.buildSnapshot();
   }
 
-  /** Advances the simulation by dt seconds. The renderer draws the state afterwards. */
-  step(dt: number, input: FrameInput): void {
+  /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
+  setPlayerInput(playerId: PlayerId, input: FrameInput): void {
+    mustGetPlayer(this.state, playerId).input = input;
+  }
+
+  /**
+   * Advances the simulation by dt seconds. The renderer draws the state
+   * afterwards. `input` is the SP shell's live FrameInput for the primary
+   * player; a server omits it and feeds every player via setPlayerInput.
+   */
+  step(dt: number, input?: FrameInput): void {
     const state = this.state;
     if (state.paused) {
       // Full freeze: mobs, the day clock, mining, and stats all stop.
       this.refreshSnapshot();
       return;
     }
+    const primary = state.players.get(state.primaryPlayerId) ?? null;
+    if (input && primary) primary.input = input;
     // The HUD indicator still reads (and names) CapsLock, but the engine only
     // knows the abstract sprint intent — the binding lives in the controller.
-    state.capsActive = input.move.sprint;
+    if (primary) state.capsActive = primary.input.move.sprint;
 
-    // Stuck detection / auto-unstuck — skipped for Spectator, which legitimately
-    // sits inside terrain while noclipping and must never be teleported out.
-    if (!isNoclip(state.gameMode)) {
-      const inBadState = collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2;
-      state.timers.stuckTimer = inBadState ? state.timers.stuckTimer + dt : 0;
-      if (state.timers.stuckTimer > STUCK_RESET_SECONDS) {
-        this.forceUnstuck();
-        state.timers.stuckTimer = 0;
-      }
-    }
-
-    // Death: only mobs and the respawn countdown tick while dead.
-    if (state.isDead) {
-      if (tickRespawnTimer(state.player, dt)) this.respawn();
+    // Single-player death semantics: while the (primary) player is dead, only
+    // mobs, lit fuses, and in-flight arrows tick. An authoritative server never
+    // freezes a shared world for one death — each player's respawn countdown
+    // runs inside their own per-player step below instead.
+    if (this.authority === "local" && primary?.isDead) {
+      if (tickRespawnTimer(primary, dt)) this.respawn(primary);
       else {
         tickMobs(state, dt, this.mobTickDeps);
         // Keep ticking so lit fuses and in-flight arrows resolve instead of
-        // freezing for the respawn countdown; applyDamage no-ops while dead.
+        // freezing for the respawn countdown; damage no-ops while dead.
         tickPrimedTnt(state, dt, this.mobTickDeps);
         tickProjectiles(state, dt, this.mobTickDeps);
       }
@@ -399,6 +420,8 @@ export class GameEngine {
     }
 
     // Sleeping: a full freeze during the fade, then a jump to the next morning.
+    // The fade only ever engages once EVERY eligible player is in bed (see
+    // interactBed), so the freeze is fair in multiplayer too.
     if (state.sleepTimer > 0) {
       state.sleepTimer = Math.max(0, state.sleepTimer - dt);
       if (state.sleepTimer === 0) this.wakeToMorning();
@@ -406,38 +429,10 @@ export class GameEngine {
       return;
     }
 
-    // While mounted, the vehicle drives the player and normal walking physics are
-    // skipped; otherwise player motion runs first, then vehicles tick (so a ship can
-    // auto-board the player at their post-motion position). tickVehicles is called
-    // exactly once per frame in either case. Boating reports zero horizontalDistance so
-    // it doesn't inflate the walked-distance stat.
-    const mounted = state.mountedVehicleId !== null;
-    let move: MoveTickResult;
-    if (mounted) {
-      tickVehicles(state, state.player, input, dt);
-      move = { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
-    } else {
-      move = tickPlayerMotion(state, state.player, input, dt, this.applyDamage);
-      tickVehicles(state, state.player, input, dt);
+    for (const player of state.players.values()) {
+      this.stepPlayer(player, dt);
     }
-    if (move.didJump) this.emit({ type: "jumped" });
-    if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
-    // Tick-driven display stats (no event, so out of the advancement path).
-    recordTick(state.player, dt, move.horizontalDistance);
-    tickHungerDrain(state.player, move);
-    tickHealthRegen(state, state.player, dt);
-    // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
-    // Hard (floor 0) can kill via the environmental-damage path.
-    tickStarvation(state, state.player, dt, this.applyStarvationFloored, this.applyEnvironmentalDamage);
-    // Status effects tick here so the fire-resist / water-breathing gates below are current.
-    tickStatusEffects(state.player, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
-    tickWaterExposure(state, state.player, dt, this.applyEnvironmentalDamage);
-    tickLavaExposure(state, state.player, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "fire_resistance"));
-    tickOxygen(state, state.player, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "water_breathing"));
-    state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
-    tickMining(state, state.player, input, dt, this.emit, this.rng);
-    tickThrownSpears(state, state.player, dt, this.removeMobAt, this.emit);
-    tickFishing(state, state.player, dt, this.rng, this.emit);
+
     tickDayNight(state, dt);
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
@@ -447,6 +442,7 @@ export class GameEngine {
     tickMobs(state, dt, this.mobTickDeps);
     tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
+    tickThrownSpears(state, dt, this.removeMobAt, this.emit);
     tickBreeding(state, dt, this.rng, this.surfaceYAt, this.emit);
     tickRaid(state, dt, { surfaceYAt: this.surfaceYAt, rng: this.rng, emit: this.emit });
     this.tickDebugInfo(dt);
@@ -454,50 +450,128 @@ export class GameEngine {
     this.refreshSnapshot();
   }
 
-  /** Applies a discrete player intent. */
-  dispatch(command: Command): void {
+  /** One player's slice of a step: body, hazards, activities — everything scoped to that avatar. */
+  private stepPlayer(player: PlayerState, dt: number): void {
     const state = this.state;
+    const input = player.input;
+    const damageEnv = (amount: number): void => this.damageEnvironmental(player, amount);
+
+    // A dead player's respawn countdown (the server path — the SP world freeze
+    // handled this branch before the loop).
+    if (player.isDead) {
+      if (tickRespawnTimer(player, dt)) this.respawn(player);
+      return;
+    }
+    // A sleeping player is immobilized until everyone joins them (or they wake).
+    if (player.sleeping) return;
+
+    // Stuck detection / auto-unstuck — skipped for Spectator, which legitimately
+    // sits inside terrain while noclipping and must never be teleported out.
+    if (!isNoclip(player.gameMode)) {
+      const inBadState = collidesAt(state.world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || player.position.y < 2;
+      player.timers.stuckTimer = inBadState ? player.timers.stuckTimer + dt : 0;
+      if (player.timers.stuckTimer > STUCK_RESET_SECONDS) {
+        this.forceUnstuck(player);
+        player.timers.stuckTimer = 0;
+      }
+    }
+
+    // While mounted, the vehicle drives the player and normal walking physics are
+    // skipped; otherwise player motion runs first, then vehicles tick (so a ship can
+    // auto-board the player at their post-motion position). tickVehicles is called
+    // exactly once per player per frame in either case. Boating reports zero
+    // horizontalDistance so it doesn't inflate the walked-distance stat.
+    const mounted = player.mountedVehicleId !== null;
+    let move: MoveTickResult;
+    if (mounted) {
+      tickVehicles(state, player, input, dt);
+      move = { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
+    } else {
+      move = tickPlayerMotion(state, player, input, dt, (amount) => this.damageCombat(player, amount));
+      tickVehicles(state, player, input, dt);
+    }
+    if (move.didJump) this.emit({ type: "jumped" });
+    if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
+    // Tick-driven display stats (no event, so out of the advancement path).
+    recordTick(player, dt, move.horizontalDistance);
+    tickHungerDrain(player, move);
+    tickHealthRegen(state, player, dt);
+    // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
+    // Hard (floor 0) can kill via the environmental-damage path.
+    tickStarvation(
+      state,
+      player,
+      dt,
+      (amount, floorHp) => {
+        if (applyNonLethalDamage(player, amount, floorHp)) this.emit({ type: "playerHurt" });
+      },
+      damageEnv
+    );
+    // Status effects tick here so the fire-resist / water-breathing gates below are current.
+    tickStatusEffects(player, dt, {
+      applyPoisonDamage: (amount) => {
+        if (applyNonLethalDamage(player, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
+      },
+      emit: this.emit
+    });
+    tickWaterExposure(state, player, dt, damageEnv);
+    tickLavaExposure(state, player, dt, damageEnv, hasEffect(player, "fire_resistance"));
+    tickOxygen(state, player, dt, damageEnv, hasEffect(player, "water_breathing"));
+    player.timers.bowCooldownTimer = Math.max(0, player.timers.bowCooldownTimer - dt);
+    player.timers.spearThrowCooldown = Math.max(0, player.timers.spearThrowCooldown - dt);
+    tickMining(state, player, input, dt, this.emit, this.rng);
+    tickFishing(state, player, dt, this.rng, this.emit);
+  }
+
+  /**
+   * Applies a discrete player intent. `playerId` says whose intent it is —
+   * the single-player shell omits it (primary); a server passes the sender's
+   * id, so every mutation in here acts on the commanding player.
+   */
+  dispatch(command: Command, playerId: PlayerId = this.state.primaryPlayerId): void {
+    const state = this.state;
+    const player = mustGetPlayer(state, playerId);
     switch (command.type) {
       case "selectSlot": {
-        if (command.index >= 0 && command.index < Math.min(HOTBAR_SLOTS, state.inventory.length)) {
-          state.selectedSlot = command.index;
+        if (command.index >= 0 && command.index < Math.min(HOTBAR_SLOTS, player.inventory.length)) {
+          player.selectedSlot = command.index;
         }
         break;
       }
       case "toggleInventory": {
-        if (!canInteract(state.gameMode)) break; // Spectator has no inventory
-        state.inventoryOpen = !state.inventoryOpen;
-        if (state.inventoryOpen) state.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
-        if (!state.inventoryOpen) {
-          state.craftingStation = null; // leaving the panel closes the station
-          state.activeVillagerProfession = null; // ...and the open villager's trades
-          state.openContainerIndex = null; // ...and the open chest
+        if (!canInteract(player.gameMode)) break; // Spectator has no inventory
+        player.inventoryOpen = !player.inventoryOpen;
+        if (player.inventoryOpen) player.advancementsOpen = false; // the two full-screen overlays are mutually exclusive
+        if (!player.inventoryOpen) {
+          player.craftingStation = null; // leaving the panel closes the station
+          player.activeVillagerProfession = null; // ...and the open villager's trades
+          player.openContainerIndex = null; // ...and the open chest
         }
         break;
       }
       case "toggleAdvancements": {
         // A read-only progression overlay — available in any mode (even Spectator).
-        state.advancementsOpen = !state.advancementsOpen;
-        if (state.advancementsOpen) {
-          state.inventoryOpen = false; // mutually exclusive with the inventory panel
-          state.craftingStation = null;
-          state.activeVillagerProfession = null;
-          state.openContainerIndex = null;
+        player.advancementsOpen = !player.advancementsOpen;
+        if (player.advancementsOpen) {
+          player.inventoryOpen = false; // mutually exclusive with the inventory panel
+          player.craftingStation = null;
+          player.activeVillagerProfession = null;
+          player.openContainerIndex = null;
         }
         break;
       }
       case "craft": {
         const recipe = RECIPES.find((entry) => entry.id === command.recipeId);
-        if (!recipe || state.isDead || !canInteract(state.gameMode)) break;
+        if (!recipe || player.isDead || !canInteract(player.gameMode)) break;
         // Station recipes (e.g. furnace smelting) require that station to be open.
         // The UI gates these too, but dispatch is the spoofable surface to guard.
-        if (recipe.station && recipe.station !== state.craftingStation) break;
+        if (recipe.station && recipe.station !== player.craftingStation) break;
         // A villager trade additionally requires the open villager's profession —
         // you can't craft a blacksmith trade while talking to a farmer.
-        if (recipe.station === "villager" && tradeProfession(recipe.id) !== state.activeVillagerProfession) break;
-        const next = inv.craft(state.inventory, recipe);
+        if (recipe.station === "villager" && tradeProfession(recipe.id) !== player.activeVillagerProfession) break;
+        const next = inv.craft(player.inventory, recipe);
         if (!next) break;
-        state.inventory = next;
+        player.inventory = next;
         // A broadly-useful craft signal: drives items_crafted + the craft/brew/trade
         // advancements. Station recipes still emit `smelted` for the audio director.
         this.emit({ type: "crafted", recipeId: recipe.id });
@@ -505,193 +579,193 @@ export class GameEngine {
         break;
       }
       case "swapSlots": {
-        if (!canInteract(state.gameMode)) break;
-        state.inventory = inv.swapSlots(state.inventory, command.from, command.to) ?? state.inventory;
+        if (!canInteract(player.gameMode)) break;
+        player.inventory = inv.swapSlots(player.inventory, command.from, command.to) ?? player.inventory;
         break;
       }
       case "moveStack": {
-        if (!canInteract(state.gameMode)) break;
+        if (!canInteract(player.gameMode)) break;
         this.applyMoveStack(command.from, command.to);
         break;
       }
       case "toggleEquipArmor": {
-        if (!canInteract(state.gameMode)) break;
-        const equip = inv.toggleEquipArmor(state.inventory, state.equippedArmor, command.index);
+        if (!canInteract(player.gameMode)) break;
+        const equip = inv.toggleEquipArmor(player.inventory, player.equippedArmor, command.index);
         if (equip) {
-          state.inventory = equip.slots;
-          state.equippedArmor = equip.equipped;
+          player.inventory = equip.slots;
+          player.equippedArmor = equip.equipped;
         }
         break;
       }
       case "unequipArmor": {
-        if (!canInteract(state.gameMode)) break;
-        const unequip = inv.unequipArmor(state.inventory, state.equippedArmor, command.slot);
+        if (!canInteract(player.gameMode)) break;
+        const unequip = inv.unequipArmor(player.inventory, player.equippedArmor, command.slot);
         if (unequip) {
-          state.inventory = unequip.slots;
-          state.equippedArmor = unequip.equipped;
+          player.inventory = unequip.slots;
+          player.equippedArmor = unequip.equipped;
         }
         break;
       }
       case "eatFood": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
-        const slot = state.inventory[state.selectedSlot];
+        if (player.isDead || player.inventoryOpen || state.sleepTimer > 0 || !canInteract(player.gameMode)) break;
+        const slot = player.inventory[player.selectedSlot];
         if (!slot?.id || slot.kind !== "food" || !slot.hunger || slot.count <= 0) break;
-        const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
+        const next = inv.adjustSlotCount(player.inventory, slot.id, -1, player.selectedSlot);
         if (!next) break;
-        state.inventory = next;
-        state.hunger = restoreHunger(state.hunger, slot.hunger);
+        player.inventory = next;
+        player.hunger = restoreHunger(player.hunger, slot.hunger);
         // Rotten flesh sometimes poisons — a never-lethal nibble of risk on the
         // most desperate food. Uses the injected rng so the roll is deterministic.
         if (slot.id === "rotten_flesh" && this.rng() < ROTTEN_FLESH_POISON_CHANCE) {
-          addEffect(state.player, "poison", POISON_DURATION);
+          addEffect(player, "poison", POISON_DURATION);
         }
         this.emit({ type: "ateFood" });
         break;
       }
       case "drinkPotion": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
-        const slot = state.inventory[state.selectedSlot];
+        if (player.isDead || player.inventoryOpen || state.sleepTimer > 0 || !canInteract(player.gameMode)) break;
+        const slot = player.inventory[player.selectedSlot];
         if (!slot?.id || !slot.effect || slot.count <= 0) break;
-        const next = inv.adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
+        const next = inv.adjustSlotCount(player.inventory, slot.id, -1, player.selectedSlot);
         if (!next) break;
-        state.inventory = next;
-        addEffect(state.player, slot.effect.id, slot.effect.durationSeconds);
+        player.inventory = next;
+        addEffect(player, slot.effect.id, slot.effect.durationSeconds);
         this.emit({ type: "drankPotion" });
         break;
       }
       case "enchant": {
         // Only at an open enchanting table; applies to the selected item instance.
-        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "enchanting") break;
-        const slot = state.inventory[state.selectedSlot];
+        if (player.isDead || !canInteract(player.gameMode) || player.craftingStation !== "enchanting") break;
+        const slot = player.inventory[player.selectedSlot];
         if (!canEnchant(slot, command.enchant)) break;
-        if (!spendXpLevels(state.player, ENCHANT_COST_LEVELS)) break; // too few levels
-        const next = [...state.inventory];
-        next[state.selectedSlot] = applyEnchant(slot, command.enchant);
-        state.inventory = next;
+        if (!spendXpLevels(player, ENCHANT_COST_LEVELS)) break; // too few levels
+        const next = [...player.inventory];
+        next[player.selectedSlot] = applyEnchant(slot, command.enchant);
+        player.inventory = next;
         this.emit({ type: "enchanted", enchant: command.enchant });
         break;
       }
       case "anvilCombine": {
         // Combine a duplicate of the selected gear into it: repair + merge enchants.
-        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "anvil") break;
-        const i = state.selectedSlot;
-        const target = state.inventory[i];
+        if (player.isDead || !canInteract(player.gameMode) || player.craftingStation !== "anvil") break;
+        const i = player.selectedSlot;
+        const target = player.inventory[i];
         if (!isAnvilGear(target)) break;
-        const sacrifice = findSacrificeIndex(state.inventory, i);
-        if (sacrifice < 0 || !wouldCombineHelp(target, state.inventory[sacrifice])) break;
-        if (!spendXpLevels(state.player, ANVIL_COMBINE_COST_LEVELS)) break;
-        const next = [...state.inventory];
-        next[i] = combineSlots(target, state.inventory[sacrifice]);
+        const sacrifice = findSacrificeIndex(player.inventory, i);
+        if (sacrifice < 0 || !wouldCombineHelp(target, player.inventory[sacrifice])) break;
+        if (!spendXpLevels(player, ANVIL_COMBINE_COST_LEVELS)) break;
+        const next = [...player.inventory];
+        next[i] = combineSlots(target, player.inventory[sacrifice]);
         next[sacrifice] = createEmptySlot();
-        state.inventory = next;
+        player.inventory = next;
         this.emit({ type: "anvilCombined" });
         break;
       }
       case "anvilRepair": {
         // Repair the selected gear by consuming one unit of its tier material.
-        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "anvil") break;
-        const i = state.selectedSlot;
-        const target = state.inventory[i];
-        if (!canMaterialRepair(target, state.inventory)) break;
+        if (player.isDead || !canInteract(player.gameMode) || player.craftingStation !== "anvil") break;
+        const i = player.selectedSlot;
+        const target = player.inventory[i];
+        if (!canMaterialRepair(target, player.inventory)) break;
         const material = repairMaterialFor(target)!;
-        if (!spendXpLevels(state.player, ANVIL_REPAIR_COST_LEVELS)) break;
-        const consumed = inv.adjustSlotCount(state.inventory, material, -1);
+        if (!spendXpLevels(player, ANVIL_REPAIR_COST_LEVELS)) break;
+        const consumed = inv.adjustSlotCount(player.inventory, material, -1);
         if (!consumed) break; // belt-and-braces: canMaterialRepair already verified stock
         consumed[i] = materialRepair(target);
-        state.inventory = consumed;
+        player.inventory = consumed;
         this.emit({ type: "anvilRepaired" });
         break;
       }
       case "anvilRename": {
         // Rename the selected durable item (or clear the name with "").
-        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "anvil") break;
-        const slot = state.inventory[state.selectedSlot];
+        if (player.isDead || !canInteract(player.gameMode) || player.craftingStation !== "anvil") break;
+        const slot = player.inventory[player.selectedSlot];
         if (!isAnvilGear(slot)) break;
         const name = sanitizeCustomName(command.name);
         if ((slot.customName ?? "") === name) break; // no-op: nothing to charge for
-        if (!spendXpLevels(state.player, ANVIL_RENAME_COST_LEVELS)) break;
-        const next = [...state.inventory];
-        next[state.selectedSlot] = { ...slot, customName: name || undefined };
-        state.inventory = next;
+        if (!spendXpLevels(player, ANVIL_RENAME_COST_LEVELS)) break;
+        const next = [...player.inventory];
+        next[player.selectedSlot] = { ...slot, customName: name || undefined };
+        player.inventory = next;
         this.emit({ type: "anvilRenamed" });
         break;
       }
       case "grindstoneStrip": {
         // Strip the selected gear's enchantments, refunding XP for them.
-        if (state.isDead || !canInteract(state.gameMode) || state.craftingStation !== "grindstone") break;
-        const slot = state.inventory[state.selectedSlot];
+        if (player.isDead || !canInteract(player.gameMode) || player.craftingStation !== "grindstone") break;
+        const slot = player.inventory[player.selectedSlot];
         if (!canStripEnchantments(slot)) break;
-        state.xp += enchantRefund(slot);
-        const next = [...state.inventory];
-        next[state.selectedSlot] = stripEnchantments(slot);
-        state.inventory = next;
+        player.xp += enchantRefund(slot);
+        const next = [...player.inventory];
+        next[player.selectedSlot] = stripEnchantments(slot);
+        player.inventory = next;
         this.emit({ type: "grindstoneStripped" });
         break;
       }
       case "placeBlock": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
+        if (player.isDead || player.inventoryOpen || state.sleepTimer > 0 || !canInteract(player.gameMode)) break;
         // Spears consume the right-click/E action before all world interaction.
-        if (tryThrowSelectedSpear(state, state.player, this.emit, this.rng)) break;
+        if (tryThrowSelectedSpear(state, player, this.emit, this.rng)) break;
         // Right-click precedence: feed an aimed animal, then interact with the
         // aimed block (bed, furnace), then use the held item (hoe, seeds); only
         // place a block if none of those consumed the click.
         // Companions: a treat tames a wild wolf/cat; otherwise toggling sit on your
         // own pet. Both run before feeding so the bone/fish tames rather than feeds.
-        if (tryTameAimedMob(state, state.player, this.emit, this.rng)) break;
-        if (tryFeedAimedMob(state, state.player, this.emit)) break;
-        if (tryToggleSitPet(state, state.player, this.emit)) break;
-        if (tryTradeAimedVillager(state, state.player, this.emit)) break;
-        if (tryBoardAimedVehicle(state, state.player)) break;
-        if (tryInteractBlock(state, state.player, this.emit)) break;
-        if (this.trySummonBoss()) break;
-        if (this.tryStartRaid()) break;
-        if (tryFish(state, state.player, this.emit, this.rng)) break;
-        if (tryPlaceVehicle(state, state.player, this.emit)) break;
-        if (tryUseHeldItem(state, state.player, this.emit, this.rng)) break;
-        placeSelectedBlock(state, state.player, this.emit);
+        if (tryTameAimedMob(state, player, this.emit, this.rng)) break;
+        if (tryFeedAimedMob(state, player, this.emit)) break;
+        if (tryToggleSitPet(state, player, this.emit)) break;
+        if (tryTradeAimedVillager(state, player, this.emit)) break;
+        if (tryBoardAimedVehicle(state, player)) break;
+        if (tryInteractBlock(state, player, this.emit)) break;
+        if (this.trySummonBoss(player)) break;
+        if (this.tryStartRaid(player)) break;
+        if (tryFish(state, player, this.emit, this.rng)) break;
+        if (tryPlaceVehicle(state, player, this.emit)) break;
+        if (tryUseHeldItem(state, player, this.emit, this.rng)) break;
+        placeSelectedBlock(state, player, this.emit);
         break;
       }
       case "attack": {
-        if (state.isDead || state.inventoryOpen || state.sleepTimer > 0 || !canInteract(state.gameMode)) break;
+        if (player.isDead || player.inventoryOpen || state.sleepTimer > 0 || !canInteract(player.gameMode)) break;
         this.emit({ type: "attackSwung" });
         // A held bow fires arrows instead of meleeing; tryFireBow no-ops on
         // cooldown or with no arrows, but the swing animation still plays.
-        if (isBow(state.inventory[state.selectedSlot])) {
-          tryFireBow(state, state.player, this.emit, this.rng);
+        if (isBow(player.inventory[player.selectedSlot])) {
+          tryFireBow(state, player, this.emit, this.rng);
           break;
         }
-        const heldWeapon = state.inventory[state.selectedSlot];
+        const heldWeapon = player.inventory[player.selectedSlot];
         const hitKind = tryAttackMob(
           state,
-          state.player,
-          weaponDamage(state.player) + strengthBonus(state.player) + sharpnessBonus(heldWeapon),
+          player,
+          weaponDamage(player) + strengthBonus(player) + sharpnessBonus(heldWeapon),
           this.removeMobAt,
-          weaponReach(state.player),
+          weaponReach(player),
           knockbackBonus(heldWeapon),
           lootingLevel(heldWeapon)
         );
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
-          state.inventory = inv.consumeToolDurability(state.inventory, state.selectedSlot, 1, this.rng) ?? state.inventory;
-          resetMining(state.player);
+          player.inventory = inv.consumeToolDurability(player.inventory, player.selectedSlot, 1, this.rng) ?? player.inventory;
+          resetMining(player);
         }
         break;
       }
       case "toggleFlight": {
         // Creative only — Spectator is permanently airborne, survival can't fly.
-        if (state.gameMode !== "creative" || state.isDead || state.inventoryOpen) break;
-        state.isFlying = !state.isFlying;
+        if (player.gameMode !== "creative" || player.isDead || player.inventoryOpen) break;
+        player.isFlying = !player.isFlying;
         break;
       }
       case "creativeGiveItem": {
         // Pulls a full stack from the creative palette into the inventory
         // (lowest empty slot first, so it lands on the hotbar). Creative only.
-        if (state.gameMode !== "creative" || !ITEM_DEF_BY_ID[command.itemId]) break;
-        state.inventory = inv.adjustSlotCount(state.inventory, command.itemId, maxStackSizeForItem(command.itemId), state.selectedSlot) ?? state.inventory;
+        if (player.gameMode !== "creative" || !ITEM_DEF_BY_ID[command.itemId]) break;
+        player.inventory = inv.adjustSlotCount(player.inventory, command.itemId, maxStackSizeForItem(command.itemId), player.selectedSlot) ?? player.inventory;
         break;
       }
       case "setGameMode": {
-        this.switchGameMode(command.mode);
+        this.switchGameMode(player, command.mode);
         break;
       }
       case "setDifficulty": {
@@ -699,19 +773,22 @@ export class GameEngine {
         break;
       }
       case "unstuck": {
-        if (state.isDead) break;
-        this.forceUnstuck();
+        if (player.isDead) break;
+        this.forceUnstuck(player);
         break;
       }
       case "pause": {
+        // A shared world never pauses: on a server the pause menu is a purely
+        // client-side overlay, so the command is ignored outright.
+        if (this.authority === "server") break;
         // The inventory panel, death screen, and victory screen own their
         // lock-loss; only plain gameplay lock-loss (or an explicit Escape) opens
         // the pause menu. Sleeping is a brief, atomic freeze — pausing mid-fade
         // would stall the sleep timer (step early-returns on paused before sleep).
-        if (state.inventoryOpen || state.advancementsOpen || state.isDead || state.sleepTimer > 0 || state.victory || state.gameOver) break;
+        if (player.inventoryOpen || player.advancementsOpen || player.isDead || state.sleepTimer > 0 || state.victory || player.gameOver) break;
         state.paused = true;
-        state.craftingStation = null;
-        state.openContainerIndex = null;
+        player.craftingStation = null;
+        player.openContainerIndex = null;
         break;
       }
       case "resume": {
@@ -730,22 +807,99 @@ export class GameEngine {
       }
       case "respawn": {
         // Skip the rest of the countdown; the next step performs the respawn.
-        if (state.isDead) state.respawnTimer = 0;
+        if (player.isDead) player.respawnTimer = 0;
         break;
       }
       case "dismissVictory": {
         state.victory = false;
         break;
       }
+      case "wakeUp": {
+        // Out of bed before the fade started (multiplayer: stop waiting on the
+        // others). Once the fade runs (sleepTimer > 0) the skip is committed.
+        if (state.sleepTimer <= 0) player.sleeping = false;
+        break;
+      }
     }
     this.refreshSnapshot();
   }
 
-  /** Mouse-look: applied directly by the input controller (radians). */
-  applyLook(deltaYaw: number, deltaPitch: number): void {
-    const player = this.state.player;
+  /** Mouse-look: applied directly by the input controller (radians). A server passes the sender's id. */
+  applyLook(deltaYaw: number, deltaPitch: number, playerId: PlayerId = this.state.primaryPlayerId): void {
+    const player = mustGetPlayer(this.state, playerId);
     player.yaw += deltaYaw;
     player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch + deltaPitch));
+  }
+
+  /**
+   * Adds a player to the world (a server join). Restores their persisted slice
+   * when given (the world save carries one entry per known player), otherwise
+   * spawns them fresh on land near the world center. Returns the live state.
+   */
+  addPlayer(spec: { id: PlayerId; gameMode?: GameMode; restore?: SavedPlayer | null }): PlayerState {
+    const state = this.state;
+    if (state.players.has(spec.id)) return mustGetPlayer(state, spec.id);
+    const spawn = findSpawnOnLand(state.world, Math.floor(state.world.sizeX / 2), Math.floor(state.world.sizeZ / 2));
+    const gameMode = state.hardcore ? "survival" : (spec.gameMode ?? "survival");
+    const player: PlayerState = {
+      id: spec.id,
+      position: new THREE.Vector3(spawn.x, spawn.y, spawn.z),
+      velocity: new THREE.Vector3(),
+      yaw: 0,
+      pitch: 0,
+      onGround: false,
+      gameMode,
+      isFlying: gameMode === "spectator",
+      gameOver: false,
+      inventory: createInitialInventory(),
+      equippedArmor: createEmptyArmorEquipment(),
+      selectedSlot: 0,
+      hearts: MAX_HEARTS,
+      hunger: MAX_HUNGER,
+      oxygen: MAX_OXYGEN,
+      effects: new Map(),
+      xp: 0,
+      stats: new Map(),
+      advancements: new Set(),
+      isDead: false,
+      respawnTimer: 0,
+      spawnPoint: null,
+      mining: { targetKey: "", progress: 0 },
+      fishing: null,
+      mountedVehicleId: null,
+      inventoryOpen: false,
+      advancementsOpen: false,
+      craftingStation: null,
+      activeVillagerProfession: null,
+      openContainerIndex: null,
+      sleeping: false,
+      input: createIdleInput(),
+      timers: createPlayerTimers()
+    };
+    if (spec.restore) this.restorePlayerFields(player, spec.restore);
+    state.players.set(spec.id, player);
+    this.emit({ type: "playerJoined", playerId: spec.id });
+    return player;
+  }
+
+  /**
+   * Removes a player (a server leave), returning their persisted slice so the
+   * caller can fold it into the world save. Unmounts their vehicle first; the
+   * primary player (the SP shell's) can't be removed.
+   */
+  removePlayer(id: PlayerId): SavedPlayer | null {
+    const state = this.state;
+    if (id === state.primaryPlayerId) return null;
+    const player = state.players.get(id);
+    if (!player) return null;
+    if (player.mountedVehicleId !== null) {
+      const vehicle = state.vehicles.find((v) => v.id === player.mountedVehicleId);
+      if (vehicle) vehicle.rider = null;
+    }
+    const saved = this.serializePlayer(player);
+    state.players.delete(id);
+    this.emit({ type: "playerLeft", playerId: id });
+    return saved;
   }
 
   /** Current world + player state as a persistable save. */
@@ -914,12 +1068,6 @@ export class GameEngine {
     }
   };
 
-  // Single-arg wrappers bound to the primary player — the per-player step loop
-  // replaces these bindings with per-player closures when it lands.
-  private applyDamage = (amount: number): void => this.damageCombat(this.state.player, amount);
-
-  private applyEnvironmentalDamage = (amount: number): void => this.damageEnvironmental(this.state.player, amount);
-
   /**
    * Hardcore permadeath. The run is over: instead of the respawn countdown the
    * player is dropped into a Spectator free-cam over their dead world and a
@@ -943,16 +1091,6 @@ export class GameEngine {
     this.state.paused = false;
     this.emit({ type: "gameOver" });
   }
-
-  /** Poison damage: armor-bypassing but never lethal (floors at half a heart). */
-  private applyPoisonDamage = (amount: number): void => {
-    if (applyNonLethalDamage(this.state.player, amount, POISON_FLOOR_HP)) this.emit({ type: "playerHurt" });
-  };
-
-  /** Starvation chip on Easy/Normal: armor-bypassing, floored at the difficulty's HP (Hard kills via applyEnvironmentalDamage). */
-  private applyStarvationFloored = (amount: number, floorHp: number): void => {
-    if (applyNonLethalDamage(this.state.player, amount, floorHp)) this.emit({ type: "playerHurt" });
-  };
 
   /**
    * Rebuilds the live MobState for each validated SavedMob: re-grounds onto the
@@ -990,19 +1128,24 @@ export class GameEngine {
   // `credit` (default true) gates loot + XP to the player: player/arrow/spear/
   // explosion kills credit; the mobAI sweep passes the victim's faction so a pet's
   // kill still feeds you, but a slain villager or pet yields nothing.
-  private removeMobAt = (index: number, lootingLevel = 0, credit = true): void => {
+  private removeMobAt = (index: number, lootingLevel = 0, credit = true, creditTo?: PlayerState): void => {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
+    // Loot/XP land on the crediting player (the killer where the caller knows
+    // it; the primary otherwise). A playerless server room credits nobody.
+    const receiver = creditTo ?? state.players.get(state.primaryPlayerId) ?? null;
     // Babies drop nothing — only grown animals yield loot. `lootingLevel` is the
     // *killing* melee weapon's Looting (forwarded by tryAttackMob); indirect kills
     // (arrows, thrown spears, explosions) pass 0, since Looting is a melee enchant.
-    const drops = credit && mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
-    for (const drop of drops) {
-      state.inventory = inv.adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+    const drops = credit && receiver && mob.ageTimer <= 0 ? rollMobDrops(mob.kind, this.rng, lootingLevel) : [];
+    if (receiver) {
+      for (const drop of drops) {
+        receiver.inventory = inv.adjustSlotCount(receiver.inventory, drop.itemId, drop.count) ?? receiver.inventory;
+      }
+      // XP on kill, baby-gated like drops; the boss pays a jackpot.
+      if (credit && mob.ageTimer <= 0) awardXp(receiver, xpForMob(mob.kind), this.emit);
     }
-    // XP on kill, baby-gated like drops; the boss pays a jackpot.
-    if (credit && mob.ageTimer <= 0) awardXp(state.player, xpForMob(mob.kind), this.emit);
     this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
     // Drops land straight in inventory (no ground item), so announce them.
     if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
@@ -1018,17 +1161,17 @@ export class GameEngine {
    * player, consuming the totem. Refuses (keeping the totem) when a boss already
    * walks. Returns true when the click was consumed.
    */
-  private trySummonBoss(): boolean {
+  private trySummonBoss(player: PlayerState): boolean {
     const state = this.state;
-    const slot = state.inventory[state.selectedSlot];
+    const slot = player.inventory[player.selectedSlot];
     if (slot?.id !== "boss_summoner" || slot.count <= 0) return false;
     if (state.mobs.some((mob) => mob.kind === "boss")) {
       this.emit({ type: "summonFailed" });
       return true;
     }
-    const point = randomLandPointNear(state.world, this.surfaceYAt, state.player.position.x, state.player.position.z, BOSS_SUMMON_RADIUS, this.rng);
+    const point = randomLandPointNear(state.world, this.surfaceYAt, player.position.x, player.position.z, BOSS_SUMMON_RADIUS, this.rng);
     spawnBoss(state, point.x, point.y, point.z, this.rng);
-    state.inventory = inv.adjustSlotCount(state.inventory, "boss_summoner", -1, state.selectedSlot) ?? state.inventory;
+    player.inventory = inv.adjustSlotCount(player.inventory, "boss_summoner", -1, player.selectedSlot) ?? player.inventory;
     this.emit({ type: "bossSummoned", x: point.x, y: point.y, z: point.z });
     return true;
   }
@@ -1039,15 +1182,15 @@ export class GameEngine {
    * running; does nothing (returns false, so placement falls through) when no village
    * is in range or the difficulty is Peaceful.
    */
-  private tryStartRaid(): boolean {
+  private tryStartRaid(player: PlayerState): boolean {
     const state = this.state;
-    const slot = state.inventory[state.selectedSlot];
+    const slot = player.inventory[player.selectedSlot];
     if (slot?.id !== "ominous_horn" || slot.count <= 0) return false;
     if (state.raid) {
       this.emit({ type: "raidFailed" });
       return true;
     }
-    const { x, z } = state.player.position;
+    const { x, z } = player.position;
     let nearest: { x: number; z: number } | null = null;
     let bestSq = RAID_TRIGGER_DISTANCE * RAID_TRIGGER_DISTANCE;
     for (const site of state.villageSites) {
@@ -1058,7 +1201,7 @@ export class GameEngine {
       }
     }
     if (!nearest || !startRaid(state, nearest.x, nearest.z)) return false;
-    state.inventory = inv.adjustSlotCount(state.inventory, "ominous_horn", -1, state.selectedSlot) ?? state.inventory;
+    player.inventory = inv.adjustSlotCount(player.inventory, "ominous_horn", -1, player.selectedSlot) ?? player.inventory;
     this.emit({ type: "raidStarted", totalWaves: RAID_WAVE_COUNT });
     return true;
   }
@@ -1080,31 +1223,31 @@ export class GameEngine {
    * always airborne), open panels close, and leaving noclip lifts the player out
    * of any wall they were sitting in.
    */
-  private switchGameMode(next: GameMode): void {
+  private switchGameMode(player: PlayerState, next: GameMode): void {
     const state = this.state;
     if (state.hardcore) return; // locked to Survival (Spectator after game-over); the death transition sets the mode directly
-    if (!isGameMode(next) || next === state.gameMode || state.isDead) return;
-    state.gameMode = next;
+    if (!isGameMode(next) || next === player.gameMode || player.isDead) return;
+    player.gameMode = next;
 
-    const t = state.timers;
+    const t = player.timers;
     t.lavaBurnTimer = 0;
     t.lavaDamageTimer = 0;
     t.voidTimer = 0;
     t.waterExposureTimer = 0;
     t.waterDamageTimer = 0;
     t.drownTimer = 0;
-    state.hearts = MAX_HEARTS;
-    state.hunger = MAX_HUNGER;
-    state.oxygen = MAX_OXYGEN;
+    player.hearts = MAX_HEARTS;
+    player.hunger = MAX_HUNGER;
+    player.oxygen = MAX_OXYGEN;
 
-    state.isFlying = next === "spectator";
-    resetMining(state.player);
-    state.inventoryOpen = false;
-    state.craftingStation = null;
-    state.openContainerIndex = null;
+    player.isFlying = next === "spectator";
+    resetMining(player);
+    player.inventoryOpen = false;
+    player.craftingStation = null;
+    player.openContainerIndex = null;
 
-    if (!isNoclip(next) && (collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || state.player.position.y < 2)) {
-      this.forceUnstuck();
+    if (!isNoclip(next) && (collidesAt(state.world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT) || player.position.y < 2)) {
+      this.forceUnstuck(player);
     }
   }
 
@@ -1123,7 +1266,7 @@ export class GameEngine {
     if (state.hardcore) return; // locked to Hard for the world's life
     if (!isDifficulty(next) || next === state.difficulty) return;
     state.difficulty = next;
-    state.timers.starvationTimer = 0;
+    for (const p of state.players.values()) p.timers.starvationTimer = 0;
     if (!hostilesSpawn(next)) this.despawnHostiles();
   }
 
@@ -1140,31 +1283,31 @@ export class GameEngine {
     }
   }
 
-  private forceUnstuck(): void {
+  private forceUnstuck(player: PlayerState): void {
     const state = this.state;
-    const safe = findSpawnOnLand(state.world, state.player.position.x, state.player.position.z, true);
-    state.player.position.set(safe.x, safe.y, safe.z);
-    state.player.velocity.set(0, 0, 0);
-    state.player.onGround = false;
+    const safe = findSpawnOnLand(state.world, player.position.x, player.position.z, true);
+    player.position.set(safe.x, safe.y, safe.z);
+    player.velocity.set(0, 0, 0);
+    player.onGround = false;
     state.worldMeshDirty = true;
   }
 
-  private respawn(): void {
+  private respawn(player: PlayerState): void {
     const state = this.state;
-    const bed = state.spawnPoint;
+    const bed = player.spawnPoint;
     if (bed && state.world.get(bed.x, bed.y, bed.z) === BlockId.Bed) {
       // Respawn standing on the bed; the bed block is non-solid head room above it.
-      state.player.position.set(bed.x + 0.5, bed.y + 1.05, bed.z + 0.5);
+      player.position.set(bed.x + 0.5, bed.y + 1.05, bed.z + 0.5);
     } else {
       const spawn = randomLandPointNear(state.world, this.surfaceYAt, state.world.sizeX / 2, state.world.sizeZ / 2, RENDER_RADIUS * 0.9, this.rng);
-      state.player.position.set(spawn.x, spawn.y + 2, spawn.z);
+      player.position.set(spawn.x, spawn.y + 2, spawn.z);
     }
-    state.player.velocity.set(0, 0, 0);
-    state.player.pitch = 0;
-    clearEffects(state.player);
-    resetMining(state.player);
+    player.velocity.set(0, 0, 0);
+    player.pitch = 0;
+    clearEffects(player);
+    resetMining(player);
     state.thrownSpears = [];
-    state.fishing = null;
+    player.fishing = null;
     state.worldMeshDirty = true;
     this.events.push({ type: "respawned" });
   }
@@ -1172,6 +1315,7 @@ export class GameEngine {
   /** Advances the day clock to the next morning after a sleep completes. */
   private wakeToMorning(): void {
     const state = this.state;
+    for (const p of state.players.values()) p.sleeping = false;
     const nextDay = Math.floor(state.dayClock / DAY_CYCLE_SECONDS) + 1;
     state.dayClock = (nextDay + WAKE_DAY_PHASE) * DAY_CYCLE_SECONDS;
     state.daylight = daylightAt(state.dayClock);
@@ -1315,6 +1459,9 @@ export class GameEngine {
   }
 
   private refreshSnapshot(): void {
+    // A headless server room has no React shell: nobody subscribes, so the
+    // (primary-player-shaped) snapshot would be pure wasted work every tick.
+    if (this.headless) return;
     const next = this.buildSnapshot();
     const prev = this.snapshot;
     const changed = (Object.keys(next) as Array<keyof GameSnapshot>).some((key) => next[key] !== prev[key]);

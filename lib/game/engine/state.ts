@@ -74,8 +74,21 @@ export type PlayerState = {
   activeVillagerProfession: Profession | null;
   /** Voxel index of the chest open in this player's inventory panel, or null. */
   openContainerIndex: number | null;
+  /** In bed, waiting for everyone: the sleep fade engages once ALL eligible players sleep. Session-only. */
+  sleeping: boolean;
+  /**
+   * This player's live continuous input, applied each step. The SP shell feeds
+   * the primary player's via step(dt, input); a server stores each client's
+   * latest packet here via setPlayerInput. Session-only.
+   */
+  input: FrameInput;
   timers: PlayerTimers;
 };
+
+/** A fresh all-idle FrameInput (per player — mutable, unlike the shared frozen IDLE_INPUT). */
+export function createIdleInput(): FrameInput {
+  return { move: { forward: false, back: false, left: false, right: false, jump: false, sprint: false, crouch: false }, mineHeld: false };
+}
 
 /** Simulation-side mob — no Three.js objects; visuals live in the renderer. */
 export type MobState = {
@@ -520,6 +533,8 @@ export type GameEvent =
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
   | { type: "wokeUp" }
+  | { type: "playerJoined"; playerId: PlayerId }
+  | { type: "playerLeft"; playerId: PlayerId }
   | { type: "tilledSoil" }
   | { type: "plantedSeed" }
   | { type: "plantedSapling" }

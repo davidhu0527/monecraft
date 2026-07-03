@@ -17,6 +17,7 @@ import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
 import { createEmptySlot } from "@/lib/game/items";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState, PlayerState } from "../state";
+import { allEligiblePlayersSleeping } from "../players";
 import { findAimedMobIndex } from "./combat";
 import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { primeTnt } from "./explosion";
@@ -274,7 +275,10 @@ function interactBed(state: GameState, player: PlayerState, emit: EmitGameEvent,
   }
 
   player.spawnPoint = { x, y, z };
-  state.sleepTimer = SLEEP_FADE_SECONDS;
+  // Into bed; the fade (and the night skip) only engages once EVERY eligible
+  // player sleeps — single-player: immediately, exactly the old behavior.
+  player.sleeping = true;
+  if (allEligiblePlayersSleeping(state)) state.sleepTimer = SLEEP_FADE_SECONDS;
   emit({ type: "sleepStarted" });
   return true;
 }

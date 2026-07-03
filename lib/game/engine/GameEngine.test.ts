@@ -2845,7 +2845,7 @@ describe("drinking potions", () => {
 });
 
 describe("armor equipping (dedicated slots)", () => {
-  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const die = (engine: GameEngine) => (engine as unknown as { damageCombat: (p: unknown, amount: number) => void }).damageCombat(engine.state.player, 100);
 
   test("equipping moves the piece out of the hotbar, freeing the slot", () => {
     const engine = makeEngine();
@@ -2895,7 +2895,7 @@ describe("armor equipping (dedicated slots)", () => {
 });
 
 describe("statistics (save v13)", () => {
-  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const die = (engine: GameEngine) => (engine as unknown as { damageCombat: (p: unknown, amount: number) => void }).damageCombat(engine.state.player, 100);
 
   test("crafting bumps items_crafted and the per-recipe counter at the emit chokepoint", () => {
     const engine = makeEngine();
@@ -2932,7 +2932,7 @@ describe("statistics (save v13)", () => {
 });
 
 describe("advancements (save v13)", () => {
-  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const die = (engine: GameEngine) => (engine as unknown as { damageCombat: (p: unknown, amount: number) => void }).damageCombat(engine.state.player, 100);
   const removeMobAt = (engine: GameEngine, index: number) => (engine as unknown as { removeMobAt: (i: number, looting?: number) => void }).removeMobAt(index);
 
   function pushHostile(engine: GameEngine, kind: MobKind): void {
