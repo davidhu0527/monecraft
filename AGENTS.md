@@ -38,6 +38,7 @@ For a non-trivial change:
 - [docs/adding-content.md](docs/adding-content.md) — step-by-step: new block / item / recipe / mob / mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema, autosave, compatibility rules
 - [docs/online.md](docs/online.md) — accounts/guests, cloud saves, invites, join tickets, env setup, local online dev
+- [docs/deploy.md](docs/deploy.md) — first-time deploy runbook (Vercel + Neon + Fly.io), shared secrets, verify, troubleshooting
 - [docs/protocol.md](docs/protocol.md) — the client↔game-server wire protocol (framing, handshake, tick contents, close codes, trust model)
 - [docs/testing.md](docs/testing.md) — test coverage map and the worldgen hash re-baseline policy
 - [docs/tuning.md](docs/tuning.md) — gameplay tunables in `config.ts`, grouped by effect with balance trade-offs

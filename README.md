@@ -54,4 +54,5 @@ All of these are enforced by CI on every PR. The game simulation is a headless e
 - [docs/architecture.md](docs/architecture.md) — engine/renderer/shell layering and invariants
 - [docs/adding-content.md](docs/adding-content.md) — add a block, item, recipe, mob, or mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema and compatibility rules
+- [docs/deploy.md](docs/deploy.md) — deploy online multiplayer (Vercel + Neon + Fly.io)
 - [CONTRIBUTING.md](CONTRIBUTING.md) — workflow and verification baseline

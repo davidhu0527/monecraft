@@ -103,10 +103,15 @@ fixture DDL and the schema module honest against each other.
 
 ## Production
 
+**[deploy.md](deploy.md) is the step-by-step first-time deploy runbook** (Neon
+schema → Fly game server → Vercel web app, with a verify checklist and
+troubleshooting). In short:
+
 - **Vercel**: set the web env vars; point `DATABASE_URL` at Neon. The auth
   mount builds lazily, so `next build` needs no env.
-- **Fly.io** (game server, phase 4): shares `DATABASE_URL` and
-  `GAME_TICKET_SECRET` with the web app.
+- **Fly.io** (game server): shares `DATABASE_URL` and `GAME_TICKET_SECRET`
+  with the web app (a mismatch on the latter = every join fails with close
+  code 4000).
 
 ## Game server operations
 
