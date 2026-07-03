@@ -1,5 +1,6 @@
 import { useState } from "react";
 import PixelImg from "@/components/game/PixelImg";
+import AccountPanel from "@/components/menu/AccountPanel";
 import CreateProfileForm from "@/components/menu/CreateProfileForm";
 import MenuScreen from "@/components/menu/MenuScreen";
 import { createProfile, deleteProfile, MAX_PROFILE_NAME, readProfiles, renameProfile } from "@/lib/game/profiles";
@@ -40,6 +41,7 @@ export default function ProfileSelect({ onPlay }: ProfileSelectProps) {
 
   return (
     <MenuScreen title="Select Profile">
+      <AccountPanel />
       <ul className="menu-list">
         {profiles.map((profile) => (
           <li key={profile.id} className="menu-card">

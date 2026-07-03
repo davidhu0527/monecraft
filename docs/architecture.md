@@ -15,6 +15,8 @@ AudioDirector (lib/game/audio/)  WebAudio: maps engine events + state → proced
 
 The engine has **no React, no DOM, no rendering** — it runs (and is tested) headlessly in `bun test`. The renderer, the audio director, and the input controller are the only modules touching Three.js scene objects, the `AudioContext`, and DOM listeners respectively.
 
+The ONLINE layer (accounts, cloud saves, invites, join tickets) sits beside the shell: better-auth + Postgres behind `app/api` route handlers that adapt the tested rules in `lib/online/worldsService.ts` — see [online.md](online.md). Offline single-player never touches it.
+
 ## React shell (`lib/game/useMinecraftGame.ts`, `components/`)
 
 - `useMinecraftGame` creates the `GameEngine` in the canvas mount's callback ref, then an effect builds the `GameRenderer`, the `AudioDirector`, and `inputController` and drives the `requestAnimationFrame` loop: `engine.step(dt, input)` (in bounded catch-up substeps of ≤50 ms via `createAccumulator` from `lib/game/engine/tickDriver.ts`, so slow frames — e.g. software GL — don't run the simulation in slow motion) → drain engine events (death/respawn handling, `attackSwung` → `renderer.triggerSwing()`, + `renderer.handleEvent` for particle bursts, + `audio.handleEvent`) → `minimap.sync(state)` → `renderer.sync(state)` → `audio.sync(state, dt)` → `renderer.render()`. The minimap must sync **before** the renderer because it reads `state.worldMeshDirty`, which `renderer.sync` clears.
