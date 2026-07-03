@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
 import { WORLDGEN_VERSION } from "@/lib/game/config";
@@ -159,14 +159,18 @@ export async function putSaveBlob(
 ): Promise<{ ok: true; updatedAt: string } | Failure> {
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
-  const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
-  if (!world) return fail("not-found");
   if (!Number.isInteger(saveVersion) || blob.byteLength === 0) return fail("invalid");
-  const current = world.updatedAt.toISOString();
-  const stale = baseUpdatedAt === null ? world.saveBlob !== null : baseUpdatedAt !== current;
-  if (stale) return fail("conflict");
   const now = new Date();
-  await db.update(schema.worlds).set({ saveBlob: blob, saveVersion, updatedAt: now }).where(eq(schema.worlds.id, worldId));
+  // Fold the stale check into the UPDATE predicate so two writers with the same
+  // base stamp can't both win: first upload requires no blob yet; a later one
+  // requires the exact `updatedAt` it last saw. Zero rows affected = stale.
+  const guard =
+    baseUpdatedAt === null
+      ? and(eq(schema.worlds.id, worldId), isNull(schema.worlds.saveBlob))
+      : and(eq(schema.worlds.id, worldId), eq(schema.worlds.updatedAt, new Date(baseUpdatedAt)));
+  const updated = await db.update(schema.worlds).set({ saveBlob: blob, saveVersion, updatedAt: now }).where(guard).returning({ id: schema.worlds.id });
+  // Membership implies the world exists (FK cascade), so no rows means a stale base.
+  if (updated.length === 0) return fail("conflict");
   return { ok: true, updatedAt: now.toISOString() };
 }
 
@@ -216,12 +220,15 @@ export async function acceptInvite(db: Db, userId: string, token: string): Promi
   if (!resolved.ok) return resolved;
   const existing = await membership(db, userId, resolved.worldId);
   if (existing) return { ok: true, worldId: resolved.worldId };
-  await db.insert(schema.worldMembers).values({ worldId: resolved.worldId, userId, role: "member" }).onConflictDoNothing();
-  const [invite] = await db.select().from(schema.worldInvites).where(eq(schema.worldInvites.token, token));
-  await db
+  // Consume one use atomically, enforcing the cap in the predicate: concurrent
+  // accepts can't both slip past a maxUses that only one increment should clear.
+  const consumed = await db
     .update(schema.worldInvites)
-    .set({ uses: invite.uses + 1 })
-    .where(eq(schema.worldInvites.id, invite.id));
+    .set({ uses: sql`${schema.worldInvites.uses} + 1` })
+    .where(and(eq(schema.worldInvites.token, token), or(isNull(schema.worldInvites.maxUses), lt(schema.worldInvites.uses, schema.worldInvites.maxUses))))
+    .returning({ id: schema.worldInvites.id });
+  if (consumed.length === 0) return fail("expired"); // the cap filled under concurrency
+  await db.insert(schema.worldMembers).values({ worldId: resolved.worldId, userId, role: "member" }).onConflictDoNothing();
   return { ok: true, worldId: resolved.worldId };
 }
 

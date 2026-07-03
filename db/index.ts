@@ -30,8 +30,11 @@ export function db(): Db {
     const { SCHEMA_DDL } = require("./ddl") as typeof import("./ddl");
     /* eslint-enable @typescript-eslint/no-require-imports */
     const client = new PGlite();
-    // exec() is async; PGlite queues queries behind it, so no race.
-    void client.exec(SCHEMA_DDL);
+    // exec() is async; PGlite queues queries behind it, so no race. Surface a
+    // schema-init failure loudly instead of leaving it an unhandled rejection.
+    void client.exec(SCHEMA_DDL).catch((error: unknown) => {
+      console.error("pglite schema init failed", error);
+    });
     instance = drizzlePglite(client, { schema }) as unknown as Db;
     return instance;
   }

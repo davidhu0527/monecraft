@@ -43,6 +43,16 @@ export async function createOnlineWorld(input: {
   }
 }
 
+/** Deletes an online world server-side (owner only; cascades members/invites). Returns whether it succeeded. */
+export async function deleteOnlineWorld(worldId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/worlds/${worldId}`, { method: "DELETE" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Mints an invite token and returns the full shareable link. */
 export async function createInviteLink(worldId: string): Promise<string | null> {
   try {

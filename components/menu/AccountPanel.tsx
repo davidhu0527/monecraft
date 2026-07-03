@@ -33,18 +33,24 @@ export default function AccountPanel() {
     markOnlineUsed();
     // Sign-up (and sign-in) while holding a guest session links the account:
     // the guest's worlds move over server-side before the guest is deleted.
-    const result =
-      mode === "signup"
-        ? await authClient().signUp.email({ email, password, name: name.trim() || email.split("@")[0] })
-        : await authClient().signIn.email({ email, password });
-    setBusy(false);
-    if (result.error) {
-      setError(result.error.message ?? "That didn't work — check the details and try again.");
-      return;
+    try {
+      const result =
+        mode === "signup"
+          ? await authClient().signUp.email({ email, password, name: name.trim() || email.split("@")[0] })
+          : await authClient().signIn.email({ email, password });
+      if (result.error) {
+        setError(result.error.message ?? "That didn't work — check the details and try again.");
+        return;
+      }
+      setMode("closed");
+      setPassword("");
+      await refresh();
+    } catch {
+      // A thrown request (network failure) instead of an { error } result.
+      setError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    setMode("closed");
-    setPassword("");
-    await refresh();
   };
 
   if (mode !== "closed") {
@@ -110,9 +116,15 @@ export default function AccountPanel() {
             className="mc-button"
             onClick={async () => {
               setBusy(true);
-              await ensureSignedIn();
-              setBusy(false);
-              await refresh();
+              setError(null);
+              try {
+                await ensureSignedIn();
+                await refresh();
+              } catch {
+                setError("Couldn't reach the server — check your connection and try again.");
+              } finally {
+                setBusy(false);
+              }
             }}
             disabled={busy}
           >
@@ -121,6 +133,7 @@ export default function AccountPanel() {
           <button type="button" className="mc-button" onClick={() => setMode("signin")}>
             Sign in
           </button>
+          {error && <div className="account-error">{error}</div>}
         </>
       )}
     </div>

@@ -43,22 +43,26 @@ export function createAuth(database: AnyDrizzleDb, options: { baseURL?: string; 
         onLinkAccount: async ({ anonymousUser, newUser }) => {
           // Everything the guest owned moves to the upgraded account. The
           // anonymous user row is deleted right after this hook, and the FKs
-          // cascade — so a missed table here would silently destroy data.
+          // cascade — so a missed table (or a partial failure) would silently
+          // destroy data. One transaction makes the re-parent all-or-nothing:
+          // if any statement throws, nothing moves and the guest survives.
           const target = database as unknown as import("@/db").Db;
           const from = anonymousUser.user.id;
           const to = newUser.user.id;
-          await target.update(schema.worlds).set({ ownerId: to }).where(eq(schema.worlds.ownerId, from));
-          await target.update(schema.worldInvites).set({ createdBy: to }).where(eq(schema.worldInvites.createdBy, from));
-          // Memberships can collide if the new account already joined the same
-          // world; drop the guest's row in that case (the membership exists).
-          const memberships = await target.select().from(schema.worldMembers).where(eq(schema.worldMembers.userId, from));
-          for (const membership of memberships) {
-            await target
-              .insert(schema.worldMembers)
-              .values({ ...membership, userId: to })
-              .onConflictDoNothing();
-          }
-          await target.delete(schema.worldMembers).where(eq(schema.worldMembers.userId, from));
+          await target.transaction(async (tx) => {
+            await tx.update(schema.worlds).set({ ownerId: to }).where(eq(schema.worlds.ownerId, from));
+            await tx.update(schema.worldInvites).set({ createdBy: to }).where(eq(schema.worldInvites.createdBy, from));
+            // Memberships can collide if the new account already joined the same
+            // world; drop the guest's row in that case (the membership exists).
+            const memberships = await tx.select().from(schema.worldMembers).where(eq(schema.worldMembers.userId, from));
+            for (const membership of memberships) {
+              await tx
+                .insert(schema.worldMembers)
+                .values({ ...membership, userId: to })
+                .onConflictDoNothing();
+            }
+            await tx.delete(schema.worldMembers).where(eq(schema.worldMembers.userId, from));
+          });
         }
       })
     ]

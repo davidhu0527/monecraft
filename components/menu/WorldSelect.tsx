@@ -42,6 +42,7 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
   const [onlineWorlds, setOnlineWorlds] = useState<OnlineWorld[] | null>(null);
   const [inviteCopied, setInviteCopied] = useState<string | null>(null);
   const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
+  const [onlineCreateError, setOnlineCreateError] = useState<string | null>(null);
 
   // Online worlds appear only once this browser has used online features —
   // offline-first: no fetch, no section, no account until the player opts in.
@@ -71,13 +72,20 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
   if (creatingOnline) {
     return (
       <MenuScreen title={`${profile.name} — New Online World`}>
+        {onlineCreateError && <p className="account-error">{onlineCreateError}</p>}
         <CreateWorldForm
           onCreate={(name, seed, worldType, gameMode, difficulty, hardcore) => {
             // Same form, different home: the world row lives on the server and
             // the game server hosts it — friends join by invite link.
+            setOnlineCreateError(null);
             void createOnlineWorld({ name, seed: resolveSeed(seed), worldType, gameMode, difficulty, hardcore }).then((world) => {
-              setCreatingOnline(false);
-              if (world) onPlayOnline(world);
+              if (world) {
+                setCreatingOnline(false);
+                onPlayOnline(world);
+              } else {
+                // Keep the form open so the entered settings aren't lost on a retry.
+                setOnlineCreateError("Couldn't create the online world — are you signed in and online?");
+              }
             });
           }}
           onCancel={() => setCreatingOnline(false)}

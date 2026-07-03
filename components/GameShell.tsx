@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MinecraftGame from "@/components/MinecraftGame";
 import ProfileSelect from "@/components/menu/ProfileSelect";
 import WorldSelect from "@/components/menu/WorldSelect";
@@ -8,7 +8,7 @@ import { ensureSignedIn } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { getProfile, setActiveProfile } from "@/lib/game/profiles";
 import { deleteWorld, getWorld, touchWorld, type WorldMeta } from "@/lib/game/worlds";
-import { requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
+import { deleteOnlineWorld, requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
 import { connectNetworkSession, type NetworkSession } from "@/lib/net/NetworkSession";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
@@ -79,9 +79,14 @@ export default function GameShell() {
   const [reloadNonce, setReloadNonce] = useState(0);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  // A join is in flight — guards against a double-click opening (and leaking) a
+  // second socket. A ref, not `connecting`, so it's set synchronously.
+  const joiningRef = useRef(false);
 
   /** Guest-or-account → ticket → socket → replica sync → play. */
   const playOnline = async (profileId: string, world: OnlineWorld) => {
+    if (joiningRef.current) return; // a join is already in flight
+    joiningRef.current = true;
     setConnectError(null);
     setConnecting(world.name);
     try {
@@ -101,6 +106,7 @@ export default function GameShell() {
       setConnectError(error instanceof Error ? error.message : "connection failed");
     } finally {
       setConnecting(null);
+      joiningRef.current = false;
     }
   };
 
@@ -156,7 +162,13 @@ export default function GameShell() {
           profile={profile}
           online={screen.session}
           onQuitToWorlds={() => setScreen({ name: "world-select", profileId: profile.id })}
-          onDeleteWorld={() => setScreen({ name: "world-select", profileId: profile.id })}
+          onDeleteWorld={() => {
+            // Hardcore game-over: actually delete the shared world on the server
+            // (owner-gated; a member just leaves), then return to the list.
+            screen.session.dispose();
+            void deleteOnlineWorld(screen.world.id);
+            setScreen({ name: "world-select", profileId: profile.id });
+          }}
           onReloadWorld={() => setScreen({ name: "world-select", profileId: profile.id })}
         />
       );
