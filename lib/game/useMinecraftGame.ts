@@ -6,6 +6,7 @@ import { readAudioSettings, writeAudioSettings } from "@/lib/game/audio/settings
 import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, MAX_OXYGEN } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
+import { createAccumulator } from "@/lib/game/engine/tickDriver";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
 import * as inv from "@/lib/game/inventory";
 import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
@@ -284,28 +285,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     window.__monecraft = { engine: gameEngine, renderer, input, audio };
 
     let minimap: MinimapRenderer | null = null;
-    let last = performance.now();
     let animationFrame = 0;
-    // Catch-up stepping: a slow frame (software GL, busy machine) can take far
-    // longer than one 50ms step, and a single clamped step would run the
-    // simulation in slow motion. Bounded substeps keep sim time tracking wall
-    // time; the cap bounds work per frame and quietly drops time beyond it
-    // (e.g. after a background-tab stall).
-    const MAX_STEP_SECONDS = 0.05;
-    const MAX_SUBSTEPS = 5;
-    let pendingSeconds = 0;
+    // Catch-up stepping (createAccumulator): bounded substeps keep sim time
+    // tracking wall time on slow frames — see lib/game/engine/tickDriver.ts.
+    const accumulator = createAccumulator({ startMs: performance.now() });
     const clock = () => {
       const now = performance.now();
-      pendingSeconds = Math.min(pendingSeconds + (now - last) / 1000, MAX_STEP_SECONDS * MAX_SUBSTEPS);
-      last = now;
-
-      let frameSeconds = 0;
-      while (pendingSeconds > 0) {
-        const dt = Math.min(pendingSeconds, MAX_STEP_SECONDS);
-        gameEngine.step(dt, input.input);
-        pendingSeconds -= dt;
-        frameSeconds += dt;
-      }
+      const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, input.input));
 
       for (const event of gameEngine.consumeEvents()) {
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {

@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- **Tick driver extraction** (no behavior change): the rAF loop's catch-up substepping moved from `useMinecraftGame` into `lib/game/engine/tickDriver.ts` (`createAccumulator`), alongside a new drift-corrected `createFixedTicker` — the 20 Hz driver a headless multiplayer server will step worlds with. Unit-tested with a fake clock (catch-up, debt-drop cap, no drift under chronically-late callbacks).
 - **Portable worldgen noise** (`WORLDGEN_VERSION` **10→11**, save schema stays v16): all seed-determined noise — terrain waves, biome fields, cave-walk trig, underground speckle/flora hashes, weather windows, the daylight curve — moved from engine-defined `Math.sin` to bit-portable implementations (`lib/world/noise.ts`), so the same seed now generates **byte-identical worlds on every JS engine**. This is the groundwork for online multiplayer (a Bun server and browser clients must agree on the generated baseline to sync worlds as seed + block diff) and retires the fragile "worldgen hashes are only valid on the pinned Bun" caveat. Terrain is visually unchanged (same formulas; every structural probe passed the re-baseline untouched), but exact bytes shift: **existing worlds reboot from their seed and discard block edits**, per the standard worldgen-bump policy. Digests re-baselined into the new `lib/world/generationBaselines.ts`; a new Playwright spec (`e2e/determinism.e2e.ts`) proves Chromium/V8 regenerates the exact Bun/JSC baseline.
 
 ## [0.12.0] - 2026-07-03
