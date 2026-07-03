@@ -429,23 +429,23 @@ export class GameEngine {
       tickVehicles(state, input, dt);
       move = { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
     } else {
-      move = tickPlayerMotion(state, input, dt, this.applyDamage);
+      move = tickPlayerMotion(state, state.player, input, dt, this.applyDamage);
       tickVehicles(state, input, dt);
     }
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     // Tick-driven display stats (no event, so out of the advancement path).
     recordTick(state, dt, move.horizontalDistance);
-    tickHungerDrain(state, move);
-    tickHealthRegen(state, dt);
+    tickHungerDrain(state.player, move);
+    tickHealthRegen(state, state.player, dt);
     // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
     // Hard (floor 0) can kill via the environmental-damage path.
-    tickStarvation(state, dt, this.applyStarvationFloored, this.applyEnvironmentalDamage);
+    tickStarvation(state, state.player, dt, this.applyStarvationFloored, this.applyEnvironmentalDamage);
     // Status effects tick here so the fire-resist / water-breathing gates below are current.
     tickStatusEffects(state.player, dt, { applyPoisonDamage: this.applyPoisonDamage, emit: this.emit });
-    tickWaterExposure(state, dt, this.applyEnvironmentalDamage);
-    tickLavaExposure(state, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "fire_resistance"));
-    tickOxygen(state, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "water_breathing"));
+    tickWaterExposure(state, state.player, dt, this.applyEnvironmentalDamage);
+    tickLavaExposure(state, state.player, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "fire_resistance"));
+    tickOxygen(state, state.player, dt, this.applyEnvironmentalDamage, hasEffect(state.player, "water_breathing"));
     state.timers.bowCooldownTimer = Math.max(0, state.timers.bowCooldownTimer - dt);
     tickMining(state, input, dt, this.emit, this.rng);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);

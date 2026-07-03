@@ -9,8 +9,12 @@ import type { GameMode } from "@/lib/game/gameModes";
 import type { EffectId } from "@/lib/game/types";
 
 function makeState(overrides: Partial<GameState> = {}): GameState & PlayerState {
-  return {
-    player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+  const state = {
+    position: new THREE.Vector3(0, 64, 0),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true,
     gameMode: "survival" as GameMode,
     difficulty: "normal" as Difficulty,
     hearts: MAX_HEARTS,
@@ -21,6 +25,9 @@ function makeState(overrides: Partial<GameState> = {}): GameState & PlayerState 
     timers: createTimers(),
     ...overrides
   } as unknown as GameState & PlayerState;
+  // The flat fixture IS its own player (the old single-player shape).
+  (state as { player: unknown }).player = state;
+  return state;
 }
 
 // The same wiring the engine uses: Easy/Normal floor via applyNonLethalDamage,
@@ -30,7 +37,7 @@ const applyLethal = (state: GameState & PlayerState) => (amount: number) => void
 
 /** Advances starvation by `seconds` of game time in one call. */
 function starve(state: GameState & PlayerState, seconds: number): void {
-  tickStarvation(state, seconds, applyFloored(state), applyLethal(state));
+  tickStarvation(state, state, seconds, applyFloored(state), applyLethal(state));
 }
 
 describe("tickStarvation", () => {
@@ -100,12 +107,12 @@ describe("tickStarvation", () => {
 describe("tickHealthRegen difficulty scaling", () => {
   test("Peaceful heals in half the time of the baseline interval", () => {
     const peaceful = makeState({ difficulty: "peaceful", hearts: 10, hunger: 20 });
-    tickHealthRegen(peaceful, HEALTH_REGEN_INTERVAL_SECONDS * 0.5); // Peaceful's faster cadence
+    tickHealthRegen(peaceful, peaceful, HEALTH_REGEN_INTERVAL_SECONDS * 0.5); // Peaceful's faster cadence
     expect(peaceful.hearts).toBe(11);
 
     // Normal needs the full interval — half of it isn't enough.
     const normal = makeState({ difficulty: "normal", hearts: 10, hunger: 20 });
-    tickHealthRegen(normal, HEALTH_REGEN_INTERVAL_SECONDS * 0.5);
+    tickHealthRegen(normal, normal, HEALTH_REGEN_INTERVAL_SECONDS * 0.5);
     expect(normal.hearts).toBe(10);
   });
 });

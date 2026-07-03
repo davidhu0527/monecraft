@@ -25,7 +25,7 @@ import {
 import { BlockId } from "@/lib/world";
 import { takesDamage } from "@/lib/game/gameModes";
 import { regenIntervalScale, starves, starvationFloorHp } from "@/lib/game/difficulties";
-import type { GameState } from "../state";
+import type { GameState, PlayerState } from "../state";
 import type { MoveTickResult } from "./playerMotion";
 
 /** Movement speed multiplier from the hunger level, with a small full-hunger bonus. */
@@ -35,9 +35,9 @@ export function speedScaleFromHunger(hunger: number): number {
 }
 
 /** Drains hunger from accumulated sprint/walk distance and jumps. Creative/Spectator never hunger. */
-export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
-  if (!takesDamage(state.gameMode)) return;
-  const { timers } = state;
+export function tickHungerDrain(player: PlayerState, move: MoveTickResult): void {
+  if (!takesDamage(player.gameMode)) return;
+  const { timers } = player;
   let drain = 0;
 
   if (move.didSprint) {
@@ -61,7 +61,7 @@ export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
     }
   }
 
-  if (drain > 0) state.hunger = Math.max(0, state.hunger - drain);
+  if (drain > 0) player.hunger = Math.max(0, player.hunger - drain);
 }
 
 /**
@@ -69,21 +69,21 @@ export function tickHungerDrain(state: GameState, move: MoveTickResult): void {
  * Creative/Spectator stay topped up. Difficulty scales the cadence — Peaceful
  * heals twice as fast (regenIntervalScale 0.5) as its build-in-peace mercy.
  */
-export function tickHealthRegen(state: GameState, dt: number): void {
-  if (!takesDamage(state.gameMode)) {
-    state.hearts = MAX_HEARTS;
-    state.timers.regenTimer = 0;
+export function tickHealthRegen(state: GameState, player: PlayerState, dt: number): void {
+  if (!takesDamage(player.gameMode)) {
+    player.hearts = MAX_HEARTS;
+    player.timers.regenTimer = 0;
     return;
   }
-  if (!state.isDead && state.hearts < MAX_HEARTS && state.hunger >= REGEN_MIN_HUNGER) {
+  if (!player.isDead && player.hearts < MAX_HEARTS && player.hunger >= REGEN_MIN_HUNGER) {
     const interval = HEALTH_REGEN_INTERVAL_SECONDS * regenIntervalScale(state.difficulty);
-    state.timers.regenTimer += dt;
-    if (state.timers.regenTimer >= interval) {
-      state.hearts = Math.min(MAX_HEARTS, state.hearts + 1);
-      state.timers.regenTimer = 0;
+    player.timers.regenTimer += dt;
+    if (player.timers.regenTimer >= interval) {
+      player.hearts = Math.min(MAX_HEARTS, player.hearts + 1);
+      player.timers.regenTimer = 0;
     }
   } else {
-    state.timers.regenTimer = 0;
+    player.timers.regenTimer = 0;
   }
 }
 
@@ -98,26 +98,28 @@ export function tickHealthRegen(state: GameState, dt: number): void {
  */
 export function tickStarvation(
   state: GameState,
+  player: PlayerState,
   dt: number,
   applyFloored: (amount: number, floorHp: number) => void,
   applyLethal: (amount: number) => void
 ): void {
-  if (!takesDamage(state.gameMode) || !starves(state.difficulty) || state.isDead || state.hunger > 0) {
-    state.timers.starvationTimer = 0;
+  if (!takesDamage(player.gameMode) || !starves(state.difficulty) || player.isDead || player.hunger > 0) {
+    player.timers.starvationTimer = 0;
     return;
   }
   const floor = starvationFloorHp(state.difficulty);
-  state.timers.starvationTimer += dt;
-  while (state.timers.starvationTimer >= STARVATION_INTERVAL_SECONDS && !state.isDead) {
-    state.timers.starvationTimer -= STARVATION_INTERVAL_SECONDS;
+  player.timers.starvationTimer += dt;
+  while (player.timers.starvationTimer >= STARVATION_INTERVAL_SECONDS && !player.isDead) {
+    player.timers.starvationTimer -= STARVATION_INTERVAL_SECONDS;
     if (floor <= 0) applyLethal(STARVATION_HP);
     else applyFloored(STARVATION_HP, floor);
   }
 }
 
 /** Damages a continuously immersed player after one minute; leaving water fully resets the clock. */
-export function tickWaterExposure(state: GameState, dt: number, applyDamage: (amount: number) => void): void {
-  const { player, timers, world } = state;
+export function tickWaterExposure(state: GameState, player: PlayerState, dt: number, applyDamage: (amount: number) => void): void {
+  const { timers } = player;
+  const { world } = state;
   const x = Math.floor(player.position.x);
   const y = Math.floor(player.position.y + PLAYER_HEIGHT * 0.5);
   const z = Math.floor(player.position.z);
@@ -131,7 +133,7 @@ export function tickWaterExposure(state: GameState, dt: number, applyDamage: (am
   if (timers.waterExposureTimer <= WATER_DAMAGE_DELAY_SECONDS) return;
 
   timers.waterDamageTimer += dt;
-  while (timers.waterDamageTimer >= WATER_DAMAGE_INTERVAL_SECONDS && !state.isDead) {
+  while (timers.waterDamageTimer >= WATER_DAMAGE_INTERVAL_SECONDS && !player.isDead) {
     timers.waterDamageTimer -= WATER_DAMAGE_INTERVAL_SECONDS;
     applyDamage(WATER_DAMAGE_HP);
   }
@@ -143,8 +145,9 @@ export function tickWaterExposure(state: GameState, dt: number, applyDamage: (am
  * at once and keeps burning for LAVA_BURN_SECONDS after escaping. Lava is solid,
  * so "contact" means the block at the feet, just under them, or at body height.
  */
-export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amount: number) => void, fireImmune = false): void {
-  const { player, timers, world } = state;
+export function tickLavaExposure(state: GameState, player: PlayerState, dt: number, applyDamage: (amount: number) => void, fireImmune = false): void {
+  const { timers } = player;
+  const { world } = state;
   // Fire Resistance fully negates lava burn — no damage, no lingering burn timer.
   if (fireImmune) {
     timers.lavaBurnTimer = 0;
@@ -171,7 +174,7 @@ export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amo
   }
   timers.lavaBurnTimer = Math.max(0, timers.lavaBurnTimer - dt);
   timers.lavaDamageTimer += dt;
-  while (timers.lavaDamageTimer >= LAVA_DAMAGE_INTERVAL_SECONDS && !state.isDead) {
+  while (timers.lavaDamageTimer >= LAVA_DAMAGE_INTERVAL_SECONDS && !player.isDead) {
     timers.lavaDamageTimer -= LAVA_DAMAGE_INTERVAL_SECONDS;
     applyDamage(LAVA_DAMAGE_HP);
   }
@@ -184,17 +187,18 @@ export function tickLavaExposure(state: GameState, dt: number, applyDamage: (amo
  * so wading chest-deep never drowns you — distinct from the body-keyed 60s
  * water-exposure timer, which still runs in parallel.
  */
-export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: number) => void, waterBreathing = false): void {
-  const { player, timers, world } = state;
+export function tickOxygen(state: GameState, player: PlayerState, dt: number, applyDamage: (amount: number) => void, waterBreathing = false): void {
+  const { timers } = player;
+  const { world } = state;
   // Creative/Spectator never drown — keep the lungs full so the bubble bar hides.
-  if (!takesDamage(state.gameMode)) {
-    state.oxygen = MAX_OXYGEN;
+  if (!takesDamage(player.gameMode)) {
+    player.oxygen = MAX_OXYGEN;
     timers.drownTimer = 0;
     return;
   }
   // Water Breathing keeps the lungs full and immune to drowning.
   if (waterBreathing) {
-    state.oxygen = MAX_OXYGEN;
+    player.oxygen = MAX_OXYGEN;
     timers.drownTimer = 0;
     return;
   }
@@ -203,20 +207,20 @@ export function tickOxygen(state: GameState, dt: number, applyDamage: (amount: n
   const z = Math.floor(player.position.z);
 
   if (world.get(x, headY, z) === BlockId.Water) {
-    state.oxygen = Math.max(0, state.oxygen - (MAX_OXYGEN / OXYGEN_HOLD_SECONDS) * dt);
-    if (state.oxygen > 0) {
+    player.oxygen = Math.max(0, player.oxygen - (MAX_OXYGEN / OXYGEN_HOLD_SECONDS) * dt);
+    if (player.oxygen > 0) {
       timers.drownTimer = 0;
       return;
     }
     timers.drownTimer += dt;
-    while (timers.drownTimer >= OXYGEN_DROWN_INTERVAL_SECONDS && !state.isDead) {
+    while (timers.drownTimer >= OXYGEN_DROWN_INTERVAL_SECONDS && !player.isDead) {
       timers.drownTimer -= OXYGEN_DROWN_INTERVAL_SECONDS;
       applyDamage(OXYGEN_DROWN_HP);
     }
     return;
   }
 
-  state.oxygen = Math.min(MAX_OXYGEN, state.oxygen + (MAX_OXYGEN / OXYGEN_REFILL_SECONDS) * dt);
+  player.oxygen = Math.min(MAX_OXYGEN, player.oxygen + (MAX_OXYGEN / OXYGEN_REFILL_SECONDS) * dt);
   timers.drownTimer = 0;
 }
 
