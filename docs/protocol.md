@@ -53,17 +53,31 @@ the join payload is KBs, not the 37 MB voxel field.
 Backpressure: past 256 KB buffered, a client's `pp`/`mp` are shed (events
 and `self` still flow); sustained >1 MB is a `4008` kick.
 
+## Reconnect
+
+The replica engine outlives the socket. On a **non-fatal** drop the client
+walks a back-off ladder (`RECONNECT_DELAYS_MS` = 1/2/4/8/8 s), minting a
+**fresh** ticket each rung (the 60 s TTL kills a stale one) and doing a whole
+new `hello` → `welcome` → world-sync — a reconnect is an ordinary join on a
+new socket, not a special frame, so the server's `join` already re-syncs the
+same room in place. The server closes the player's _previous_ socket with
+`4003` when the new one lands (see the table). `resync` stays the same-socket
+path (a client that's still connected but suspects drift asks for a fresh
+world-sync + keyframe). Fatal closes are not retried; after the ladder is
+exhausted the client shows the disconnect modal.
+
 ## Close codes
 
-| Code | Meaning                                           |
-| ---- | ------------------------------------------------- |
-| 4000 | bad/expired ticket (or no hello in time)          |
-| 4001 | protocol version mismatch                         |
-| 4002 | room full (8 players) or server at MAX_ROOMS      |
-| 4003 | kicked (owner action, or replaced by a reconnect) |
-| 4004 | idle timeout                                      |
-| 4005 | server shutting down (redeploy — reconnect after) |
-| 4008 | slow client (sustained backpressure)              |
+| Code | Meaning                                           | Client retries? |
+| ---- | ------------------------------------------------- | --------------- |
+| 4000 | bad/expired ticket (or no hello in time)          | no (fatal)      |
+| 4001 | protocol version mismatch                         | no (fatal)      |
+| 4002 | room full (8 players) or server at MAX_ROOMS      | no (fatal)      |
+| 4003 | kicked (owner action, or replaced by a reconnect) | no (fatal)      |
+| 4004 | idle timeout                                      | yes (ladder)    |
+| 4005 | server shutting down (redeploy — reconnect after) | yes (ladder)    |
+| 4008 | slow client (sustained backpressure)              | no (fatal)      |
+| 1006 | abnormal close (network drop)                     | yes (ladder)    |
 
 ## Trust model
 

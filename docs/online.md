@@ -117,12 +117,46 @@ persist every 60 s (when dirty), on last-leave, and on SIGTERM (deploys
 drain, ≤60 s loss crash-safe); five idle minutes evicts a room from memory.
 See [protocol.md](protocol.md) for the wire format.
 
-- `GET /health` — liveness (Fly checks hit this).
-- `GET /rooms` — per-room diagnostics (players, tick, slowest-tick ms);
-  requires `Authorization: Bearer $ADMIN_TOKEN`.
-- `PERSISTENCE=memory` runs with no database — local iteration, the
-  Playwright multiplayer spec, and `bun scripts/netProbe.ts` (a CLI client
-  that joins, walks, and tallies traffic — point it at localhost or staging).
+All admin endpoints require `Authorization: Bearer $ADMIN_TOKEN` (absent
+`ADMIN_TOKEN` = always 403):
+
+- `GET /health` — liveness (Fly checks hit this); unauthenticated.
+- `GET /rooms` — per-room diagnostics: players, tick, `slowestTickMs`
+  (against the 50 ms budget), and `kbOutPerSec` (downstream bandwidth). Watch
+  these to set `MAX_ROOMS`.
+- `GET /rooms/:id/log` — the room's rolling replay log (recent commands with
+  their claimed eye pose + per-second pose anchors, `COMMAND_LOG_SIZE`
+  entries). Feed a dump to `bun scripts/replay.ts dump.json` to reconstruct
+  the command-driven state offline (edits/inventory/movement — mobs aren't
+  reproduced; the live RNG is unseeded).
+- `POST /rooms/:id/kick/:playerId` — eject a player (fatal `4003`, no retry).
+
+`PERSISTENCE=memory` runs with no database — local iteration, the Playwright
+multiplayer spec, and the two CLI clients: `bun scripts/netProbe.ts` (one
+client, joins/walks/tallies) and `bun scripts/loadSim.ts <url> <world> <N>
+<seconds>` (N synthetic clients → server tick p95 + bandwidth, for capacity
+tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
+`loadSim` `ADMIN_TOKEN` too for the server-side stats.
+
+### Runbook
+
+- **A player is stuck / griefing.** The world owner revokes shared invite
+  links from the menu ("Revoke links" on the world card — kills every
+  outstanding link at once; existing members keep access). To force a live
+  player out, `POST /rooms/:id/kick/:playerId`.
+- **A redeploy.** SIGTERM drains every room (persist + close with `4005`);
+  clients reconnect on the ladder to the new instance and re-sync. Loss is
+  bounded to the last 60 s (the dirty-persist interval) even on a hard crash.
+- **"How did this happen?"** Pull `/rooms/:id/log`, then `bun scripts/replay.ts`
+  to replay the command stream against a fresh engine and diff the outcome.
+- **Latency feels bad.** From a browser console, `window.__monecraft.net`
+  `.setSimulatedLatency(ms)` injects delay to reproduce; set
+  `NEXT_PUBLIC_NET_SIM_LATENCY_MS` to bake it into a dev build.
+- **Capacity.** Run `loadSim` at the target player count and watch
+  `slowestTickMs`/`kbOutPerSec` in `/rooms`; keep p95 well under 50 ms and set
+  `MAX_ROOMS` so peak memory (~74 MB/room) fits the machine. Net constants
+  (deadbands, keyframe/persist intervals, reconnect ladder) live in
+  [tuning.md](tuning.md#multiplayer-networking).
 
 Deploy: `server/Dockerfile` + `server/fly.toml` (see file comments). The
 container is platform-neutral — anything that runs a long-lived container
