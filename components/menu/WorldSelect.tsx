@@ -41,6 +41,7 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
   const [creatingOnline, setCreatingOnline] = useState(false);
   const [onlineWorlds, setOnlineWorlds] = useState<OnlineWorld[] | null>(null);
   const [inviteCopied, setInviteCopied] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
   const [onlineCreateError, setOnlineCreateError] = useState<string | null>(null);
 
@@ -198,20 +199,28 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
                         className="mc-button"
                         onClick={() => {
                           setInvitesRevoked(null);
+                          setInviteError(null);
+                          setInviteCopied(null);
                           void createInviteLink(world.id).then((link) => {
-                            if (!link) return;
-                            void navigator.clipboard?.writeText(link).catch(() => {});
-                            setInviteCopied(world.id);
+                            const clipboard = navigator.clipboard;
+                            // Mint failure (offline/auth) or no clipboard: report it, don't lie.
+                            if (!link || !clipboard) return void setInviteError(world.id);
+                            // Only claim "copied" once the write actually resolves (it can reject, e.g. no focus).
+                            void clipboard
+                              .writeText(link)
+                              .then(() => setInviteCopied(world.id))
+                              .catch(() => setInviteError(world.id));
                           });
                         }}
                       >
-                        {inviteCopied === world.id ? "Link copied!" : "Copy invite"}
+                        {inviteError === world.id ? "Copy failed" : inviteCopied === world.id ? "Link copied!" : "Copy invite"}
                       </button>
                       <button
                         className="mc-button"
                         title="Invalidate every invite link you've shared for this world"
                         onClick={() => {
                           setInviteCopied(null);
+                          setInviteError(null);
                           void revokeInviteLinks(world.id).then((count) => {
                             if (count !== null) setInvitesRevoked(world.id);
                           });
