@@ -4,7 +4,7 @@ import { BlockId, VoxelWorld } from "@/lib/world";
 import { CREEPER_FUSE_SECONDS, PET_FIGHT_RANGE } from "@/lib/game/config";
 import { FACTION_BY_KIND, mobHalfHeight } from "@/lib/game/mobs";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
-import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState, MobState, PlayerState } from "@/lib/game/engine/state";
 import { tickMobs, type MobTickDeps } from "@/lib/game/engine/systems/mobAI";
 import type { MobKind } from "@/lib/game/types";
 
@@ -38,18 +38,30 @@ function makeMob(kind: MobKind, x: number, y: number, z: number, attackTimer = 0
 
 function makeState(mobs: MobState[]): GameState {
   const world = new VoxelWorld(48, 48, 48, 1);
+  // Real players map: mobAI selects hunt/anchor targets from it. gameMode
+  // lives on the player now (hostiles only threaten survival/adventure).
+  const player = {
+    id: "local",
+    position: new THREE.Vector3(24, 30, 24),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true,
+    gameMode: "survival",
+    isDead: false
+  } as unknown as PlayerState;
   return {
+    players: new Map([["local", player]]),
     world,
     blockChanges: createBlockChangeTracker(world),
     primedTnt: new Map<number, number>(),
     worldMeshDirty: false,
-    gameMode: "survival", // hostiles only threaten survival/adventure players
     difficulty: "normal", // baseline 1× mob-damage multiplier
     mobs,
     projectiles: [],
     nextProjectileId: 1,
     daylight: 0.1, // night-ish so hostiles stay active and don't burn
-    player: { position: new THREE.Vector3(24, 30, 24), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true }
+    player
   } as unknown as GameState;
 }
 
@@ -58,7 +70,7 @@ function makeDeps() {
   let damage = 0;
   const deps: MobTickDeps = {
     surfaceYAt: () => 29, // keeps mob.y ≈ player.y so the vertical gap stays small
-    applyDamage: (a: number) => {
+    damagePlayer: (_p: PlayerState, a: number) => {
       damage += a;
     },
     removeMobAt: () => {},

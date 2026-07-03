@@ -1,3 +1,4 @@
+import { mobsThreaten } from "@/lib/game/gameModes";
 import type { GameState, PlayerId, PlayerState, PlayerTimers, WorldTimers } from "./state";
 
 /**
@@ -76,6 +77,47 @@ export function mustGetPlayer(state: GameState, id: PlayerId): PlayerState {
 
 export function primaryPlayer(state: GameState): PlayerState {
   return mustGetPlayer(state, state.primaryPlayerId);
+}
+
+/**
+ * Nearest player (any mode) to a world XZ position, or null with no players.
+ * The proximity anchor for flee/follow/interest behavior. Single-player: the
+ * one player — exactly the old `state.player` reads.
+ */
+export function nearestPlayerTo(state: GameState, x: number, z: number): PlayerState | null {
+  let best: PlayerState | null = null;
+  let bestSq = Infinity;
+  for (const player of state.players.values()) {
+    const dx = player.position.x - x;
+    const dz = player.position.z - z;
+    const d = dx * dx + dz * dz;
+    if (d < bestSq) {
+      bestSq = d;
+      best = player;
+    }
+  }
+  return best;
+}
+
+/**
+ * Nearest player hostiles may hunt — Creative/Spectator players aren't a
+ * threat target (mobsThreaten), so they're skipped. Null when nobody is
+ * huntable (or the world is empty, e.g. an idle server room).
+ */
+export function nearestTargetablePlayer(state: GameState, x: number, z: number): PlayerState | null {
+  let best: PlayerState | null = null;
+  let bestSq = Infinity;
+  for (const player of state.players.values()) {
+    if (!mobsThreaten(player.gameMode)) continue;
+    const dx = player.position.x - x;
+    const dz = player.position.z - z;
+    const d = dx * dx + dz * dz;
+    if (d < bestSq) {
+      bestSq = d;
+      best = player;
+    }
+  }
+  return best;
 }
 
 /**

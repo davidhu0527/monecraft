@@ -874,31 +874,39 @@ export class GameEngine {
     writeBack(bIsInventory, moved.b);
   }
 
-  private applyDamage = (amount: number): void => {
-    const heartsBefore = this.state.hearts;
-    const died = applyDamageWithArmor(this.state.player, amount, this.rng);
+  /** Armor-mitigated combat damage to a specific player (mob melee/arrows, explosions). */
+  private damageCombat = (player: PlayerState, amount: number): void => {
+    const heartsBefore = player.hearts;
+    const died = applyDamageWithArmor(player, amount, this.rng);
     if (died) {
-      if (this.state.hardcore) return void this.triggerGameOver();
-      clearEffects(this.state.player);
-      resetMining(this.state.player);
+      if (this.state.hardcore) return void this.triggerGameOver(player);
+      clearEffects(player);
+      resetMining(player);
       this.emit({ type: "died" });
-    } else if (this.state.hearts < heartsBefore) {
+    } else if (player.hearts < heartsBefore) {
       this.emit({ type: "playerHurt" });
     }
   };
 
-  private applyEnvironmentalDamage = (amount: number): void => {
-    const heartsBefore = this.state.hearts;
-    const died = applyUnmitigatedDamage(this.state.player, amount);
+  /** Armor-bypassing environmental damage to a specific player (fall/void/lava/water/drowning/starvation). */
+  private damageEnvironmental = (player: PlayerState, amount: number): void => {
+    const heartsBefore = player.hearts;
+    const died = applyUnmitigatedDamage(player, amount);
     if (died) {
-      if (this.state.hardcore) return void this.triggerGameOver();
-      clearEffects(this.state.player);
-      resetMining(this.state.player);
+      if (this.state.hardcore) return void this.triggerGameOver(player);
+      clearEffects(player);
+      resetMining(player);
       this.emit({ type: "died" });
-    } else if (this.state.hearts < heartsBefore) {
+    } else if (player.hearts < heartsBefore) {
       this.emit({ type: "playerHurt" });
     }
   };
+
+  // Single-arg wrappers bound to the primary player — the per-player step loop
+  // replaces these bindings with per-player closures when it lands.
+  private applyDamage = (amount: number): void => this.damageCombat(this.state.player, amount);
+
+  private applyEnvironmentalDamage = (amount: number): void => this.damageEnvironmental(this.state.player, amount);
 
   /**
    * Hardcore permadeath. The run is over: instead of the respawn countdown the
@@ -908,20 +916,19 @@ export class GameEngine {
    * the mode DIRECTLY (not via the now-locked switchGameMode). The shell saves
    * on the {type:"gameOver"} event so closing the tab still resumes the dead world.
    */
-  private triggerGameOver(): void {
-    const state = this.state;
-    state.gameOver = true;
-    state.gameMode = "spectator"; // free-cam roam; takesDamage=false → fully inert
-    state.isFlying = true;
-    state.isDead = false;
-    state.respawnTimer = 0;
-    state.hearts = 0; // the run's final state (bars are hidden in spectator anyway)
-    clearEffects(state.player);
-    resetMining(state.player);
-    state.inventoryOpen = false;
-    state.craftingStation = null;
-    state.openContainerIndex = null;
-    state.paused = false;
+  private triggerGameOver(player: PlayerState): void {
+    player.gameOver = true;
+    player.gameMode = "spectator"; // free-cam roam; takesDamage=false → fully inert
+    player.isFlying = true;
+    player.isDead = false;
+    player.respawnTimer = 0;
+    player.hearts = 0; // the run's final state (bars are hidden in spectator anyway)
+    clearEffects(player);
+    resetMining(player);
+    player.inventoryOpen = false;
+    player.craftingStation = null;
+    player.openContainerIndex = null;
+    this.state.paused = false;
     this.emit({ type: "gameOver" });
   }
 
@@ -1047,7 +1054,7 @@ export class GameEngine {
   private get mobTickDeps() {
     return {
       surfaceYAt: this.surfaceYAt,
-      applyDamage: this.applyDamage,
+      damagePlayer: this.damageCombat,
       removeMobAt: this.removeMobAt,
       rng: this.rng,
       emit: this.emit
