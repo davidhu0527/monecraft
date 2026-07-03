@@ -673,6 +673,46 @@ const GUNPOWDER_PALETTE: PixelPalette = { c: [120, 120, 126], C: [78, 78, 84], h
 const BONE_MEAL_PALETTE: PixelPalette = { c: [232, 228, 212], C: [196, 190, 170], h: [250, 248, 240] };
 const EMERALD_PALETTE: PixelPalette = { c: [46, 184, 110], C: [24, 120, 70], h: [150, 240, 180] };
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
+// A weathered parchment chart with a red X where the treasure lies.
+const TREASURE_MAP_PALETTE: PixelPalette = { o: [110, 88, 55], p: [222, 205, 160], P: [186, 166, 122], x: [190, 50, 40] };
+const TREASURE_MAP_GRID = [
+  "................",
+  ".oooooooooooooo.",
+  ".oppppppppppppo.",
+  ".opPPpppppppppo.",
+  ".opppppppPPpppo.",
+  ".opppxppxpppppo.",
+  ".oppppxxppppppo.",
+  ".oppppxxppppppo.",
+  ".opppxppxpppppo.",
+  ".oppPpppppppppo.",
+  ".opppppppppPPpo.",
+  ".oppppPPppppppo.",
+  ".oppppppppppppo.",
+  ".oooooooooooooo.",
+  "................",
+  "................"
+];
+// A folded sheet of dried kelp: dark seaweed-green with a fold seam and highlights.
+const DRIED_KELP_PALETTE: PixelPalette = { K: [34, 58, 38], k: [58, 102, 62], l: [110, 160, 104] };
+const DRIED_KELP_GRID = [
+  "................",
+  "................",
+  "................",
+  "...KKKKKKKKKK...",
+  "..KkkkkkkkkkkK..",
+  "..KklkkkkklkkK..",
+  "..KkkkkkkkkkkK..",
+  "..KKKKKKKKKKKK..",
+  "..KkkkkkkkkkkK..",
+  "..KklkkkkklkkK..",
+  "..KkkkkkkkkkkK..",
+  "...KKKKKKKKKK...",
+  "................",
+  "................",
+  "................",
+  "................"
+];
 const WHEAT_PALETTE: PixelPalette = { w: [226, 193, 90], W: [176, 142, 55], g: [110, 150, 60] };
 const BREAD_PALETTE: PixelPalette = { M: [120, 70, 35], b: [170, 110, 55], l: [210, 160, 95], s: [140, 90, 45] };
 const DOOR_PALETTE: PixelPalette = { d: [92, 55, 26], m: [156, 101, 50], l: [192, 137, 76], k: [220, 188, 86] };
@@ -814,6 +854,8 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   cooked_fish: { grid: FISH_GRID, palette: COOKED_FISH_PALETTE },
   fishing_rod: { grid: FISHING_ROD_GRID, palette: FISHING_ROD_PALETTE },
   seeds: { grid: SEEDS_GRID, palette: SEEDS_PALETTE },
+  dried_kelp: { grid: DRIED_KELP_GRID, palette: DRIED_KELP_PALETTE },
+  treasure_map: { grid: TREASURE_MAP_GRID, palette: TREASURE_MAP_PALETTE },
   wheat: { grid: WHEAT_GRID, palette: WHEAT_PALETTE },
   bread: { grid: BREAD_GRID, palette: BREAD_PALETTE },
   door: { grid: DOOR_GRID, palette: DOOR_PALETTE },

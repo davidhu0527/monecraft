@@ -2,6 +2,8 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectShipwreckSites,
+  collectTreasureSites,
   collectVillageSites,
   collidesAt,
   computeFullLight,
@@ -38,7 +40,7 @@ import {
   STUCK_RESET_SECONDS,
   WAKE_DAY_PHASE
 } from "@/lib/game/config";
-import { bossTracking, type BossTracking } from "@/lib/game/bossTracking";
+import { bossTracking, trackTarget, type BossTracking } from "@/lib/game/bossTracking";
 import { createEmptyArmorEquipment, createEmptySlot, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import {
   canMaterialRepair,
@@ -121,6 +123,7 @@ import {
   spawnInitialMobs,
   spawnMobGroup,
   spawnVillageResidents,
+  tickAquaticSpawnDirector,
   tickHostileSpawnDirector,
   tickSpawnerDirector
 } from "./systems/spawnDirector";
@@ -162,6 +165,7 @@ export class GameEngine {
   // Navigation values are rounded, so the ref-equality snapshot diff updates
   // the HUD responsively without forcing a React render for sub-block movement.
   private lastBoss: ({ hpPercent: number } & BossTracking) | null = null;
+  private lastTreasure: BossTracking | null = null;
   // The effects HUD projection is rebuilt only when its content (ids / rounded
   // seconds) changes, so the snapshot ref stays stable frame-to-frame and the
   // countdown re-renders at most ~once per second instead of every frame.
@@ -182,7 +186,11 @@ export class GameEngine {
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
     const dungeonSites = collectDungeonSites(world, this.worldType);
-    // Likewise re-derive village centers, so resident villagers can be seeded there.
+    // Likewise re-derive shipwreck and buried-treasure chests (they share the
+    // lazy loot fill; treasure also feeds the map compass) and village centers,
+    // so resident villagers can be seeded there.
+    const shipwreckSites = collectShipwreckSites(world, this.worldType);
+    const treasureSites = collectTreasureSites(world, this.worldType);
     const villageSites = collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
@@ -242,7 +250,10 @@ export class GameEngine {
       openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
-      lootedDungeonChests: new Set(),
+      shipwreckChestIndices: new Set(shipwreckSites.chestIndices),
+      buriedTreasureChestIndices: new Set(treasureSites.sites.map((site) => site.index)),
+      treasureSites: treasureSites.sites,
+      lootedWorldgenChests: new Set(),
       villageSites: villageSites.centers,
       paused: false,
       debugOpen: false,
@@ -279,7 +290,7 @@ export class GameEngine {
       this.state.hearts = restoreHearts(save) ?? this.state.hearts;
       this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
       this.state.spawnPoint = restoreSpawnPoint(save);
-      this.state.lootedDungeonChests = new Set(readLootedChests(save));
+      this.state.lootedWorldgenChests = new Set(readLootedChests(save));
       // Restore any active effects (cleared on death, so a live save carries them).
       for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
       this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
@@ -425,6 +436,7 @@ export class GameEngine {
     tickWeather(state);
     tickRandomBlocks(state, dt, this.rng);
     tickHostileSpawnDirector(state, dt, this.rng, this.surfaceYAt);
+    tickAquaticSpawnDirector(state, dt, this.rng);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
     tickPrimedTnt(state, dt, this.mobTickDeps);
@@ -754,7 +766,7 @@ export class GameEngine {
       hunger: state.hunger,
       spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
-      lootedChests: serializeLootedChests(state.lootedDungeonChests),
+      lootedChests: serializeLootedChests(state.lootedWorldgenChests),
       effects: serializeEffects(state.effects),
       xp: state.xp,
       stats: serializeStats(state.stats),
@@ -1170,6 +1182,41 @@ export class GameEngine {
   }
 
   /**
+   * Treasure-compass HUD data as a ref-stable object, rebuilt only when a
+   * rounded value moves. Non-null only while the selected hotbar item is a
+   * treasure map and an unlooted buried chest remains; the target is always the
+   * nearest unlooted site, so digging one up retargets the compass for free.
+   */
+  private treasureSnapshot(): BossTracking | null {
+    const state = this.state;
+    if (state.inventory[state.selectedSlot]?.id !== "treasure_map") {
+      if (this.lastTreasure !== null) this.lastTreasure = null;
+      return null;
+    }
+    let best: { x: number; z: number } | null = null;
+    let bestSq = Infinity;
+    for (const site of state.treasureSites) {
+      if (state.lootedWorldgenChests.has(site.index)) continue;
+      const dx = site.x - state.player.position.x;
+      const dz = site.z - state.player.position.z;
+      const d = dx * dx + dz * dz;
+      if (d < bestSq) {
+        bestSq = d;
+        best = site;
+      }
+    }
+    if (!best) {
+      if (this.lastTreasure !== null) this.lastTreasure = null;
+      return null;
+    }
+    const tracking = trackTarget(state.player, best.x + 0.5, best.z + 0.5);
+    if (!this.lastTreasure || tracking.bearingDegrees !== this.lastTreasure.bearingDegrees || tracking.distanceBlocks !== this.lastTreasure.distanceBlocks) {
+      this.lastTreasure = tracking;
+    }
+    return this.lastTreasure;
+  }
+
+  /**
    * Active effects as a ref-stable array, rebuilt only when the visible content
    * (ids or rounded seconds) changes — `Math.ceil(remaining)` only moves on
    * integer-second boundaries, so the HUD countdown re-renders ~1 Hz, not 60 Hz.
@@ -1221,6 +1268,7 @@ export class GameEngine {
       activeVillagerProfession: state.activeVillagerProfession,
       container: state.openContainerIndex !== null ? (state.containers.get(state.openContainerIndex) ?? null) : null,
       boss: this.bossSnapshot(),
+      treasure: this.treasureSnapshot(),
       victory: state.victory,
       activeEffects: this.effectsProjection(),
       xpLevel: xpLevel(state.xp),

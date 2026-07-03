@@ -403,6 +403,24 @@ how many catches a rod lands before breaking — only a successful reel wears it
 The catch odds live in the weighted `FISHING_LOOT` table in `lib/game/fishingLoot.ts`,
 not here.
 
+## Fish & the ocean
+
+`FISH_FLEE_RANGE`, `FISH_SUFFOCATION_HP_PER_SECOND`, `AQUATIC_CAP`,
+`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`.
+
+Read by the aquatic branch in `systems/mobAI.ts` and the aquatic spawn director
+in `systems/spawnDirector.ts`. `FISH_FLEE_RANGE` (5) is the 3D radius inside
+which a cod/salmon bolts away from the player — raise it for skittish fish that
+are hard to melee, lower it to make hand-fishing viable.
+`FISH_SUFFOCATION_HP_PER_SECOND` (2) drains a beached fish; at cod's 3 HP that's
+~1.5 s to die on land. `AQUATIC_CAP` (24) bounds the live fish population and
+`AQUATIC_SPAWN_INTERVAL_SECONDS` (8) is the director's top-up cadence — together
+they set how quickly a sailed-to ocean fills with fish (the sampler fails closed
+without nearby deep water, so these cost nothing on dry worlds).
+`KELP_GROWTH_CHANCE` (0.2) is the per-sampled-tick odds a kelp stalk grows one
+block (the same sampler as crops — see Farming above); height and surface
+clearance are worldgen invariants in `GEN.oceanFlora`, not tunables here.
+
 ## Beds & sleep
 
 `SLEEP_ALLOWED_BELOW_DAYLIGHT`, `SLEEP_HOSTILE_RADIUS`, `SLEEP_FADE_SECONDS`,
@@ -438,12 +456,12 @@ tolerated before the auto-unstuck teleport fires.
 
 Change these only with care:
 
-- **`WORLDGEN_VERSION`** (`8`) is the worldgen baseline each world records at
+- **`WORLDGEN_VERSION`** (`10`) is the worldgen baseline each world records at
   creation. When a deliberate terrain change invalidates old block-diffs, bump this:
   every world whose recorded version differs discards its stale diffs and reboots from
   its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
   This replaced the old whole-store `SAVE_KEY` bump, which reset _every_ world at once.
-  It's versioned independently of the save **schema** (currently v5); don't bump it to
+  It's versioned independently of the save **schema** (currently v16); don't bump it to
   express a schema change — add a migration instead.
 - **`SAVE_KEY`** (`"minecraft_save_v7"`) is now **legacy**: each world has its own
   `minecraft_world_save_<id>` key, and `SAVE_KEY` is read only once by the one-time
@@ -459,8 +477,12 @@ Change these only with care:
   [testing.md](testing.md). This includes **`GEN.dungeonCount`** (28, how many
   dungeon rooms are attempted), **`GEN.coalConfig`** (coal vein attempts/depth/size —
   coal is placed on its own PRNG in `placeCoal`, so retuning it shifts only coal,
-  not the rest of the terrain), and the dungeon loot tables / tier odds in
-  `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
+  not the rest of the terrain), **`GEN.oceanFlora`** (kelp/coral density, stalk
+  height cap, and the surface-clearance invariant), **`GEN.shipwreckCount`** (45
+  attempts) and **`GEN.buriedTreasureCount`** (90 attempts) — each on its own
+  decoupled PRNG, so retuning one shifts only that pass — and the worldgen-chest
+  loot tables / tier odds in `lib/game/dungeonLoot.ts` / `shipwreckLoot.ts` /
+  `buriedTreasureLoot.ts` (loot is pure logic, not a worldgen byte contract, but
   changing the _placement_ count or geometry is).
 - **World types** (Default / Superflat / Amplified / Islands) are terrain-config
   variations of `GEN` in **`terrainConfigFor`** (`generation.ts`) — they change

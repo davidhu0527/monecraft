@@ -125,4 +125,40 @@ describe("random block ticks", () => {
     tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0.99));
     expect(state.world.get(8, 5, 8)).toBe(BlockId.Dirt);
   });
+
+  /** Sand floor at y=4 with a 1-tall kelp stalk at y=5 under a water column up to `waterTop`. */
+  function plantKelp(state: GameState, waterTop: number): void {
+    state.blockChanges.set(8, 4, 8, BlockId.Sand);
+    state.blockChanges.set(8, 5, 8, BlockId.Kelp);
+    for (let y = 6; y <= waterTop; y += 1) state.blockChanges.set(8, y, 8, BlockId.Water);
+  }
+
+  test("kelp grows up through water until the surface clearance band stops it", () => {
+    const state = makeState();
+    plantKelp(state, 12); // water at 6..12; air above
+    // Every sample lands on the stalk top and passes the grow roll, so it climbs
+    // until growing further would eat into the 3-block clearance below the air:
+    // the top stops at y=9, keeping 10..12 water.
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0));
+    expect(state.world.get(8, 9, 8)).toBe(BlockId.Kelp);
+    expect(state.world.get(8, 10, 8)).toBe(BlockId.Water);
+    expect(state.worldMeshDirty).toBe(true);
+  });
+
+  test("kelp stops at its maximum stalk height in deep water", () => {
+    const state = makeState();
+    plantKelp(state, 20); // deep: clearance never binds
+    // GEN.oceanFlora.kelpMaxHeight is 6, so the stalk tops out at y=10 (5..10).
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0));
+    expect(state.world.get(8, 10, 8)).toBe(BlockId.Kelp);
+    expect(state.world.get(8, 11, 8)).toBe(BlockId.Water);
+  });
+
+  test("kelp does not grow when the growth roll fails", () => {
+    const state = makeState();
+    plantKelp(state, 12);
+    // 0.99 is at/above KELP_GROWTH_CHANCE, so every roll fails.
+    tickRandomBlocks(state, RANDOM_TICK_INTERVAL_SECONDS, scriptedRng(0.99));
+    expect(state.world.get(8, 6, 8)).toBe(BlockId.Water);
+  });
 });

@@ -6,7 +6,7 @@ import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/ga
 import { canEditBlocks, freeBuild } from "@/lib/game/gameModes";
 import type { EmitGameEvent, FrameInput, GameState } from "../state";
 import { efficiencyMultiplier, fortuneLevel } from "@/lib/game/enchantments";
-import { fillDungeonChestIfUnlooted } from "./dungeon";
+import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
 import { hasteMultiplier } from "./statusEffects";
@@ -58,8 +58,8 @@ function addBlockDrop(state: GameState, block: BlockId, rng: () => number, tool:
  * removed and a pickedUp toast announces what was retrieved.
  */
 function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): boolean {
-  // Breaking an unopened dungeon chest still pays out its loot.
-  fillDungeonChestIfUnlooted(state, idx);
+  // Breaking an unopened worldgen chest still pays out its loot.
+  fillWorldgenChestIfUnlooted(state, idx, emit);
   const container = state.containers.get(idx);
   const items = container?.filter((slot) => slot.id && slot.count > 0) ?? [];
   if (items.length > 0) {
@@ -144,6 +144,18 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
     state.blockChanges.set(bx, by, bz, BlockId.Air);
     if (other && other.upper !== door.upper) {
       state.blockChanges.set(bx, door.upper ? by - 1 : by + 1, bz, BlockId.Air);
+    }
+  } else if (targetBlock === BlockId.Kelp) {
+    // Breaking a kelp cell breaks the whole stalk above it (each cell drops),
+    // and a submerged stalk refills with water — never air — so harvesting
+    // doesn't leave air pockets in the ocean. The targeted cell's own drop
+    // rides the shared addBlockDrop call below.
+    let top = by;
+    while (world.get(bx, top + 1, bz) === BlockId.Kelp) top += 1;
+    const fill = world.get(bx, top + 1, bz) === BlockId.Water ? BlockId.Water : BlockId.Air;
+    for (let y = by; y <= top; y += 1) {
+      state.blockChanges.set(bx, y, bz, fill);
+      if (!creative && y > by) addBlockDrop(state, BlockId.Kelp, rng, tool);
     }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);

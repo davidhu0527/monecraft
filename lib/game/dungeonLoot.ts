@@ -12,6 +12,8 @@ import type { MobDrop } from "@/lib/game/mobLoot";
  */
 export type LootEntry = MobDrop;
 export type LootTier = "common" | "rare";
+/** One rolled chest drop — the shared shape every worldgen loot table yields. */
+export type LootDrop = { itemId: string; count: number };
 
 /** Probability a chest rolls the rare tier (on top of the common roll). */
 export const RARE_CHEST_CHANCE = 0.25;
@@ -58,8 +60,8 @@ export function seededRng(seed: number): () => number {
   };
 }
 
-function rollEntries(entries: LootEntry[], rng: () => number): Array<{ itemId: string; count: number }> {
-  const drops: Array<{ itemId: string; count: number }> = [];
+function rollEntries(entries: LootEntry[], rng: () => number): LootDrop[] {
+  const drops: LootDrop[] = [];
   for (const entry of entries) {
     if (entry.chance !== undefined && clampUnit(rng()) >= entry.chance) continue;
     const span = entry.max - entry.min + 1;
@@ -70,13 +72,19 @@ function rollEntries(entries: LootEntry[], rng: () => number): Array<{ itemId: s
 }
 
 /**
- * Rolls one dungeon chest. Consumes one rng sample for the tier, then rolls the
- * common table (always) plus the rare table when the chest is rare. `rng` is
+ * Rolls one tiered worldgen chest. Consumes one rng sample for the tier, then
+ * rolls the common table (always) plus the rare table when the chest is rare —
+ * the shared shape for dungeon, shipwreck, and buried-treasure chests. `rng` is
  * injectable so tests get deterministic loot (and the engine seeds it per chest).
  */
-export function rollDungeonLoot(rng: () => number): Array<{ itemId: string; count: number }> {
+export function rollTieredLoot(tables: Record<LootTier, LootEntry[]>, rng: () => number): LootDrop[] {
   const rare = clampUnit(rng()) < RARE_CHEST_CHANCE;
-  const drops = rare ? rollEntries(DUNGEON_LOOT.rare, rng) : [];
-  drops.push(...rollEntries(DUNGEON_LOOT.common, rng));
+  const drops = rare ? rollEntries(tables.rare, rng) : [];
+  drops.push(...rollEntries(tables.common, rng));
   return drops;
+}
+
+/** Rolls one dungeon chest (see rollTieredLoot). */
+export function rollDungeonLoot(rng: () => number): LootDrop[] {
+  return rollTieredLoot(DUNGEON_LOOT, rng);
 }

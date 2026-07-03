@@ -10,6 +10,8 @@ export type MobTemplate = {
   attackCooldown: number;
   /** Fires arrows and kites instead of meleeing (skeletons, boss). */
   ranged?: boolean;
+  /** Lives in water: swims in 3D via the aquatic branch in mobAI, suffocates on land. */
+  aquatic?: boolean;
   modelArgs: Parameters<typeof createMobModel>;
 };
 
@@ -76,6 +78,28 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     attackCooldown: 1.0,
     // Orange tabby with green eyes; small and lithe.
     modelArgs: [0xd98a3a, 0xe0a050, 0xb06a28, 0x9bd84f, 0xc06a20, [0.55, 0.45, 0.95], [0.42, 0.4, 0.42]]
+  },
+  cod: {
+    // A small schooling fish: passive, flees the player in 3D (see the aquatic
+    // branch in mobAI). detectRange 0 like the land passives.
+    speed: 1.1,
+    hp: 3,
+    detectRange: 0,
+    attackDamage: 0,
+    attackCooldown: 0,
+    aquatic: true,
+    // Grey-brown body, sandy belly fins, pale tail; flat and small.
+    modelArgs: [0x8a8a72, 0xa0a088, 0x6f6f5c, 0x101010, 0xb8b8a4, [0.32, 0.3, 0.7], [0.3, 0.34, 0.38], "fish"]
+  },
+  salmon: {
+    speed: 1.25,
+    hp: 4,
+    detectRange: 0,
+    attackDamage: 0,
+    attackCooldown: 0,
+    aquatic: true,
+    // Red-pink body with darker back fins; longer than the cod.
+    modelArgs: [0xb35a4a, 0xc06a56, 0x7a3a30, 0x101010, 0x8f4438, [0.38, 0.34, 0.92], [0.32, 0.4, 0.44], "fish"]
   },
   zombie: {
     speed: 1.05,
@@ -168,6 +192,8 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
   pig: "wild",
   wolf: "wild",
   cat: "wild",
+  cod: "wild",
+  salmon: "wild",
   villager: "villager",
   zombie: "hostile",
   skeleton: "hostile",
@@ -183,6 +209,8 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
  */
 export function mobHalfHeight(kind: MobKind): number {
   const bodyHeight = MOB_TEMPLATES[kind].modelArgs[5][1];
+  // Fish have no legs — their model is centered on the body (createFishModel).
+  if (MOB_TEMPLATES[kind].aquatic) return bodyHeight * 0.5 + 0.05;
   const legHeight = Math.max(0.3, bodyHeight * 0.56);
   return Math.max(bodyHeight, legHeight) * 0.5 + 0.2;
 }

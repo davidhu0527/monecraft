@@ -53,6 +53,7 @@ export function opacity(block: BlockId): number {
       return 0;
     case BlockId.Leaves:
     case BlockId.Water:
+    case BlockId.Kelp:
       return 1;
     default:
       return OPAQUE;

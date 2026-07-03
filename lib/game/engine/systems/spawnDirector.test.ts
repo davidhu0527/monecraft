@@ -1,18 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { HOSTILE_CAP } from "@/lib/game/config";
-import { VoxelWorld, generateWorld } from "@/lib/world";
+import * as THREE from "three";
+import { AQUATIC_CAP, AQUATIC_SPAWN_INTERVAL_SECONDS, HOSTILE_CAP } from "@/lib/game/config";
+import { BlockId, VoxelWorld, generateWorld } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { createSurfaceYAt } from "@/lib/game/spawn";
 import {
   assignVillagerProfessions,
   pushMob,
+  spawnAquaticGroup,
   spawnVillageResidents,
+  tickAquaticSpawnDirector,
   tickHostileSpawnDirector,
   tickSpawnerDirector
 } from "@/lib/game/engine/systems/spawnDirector";
 import { PROFESSIONS } from "@/lib/game/trades";
-import type { GameState } from "@/lib/game/engine/state";
+import { createTimers, type GameState } from "@/lib/game/engine/state";
 import type { Difficulty } from "@/lib/game/difficulties";
 
 function mulberry32(seed: number): () => number {
@@ -153,5 +156,89 @@ describe("tickSpawnerDirector", () => {
     e.state.timers.spawnerTimer = 1000;
     tickSpawnerDirector(e.state, 0.1, mulberry32(5), () => {});
     expect(hostileCount(e)).toBe(0);
+  });
+});
+
+describe("spawnAquaticGroup", () => {
+  test("spawns fish fully submerged in a water pool", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    // A sand basin (floor y=10) holding 4 blocks of water (y 11..14).
+    for (let x = 20; x <= 44; x += 1) {
+      for (let z = 20; z <= 44; z += 1) {
+        world.set(x, 10, z, BlockId.Sand);
+        for (let y = 11; y <= 14; y += 1) world.set(x, y, z, BlockId.Water);
+      }
+    }
+    const state = { world, mobs: [], nextMobId: 1 } as unknown as GameState;
+
+    spawnAquaticGroup(state, "cod", 5, 32, 32, 10, mulberry32(7));
+
+    expect(state.mobs).toHaveLength(5);
+    for (const mob of state.mobs) {
+      expect(mob.kind).toBe("cod");
+      expect(mob.hostile).toBe(false);
+      const cell = world.get(Math.floor(mob.position.x), Math.floor(mob.position.y), Math.floor(mob.position.z));
+      expect(cell).toBe(BlockId.Water);
+    }
+  });
+
+  test("fails closed on a dry world: zero fish, no land spawns", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    for (let x = 0; x < 64; x += 1) for (let z = 0; z < 64; z += 1) world.set(x, 10, z, BlockId.Grass);
+    const state = { world, mobs: [], nextMobId: 1 } as unknown as GameState;
+
+    spawnAquaticGroup(state, "salmon", 5, 32, 32, 10, mulberry32(7));
+
+    expect(state.mobs).toHaveLength(0);
+  });
+});
+
+describe("tickAquaticSpawnDirector", () => {
+  /** A hand-built state over a world-wide water basin (the director samples a
+   *  wide radius around the player, so the whole floor must hold water), with
+   *  the player floating above it. */
+  function makeAquaticState(): GameState {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    for (let x = 0; x < 64; x += 1) {
+      for (let z = 0; z < 64; z += 1) {
+        world.set(x, 10, z, BlockId.Sand);
+        for (let y = 11; y <= 14; y += 1) world.set(x, y, z, BlockId.Water);
+      }
+    }
+    return {
+      world,
+      mobs: [],
+      nextMobId: 1,
+      timers: createTimers(),
+      player: { position: new THREE.Vector3(32, 16, 32) }
+    } as unknown as GameState;
+  }
+
+  test("accumulates its timer and only spawns once the interval elapses", () => {
+    const state = makeAquaticState();
+    const rng = mulberry32(7);
+
+    tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS / 2, rng);
+    expect(state.mobs).toHaveLength(0); // interval not yet reached
+    expect(state.timers.aquaticSpawnTimer).toBeGreaterThan(0);
+
+    tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS / 2, rng);
+    expect(state.mobs.length).toBeGreaterThan(0); // the director's own path spawned
+    expect(state.timers.aquaticSpawnTimer).toBe(0); // and reset its timer
+    for (const mob of state.mobs) {
+      expect(["cod", "salmon"]).toContain(mob.kind);
+      const cell = state.world.get(Math.floor(mob.position.x), Math.floor(mob.position.y), Math.floor(mob.position.z));
+      expect(cell).toBe(BlockId.Water);
+    }
+  });
+
+  test("no-ops once the aquatic population sits at the cap", () => {
+    const state = makeAquaticState();
+    const rng = mulberry32(7);
+    for (let i = 0; i < AQUATIC_CAP; i += 1) pushMob(state, "cod", false, 32, 12, 32, rng);
+
+    tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS, rng);
+
+    expect(state.mobs).toHaveLength(AQUATIC_CAP);
   });
 });

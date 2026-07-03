@@ -166,6 +166,7 @@ player who hasn't found coal can still cook.
 | Cooked Beef     | Raw Beef + Fuel     | Furnace |
 | Cooked Porkchop | Raw Porkchop + Fuel | Furnace |
 | Cooked Fish     | Raw Fish + Fuel     | Furnace |
+| 3 Dried Kelp    | 3 Kelp + Fuel       | Furnace |
 
 ### Brewing & potions
 
@@ -238,54 +239,57 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
 ## Blocks
 
-**37 block types** (plus air). Hardness is relative break time — higher is slower.
+**40 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
-| Block             | Hardness | Mine with       | Notes                                                                                                                             |
-| ----------------- | -------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                                       |
-| Dirt              | 2        | any             | —                                                                                                                                 |
-| Sand              | 2        | any             | Common on beaches and in deserts                                                                                                  |
-| Snow              | 2        | any             | Mountain peaks                                                                                                                    |
-| Leaves            | 2        | any             | From trees; drops a sapling ~8% of the time, else nothing                                                                         |
-| Cactus            | 2        | any             | Desert decoration                                                                                                                 |
-| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                              |
-| Wood              | 3        | any             | Tree trunks                                                                                                                       |
-| Planks            | 3        | any             | Crafted from wood                                                                                                                 |
-| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                                              |
-| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                                    |
-| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                                     |
-| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                                          |
-| Brewing Stand     | 4        | any             | **Interactive** — opens brewing recipes (potions). Crafted from 3 cobble + 1 gold ore                                             |
-| Enchanting Table  | 6        | any             | **Interactive** — opens the enchanting panel (spend XP levels). Crafted from 2 diamond ore + 4 cobble                             |
-| Anvil             | 6        | any             | **Interactive** — opens the anvil panel: repair/combine/rename held gear for XP levels. Crafted from 3 gold ore + 4 cobble        |
-| Grindstone        | 5        | any             | **Interactive** — opens the grindstone panel: strip a held item's enchantments for an XP refund. Crafted from 2 cobble + 2 planks |
-| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full)                     |
-| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                               |
-| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                                        |
-| TNT               | 1        | any             | **Interactive** — right-click with a torch to light a fuse, then it explodes (power 4). Crafted from gunpowder + sand             |
-| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item                      |
-| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                                        |
-| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it                          |
-| Coal Ore          | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                                            |
-| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                                                 |
-| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                                                 |
-| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                                                 |
-| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                                                 |
-| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                                               |
-| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                                               |
-| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                                          |
-| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                                     |
-| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                              |
-| Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                                      |
-| Bedrock           | —        | unbreakable     | World floor and border                                                                                                            |
-| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second                      |
+| Block             | Hardness | Mine with       | Notes                                                                                                                                                                                            |
+| ----------------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Grass             | 2        | any             | Drops dirt; ~20% chance to also drop a seed                                                                                                                                                      |
+| Dirt              | 2        | any             | —                                                                                                                                                                                                |
+| Sand              | 2        | any             | Common on beaches and in deserts                                                                                                                                                                 |
+| Snow              | 2        | any             | Mountain peaks                                                                                                                                                                                   |
+| Leaves            | 2        | any             | From trees; drops a sapling ~8% of the time, else nothing                                                                                                                                        |
+| Cactus            | 2        | any             | Desert decoration                                                                                                                                                                                |
+| Glass             | 2        | any             | Crafted from sand; clear when placed                                                                                                                                                             |
+| Wood              | 3        | any             | Tree trunks                                                                                                                                                                                      |
+| Planks            | 3        | any             | Crafted from wood                                                                                                                                                                                |
+| Stone             | 5        | Wood Pickaxe    | Drops the stone item                                                                                                                                                                             |
+| Cobblestone       | 5        | Wood Pickaxe    | Drops cobble (crafting staple)                                                                                                                                                                   |
+| Brick             | 5        | Wood Pickaxe    | Crafted; also found in houses                                                                                                                                                                    |
+| Furnace           | 5        | Wood Pickaxe    | **Interactive** — opens smelting recipes                                                                                                                                                         |
+| Brewing Stand     | 4        | any             | **Interactive** — opens brewing recipes (potions). Crafted from 3 cobble + 1 gold ore                                                                                                            |
+| Enchanting Table  | 6        | any             | **Interactive** — opens the enchanting panel (spend XP levels). Crafted from 2 diamond ore + 4 cobble                                                                                            |
+| Anvil             | 6        | any             | **Interactive** — opens the anvil panel: repair/combine/rename held gear for XP levels. Crafted from 3 gold ore + 4 cobble                                                                       |
+| Grindstone        | 5        | any             | **Interactive** — opens the grindstone panel: strip a held item's enchantments for an XP refund. Crafted from 2 cobble + 2 planks                                                                |
+| Chest             | 3        | any             | **Interactive** — 27-slot storage; breaking it spills the contents into your inventory (refused if it's full)                                                                                    |
+| Wood Door         | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                                                                                              |
+| Torch             | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                                                                                                       |
+| TNT               | 1        | any             | **Interactive** — right-click with a torch to light a fuse, then it explodes (power 4). Crafted from gunpowder + sand                                                                            |
+| Lava              | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item                                                                                     |
+| Mossy Cobblestone | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                                                                                                       |
+| Spawner           | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it                                                                                         |
+| Coal Ore          | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                                                                                                           |
+| Sliver Ore        | 7        | Stone Pickaxe   | —                                                                                                                                                                                                |
+| Ruby Ore          | 9        | Sliver Pickaxe  | —                                                                                                                                                                                                |
+| Gold Ore          | 11       | Sliver Pickaxe  | —                                                                                                                                                                                                |
+| Sapphire Ore      | 12       | Ruby Pickaxe    | —                                                                                                                                                                                                |
+| Diamond Ore       | 14       | Ruby Pickaxe    | Deepest, rarest ore                                                                                                                                                                              |
+| Bed               | 2        | any             | **Interactive** — sleep & set spawn                                                                                                                                                              |
+| Farmland          | 1        | any             | Tilled soil; reverts to dirt when broken                                                                                                                                                         |
+| Wheat (stage 0–2) | 1        | any             | Immature crop; drops its seed                                                                                                                                                                    |
+| Wheat (stage 3)   | 1        | any             | Mature crop; drops wheat + 1–2 seeds                                                                                                                                                             |
+| Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                                                                                                     |
+| Kelp              | 1        | any             | Ocean-floor stalks; breaking a cell breaks the stalk above it and submerged cells refill with **water**, never air. Grows upward over time (capped ~3 below the surface). Smelts into dried kelp |
+| Pink/Blue Coral   | 2        | any             | Decorative reef blocks scattered on the sandy ocean floor (worldgen-only source; drop themselves)                                                                                                |
+| Bedrock           | —        | unbreakable     | World floor and border                                                                                                                                                                           |
+| Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second                                                                                     |
 
 ## Mobs
 
-**13 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+**15 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
 can be bred; wolves and cats are passive until **tamed** into fighting companions;
+**cod and salmon** swim the oceans, flee in 3D, and suffocate out of water;
 the villager is passive but doesn't flee (right-click to trade); hostiles hunt at
 night and also attack villagers; **raiders** storm a village in waves when a raid is
 triggered. Drop counts are inclusive ranges rolled per kill.
@@ -299,6 +303,8 @@ triggered. Drop counts are inclusive ranges rolled per kill.
 | Pig      | passive | 8            | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
 | Wolf     | passive | 8 (20 tamed) | 1.3   | 12 (tamed)   | 4 (ally, melee)    | 0.9 s    | nothing                         |
 | Cat      | passive | 8 (20 tamed) | 1.35  | 12 (tamed)   | 3 (ally, melee)    | 1.0 s    | nothing                         |
+| Cod      | passive | 3            | 1.1   | —            | —                  | —        | 1 Raw Fish                      |
+| Salmon   | passive | 4            | 1.25  | —            | —                  | —        | 1–2 Raw Fish                    |
 | Villager | passive | 20           | 0.6   | —            | — (trade partner)  | —        | nothing                         |
 | Zombie   | hostile | 100          | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
 | Skeleton | hostile | 100          | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
@@ -434,21 +440,22 @@ to a free inventory slot. Worn pieces render on the third-person player model
 
 `Eat` (`F`) restores the listed hunger.
 
-| Item            | Hunger restored | Source             |
-| --------------- | --------------- | ------------------ |
-| Cooked Chicken  | 8               | Smelt raw chicken  |
-| Cooked Mutton   | 8               | Smelt raw mutton   |
-| Cooked Beef     | 8               | Smelt raw beef     |
-| Cooked Porkchop | 8               | Smelt raw porkchop |
-| Food            | 7               | Generic food item  |
-| Cooked Fish     | 6               | Smelt raw fish     |
-| Bread           | 6               | Craft from 3 wheat |
-| Raw Chicken     | 3               | Chicken drop       |
-| Raw Mutton      | 3               | Sheep drop         |
-| Raw Beef        | 3               | Cow drop           |
-| Raw Porkchop    | 3               | Pig drop           |
-| Raw Fish        | 2               | Reel in by fishing |
-| Rotten Flesh    | 2               | Zombie drop        |
+| Item            | Hunger restored | Source                   |
+| --------------- | --------------- | ------------------------ |
+| Cooked Chicken  | 8               | Smelt raw chicken        |
+| Cooked Mutton   | 8               | Smelt raw mutton         |
+| Cooked Beef     | 8               | Smelt raw beef           |
+| Cooked Porkchop | 8               | Smelt raw porkchop       |
+| Food            | 7               | Generic food item        |
+| Cooked Fish     | 6               | Smelt raw fish           |
+| Bread           | 6               | Craft from 3 wheat       |
+| Raw Chicken     | 3               | Chicken drop             |
+| Raw Mutton      | 3               | Sheep drop               |
+| Raw Beef        | 3               | Cow drop                 |
+| Raw Porkchop    | 3               | Pig drop                 |
+| Raw Fish        | 2               | Fish, or hunt cod/salmon |
+| Dried Kelp      | 2               | Smelt kelp (3 per fuel)  |
+| Rotten Flesh    | 2               | Zombie drop              |
 
 ### Materials
 
@@ -461,7 +468,9 @@ and **Charcoal** (smelted from wood) — interchangeable for smelting and torche
 **Gunpowder** (creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
 Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
-boss drop that crafts the Dragon Sword). Brewing materials: the **Glass Bottle**
+boss drop that crafts the Dragon Sword). The **Treasure Map** (found in
+shipwrecks, rarely fished up) shows a compass to the nearest unearthed
+[buried treasure](#buried-treasure) while held. Brewing materials: the **Glass Bottle**
 and the five **potions** drink with `F` for a [status effect](#status-effects).
 
 ## Dungeons
@@ -482,6 +491,33 @@ Each chest rolls a tier:
 drips one hostile (zombie/skeleton/spider) every ~8 s onto the room floor, up to
 6 clustered nearby (and never past the global hostile cap of 16). Mining the
 spawner block out stops it.
+
+## Shipwrecks
+
+Flooded plank hulls (broken walls, a snapped mast) sink onto the **deep ocean
+floor**, clear of spawn. Each holds 1–2 loot chests filled lazily on first
+access, exactly like dungeon chests but from their own table
+(`lib/game/shipwreckLoot.ts`) — nautical salvage, and the main source of the
+**treasure map**.
+
+| Tier   | Odds | Contents                                                                                       |
+| ------ | ---- | ---------------------------------------------------------------------------------------------- |
+| Common | 75%  | Planks (always), treasure map (40%), emeralds, string, leather, raw fish, dried kelp, gold ore |
+| Rare   | 25%  | Everything a common chest rolls **plus** diamond/sapphire ore, a bow, a sapphire sword, boots  |
+
+## Buried treasure
+
+Lone chests buried **two blocks under beach sand** near the waterline, clear of
+spawn. Hold a **treasure map** to see a compass pill (bearing + distance) to the
+**nearest** unearthed chest and red **X** marks on the minimap; dig where X
+marks the spot. The map is stateless — dig one up and the compass retargets to
+the next. First access emits the **X Marks the Spot** advancement and rolls the
+richest chest table in the game (`lib/game/buriedTreasureLoot.ts`).
+
+| Tier   | Odds | Contents                                                                                               |
+| ------ | ---- | ------------------------------------------------------------------------------------------------------ |
+| Common | 75%  | Emeralds (always), gold/diamond/sapphire ore, cooked fish, arrows                                      |
+| Rare   | 25%  | Everything a common chest rolls **plus** more diamonds, a gold sword, chestplate, rare diamond pickaxe |
 
 ## Endgame
 
@@ -505,24 +541,25 @@ the moment their goal is met (a toast + chime), persist in the save, and are
 **kept across death**. The registry lives in `lib/game/engine/systems/advancements.ts`;
 each is a declarative `{ stat, threshold }` row, so nothing is gated behind them.
 
-| Advancement    | Category  | How to unlock              |
-| -------------- | --------- | -------------------------- |
-| Getting Wood   | Mining    | Chop down a log            |
-| Stone Age      | Mining    | Mine a block of stone      |
-| Iron-ish       | Mining    | Mine sliver ore            |
-| Diamonds!      | Mining    | Mine diamond ore           |
-| Tool Up        | Crafting  | Craft a pickaxe (any tier) |
-| Hot Topic      | Crafting  | Craft a furnace            |
-| Take Aim       | Combat    | Fire an arrow from a bow   |
-| Monster Hunter | Combat    | Slay a hostile monster     |
-| Dragon Slayer  | Combat    | Defeat the Dragon Lord     |
-| Two by Two     | Farming   | Breed two animals          |
-| Time to Farm   | Farming   | Harvest fully-grown wheat  |
-| Gone Fishing   | Farming   | Reel in a catch            |
-| Enchanter      | Magic     | Enchant an item            |
-| Local Brewery  | Magic     | Drink a potion             |
-| Sleep Tight    | Adventure | Sleep through the night    |
-| Hired Help     | Adventure | Trade with a villager      |
+| Advancement      | Category  | How to unlock                  |
+| ---------------- | --------- | ------------------------------ |
+| Getting Wood     | Mining    | Chop down a log                |
+| Stone Age        | Mining    | Mine a block of stone          |
+| Iron-ish         | Mining    | Mine sliver ore                |
+| Diamonds!        | Mining    | Mine diamond ore               |
+| Tool Up          | Crafting  | Craft a pickaxe (any tier)     |
+| Hot Topic        | Crafting  | Craft a furnace                |
+| Take Aim         | Combat    | Fire an arrow from a bow       |
+| Monster Hunter   | Combat    | Slay a hostile monster         |
+| Dragon Slayer    | Combat    | Defeat the Dragon Lord         |
+| Two by Two       | Farming   | Breed two animals              |
+| Time to Farm     | Farming   | Harvest fully-grown wheat      |
+| Gone Fishing     | Farming   | Reel in a catch                |
+| Enchanter        | Magic     | Enchant an item                |
+| Local Brewery    | Magic     | Drink a potion                 |
+| Sleep Tight      | Adventure | Sleep through the night        |
+| Hired Help       | Adventure | Trade with a villager          |
+| X Marks the Spot | Adventure | Dig up a buried treasure chest |
 
 ## Statistics
 
@@ -530,20 +567,21 @@ Running counters shown on the overlay's Statistics tab — also persisted and ke
 across death. (Internally more counters are tracked to drive advancements, e.g.
 per-ore mining and per-recipe crafts; these are the ones displayed.)
 
-| Statistic          | Counts                                            |
-| ------------------ | ------------------------------------------------- |
-| Time Played        | Seconds of active play                            |
-| Distance Travelled | Blocks walked on foot (boat travel isn't counted) |
-| Blocks Mined       | Total blocks broken                               |
-| Logs Chopped       | Logs broken                                       |
-| Diamond Ore Mined  | Diamond ore broken                                |
-| Monsters Slain     | Hostile mobs killed                               |
-| Animals Bred       | Successful breedings                              |
-| Items Crafted      | Successful crafts (incl. smelting & trading)      |
-| Items Enchanted    | Enchantments applied                              |
-| Potions Drunk      | Potions consumed                                  |
-| Fish Caught        | Fishing catches                                   |
-| Arrows Fired       | Bow shots                                         |
-| Villager Trades    | Trades made with a villager                       |
-| Jumps              | Times jumped                                      |
-| Deaths             | Times died                                        |
+| Statistic           | Counts                                            |
+| ------------------- | ------------------------------------------------- |
+| Time Played         | Seconds of active play                            |
+| Distance Travelled  | Blocks walked on foot (boat travel isn't counted) |
+| Blocks Mined        | Total blocks broken                               |
+| Logs Chopped        | Logs broken                                       |
+| Diamond Ore Mined   | Diamond ore broken                                |
+| Monsters Slain      | Hostile mobs killed                               |
+| Animals Bred        | Successful breedings                              |
+| Items Crafted       | Successful crafts (incl. smelting & trading)      |
+| Items Enchanted     | Enchantments applied                              |
+| Potions Drunk       | Potions consumed                                  |
+| Fish Caught         | Fishing catches                                   |
+| Treasures Unearthed | Buried treasure chests dug up                     |
+| Arrows Fired        | Bow shots                                         |
+| Villager Trades     | Trades made with a villager                       |
+| Jumps               | Times jumped                                      |
+| Deaths              | Times died                                        |

@@ -41,9 +41,9 @@ import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
 import { MAX_VEHICLES } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
-import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
+import { fillWorldgenChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
-import type { FrameInput } from "@/lib/game/engine/state";
+import type { FrameInput, GameEvent } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
 /**
@@ -124,11 +124,11 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4);
+    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper + cod/salmon
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4 + 6 + 4);
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(32);
+    expect(engine.getSnapshot().passiveCount).toBe(42); // land passives + villagers + 10 fish
     expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
@@ -462,6 +462,37 @@ describe("mining", () => {
     run(engine, 4, input({ leftMouseHeld: true, pointerLocked: false }));
     expect(engine.state.blockChanges.changes().length).toBe(0);
   });
+
+  test("breaking a submerged kelp cell breaks the stalk above it and refills with water", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    // A clear lane at eye height into a 3-tall kelp stalk topped with water; the
+    // ray hits the stalk's MIDDLE cell (ey), so the cascade must take ey+1 too.
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Air);
+    state.blockChanges.set(ex, ey - 1, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey + 1, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey + 2, ez - 2, BlockId.Water);
+
+    const before = countsById(state.inventory).get("kelp") ?? 0;
+    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+
+    // The hit cell and everything above it turned to water (no air pocket)...
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Water);
+    expect(state.world.get(ex, ey + 1, ez - 2)).toBe(BlockId.Water);
+    // ...the stalk base below the hit survives, and both cells dropped kelp.
+    expect(state.world.get(ex, ey - 1, ez - 2)).toBe(BlockId.Kelp);
+    expect(countsById(state.inventory).get("kelp")).toBe(before + 2);
+  });
 });
 
 describe("chests", () => {
@@ -658,8 +689,8 @@ describe("chests", () => {
     const idx = engine.state.world.index(22, 40, 22);
     engine.state.dungeonChestIndices.add(idx);
 
-    fillDungeonChestIfUnlooted(engine.state, idx);
-    expect(engine.state.lootedDungeonChests.has(idx)).toBe(true);
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
 
     // Emptying it and re-accessing must not re-roll: the looted set is the gate.
@@ -667,7 +698,7 @@ describe("chests", () => {
       idx,
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
-    fillDungeonChestIfUnlooted(engine.state, idx);
+    fillWorldgenChestIfUnlooted(engine.state, idx);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
 
@@ -677,7 +708,7 @@ describe("chests", () => {
     engine.state.blockChanges.set(20, 40, 20, BlockId.Chest);
     engine.state.dungeonChestIndices.add(idx);
 
-    fillDungeonChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
+    fillWorldgenChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
     // Player loots everything; the now-empty container drops out of the save.
     engine.state.containers.set(
@@ -690,9 +721,9 @@ describe("chests", () => {
     // would normally be among them, so simulate that — the point under test is
     // that the *persisted looted set*, not the chest's emptiness, blocks re-roll.
     restored.state.dungeonChestIndices.add(idx);
-    expect(restored.state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(restored.state.lootedWorldgenChests.has(idx)).toBe(true);
 
-    fillDungeonChestIfUnlooted(restored.state, idx);
+    fillWorldgenChestIfUnlooted(restored.state, idx);
     const after = restored.state.containers.get(idx) ?? [];
     expect(after.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
@@ -709,9 +740,76 @@ describe("chests", () => {
     run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
-    expect(state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
     expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
+  });
+
+  test("the treasure-map compass targets the nearest unlooted buried chest and retargets after digging", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.mobs = [];
+    // Two hand-injected buried sites (the 64³ test world derives none — all
+    // candidates fall inside the spawn-clearance radius, like dungeons).
+    const near = { x: Math.floor(state.player.position.x) + 10, y: 20, z: Math.floor(state.player.position.z), index: 0 };
+    near.index = state.world.index(near.x, near.y, near.z);
+    const far = { x: near.x + 20, y: 20, z: near.z, index: 0 };
+    far.index = state.world.index(far.x, far.y, far.z);
+    state.treasureSites = [far, near];
+    state.buriedTreasureChestIndices.add(near.index).add(far.index);
+
+    // No map held → no compass. (getSnapshot returns the cached snapshot, so
+    // step once to rebuild it against the injected sites.)
+    engine.step(0.01, input());
+    expect(engine.getSnapshot().treasure).toBeNull();
+
+    // Holding the map targets the NEAREST unlooted site.
+    state.inventory[state.selectedSlot] = createSlot("treasure_map", 1);
+    engine.step(0.01, input());
+    const first = engine.getSnapshot().treasure;
+    expect(first).not.toBeNull();
+    expect(Math.abs(first!.distanceBlocks - 10)).toBeLessThanOrEqual(1);
+
+    // Digging up the near chest (first fill) emits the unearthed event and
+    // retargets the compass to the remaining site.
+    const events: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(state, near.index, (e) => events.push(e));
+    expect(events.some((e) => e.type === "treasureUnearthed")).toBe(true);
+    engine.step(0.01, input());
+    const second = engine.getSnapshot().treasure;
+    expect(Math.abs(second!.distanceBlocks - 30)).toBeLessThanOrEqual(1);
+
+    // Both looted → the compass goes dark.
+    fillWorldgenChestIfUnlooted(state, far.index);
+    engine.step(0.01, input());
+    expect(engine.getSnapshot().treasure).toBeNull();
+  });
+
+  test("a shipwreck chest fills from the shipwreck table, once, from its own seed family", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(24, 40, 24);
+    engine.state.shipwreckChestIndices.add(idx);
+
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
+    const slots = engine.state.containers.get(idx)!;
+    // Planks are the shipwreck table's guaranteed salvage (bone is the dungeon one).
+    expect(slots.some((slot) => slot.id === "planks" && slot.count > 0)).toBe(true);
+
+    // The same index registered as a dungeon chest instead rolls different loot —
+    // the family picks both the table and the seed constant.
+    const other = makeEngine();
+    other.state.dungeonChestIndices.add(idx);
+    fillWorldgenChestIfUnlooted(other.state, idx);
+    expect(other.state.containers.get(idx)!.some((slot) => slot.id === "bone" && slot.count > 0)).toBe(true);
+
+    // Re-access after emptying never re-rolls (the shared looted set gates it).
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
 });
 

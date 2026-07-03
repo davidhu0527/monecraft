@@ -18,7 +18,7 @@ import { createEmptySlot } from "@/lib/game/items";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState } from "../state";
 import { findAimedMobIndex } from "./combat";
-import { fillDungeonChestIfUnlooted } from "./dungeon";
+import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { primeTnt } from "./explosion";
 import { lookDirection } from "./playerMotion";
 import { growTreeAt } from "./treeGrowth";
@@ -108,8 +108,8 @@ function interactChest(state: GameState, emit: EmitGameEvent, x: number, y: numb
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
   }
-  // A worldgen dungeon chest rolls its loot here, on first open (then never again).
-  fillDungeonChestIfUnlooted(state, idx);
+  // A worldgen chest (dungeon/shipwreck/buried) rolls its loot here, on first open (then never again).
+  fillWorldgenChestIfUnlooted(state, idx, emit);
   state.openContainerIndex = idx;
   state.inventoryOpen = true;
   emit({ type: "openedContainer" });

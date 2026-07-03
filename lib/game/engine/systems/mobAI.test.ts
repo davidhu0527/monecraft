@@ -371,3 +371,63 @@ describe("companion pets (allies)", () => {
     expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(3); // teleported adjacent
   });
 });
+
+describe("aquatic fish", () => {
+  /** Fills a water pool (x,z in 20..28, y in 18..22) into the state's empty world. */
+  function fillPool(state: GameState): void {
+    for (let x = 20; x <= 28; x += 1) {
+      for (let z = 20; z <= 28; z += 1) {
+        for (let y = 18; y <= 22; y += 1) state.world.set(x, y, z, BlockId.Water);
+      }
+    }
+  }
+
+  function makeFish(x: number, y: number, z: number): MobState {
+    const fish = makeMob("cod", x, y, z);
+    fish.hostile = false;
+    return fish;
+  }
+
+  test("a swimming fish stays confined to water cells", () => {
+    const fish = makeFish(24.5, 20.5, 24.5);
+    const state = makeState([fish]);
+    fillPool(state);
+    const { deps } = makeDeps();
+
+    // Long run with wandering turns: wherever it ends up each tick, the cell
+    // holding its body center is always water (it bounces off the pool walls).
+    for (let i = 0; i < 200; i += 1) {
+      tickMobs(state, 0.1, deps);
+      const cell = state.world.get(Math.floor(fish.position.x), Math.floor(fish.position.y), Math.floor(fish.position.z));
+      expect(cell).toBe(BlockId.Water);
+    }
+  });
+
+  test("a fish flees the player in 3D when approached", () => {
+    const fish = makeFish(24.5, 20.5, 24.5);
+    const state = makeState([fish]);
+    fillPool(state);
+    state.player.position.set(24.5, 20.5, 22.5); // 2 blocks away, inside FISH_FLEE_RANGE
+    const { deps } = makeDeps();
+
+    for (let i = 0; i < 10; i += 1) tickMobs(state, 0.1, deps);
+
+    expect(fish.position.z).toBeGreaterThan(24.5); // swam away (+z) from the player
+    expect(fish.moveSpeed).toBeCloseTo(fish.speed * 1.6, 5); // flee boost
+  });
+
+  test("a beached fish is immobile, suffocates, and is eventually swept", () => {
+    const fish = makeFish(24, 30, 24); // dry cell: the state world is air here
+    const state = makeState([fish]);
+    const removed: number[] = [];
+    const { deps } = makeDeps();
+    deps.removeMobAt = (i: number) => removed.push(i);
+
+    tickMobs(state, 1, deps);
+    expect(fish.moveSpeed).toBe(0);
+    expect(fish.hp).toBeCloseTo(9 - 2, 5); // FISH_SUFFOCATION_HP_PER_SECOND drain
+
+    for (let i = 0; i < 5; i += 1) tickMobs(state, 1, deps);
+    expect(removed).toContain(0); // dead and swept
+  });
+});

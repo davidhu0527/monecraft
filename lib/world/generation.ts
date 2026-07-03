@@ -63,7 +63,21 @@ export const GEN = Object.freeze({
   // shifts the shared `rand` stream — existing ores, trees, and structures stay
   // byte-identical to before coal, exactly as deep-cave lava did. It is the
   // shallowest, most common ore: large veins reaching near the surface.
-  coalConfig: Object.freeze({ attempts: 160000, minY: 4, maxYOffset: 8, minSize: 4, maxSize: 12 })
+  coalConfig: Object.freeze({ attempts: 160000, minY: 4, maxYOffset: 8, minSize: 4, maxSize: 12 }),
+  // Ocean flora (kelp stalks and reef coral), hash-gated per ocean-floor column
+  // like cacti so density follows the actual ocean area. kelpSurfaceClearance is
+  // the water that must remain above a stalk's top — kelp is a solid block, so
+  // the clearance keeps boats, fishing casts, and the water surface clear of it
+  // (random-tick growth enforces the same invariant, see randomTicks.ts).
+  oceanFlora: Object.freeze({ kelpChance: 0.03, coralChance: 0.006, kelpMaxHeight: 6, kelpSurfaceClearance: 3 }),
+  // Sunken shipwrecks: flooded plank hulls with lazily-filled loot chests on the
+  // deep ocean floor, on their own decoupled PRNG (shipwreckRand) like dungeons.
+  // Placement attempts, not a guaranteed count: only draws landing in deep ocean
+  // build a wreck (~15% of the map), so ~45 attempts yield a handful of wrecks.
+  shipwreckCount: 45,
+  // Buried treasure: lone chests two blocks under a beach, hunted via the
+  // treasure map. Attempts too — the beach band is a thin slice of the map.
+  buriedTreasureCount: 90
 });
 
 /**
@@ -166,10 +180,19 @@ export function generateWorld(world: VoxelWorld, worldType: WorldType = "default
   placeCacti(world);
   placeStructures(world, rand);
   placeDungeons(world, cfg);
-  // Villages run LAST on their own decoupled PRNG (villageRand), so they add
+  // Villages run on their own decoupled PRNG (villageRand), so they add
   // structures without shifting any other stream — every pass above stays
   // byte-identical to a village-less world of the same seed.
   placeVillages(world, cfg);
+  // Shipwrecks likewise run on their own PRNG (shipwreckRand), before ocean
+  // flora so kelp can't occupy a hull cell the wreck is about to overwrite.
+  placeShipwrecks(world, cfg);
+  // Ocean flora is hash-gated like cacti (consumes no shared PRNG), so every
+  // earlier pass stays byte-identical to a kelp-less world of the same seed.
+  placeOceanFlora(world, cfg);
+  // Buried treasure runs last on its own PRNG (treasureRand): its chest cell is
+  // written after every other pass, so nothing can overwrite a derived site.
+  placeBuriedTreasure(world, cfg);
 }
 
 function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
@@ -456,6 +479,42 @@ function placeCacti(world: VoxelWorld): void {
 
       const height = 2 + (hash2D(z * 3.1, x * 1.3) > 0.5 ? 1 : 0);
       for (let y = 1; y <= height; y += 1) world.set(x, topY + y, z, BlockId.Cactus);
+    }
+  }
+}
+
+/**
+ * Kelp stalks and reef coral on the ocean floor. Hash-gated column scan like
+ * placeCacti (no shared-PRNG draws): each sandy ocean-floor column deep enough
+ * under the sea rolls for a kelp stalk or a lone coral block. Stalk heights cap
+ * so at least kelpSurfaceClearance water remains above the top — kelp is solid,
+ * and the clearance keeps the water surface (boats, fishing) clear of it.
+ */
+function placeOceanFlora(world: VoxelWorld, cfg: TerrainConfig): void {
+  const { kelpChance, coralChance, kelpMaxHeight, kelpSurfaceClearance } = GEN.oceanFlora;
+  for (let x = 4; x < world.sizeX - 4; x += 1) {
+    for (let z = 4; z < world.sizeZ - 4; z += 1) {
+      if (world.getBiome(x, z) !== BiomeId.Ocean) continue;
+
+      const topY = world.highestSolidY(x, z);
+      if (world.get(x, topY, z) !== BlockId.Sand) continue;
+      // Need room for at least one flora block plus the clearance band above it.
+      const depth = cfg.seaLevel - topY;
+      if (depth < kelpSurfaceClearance + 1) continue;
+
+      const roll = hash2D(x * 2.9 + 5.7, z * 1.9 - 3.3);
+      if (roll < kelpChance) {
+        const maxHeight = Math.min(kelpMaxHeight, depth - kelpSurfaceClearance);
+        const height = 1 + Math.floor(hash2D(z * 3.7 + 1.9, x * 4.3 - 2.7) * maxHeight);
+        for (let y = 1; y <= height; y += 1) {
+          if (world.get(x, topY + y, z) !== BlockId.Water) break;
+          world.set(x, topY + y, z, BlockId.Kelp);
+        }
+      } else if (roll < kelpChance + coralChance) {
+        if (world.get(x, topY + 1, z) !== BlockId.Water) continue;
+        const pink = hash2D(x * 5.3 - 3.1, z * 2.7 + 9.9) > 0.5;
+        world.set(x, topY + 1, z, pink ? BlockId.CoralPink : BlockId.CoralBlue);
+      }
     }
   }
 }
@@ -747,4 +806,197 @@ export function collectVillageSites(world: VoxelWorld, worldType: WorldType = "d
   const centers: Array<{ x: number; z: number }> = [];
   buildVillages(world, false, (x, z) => centers.push({ x, z }), terrainConfigFor(worldType));
   return { centers };
+}
+
+// ── Shipwrecks ──────────────────────────────────────────────────────────────
+// Flooded plank hulls sunk on the deep ocean floor, holding 1–2 lazily-filled
+// loot chests (the dungeon chest machinery, generalized — see systems/dungeon.ts).
+// Same build/derive discipline as dungeons: a dedicated PRNG seeded only from
+// world.seed with a fixed number of draws per attempt, and seed-pure validation
+// via terrainTopY/getBiome so collectShipwreckSites replays the exact layout.
+
+type ShipwreckSink = (chestIdx: number) => void;
+const NOOP_SHIPWRECK_SINK: ShipwreckSink = () => {};
+
+/** A PRNG seeded only from the world seed, decoupled from every other gen stream. */
+function shipwreckRand(seed: number): () => number {
+  let t = (seed ^ 0xc2b2ae35) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Builds one wreck: a plank floor pad with broken plank walls, wood bow/stern
+ * posts, a snapped mast, and chests on the floor. Interior cells are left
+ * untouched — they are already sea water, so the hull reads as flooded. The
+ * hull spans ±4 along its axis and ±2 across; `axisX` picks the orientation.
+ */
+function buildShipwreckHull(
+  world: VoxelWorld,
+  cx: number,
+  cz: number,
+  floorY: number,
+  axisX: boolean,
+  secondChest: boolean,
+  mastHeight: number,
+  write: boolean,
+  sink: ShipwreckSink
+): void {
+  // Local hull coords (u along the ship, v across) → world coords.
+  const wx = (u: number, v: number): number => (axisX ? cx + u : cx + v);
+  const wz = (u: number, v: number): number => (axisX ? cz + v : cz + u);
+
+  if (write) {
+    for (let u = -4; u <= 4; u += 1) {
+      for (let v = -2; v <= 2; v += 1) {
+        if (!world.inBounds(wx(u, v), floorY - 1, wz(u, v))) continue;
+        // Floor pad under the whole footprint.
+        world.set(wx(u, v), floorY - 1, wz(u, v), BlockId.Planks);
+        // Side walls with hash-gated gaps (the wreck is broken open); bow and
+        // stern are solid wood posts.
+        const side = Math.abs(v) === 2 && Math.abs(u) < 4;
+        const end = Math.abs(u) === 4;
+        for (let y = 0; y <= 1; y += 1) {
+          const x = wx(u, v);
+          const z = wz(u, v);
+          if (end && Math.abs(v) <= 1) world.set(x, floorY + y, z, BlockId.Wood);
+          else if (side && hash2D(x * 1.3 + y * 2.1, z * 1.7 - y * 0.9) > 0.35) world.set(x, floorY + y, z, BlockId.Planks);
+        }
+      }
+    }
+    // The snapped mast amidships.
+    for (let y = 0; y < mastHeight; y += 1) {
+      if (world.inBounds(cx, floorY + y, cz)) world.set(cx, floorY + y, cz, BlockId.Wood);
+    }
+    world.set(wx(-2, 0), floorY, wz(-2, 0), BlockId.Chest);
+    if (secondChest) world.set(wx(2, 0), floorY, wz(2, 0), BlockId.Chest);
+  }
+  sink(world.index(wx(-2, 0), floorY, wz(-2, 0)));
+  if (secondChest) sink(world.index(wx(2, 0), floorY, wz(2, 0)));
+}
+
+function buildShipwrecks(world: VoxelWorld, write: boolean, sink: ShipwreckSink, cfg: TerrainConfig): void {
+  const rand = shipwreckRand(world.seed);
+  const centerX = world.sizeX / 2;
+  const centerZ = world.sizeZ / 2;
+  for (let i = 0; i < GEN.shipwreckCount; i += 1) {
+    // Draw every random up front so the stream advances identically whether or
+    // not this wreck turns out to be placeable.
+    const cx = 12 + Math.floor(rand() * (world.sizeX - 24));
+    const cz = 12 + Math.floor(rand() * (world.sizeZ - 24));
+    const axisX = rand() < 0.5;
+    const secondChest = rand() < 0.5;
+    const mastHeight = 2 + Math.floor(rand() * 2);
+
+    // Deep open water only: the mast top (floorY + mastHeight - 1, with
+    // floorY = surface + 2) must stay below the sea surface. All seed-pure.
+    if (world.getBiome(cx, cz) !== BiomeId.Ocean) continue;
+    const surface = terrainTopY(world, cx, cz, cfg);
+    if (surface + 2 + mastHeight > cfg.seaLevel) continue;
+    // Clear of spawn, like dungeons — no free starter loot.
+    if (Math.hypot(cx - centerX, cz - centerZ) < 40) continue;
+
+    buildShipwreckHull(world, cx, cz, surface + 2, axisX, secondChest, mastHeight, write, sink);
+  }
+}
+
+function placeShipwrecks(world: VoxelWorld, cfg: TerrainConfig): void {
+  buildShipwrecks(world, true, NOOP_SHIPWRECK_SINK, cfg);
+}
+
+export type ShipwreckSites = { chestIndices: number[] };
+
+/**
+ * Re-derives the voxel indices of every shipwreck chest WITHOUT writing blocks,
+ * by replaying buildShipwrecks' placement math — the same load-time derive
+ * dungeons use, feeding the generalized lazy loot fill (systems/dungeon.ts).
+ */
+export function collectShipwreckSites(world: VoxelWorld, worldType: WorldType = "default"): ShipwreckSites {
+  const chestIndices: number[] = [];
+  buildShipwrecks(world, false, (idx) => chestIndices.push(idx), terrainConfigFor(worldType));
+  return { chestIndices };
+}
+
+// ── Buried treasure ─────────────────────────────────────────────────────────
+// A lone chest buried two blocks under a beach, found by following a treasure
+// map (looted from shipwrecks, rarely fished up). Same build/derive discipline
+// as dungeons/shipwrecks; the beach test is a seed-pure PROXY — the terrain
+// height band around sea level plus a nearby below-sea column — never
+// placeBeaches' block reads, which caves or player edits could shift.
+
+type TreasureSink = (x: number, y: number, z: number, chestIdx: number) => void;
+const NOOP_TREASURE_SINK: TreasureSink = () => {};
+
+/** A PRNG seeded only from the world seed, decoupled from every other gen stream. */
+function treasureRand(seed: number): () => number {
+  let t = (seed ^ 0x27d4eb2f) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Seed-pure water proxy: some column within `radius` has its terrain below sea level. */
+function nearSeaColumn(world: VoxelWorld, cx: number, cz: number, radius: number, cfg: TerrainConfig): boolean {
+  for (let dx = -radius; dx <= radius; dx += 2) {
+    for (let dz = -radius; dz <= radius; dz += 2) {
+      if (terrainTopY(world, cx + dx, cz + dz, cfg) < cfg.seaLevel) return true;
+    }
+  }
+  return false;
+}
+
+function buildBuriedTreasure(world: VoxelWorld, write: boolean, sink: TreasureSink, cfg: TerrainConfig): void {
+  const rand = treasureRand(world.seed);
+  const centerX = world.sizeX / 2;
+  const centerZ = world.sizeZ / 2;
+  for (let i = 0; i < GEN.buriedTreasureCount; i += 1) {
+    // Draw every random up front so the stream advances identically whether or
+    // not this chest turns out to be placeable.
+    const cx = 12 + Math.floor(rand() * (world.sizeX - 24));
+    const cz = 12 + Math.floor(rand() * (world.sizeZ - 24));
+
+    // Dry shoreline only: the surface sits in the beach band around sea level
+    // on a non-ocean column, with open sea nearby. All seed-pure.
+    if (world.getBiome(cx, cz) === BiomeId.Ocean) continue;
+    const surface = terrainTopY(world, cx, cz, cfg);
+    if (surface > cfg.seaLevel + GEN.beachMaxAboveSea || surface < cfg.seaLevel - GEN.beachDepthBelowSea) continue;
+    if (!nearSeaColumn(world, cx, cz, 4, cfg)) continue;
+    // Clear of spawn, like dungeons — no free starter loot.
+    if (Math.hypot(cx - centerX, cz - centerZ) < 40) continue;
+
+    const chestY = surface - 2;
+    if (chestY < 2) continue;
+    if (write) {
+      world.set(cx, chestY, cz, BlockId.Chest);
+      // Sand caps the dig column, marking the spot subtly and guaranteeing the
+      // chest is buried (a cave breaching the column can't leave it exposed).
+      world.set(cx, chestY + 1, cz, BlockId.Sand);
+      world.set(cx, chestY + 2, cz, BlockId.Sand);
+    }
+    sink(cx, chestY, cz, world.index(cx, chestY, cz));
+  }
+}
+
+function placeBuriedTreasure(world: VoxelWorld, cfg: TerrainConfig): void {
+  buildBuriedTreasure(world, true, NOOP_TREASURE_SINK, cfg);
+}
+
+export type TreasureSites = { sites: Array<{ x: number; y: number; z: number; index: number }> };
+
+/**
+ * Re-derives every buried-treasure chest position WITHOUT writing blocks, by
+ * replaying buildBuriedTreasure's placement math. The engine derives these at
+ * boot for the treasure-map compass and the lazy loot fill.
+ */
+export function collectTreasureSites(world: VoxelWorld, worldType: WorldType = "default"): TreasureSites {
+  const sites: Array<{ x: number; y: number; z: number; index: number }> = [];
+  buildBuriedTreasure(world, false, (x, y, z, index) => sites.push({ x, y, z, index }), terrainConfigFor(worldType));
+  return { sites };
 }

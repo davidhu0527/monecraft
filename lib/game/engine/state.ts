@@ -151,6 +151,7 @@ export type GameTimers = {
   effectPoisonTimer: number;
   stuckTimer: number;
   hostileSpawnTimer: number;
+  aquaticSpawnTimer: number;
   spawnerTimer: number;
   daylightHudTimer: number;
   debugHudTimer: number;
@@ -226,8 +227,14 @@ export type GameState = {
   dungeonChestIndices: Set<number>;
   /** Worldgen dungeon spawner voxel indices (session; re-derived from the seed each load). */
   dungeonSpawnerIndices: Set<number>;
-  /** Dungeon chests already opened/broken (persisted) — gates one-time lazy loot fill. */
-  lootedDungeonChests: Set<number>;
+  /** Worldgen shipwreck chest voxel indices (session; re-derived from the seed each load). */
+  shipwreckChestIndices: Set<number>;
+  /** Worldgen buried-treasure chest voxel indices (session; re-derived from the seed each load). */
+  buriedTreasureChestIndices: Set<number>;
+  /** Buried-treasure chest positions (session; re-derived) — the treasure-map compass targets the nearest unlooted one. */
+  treasureSites: Array<{ x: number; y: number; z: number; index: number }>;
+  /** Worldgen chests (dungeon/shipwreck/buried) already opened/broken (persisted as `lootedChests`) — gates one-time lazy loot fill. */
+  lootedWorldgenChests: Set<number>;
   /** Village center (x,z) sites (session; re-derived from the seed each load) — seed the resident villager population. */
   villageSites: Array<{ x: number; z: number }>;
   /** Frozen simulation behind the pause menu; only commands are processed. */
@@ -285,6 +292,7 @@ export function createTimers(): GameTimers {
     effectPoisonTimer: 0,
     stuckTimer: 0,
     hostileSpawnTimer: 0,
+    aquaticSpawnTimer: 0,
     spawnerTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,
@@ -365,6 +373,8 @@ export type GameSnapshot = {
   container: InventorySlot[] | null;
   /** Live boss health and navigation data, or null when no boss is alive — drives the boss HUD. */
   boss: ({ hpPercent: number } & BossTracking) | null;
+  /** Bearing/distance to the nearest unlooted buried treasure while a treasure map is held, or null — drives the compass HUD. */
+  treasure: BossTracking | null;
   /** True after the boss is defeated — drives the victory screen. */
   victory: boolean;
   /** Active status effects (id + rounded seconds left) — drives the HUD effects readout. Ref-stable between content changes. */
@@ -396,6 +406,7 @@ export type GameEvent =
   | { type: "bowFired" }
   | { type: "bossSummoned"; x: number; y: number; z: number }
   | { type: "bossDefeated"; x: number; y: number; z: number }
+  | { type: "treasureUnearthed" }
   | { type: "summonFailed" }
   | { type: "explosion"; x: number; y: number; z: number; power: number }
   | { type: "tntPrimed"; x: number; y: number; z: number }

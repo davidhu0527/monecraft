@@ -12,6 +12,7 @@ import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
+import TreasureCompass from "@/components/game/TreasureCompass";
 import VictoryScreen from "@/components/game/VictoryScreen";
 import XpBar from "@/components/game/XpBar";
 import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, ENCHANT_COST_LEVELS } from "@/lib/game/config";
@@ -66,6 +67,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     activeVillagerProfession,
     container,
     boss,
+    treasure,
     victory,
     activeEffects,
     xpLevel,
@@ -141,6 +143,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
       {showClickHint ? <div className="click-hint">Double-click to play</div> : null}
 
       <BossHealthBar boss={boss} />
+
+      <TreasureCompass treasure={treasure} />
 
       <ActiveEffects effects={activeEffects} />
 

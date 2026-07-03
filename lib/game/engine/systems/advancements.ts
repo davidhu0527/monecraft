@@ -36,6 +36,7 @@ export const STATS: readonly StatMeta[] = [
   { id: "items_enchanted", label: "Items Enchanted", format: "count" },
   { id: "potions_drunk", label: "Potions Drunk", format: "count" },
   { id: "fish_caught", label: "Fish Caught", format: "count" },
+  { id: "treasure_unearthed", label: "Treasures Unearthed", format: "count" },
   { id: "arrows_fired", label: "Arrows Fired", format: "count" },
   { id: "villager_trades", label: "Villager Trades", format: "count" },
   { id: "jumps", label: "Jumps", format: "count" },
@@ -98,6 +99,9 @@ export function recordEvent(state: GameState, event: GameEvent): void {
       break;
     case "bossDefeated":
       bump(state, "boss_defeated");
+      break;
+    case "treasureUnearthed":
+      bump(state, "treasure_unearthed");
       break;
     case "died":
     case "gameOver": // hardcore permadeath emits gameOver instead of died — still a death
@@ -216,6 +220,15 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "emerald",
     category: "Adventure",
     stat: "villager_trades",
+    threshold: 1
+  },
+  {
+    id: "x_marks_the_spot",
+    title: "X Marks the Spot",
+    description: "Dig up a buried treasure chest.",
+    icon: "treasure_map",
+    category: "Adventure",
+    stat: "treasure_unearthed",
     threshold: 1
   }
 ];

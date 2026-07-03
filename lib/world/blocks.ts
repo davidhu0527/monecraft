@@ -76,7 +76,14 @@ export const enum BlockId {
   Anvil = 53,
   // A crafted station: right-click to open the grindstone panel, which strips a
   // held item's enchantments and refunds some XP (see interact.ts).
-  Grindstone = 54
+  Grindstone = 54,
+  // Ocean flora. Kelp is a solid cube painted to read as a plant (like wheat)
+  // that generates in stalks on the ocean floor and grows upward through water
+  // via random ticks; breaking one cell breaks the stalk above it (mining.ts).
+  Kelp = 55,
+  // Decorative reef blocks scattered on the ocean floor (worldgen only).
+  CoralPink = 56,
+  CoralBlue = 57
 }
 
 export enum BiomeId {
@@ -118,7 +125,10 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.BrewingStand]: 0x9a86b6,
   [BlockId.EnchantingTable]: 0x3a2a6a,
   [BlockId.Anvil]: 0x4a4a52,
-  [BlockId.Grindstone]: 0x8a7a5c
+  [BlockId.Grindstone]: 0x8a7a5c,
+  [BlockId.Kelp]: 0x3f7a4a,
+  [BlockId.CoralPink]: 0xd9739c,
+  [BlockId.CoralBlue]: 0x4f86c8
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -187,5 +197,10 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   // A dark iron block with a lighter worktop face (painted in atlas.ts).
   [BlockId.Anvil]: [0.27, 0.28, 0.31],
   // A stone wheel on a wooden frame (painted in atlas.ts).
-  [BlockId.Grindstone]: [0.5, 0.43, 0.32]
+  [BlockId.Grindstone]: [0.5, 0.43, 0.32],
+  // A dark sea-green stalk with paler fronds (painted in atlas.ts).
+  [BlockId.Kelp]: [0.16, 0.4, 0.24],
+  // Reef corals: a branching pattern over the base color (painted in atlas.ts).
+  [BlockId.CoralPink]: [0.8, 0.42, 0.58],
+  [BlockId.CoralBlue]: [0.28, 0.5, 0.76]
 };

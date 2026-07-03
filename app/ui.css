@@ -814,6 +814,39 @@
   transition: width 0.2s linear;
 }
 
+/* --- Treasure-map compass --- */
+
+.treasure-compass {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(0, 0, 0, 0.65);
+  color: #f6d374;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: var(--mc-text-shadow);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.treasure-pointer {
+  width: 0;
+  height: 0;
+  border-right: 6px solid transparent;
+  border-bottom: 12px solid #f6d374;
+  border-left: 6px solid transparent;
+  filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.9));
+  transform-origin: 50% 50%;
+  transition: transform 80ms linear;
+}
+
 /* --- Victory screen --- */
 
 .victory-overlay {

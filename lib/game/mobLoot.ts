@@ -36,6 +36,10 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
   // Pets drop nothing — you don't harvest your companions. Empty tables are allowed.
   wolf: [],
   cat: [],
+  // Fish yield the same raw fish the rod reels in — hunting them by hand or
+  // sword is just a wetter way to fill the cat-taming/cooking pipeline.
+  cod: [{ itemId: "raw_fish", min: 1, max: 1 }],
+  salmon: [{ itemId: "raw_fish", min: 1, max: 2 }],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
   spider: [{ itemId: "string", min: 0, max: 2 }],

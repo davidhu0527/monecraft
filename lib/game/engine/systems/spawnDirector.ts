@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { BlockId } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import {
+  AQUATIC_CAP,
+  AQUATIC_SPAWN_INTERVAL_SECONDS,
   BOSS_SUMMON_INTERVAL_SECONDS,
   HOSTILE_CAP,
   HOSTILE_SPAWN_BELOW_DAYLIGHT,
@@ -15,7 +17,7 @@ import {
 import { FACTION_BY_KIND, MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { PROFESSIONS } from "@/lib/game/trades";
 import { hostileCapScale, hostileSpawnIntervalScale, hostilesSpawn } from "@/lib/game/difficulties";
-import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
+import { randomLandPointNear, randomWaterPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState, MobState } from "../state";
 
@@ -79,6 +81,20 @@ export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () =>
 }
 
 /**
+ * Spawns fish submerged in open water near the center. Each fish needs a water
+ * column at least 2 deep; a dry world (Superflat) or an inland center simply
+ * yields fewer or zero fish — the sampler fails closed, never onto land.
+ * pushMob expects ground-level feet, so the swim point converts to feet-y.
+ */
+export function spawnAquaticGroup(state: GameState, kind: MobKind, count: number, centerX: number, centerZ: number, radius: number, rng: () => number): void {
+  for (let i = 0; i < count; i += 1) {
+    const pos = randomWaterPointNear(state.world, centerX, centerZ, radius, rng);
+    if (!pos) return;
+    pushMob(state, kind, false, pos.x, pos.y - mobHalfHeight(kind), pos.z, rng);
+  }
+}
+
+/**
  * The day-one population around the player's spawn point. Passives scatter
  * over a wider ring than hostiles so the spawn area doesn't feel like a
  * petting zoo; hostiles stay closer (the dawn-aggro behavior tests document).
@@ -115,6 +131,30 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     // game point-blank; passives may roam right up to the spawn area.
     spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius, minRadius: hostile ? HOSTILE_SPAWN_MIN_RADIUS : 0 }, rng, surfaceYAt);
   }
+  // Fish school in whatever water lies near spawn; a landlocked spawn gets none
+  // (the aquatic director repopulates oceans the player sails to later).
+  spawnAquaticGroup(state, "cod", 6, centerX, centerZ, passiveRadius, rng);
+  spawnAquaticGroup(state, "salmon", 4, centerX, centerZ, passiveRadius, rng);
+}
+
+/**
+ * Trickles fish in around the player so any ocean feels stocked, not just the
+ * spawn-time one. Every interval it tops the population up toward AQUATIC_CAP,
+ * one small school at a time; without nearby deep water the sampler fails
+ * closed and the tick is a no-op (Superflat never spawns a fish).
+ */
+export function tickAquaticSpawnDirector(state: GameState, dt: number, rng: () => number): void {
+  state.timers.aquaticSpawnTimer += dt;
+  if (state.timers.aquaticSpawnTimer < AQUATIC_SPAWN_INTERVAL_SECONDS) return;
+  state.timers.aquaticSpawnTimer = 0;
+
+  let aquatic = 0;
+  for (const mob of state.mobs) if (MOB_TEMPLATES[mob.kind].aquatic) aquatic += 1;
+  if (aquatic >= AQUATIC_CAP) return;
+
+  const kind: MobKind = rng() < 0.6 ? "cod" : "salmon";
+  const count = Math.min(AQUATIC_CAP - aquatic, 1 + (rng() > 0.6 ? 1 : 0));
+  spawnAquaticGroup(state, kind, count, state.player.position.x, state.player.position.z, RENDER_RADIUS * 0.85, rng);
 }
 
 /**
