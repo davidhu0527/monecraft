@@ -84,8 +84,8 @@ export type MobState = {
   hostile: boolean;
   /** Targeting allegiance (set at spawn from FACTION_BY_KIND; a tamed pet becomes "ally"). Persisted (save v14). */
   faction: MobFaction;
-  /** Pet owner once tamed (currently always "player"); undefined for wild mobs. Persisted (save v14). */
-  owner?: "player";
+  /** Pet owner's PlayerId once tamed; undefined for wild mobs. Persisted (save v14; ids since v17). */
+  owner?: PlayerId;
   /** A tamed pet told to stay put (sit/stay) — no follow, wander, or pursuit. Persisted (save v14). */
   sitting?: boolean;
   /** Villager-only: trade profession (drives its trade subset + tint). Persisted (save v15). */
@@ -171,7 +171,7 @@ export type VehicleState = {
   kind: VehicleKind;
   position: THREE.Vector3;
   yaw: number;
-  rider: "player" | null;
+  rider: PlayerId | null;
 };
 
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */

@@ -173,7 +173,7 @@ export function tryTameAimedMob(state: GameState, player: PlayerState, emit: Emi
 
   player.inventory = adjustSlotCount(player.inventory, slot.id, -1, player.selectedSlot) ?? player.inventory;
   if (rng() < TAME_CHANCE) {
-    mob.owner = "player";
+    mob.owner = player.id;
     mob.faction = "ally";
     mob.hp = PET_TAMED_HP;
     mob.detectRange = PET_FIGHT_RANGE;

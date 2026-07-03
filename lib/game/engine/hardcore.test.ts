@@ -120,9 +120,9 @@ describe("hardcore persistence", () => {
     e.state.hearts = 1;
     hooks(e).applyDamage(100);
     const save = e.serialize();
-    expect(save.version).toBe(16);
+    expect(save.version).toBe(17);
     expect(save.hardcore).toBe(true);
-    expect(save.gameOver).toBe(true);
+    expect(save.players[0].gameOver).toBe(true);
 
     const restored = new GameEngine({ save, rng: mulberry32(1), worldSize: { x: 64, y: 150, z: 64 } });
     expect(restored.state.hardcore).toBe(true);

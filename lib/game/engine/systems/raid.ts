@@ -80,9 +80,12 @@ export function tickRaid(state: GameState, dt: number, deps: RaidDeps): void {
   if (raid.wavesSpawned >= raid.totalWaves) {
     // Every wave beaten — the village holds.
     state.raid = null;
-    state.inventory = adjustSlotCount(state.inventory, "emerald", RAID_REWARD_EMERALDS) ?? state.inventory;
     // Everyone shares the defense reward (single-player: exactly the old award).
-    for (const player of state.players.values()) if (!player.isDead) awardXp(player, RAID_REWARD_XP, deps.emit);
+    for (const player of state.players.values()) {
+      if (player.isDead) continue;
+      player.inventory = adjustSlotCount(player.inventory, "emerald", RAID_REWARD_EMERALDS) ?? player.inventory;
+      awardXp(player, RAID_REWARD_XP, deps.emit);
+    }
     deps.emit({ type: "raidWon" });
     return;
   }

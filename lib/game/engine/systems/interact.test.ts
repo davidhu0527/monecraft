@@ -15,6 +15,7 @@ function inventory(items: Array<[string, number]>): InventorySlot[] {
 
 function makeState(slots: InventorySlot[], mob: MobState): GameState & PlayerState {
   const state = {
+    id: "local",
     position: new THREE.Vector3(0, 64, 0),
     velocity: new THREE.Vector3(),
     yaw: 0,
@@ -56,7 +57,7 @@ describe("tryTameAimedMob", () => {
     ); // 0 < TAME_CHANCE → success
 
     expect(consumed).toBe(true);
-    expect(wolf.owner).toBe("player");
+    expect(wolf.owner).toBe("local");
     expect(wolf.faction).toBe("ally");
     expect(wolf.hp).toBe(PET_TAMED_HP);
     expect(wolf.detectRange).toBe(PET_FIGHT_RANGE);

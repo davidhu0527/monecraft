@@ -130,7 +130,7 @@ describe("boot", () => {
     // A single bad byte in localStorage shouldn't load a NaN world — and NaN would
     // slip past the `position.y < 2` unstuck net, since NaN comparisons are false.
     const save = makeEngine().serialize();
-    const engine = makeEngine({ ...save, player: { x: Number.NaN, y: Number.NaN, z: Number.NaN } });
+    const engine = makeEngine({ ...save, players: [{ ...save.players[0], position: { x: Number.NaN, y: Number.NaN, z: Number.NaN } }] });
     const { position } = engine.state.player;
     expect(Number.isFinite(position.x)).toBe(true);
     expect(Number.isFinite(position.y)).toBe(true);
@@ -1581,8 +1581,8 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(16);
-    expect(save.gameMode).toBe("survival");
+    expect(save.version).toBe(17);
+    expect(save.players[0].gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
     const restored = makeEngine(save);
@@ -3000,7 +3000,7 @@ describe("advancements (save v13)", () => {
   test("a corrupt/unknown advancement id is dropped on load (registry-filtered)", () => {
     const engine = makeEngine();
     const save = engine.serialize();
-    save.advancements = ["getting_wood", "totally_bogus"];
+    save.players[0].advancements = ["getting_wood", "totally_bogus"];
     const restored = makeEngine(save);
     expect(restored.state.advancements.has("getting_wood")).toBe(true); // real id kept
     expect(restored.state.advancements.has("totally_bogus")).toBe(false); // bogus id dropped

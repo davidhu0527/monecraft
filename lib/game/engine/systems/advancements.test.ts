@@ -9,16 +9,16 @@ import {
   recordTick,
   STATS
 } from "@/lib/game/engine/systems/advancements";
-import type { GameEvent, GameState } from "@/lib/game/engine/state";
+import type { GameEvent, PlayerState } from "@/lib/game/engine/state";
 
 // recordEvent / recordTick / evaluateAdvancements only ever touch `state.stats`
 // and `state.advancements`, so a bare stub is all the unit needs — no engine,
 // world, or Three.js.
-function freshState(): GameState {
-  return { stats: new Map<string, number>(), advancements: new Set<string>() } as unknown as GameState;
+function freshState(): PlayerState {
+  return { stats: new Map<string, number>(), advancements: new Set<string>() } as unknown as PlayerState;
 }
 
-function record(state: GameState, ...events: GameEvent[]): void {
+function record(state: PlayerState, ...events: GameEvent[]): void {
   for (const event of events) recordEvent(state, event);
 }
 

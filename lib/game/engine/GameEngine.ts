@@ -91,7 +91,7 @@ import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficu
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
-import type { InventorySlot, SaveData, SavedMob } from "@/lib/game/types";
+import type { InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import {
@@ -214,17 +214,20 @@ export class GameEngine {
     this.surfaceYAt = createSurfaceYAt(world);
 
     const firstSpawn = findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
+    // The local player's persisted record (v17 saves hold one entry per player;
+    // a downloaded multiplayer world played solo falls back to any first entry).
+    const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
     // Hardcore is resolved first because it OVERRIDES mode/difficulty: a hardcore
     // world is locked to Survival + Hard. A persisted gameOver (the run already
     // ended in death) boots straight into Spectator so the dead world is roamable,
     // not playable. isFlying = (gameMode === "spectator") then yields a free camera.
     const hardcore = save ? restoreHardcore(save) : (options.hardcore ?? false);
-    const gameOver = save ? restoreGameOver(save) : false;
+    const gameOver = save && savedLocal ? restoreGameOver(save, savedLocal) : false;
     // A restored save's own (possibly switched) difficulty wins; hardcore forces Hard.
     const difficulty = hardcore ? "hard" : save ? restoreDifficulty(save) : (options.difficulty ?? "normal");
     // A restored save's own (possibly switched) mode wins; hardcore forces Survival,
     // except after game-over, where the player spectates their dead world.
-    const gameMode = gameOver ? "spectator" : hardcore ? "survival" : save ? restoreGameMode(save) : (options.gameMode ?? "survival");
+    const gameMode = gameOver ? "spectator" : hardcore ? "survival" : savedLocal ? restoreGameMode(savedLocal) : (options.gameMode ?? "survival");
     const localPlayer: PlayerState = {
       id: LOCAL_PLAYER_ID,
       position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
@@ -300,21 +303,8 @@ export class GameEngine {
     });
 
     if (save) {
-      this.state.inventory = restoreInventorySlots(save) ?? this.state.inventory;
-      this.state.equippedArmor = restoreEquippedArmor(save) ?? this.state.equippedArmor;
-      this.state.selectedSlot = restoreSelectedSlot(save) ?? this.state.selectedSlot;
-      this.state.hearts = restoreHearts(save) ?? this.state.hearts;
-      this.state.hunger = restoreHungerLevel(save) ?? this.state.hunger;
-      this.state.spawnPoint = restoreSpawnPoint(save);
+      if (savedLocal) this.restorePlayerFields(localPlayer, savedLocal);
       this.state.lootedWorldgenChests = new Set(readLootedChests(save));
-      // Restore any active effects (cleared on death, so a live save carries them).
-      for (const { id, remaining } of restoreEffects(save)) this.state.effects.set(id, remaining);
-      this.state.xp = restoreXp(save); // XP is a long-term currency — kept across reload and death
-      // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
-      for (const { id, value } of restoreStats(save)) this.state.stats.set(id, value);
-      // Filter against the registry so a corrupt/edited save can't inject bogus ids
-      // (which would inflate the unlocked count and round-trip back out forever).
-      for (const id of restoreAdvancements(save)) if (ADVANCEMENTS_BY_ID[id]) this.state.advancements.add(id);
       // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
       // fungible population, so the world stays alive and pets simply pre-exist.
       this.restorePersistedMobs(restoreMobs(save));
@@ -334,8 +324,6 @@ export class GameEngine {
         this.state.daylight = daylightAt(savedClock);
         this.state.daylightPercent = Math.round(this.state.daylight * 100);
       }
-      const pos = restorePlayerPosition(save);
-      if (pos) this.state.player.position.set(pos.x, pos.y, pos.z);
     }
 
     // Safety check: if stuck after load, relocate to a plain — but never for a
@@ -435,7 +423,7 @@ export class GameEngine {
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
     // Tick-driven display stats (no event, so out of the advancement path).
-    recordTick(state, dt, move.horizontalDistance);
+    recordTick(state.player, dt, move.horizontalDistance);
     tickHungerDrain(state.player, move);
     tickHealthRegen(state, state.player, dt);
     // Starvation reads the freshly-drained hunger: Easy/Normal chip to a floor,
@@ -761,35 +749,59 @@ export class GameEngine {
   }
 
   /** Current world + player state as a persistable save. */
+  /** One player's persisted slice — shared by serialize() and (later) a server's save-on-leave. */
+  private serializePlayer(player: PlayerState): SavedPlayer {
+    return {
+      id: player.id,
+      position: { x: player.position.x, y: player.position.y, z: player.position.z },
+      inventorySlots: inventorySlotsSnapshot(player.inventory),
+      equippedArmor: serializeEquippedArmor(player.equippedArmor),
+      selectedSlot: player.selectedSlot,
+      gameMode: player.gameMode,
+      gameOver: player.gameOver,
+      hearts: player.hearts,
+      hunger: player.hunger,
+      effects: serializeEffects(player.effects),
+      xp: player.xp,
+      stats: serializeStats(player.stats),
+      advancements: [...player.advancements],
+      spawnPoint: player.spawnPoint ? { ...player.spawnPoint } : null
+    };
+  }
+
+  /** Restores one player's persisted slice onto a live PlayerState (the mirror of serializePlayer). */
+  private restorePlayerFields(player: PlayerState, saved: SavedPlayer): void {
+    player.inventory = restoreInventorySlots(saved) ?? player.inventory;
+    player.equippedArmor = restoreEquippedArmor(saved) ?? player.equippedArmor;
+    player.selectedSlot = restoreSelectedSlot(saved) ?? player.selectedSlot;
+    player.hearts = restoreHearts(saved) ?? player.hearts;
+    player.hunger = restoreHungerLevel(saved) ?? player.hunger;
+    player.spawnPoint = restoreSpawnPoint(saved);
+    // Restore any active effects (cleared on death, so a live save carries them).
+    for (const { id, remaining } of restoreEffects(saved)) player.effects.set(id, remaining);
+    player.xp = restoreXp(saved); // XP is a long-term currency — kept across reload and death
+    // Stats are long-term counters, kept across reload and death (like xp, unlike effects).
+    for (const { id, value } of restoreStats(saved)) player.stats.set(id, value);
+    // Filter against the registry so a corrupt/edited save can't inject bogus ids
+    // (which would inflate the unlocked count and round-trip back out forever).
+    for (const id of restoreAdvancements(saved)) if (ADVANCEMENTS_BY_ID[id]) player.advancements.add(id);
+    const pos = restorePlayerPosition(saved);
+    if (pos) player.position.set(pos.x, pos.y, pos.z);
+  }
+
   serialize(): SaveData {
     const state = this.state;
     return {
-      version: 16,
+      version: 17,
       seed: state.world.seed,
       worldType: this.worldType,
-      gameMode: state.gameMode,
       difficulty: state.difficulty,
       hardcore: state.hardcore,
-      gameOver: state.gameOver,
       changes: state.blockChanges.changes(),
-      inventorySlots: inventorySlotsSnapshot(state.inventory),
-      equippedArmor: serializeEquippedArmor(state.equippedArmor),
-      selectedSlot: state.selectedSlot,
-      player: {
-        x: state.player.position.x,
-        y: state.player.position.y,
-        z: state.player.position.z
-      },
+      players: [...state.players.values()].map((player) => this.serializePlayer(player)),
       dayClock: state.dayClock,
-      hearts: state.hearts,
-      hunger: state.hunger,
-      spawnPoint: state.spawnPoint ? { ...state.spawnPoint } : null,
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedWorldgenChests),
-      effects: serializeEffects(state.effects),
-      xp: state.xp,
-      stats: serializeStats(state.stats),
-      advancements: [...state.advancements],
       mobs: serializeMobs(state.mobs),
       vehicles: serializeVehicles(state.vehicles),
       villagesSeeded: true // this world's villages are populated — don't re-seed on reload
@@ -836,8 +848,8 @@ export class GameEngine {
    * (before the emit, so a re-entrant observe is idempotent) and announcing it.
    */
   private observeProgress(event: GameEvent): void {
-    recordEvent(this.state, event);
-    for (const id of evaluateAdvancements(this.state)) {
+    recordEvent(this.state.player, event);
+    for (const id of evaluateAdvancements(this.state.player)) {
       this.state.advancements.add(id);
       this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title });
     }

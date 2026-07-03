@@ -304,7 +304,8 @@ export type SavedMob = {
   z: number;
   hp: number;
   faction: MobFaction;
-  owner?: "player";
+  /** Pet owner's player id once tamed (pre-v17 saves stored the literal "player"; the migration rewrites it). */
+  owner?: string;
   sitting?: boolean;
   ageTimer?: number;
   /** Villager-only trade profession (added v15); absent on pets. */
@@ -347,10 +348,61 @@ export type SaveDataV15 = Omit<SaveDataV14, "version"> & {
 };
 
 /**
- * Current save shape (v16): persistent placed water vehicles. The live rider
+ * Save shape (v16): persistent placed water vehicles. The live rider
  * link is session-only; saves carry only the placed entity's kind and pose.
  */
-export type SaveData = Omit<SaveDataV15, "version"> & {
+export type SaveDataV16 = Omit<SaveDataV15, "version"> & {
   version: 16;
   vehicles?: SavedVehicle[];
+};
+
+/**
+ * One persisted player (v17). Exactly the per-player slice that sat flat on
+ * ≤v16 saves, under the same field names (so the field validators are shared);
+ * `position` is the one rename (v16 called it `player`). Single-player worlds
+ * hold one entry with id "local"; a multiplayer server holds one per account.
+ */
+export type SavedPlayer = {
+  id: string;
+  position?: { x: number; y: number; z: number };
+  inventorySlots?: SavedSlot[];
+  equippedArmor?: SavedEquippedArmor;
+  selectedSlot?: number;
+  gameMode?: string;
+  gameOver?: boolean;
+  hearts?: number;
+  hunger?: number;
+  effects?: SavedEffect[];
+  xp?: number;
+  stats?: SavedStat[];
+  advancements?: string[];
+  spawnPoint?: { x: number; y: number; z: number } | null;
+};
+
+/**
+ * Current save shape (v17): the players map. Every per-player field moves off
+ * the top level into `players[]` (world-level fields — seed, changes,
+ * difficulty, hardcore, blockEntities, mobs, vehicles, dayClock — stay put).
+ * migrateSaveV16toV17 wraps a flat single-player save as [{ id: "local", … }]
+ * and rewrites pet owners from the legacy literal "player" to "local".
+ */
+export type SaveData = Omit<
+  SaveDataV16,
+  | "version"
+  | "gameMode"
+  | "gameOver"
+  | "inventorySlots"
+  | "equippedArmor"
+  | "selectedSlot"
+  | "player"
+  | "hearts"
+  | "hunger"
+  | "spawnPoint"
+  | "effects"
+  | "xp"
+  | "stats"
+  | "advancements"
+> & {
+  version: 17;
+  players: SavedPlayer[];
 };

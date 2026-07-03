@@ -137,7 +137,7 @@ function mountVehicle(state: GameState, player: PlayerState, vehicle: VehicleSta
     const current = state.vehicles.find((v) => v.id === player.mountedVehicleId);
     if (current) current.rider = null;
   }
-  vehicle.rider = "player";
+  vehicle.rider = player.id;
   player.mountedVehicleId = vehicle.id;
   syncPlayerToVehicle(player, vehicle);
 }
@@ -210,7 +210,7 @@ export function tryBoardAimedVehicle(state: GameState, player: PlayerState): boo
 }
 
 export function tryPlaceVehicle(state: GameState, player: PlayerState, emit: EmitGameEvent): boolean {
-  const slot = state.inventory[state.selectedSlot];
+  const slot = player.inventory[player.selectedSlot];
   if (slot?.id !== "raft" && slot?.id !== "ship") return false;
   const kind = slot.id;
   if (state.vehicles.length >= MAX_VEHICLES) {
@@ -230,7 +230,7 @@ export function tryPlaceVehicle(state: GameState, player: PlayerState, emit: Emi
     return true;
   }
   state.vehicles.push(vehicle);
-  if (state.gameMode !== "creative") state.inventory = adjustSlotCount(state.inventory, kind, -1, state.selectedSlot) ?? state.inventory;
+  if (player.gameMode !== "creative") player.inventory = adjustSlotCount(player.inventory, kind, -1, player.selectedSlot) ?? player.inventory;
   emit({ type: "vehiclePlaced", kind });
   return true;
 }

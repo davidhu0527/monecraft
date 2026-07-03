@@ -22,6 +22,8 @@ import type {
   SaveDataV13,
   SaveDataV14,
   SaveDataV15,
+  SaveDataV16,
+  SavedPlayer,
   SavedContainer,
   SavedEffect,
   SavedEquippedArmor,
@@ -219,8 +221,57 @@ export function migrateSaveV14toV15(save: SaveDataV14): SaveDataV15 {
  * Migrates a v15 save to v16 — a pure version bump. `vehicles` is optional, so
  * older saves load with no placed rafts/ships.
  */
-export function migrateSaveV15toV16(save: SaveDataV15): SaveData {
+export function migrateSaveV15toV16(save: SaveDataV15): SaveDataV16 {
   return { ...save, version: 16 };
+}
+
+/**
+ * Migrates a v16 save to v17: the flat single-player fields wrap into
+ * `players: [{ id: "local", … }]` (a pure field move — the same values under
+ * the same names, with `player` renamed to `position`), and legacy pet owners
+ * (the literal "player") rewrite to the local player's id.
+ */
+export function migrateSaveV16toV17(save: SaveDataV16): SaveData {
+  const {
+    gameMode,
+    gameOver,
+    inventorySlots,
+    equippedArmor,
+    selectedSlot,
+    player,
+    hearts,
+    hunger,
+    spawnPoint,
+    effects,
+    xp,
+    stats,
+    advancements,
+    mobs,
+    ...world
+  } = save;
+  return {
+    ...world,
+    version: 17,
+    mobs: mobs?.map((mob) => (mob.owner === "player" ? { ...mob, owner: "local" } : mob)),
+    players: [
+      {
+        id: "local",
+        position: player,
+        inventorySlots,
+        equippedArmor,
+        selectedSlot,
+        gameMode,
+        gameOver,
+        hearts,
+        hunger,
+        effects,
+        xp,
+        stats,
+        advancements,
+        spawnPoint
+      }
+    ]
+  };
 }
 
 // Storage is injectable so save logic can be tested without a browser.
@@ -230,6 +281,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (!raw) return null;
     const parsed = JSON.parse(raw) as
       | SaveData
+      | SaveDataV16
       | SaveDataV15
       | SaveDataV14
       | SaveDataV13
@@ -261,6 +313,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
       | SaveDataV13
       | SaveDataV14
       | SaveDataV15
+      | SaveDataV16
       | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -276,7 +329,9 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version === 13) migrated = migrateSaveV13toV14(migrated);
     if (migrated.version === 14) migrated = migrateSaveV14toV15(migrated);
     if (migrated.version === 15) migrated = migrateSaveV15toV16(migrated);
-    if (migrated.version !== 16) return null;
+    if (migrated.version === 16) migrated = migrateSaveV16toV17(migrated);
+    if (migrated.version !== 17) return null;
+    if (!Array.isArray(migrated.players)) return null;
     return migrated;
   } catch {
     return null;
@@ -431,7 +486,7 @@ export function serializeEffects(effects: Map<EffectId, number>): SavedEffect[] 
 }
 
 /** Reads active effects from a save, dropping unknown ids and non-positive/garbage durations. */
-export function restoreEffects(save: SaveData): SavedEffect[] {
+export function restoreEffects(save: SavedPlayer): SavedEffect[] {
   if (!Array.isArray(save.effects)) return [];
   const out: SavedEffect[] = [];
   for (const entry of save.effects) {
@@ -457,7 +512,7 @@ export function serializeStats(stats: Map<string, number>): SavedStat[] {
 }
 
 /** Reads gameplay statistics from a save, dropping non-string ids and negative / garbage values. */
-export function restoreStats(save: SaveData): SavedStat[] {
+export function restoreStats(save: SavedPlayer): SavedStat[] {
   if (!Array.isArray(save.stats)) return [];
   const out: SavedStat[] = [];
   for (const entry of save.stats) {
@@ -469,7 +524,7 @@ export function restoreStats(save: SaveData): SavedStat[] {
 }
 
 /** Reads the unlocked advancement ids from a save (non-empty strings only, de-duplicated). */
-export function restoreAdvancements(save: SaveData): string[] {
+export function restoreAdvancements(save: SavedPlayer): string[] {
   if (!Array.isArray(save.advancements)) return [];
   const seen = new Set<string>();
   for (const id of save.advancements) {
@@ -524,11 +579,11 @@ export function restoreMobs(save: SaveData): SavedMob[] {
     // Only the two persistent shapes are accepted (mirrors isPersistentMob), so a
     // stale/edited save can't resurrect e.g. a "pet zombie": an owned ally pet, or
     // an owner-less villager resident. Anything else is dropped.
-    const isPet = entry.owner === "player" && entry.faction === "ally";
+    const isPet = typeof entry.owner === "string" && entry.owner.length > 0 && entry.faction === "ally";
     const isResident = entry.owner == null && entry.faction === "villager";
     if (!isPet && !isResident) continue;
     const saved: SavedMob = { kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, hp: entry.hp, faction: entry.faction };
-    if (entry.owner === "player") saved.owner = "player";
+    if (typeof entry.owner === "string" && entry.owner.length > 0) saved.owner = entry.owner;
     if (entry.sitting === true) saved.sitting = true;
     if (Number.isFinite(entry.ageTimer) && (entry.ageTimer ?? 0) > 0) saved.ageTimer = entry.ageTimer;
     if (isProfession(entry.profession)) saved.profession = entry.profession;
@@ -559,7 +614,7 @@ export function readContainers(save: SaveData): Array<{ index: number; slots: In
  * inventorySlots shape and the legacy inventoryCounts shape. Returns null when
  * the save carries no inventory.
  */
-export function restoreInventorySlots(save: SaveData): InventorySlot[] | null {
+export function restoreInventorySlots(save: SavedPlayer & { inventoryCounts?: Record<string, number> }): InventorySlot[] | null {
   if (Array.isArray(save.inventorySlots)) {
     const slots = Array.from({ length: INVENTORY_SLOTS }, () => createEmptySlot());
     for (let i = 0; i < Math.min(INVENTORY_SLOTS, save.inventorySlots.length); i += 1) {
@@ -588,7 +643,7 @@ export function restoreInventorySlots(save: SaveData): InventorySlot[] | null {
 }
 
 /** Restores worn armor, rebuilding each piece through restoreSlot and dropping anything that isn't valid armor for its slot. */
-export function restoreEquippedArmor(save: SaveData): EquippedArmor | null {
+export function restoreEquippedArmor(save: SavedPlayer): EquippedArmor | null {
   if (!save.equippedArmor) return null;
   const next = createEmptyArmorEquipment();
   for (const armorSlot of ARMOR_SLOTS) {
@@ -601,7 +656,7 @@ export function restoreEquippedArmor(save: SaveData): EquippedArmor | null {
   return next;
 }
 
-export function restoreSelectedSlot(save: SaveData): number | null {
+export function restoreSelectedSlot(save: SavedPlayer): number | null {
   if (typeof save.selectedSlot !== "number") return null;
   return normalizeSelectedSlot(save.selectedSlot);
 }
@@ -613,25 +668,25 @@ export function restoreDayClock(save: SaveData): number | null {
 }
 
 /** Restores hearts clamped to 1..MAX_HEARTS; null if absent/invalid. */
-export function restoreHearts(save: SaveData): number | null {
+export function restoreHearts(save: SavedPlayer): number | null {
   if (typeof save.hearts !== "number" || !Number.isFinite(save.hearts)) return null;
   return Math.max(1, Math.min(MAX_HEARTS, Math.floor(save.hearts)));
 }
 
 /** Restores hunger clamped to 0..MAX_HUNGER; null if absent/invalid. */
-export function restoreHungerLevel(save: SaveData): number | null {
+export function restoreHungerLevel(save: SavedPlayer): number | null {
   if (typeof save.hunger !== "number" || !Number.isFinite(save.hunger)) return null;
   return Math.max(0, Math.min(MAX_HUNGER, Math.floor(save.hunger)));
 }
 
 /** Restores banked XP (finite, ≥ 0); 0 when absent or invalid. */
-export function restoreXp(save: SaveData): number {
+export function restoreXp(save: SavedPlayer): number {
   if (typeof save.xp !== "number" || !Number.isFinite(save.xp) || save.xp < 0) return 0;
   return Math.floor(save.xp);
 }
 
 /** Restores the saved game mode; "survival" when absent or invalid (pre-v8 saves). */
-export function restoreGameMode(save: SaveData): GameMode {
+export function restoreGameMode(save: SavedPlayer): GameMode {
   return isGameMode(save.gameMode) ? save.gameMode : "survival";
 }
 
@@ -646,12 +701,12 @@ export function restoreHardcore(save: SaveData): boolean {
 }
 
 /** Restores the permadeath game-over flag — only ever true on a hardcore save, so a stray flag on a non-hardcore (corrupt) save can't lock it into spectator. */
-export function restoreGameOver(save: SaveData): boolean {
-  return save.hardcore === true && save.gameOver === true;
+export function restoreGameOver(save: Pick<SaveData, "hardcore">, saved: SavedPlayer): boolean {
+  return save.hardcore === true && saved.gameOver === true;
 }
 
 /** Restores the bed respawn point; null if absent or explicitly cleared. */
-export function restoreSpawnPoint(save: SaveData): { x: number; y: number; z: number } | null {
+export function restoreSpawnPoint(save: SavedPlayer): { x: number; y: number; z: number } | null {
   const sp = save.spawnPoint;
   if (!sp || !Number.isFinite(sp.x) || !Number.isFinite(sp.y) || !Number.isFinite(sp.z)) return null;
   return { x: Math.floor(sp.x), y: Math.floor(sp.y), z: Math.floor(sp.z) };
@@ -663,8 +718,8 @@ export function restoreSpawnPoint(save: SaveData): { x: number; y: number; z: nu
  * `position.y < 2` unstuck net, since any comparison with NaN is false. Coords stay
  * floats (the player isn't grid-aligned), unlike the floored spawn point.
  */
-export function restorePlayerPosition(save: SaveData): { x: number; y: number; z: number } | null {
-  const p = save.player;
+export function restorePlayerPosition(save: SavedPlayer): { x: number; y: number; z: number } | null {
+  const p = save.position;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return null;
   return { x: p.x, y: p.y, z: p.z };
 }

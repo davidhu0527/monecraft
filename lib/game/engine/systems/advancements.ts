@@ -4,14 +4,14 @@
  * GameEvent from the engine's single emit chokepoint, plus `recordTick` for the
  * per-frame display counters (distance travelled, play time).
  *
- * Pure and declarative: it only reads/writes `state.stats` and
- * `state.advancements`, so it's trivially unit-testable without booting an
+ * Pure and declarative: it only reads/writes `player.stats` and
+ * `player.advancements`, so it's trivially unit-testable without booting an
  * engine. `evaluateAdvancements` is a pure function of the current stats.
  */
 import { BlockId } from "@/lib/world";
 import { HOSTILE_MOB_KINDS } from "@/lib/game/mobs";
 import { RECIPES } from "@/lib/game/recipes";
-import type { GameEvent, GameState } from "../state";
+import type { GameEvent, PlayerState } from "../state";
 
 /** How a Statistics-tab value is rendered (a plain count vs. blocks travelled vs. a clock). */
 export type StatFormat = "count" | "distance" | "duration";
@@ -59,8 +59,8 @@ const MINED_STAT_BY_BLOCK: Partial<Record<BlockId, string>> = {
 
 const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
 
-function bump(state: GameState, id: string, by = 1): void {
-  state.stats.set(id, (state.stats.get(id) ?? 0) + by);
+function bump(player: PlayerState, id: string, by = 1): void {
+  player.stats.set(id, (player.stats.get(id) ?? 0) + by);
 }
 
 /**
@@ -68,59 +68,59 @@ function bump(state: GameState, id: string, by = 1): void {
  * engine emits (the `advancementUnlocked` event is guarded out upstream so this
  * never recurses). Unknown / irrelevant event types are simply ignored.
  */
-export function recordEvent(state: GameState, event: GameEvent): void {
+export function recordEvent(player: PlayerState, event: GameEvent): void {
   switch (event.type) {
     case "blockBroken": {
-      bump(state, "blocks_mined");
+      bump(player, "blocks_mined");
       const mined = MINED_STAT_BY_BLOCK[event.blockId];
-      if (mined) bump(state, mined);
+      if (mined) bump(player, mined);
       break;
     }
     case "mobDied":
-      if (HOSTILE_MOB_KINDS.has(event.kind)) bump(state, "hostiles_killed");
+      if (HOSTILE_MOB_KINDS.has(event.kind)) bump(player, "hostiles_killed");
       break;
     case "mobBred":
-      bump(state, "animals_bred");
+      bump(player, "animals_bred");
       break;
     case "enchanted":
-      bump(state, "items_enchanted");
+      bump(player, "items_enchanted");
       break;
     case "drankPotion":
-      bump(state, "potions_drunk");
+      bump(player, "potions_drunk");
       break;
     case "fishingCaught":
-      bump(state, "fish_caught");
+      bump(player, "fish_caught");
       break;
     case "bowFired":
-      bump(state, "arrows_fired");
+      bump(player, "arrows_fired");
       break;
     case "sleepStarted":
-      bump(state, "sleeps");
+      bump(player, "sleeps");
       break;
     case "bossDefeated":
-      bump(state, "boss_defeated");
+      bump(player, "boss_defeated");
       break;
     case "treasureUnearthed":
-      bump(state, "treasure_unearthed");
+      bump(player, "treasure_unearthed");
       break;
     case "died":
     case "gameOver": // hardcore permadeath emits gameOver instead of died — still a death
-      bump(state, "deaths");
+      bump(player, "deaths");
       break;
     case "jumped":
-      bump(state, "jumps");
+      bump(player, "jumps");
       break;
     case "crafted": {
       const recipe = RECIPE_BY_ID.get(event.recipeId);
       if (!recipe) break;
-      bump(state, `crafted_${recipe.id}`);
+      bump(player, `crafted_${recipe.id}`);
       // "Items Crafted" is workbench crafts only — station outputs (smelting,
       // brewing, trading) have their own counters, so don't fold them in here.
-      if (!recipe.station) bump(state, "items_crafted");
+      if (!recipe.station) bump(player, "items_crafted");
       // "Tool Up" wants any pickaxe (7 tiers, 7 recipes), so aggregate them.
-      if (recipe.result.slotId.endsWith("_pickaxe")) bump(state, "pickaxes_crafted");
+      if (recipe.result.slotId.endsWith("_pickaxe")) bump(player, "pickaxes_crafted");
       // A villager trade is a station-gated recipe — drive the trade advancement.
-      if (recipe.station === "villager") bump(state, "villager_trades");
+      if (recipe.station === "villager") bump(player, "villager_trades");
       break;
     }
   }
@@ -131,9 +131,9 @@ export function recordEvent(state: GameState, event: GameEvent): void {
  * travelled. No advancement depends on these, so they stay out of recordEvent
  * (and the unlock path) — the engine calls this each active step.
  */
-export function recordTick(state: GameState, dt: number, horizontalDistance: number): void {
-  bump(state, "play_time", dt);
-  bump(state, "distance_walked", horizontalDistance);
+export function recordTick(player: PlayerState, dt: number, horizontalDistance: number): void {
+  bump(player, "play_time", dt);
+  bump(player, "distance_walked", horizontalDistance);
 }
 
 // --- Advancements ---
@@ -145,7 +145,7 @@ export type AdvancementCategory = "Mining" | "Crafting" | "Combat" | "Farming" |
 export const ADVANCEMENT_CATEGORY_ORDER: readonly AdvancementCategory[] = ["Mining", "Crafting", "Combat", "Farming", "Magic", "Adventure"];
 
 /**
- * One advancement. Unlock is uniform: `state.stats.get(stat) >= threshold`, so
+ * One advancement. Unlock is uniform: `player.stats.get(stat) >= threshold`, so
  * the whole set is a declarative table — adding one is a single row, no logic.
  * `icon` is an existing item/block id rendered through `itemIconUrl` (zero new
  * assets); each maps to a counter that `recordEvent` produces.
@@ -239,14 +239,14 @@ export const ADVANCEMENTS_BY_ID: Record<string, Advancement> = Object.fromEntrie
 /**
  * Returns the ids of advancements that just became earnable: not yet unlocked
  * and whose stat has reached its threshold. Pure over the current state, so the
- * engine can add each to `state.advancements` and announce it. Order follows the
+ * engine can add each to `player.advancements` and announce it. Order follows the
  * registry, so the result is deterministic regardless of which event triggered it.
  */
-export function evaluateAdvancements(state: GameState): string[] {
+export function evaluateAdvancements(player: PlayerState): string[] {
   const unlocked: string[] = [];
   for (const advancement of ADVANCEMENTS) {
-    if (state.advancements.has(advancement.id)) continue;
-    if ((state.stats.get(advancement.stat) ?? 0) >= advancement.threshold) unlocked.push(advancement.id);
+    if (player.advancements.has(advancement.id)) continue;
+    if ((player.stats.get(advancement.stat) ?? 0) >= advancement.threshold) unlocked.push(advancement.id);
   }
   return unlocked;
 }
