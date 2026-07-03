@@ -178,6 +178,14 @@ export type GameEngineOptions = {
    * join, so no phantom player ever exists in a shared world.
    */
   bootPlayer?: boolean;
+  /**
+   * A client-side MIRROR of a server world: worldgen from the seed, replicated
+   * diffs applied externally (NetworkSession), and step() advances ONLY the
+   * local player's predicted movement plus presentation (cosmetic mining
+   * progress, day clock smoothing) — every world system (mobs, spawns, random
+   * ticks, TNT, projectiles, raids, breeding) is replicated, not simulated.
+   */
+  replica?: boolean;
 };
 
 /**
@@ -190,6 +198,8 @@ export class GameEngine {
   readonly state: GameState;
   /** See GameEngineOptions.authority — "local" is the single-player shell. */
   readonly authority: "local" | "server";
+  /** See GameEngineOptions.replica — a client-side mirror of a server world. */
+  readonly replica: boolean;
   private readonly headless: boolean;
   private readonly rng: () => number;
   private readonly worldType: WorldType;
@@ -212,6 +222,7 @@ export class GameEngine {
     this.rng = options.rng ?? Math.random;
     this.authority = options.authority ?? "local";
     this.headless = options.headless ?? false;
+    this.replica = options.replica ?? false;
 
     const seed = save?.seed ?? options.seed ?? Math.floor(Math.random() * 2147483647);
     // A restored save's own type wins (the block-diffs were recorded against it);
@@ -482,6 +493,25 @@ export class GameEngine {
     // The HUD indicator still reads (and names) CapsLock, but the engine only
     // knows the abstract sprint intent — the binding lives in the controller.
     if (primary) state.capsActive = primary.input.move.sprint;
+
+    // A replica advances only the local player's prediction + presentation:
+    // own movement (the pose stream's source), cosmetic mining progress for
+    // the crack overlay (the BREAK arrives as a server event), and the day
+    // clock (corrected by the server every second). Everything else — mobs,
+    // spawns, random ticks, TNT, projectiles, vitals — is replicated state
+    // that NetworkSession writes in, never simulated here.
+    if (this.replica) {
+      if (primary && !primary.isDead && state.sleepTimer <= 0) {
+        tickPlayerMotion(state, primary, primary.input, dt, () => {});
+        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { cosmetic: true });
+      }
+      if (state.sleepTimer > 0) state.sleepTimer = Math.max(0, state.sleepTimer - dt);
+      tickDayNight(state, dt);
+      tickWeather(state);
+      this.tickDebugInfo(dt);
+      this.refreshSnapshot();
+      return;
+    }
 
     // Single-player death semantics: while the (primary) player is dead, only
     // mobs, lit fuses, and in-flight arrows tick. An authoritative server never
@@ -804,7 +834,9 @@ export class GameEngine {
         if (tryFeedAimedMob(state, player, this.emit)) break;
         if (tryToggleSitPet(state, player, this.emit)) break;
         if (tryTradeAimedVillager(state, player, this.emit)) break;
-        if (tryBoardAimedVehicle(state, player)) break;
+        // Vehicles are single-player-only in multiplayer v1: a mounted player's
+        // pose is server-driven, which fights the client-owned pose stream.
+        if (this.authority !== "server" && !this.replica && tryBoardAimedVehicle(state, player)) break;
         if (tryInteractBlock(state, player, this.emit)) break;
         if (this.trySummonBoss(player)) break;
         if (this.tryStartRaid(player)) break;

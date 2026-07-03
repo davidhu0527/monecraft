@@ -77,8 +77,20 @@ function spillChestOnBreak(state: GameState, player: PlayerState, idx: number, e
   return true;
 }
 
-/** Advances mining progress while the mouse is held; breaks the block at full progress. */
-export function tickMining(state: GameState, player: PlayerState, input: FrameInput, dt: number, emit: EmitGameEvent, rng: () => number): void {
+/**
+ * Advances mining progress while the mouse is held; breaks the block at full
+ * progress. `cosmetic` (a multiplayer replica) accrues progress for the crack
+ * overlay but never commits the break — the server's blockBroken event does.
+ */
+export function tickMining(
+  state: GameState,
+  player: PlayerState,
+  input: FrameInput,
+  dt: number,
+  emit: EmitGameEvent,
+  rng: () => number,
+  opts: { cosmetic?: boolean } = {}
+): void {
   if (!input.mineHeld) {
     // Releasing the button abandons progress (matching the crack overlay).
     if (player.mining.progress > 0) resetMining(player);
@@ -124,7 +136,14 @@ export function tickMining(state: GameState, player: PlayerState, input: FrameIn
   if (!creative) {
     const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
     mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(player);
+    // A replica shows the final crack stage and waits for the server's break.
+    if (opts.cosmetic) {
+      mining.progress = Math.min(mining.progress, hardness * 0.99);
+      return;
+    }
     if (mining.progress < hardness) return;
+  } else if (opts.cosmetic) {
+    return; // creative replica: even the instant break is the server's call
   }
 
   // Breaking a chest empties it into the inventory first; if it does not all
