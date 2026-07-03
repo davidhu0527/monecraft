@@ -129,6 +129,8 @@ export type SelfDelta = {
 export type TickMessage = {
   t: "tick";
   n: number;
+  /** Block writes this tick as [voxelIndex, blockId] — the replica's world mutation channel. */
+  blocks?: Array<[number, number]>;
   /** Attributed world events since the last tick (block edits ride these). */
   ev: Array<GameEvent & { playerId?: string }>;
   /** Other players' poses (the recipient's own is omitted). */

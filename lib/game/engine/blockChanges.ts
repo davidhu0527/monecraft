@@ -4,6 +4,11 @@ import { applyEdit, BlockId, VoxelWorld } from "@/lib/world";
  * Tracks player edits to the generated world as deltas against the worldgen
  * baseline — the heart of the save format. A block restored to its original
  * value drops out of the delta set, keeping saves minimal.
+ *
+ * The tracker also journals every write since the last drain: a multiplayer
+ * server broadcasts exactly that journal each tick, because gameplay events
+ * alone can't reconstruct multi-cell edits (an explosion crater, a kelp
+ * stalk refilling with water, a door's two cells).
  */
 export type BlockChangeTracker = {
   /** Tracked write: updates the world and the delta set. */
@@ -12,11 +17,15 @@ export type BlockChangeTracker = {
   applySavedChanges(changes: Array<[number, number]>): void;
   /** Current deltas as [voxelIndex, blockId] pairs, ready to persist. */
   changes(): Array<[number, number]>;
+  /** Every write since the last drain (a server's per-tick block broadcast). */
+  drainEdits(): Array<[number, number]>;
 };
 
 export function createBlockChangeTracker(world: VoxelWorld): BlockChangeTracker {
   const changedBlocks = new Map<number, number>();
   const baselineByIndex = new Map<number, number>();
+  // Last-write-wins within a tick window; drained by the server each tick.
+  let editJournal = new Map<number, number>();
 
   return {
     set(x, y, z, block) {
@@ -32,6 +41,7 @@ export function createBlockChangeTracker(world: VoxelWorld): BlockChangeTracker 
       const baseline = baselineByIndex.get(idx) ?? BlockId.Air;
       if (block === baseline) changedBlocks.delete(idx);
       else changedBlocks.set(idx, block);
+      editJournal.set(idx, block);
     },
 
     applySavedChanges(changes) {
@@ -49,6 +59,13 @@ export function createBlockChangeTracker(world: VoxelWorld): BlockChangeTracker 
 
     changes() {
       return [...changedBlocks.entries()];
+    },
+
+    drainEdits() {
+      if (editJournal.size === 0) return [];
+      const drained = [...editJournal.entries()];
+      editJournal = new Map();
+      return drained;
     }
   };
 }

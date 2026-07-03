@@ -291,6 +291,7 @@ export class Room {
 
     this.engine.step(dt);
     const events = this.engine.consumeEvents();
+    const blocks = this.engine.state.blockChanges.drainEdits();
     if (events.some((e) => e.type === "blockPlaced" || e.type === "blockBroken" || e.type === "explosion")) this.dirtySinceStore = true;
 
     const mobPoses = this.collectMobPoses(false);
@@ -311,6 +312,7 @@ export class Room {
       const message: TickMessage = {
         t: "tick",
         n: this.tickCount,
+        ...(blocks.length > 0 ? { blocks } : {}),
         ev: events,
         pp: shed ? [] : this.collectPlayerPoses(conn.playerId),
         mp: shed ? [] : mobPoses,
