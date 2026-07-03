@@ -94,7 +94,18 @@ import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import type { InventorySlot, SaveData, SavedMob } from "@/lib/game/types";
 import { createBlockChangeTracker } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
-import { createTimers, nextCameraMode, type FrameInput, type GameEvent, type GameSnapshot, type GameState } from "./state";
+import {
+  createPlayerTimers,
+  createWorldTimers,
+  LOCAL_PLAYER_ID,
+  nextCameraMode,
+  type FrameInput,
+  type GameEvent,
+  type GameSnapshot,
+  type GameState,
+  type PlayerState
+} from "./state";
+import { installPlayerAliases } from "./players";
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
@@ -214,24 +225,19 @@ export class GameEngine {
     // A restored save's own (possibly switched) mode wins; hardcore forces Survival,
     // except after game-over, where the player spectates their dead world.
     const gameMode = gameOver ? "spectator" : hardcore ? "survival" : save ? restoreGameMode(save) : (options.gameMode ?? "survival");
-    this.state = {
-      world,
-      blockChanges,
-      player: {
-        position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
-        velocity: new THREE.Vector3(),
-        yaw: 0,
-        pitch: 0,
-        onGround: false
-      },
+    const localPlayer: PlayerState = {
+      id: LOCAL_PLAYER_ID,
+      position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
+      velocity: new THREE.Vector3(),
+      yaw: 0,
+      pitch: 0,
+      onGround: false,
+      gameMode,
+      isFlying: gameMode === "spectator", // Spectator is always airborne
+      gameOver,
       inventory: createInitialInventory(),
       equippedArmor: createEmptyArmorEquipment(),
       selectedSlot: 0,
-      gameMode,
-      difficulty,
-      hardcore,
-      gameOver,
-      isFlying: gameMode === "spectator", // Spectator is always airborne
       hearts: MAX_HEARTS,
       hunger: MAX_HUNGER,
       oxygen: MAX_OXYGEN,
@@ -241,13 +247,27 @@ export class GameEngine {
       advancements: new Set(),
       isDead: false,
       respawnTimer: 0,
+      spawnPoint: null,
+      mining: { targetKey: "", progress: 0 },
+      fishing: null,
+      mountedVehicleId: null,
       inventoryOpen: false,
       advancementsOpen: false,
       craftingStation: null,
       activeVillagerProfession: null,
+      openContainerIndex: null,
+      timers: createPlayerTimers()
+    };
+
+    this.state = installPlayerAliases({
+      world,
+      blockChanges,
+      players: new Map([[LOCAL_PLAYER_ID, localPlayer]]),
+      primaryPlayerId: LOCAL_PLAYER_ID,
+      difficulty,
+      hardcore,
       containers: new Map(),
       primedTnt: new Map(),
-      openContainerIndex: null,
       dungeonChestIndices: new Set(dungeonSites.chestIndices),
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
       shipwreckChestIndices: new Set(shipwreckSites.chestIndices),
@@ -266,22 +286,18 @@ export class GameEngine {
       nextThrownSpearId: 1,
       projectiles: [],
       nextProjectileId: 1,
-      fishing: null,
       vehicles: [],
       nextVehicleId: 1,
-      mountedVehicleId: null,
       dayClock: 0,
       daylight: daylightAt(0),
       daylightPercent: Math.round(daylightAt(0) * 100),
       weather: { kind: "clear", intensity: 0 },
       sleepTimer: 0,
-      spawnPoint: null,
-      mining: { targetKey: "", progress: 0 },
-      timers: createTimers(),
+      timers: createWorldTimers(),
       worldMeshDirty: true,
       victory: false,
       raid: null
-    };
+    });
 
     if (save) {
       this.state.inventory = restoreInventorySlots(save) ?? this.state.inventory;

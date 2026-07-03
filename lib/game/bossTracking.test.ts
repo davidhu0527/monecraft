@@ -3,13 +3,10 @@ import * as THREE from "three";
 import { bossTracking } from "./bossTracking";
 import type { MobState, PlayerState } from "./engine/state";
 
-function player(yaw = 0): PlayerState {
+function player(yaw = 0): Pick<PlayerState, "position" | "yaw"> {
   return {
     position: new THREE.Vector3(10, 20, 10),
-    velocity: new THREE.Vector3(),
-    yaw,
-    pitch: 0,
-    onGround: true
+    yaw
   };
 }
 

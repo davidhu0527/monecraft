@@ -16,13 +16,65 @@ export function nextCameraMode(mode: CameraMode): CameraMode {
   return CAMERA_MODE_CYCLE[(CAMERA_MODE_CYCLE.indexOf(mode) + 1) % CAMERA_MODE_CYCLE.length];
 }
 
+/** Stable player identity within a world. SP uses the single LOCAL_PLAYER_ID; multiplayer uses account ids. */
+export type PlayerId = string;
+export const LOCAL_PLAYER_ID: PlayerId = "local";
+
+/**
+ * Everything that belongs to ONE player: avatar, inventory, vitals,
+ * progression, and in-progress activities. `GameState.players` holds one of
+ * these per player; single-player is simply the one-entry case. The flat
+ * legacy fields on GameState (`state.inventory`, `state.hearts`, …) are
+ * accessor aliases onto the primary player (see players.ts) kept for the
+ * shell/tests/console — engine systems must take a PlayerState explicitly.
+ */
 export type PlayerState = {
+  id: PlayerId;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   /** Look direction; the renderer derives the camera from these. Order YXZ. */
   yaw: number;
   pitch: number;
   onGround: boolean;
+  /** Per-player mode (a server may host a Creative owner beside Survival guests). Persisted (save v8). */
+  gameMode: GameMode;
+  /** True while flying (Creative toggle, always on for Spectator). Session-only, never serialized. */
+  isFlying: boolean;
+  /** This player's hardcore run ended in death (spectator over the dead world). Persisted (save v10). */
+  gameOver: boolean;
+  inventory: InventorySlot[];
+  equippedArmor: EquippedArmor;
+  selectedSlot: number;
+  hearts: number;
+  hunger: number;
+  /** Remaining breath, 0..MAX_OXYGEN. Session-only; refills out of water. */
+  oxygen: number;
+  /** Active status effects → remaining seconds. Persisted (save v6); cleared on death. */
+  effects: Map<EffectId, number>;
+  /** Banked XP points. Persisted (save v7); NOT cleared on death. */
+  xp: number;
+  /** Gameplay statistics → running counter. Persisted (save v13); NOT cleared on death. */
+  stats: Map<string, number>;
+  /** Unlocked advancement ids. Persisted (save v13); NOT cleared on death. */
+  advancements: Set<string>;
+  isDead: boolean;
+  respawnTimer: number;
+  /** Bed respawn point (block coords), or null to respawn at a random land point. */
+  spawnPoint: { x: number; y: number; z: number } | null;
+  mining: MiningState;
+  /** The active fishing cast, or null (session-only). */
+  fishing: FishingState | null;
+  mountedVehicleId: number | null;
+  inventoryOpen: boolean;
+  /** True while the advancements & statistics overlay is open. Session-only. */
+  advancementsOpen: boolean;
+  /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's trade profession while a "villager" station is up, else null. Session-only. */
+  activeVillagerProfession: Profession | null;
+  /** Voxel index of the chest open in this player's inventory panel, or null. */
+  openContainerIndex: number | null;
+  timers: PlayerTimers;
 };
 
 /** Simulation-side mob — no Three.js objects; visuals live in the renderer. */
@@ -130,7 +182,8 @@ export type DebugInfo = {
   daylight: number;
 };
 
-export type GameTimers = {
+/** Timers scoped to one player's body/activities — live on PlayerState.timers. */
+export type PlayerTimers = {
   voidTimer: number;
   regenTimer: number;
   waterExposureTimer: number;
@@ -150,6 +203,13 @@ export type GameTimers = {
   /** Poison-effect damage accumulator. */
   effectPoisonTimer: number;
   stuckTimer: number;
+  spearThrowCooldown: number;
+  /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
+  bowCooldownTimer: number;
+};
+
+/** World-scoped director/sampler timers — live on GameState.timers. */
+export type WorldTimers = {
   hostileSpawnTimer: number;
   aquaticSpawnTimer: number;
   spawnerTimer: number;
@@ -157,10 +217,15 @@ export type GameTimers = {
   debugHudTimer: number;
   randomTickTimer: number;
   breedTimer: number;
-  spearThrowCooldown: number;
-  /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
-  bowCooldownTimer: number;
 };
+
+/**
+ * The unified view legacy call sites read as `state.timers`: world timers are
+ * real properties; player timers are accessor aliases onto the primary
+ * player's PlayerTimers (installed by players.ts). New/converted code should
+ * read `player.timers` / the world timers directly.
+ */
+export type GameTimers = WorldTimers & PlayerTimers;
 
 export type WeatherKind = "clear" | "rain" | "snow";
 export type WeatherState = { kind: WeatherKind; intensity: number };
@@ -182,6 +247,17 @@ export type RaidState = {
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
+  /** Every player in the world, by id. Single-player is the one-entry case. */
+  players: Map<PlayerId, PlayerState>;
+  /**
+   * The player the legacy flat aliases below resolve to: the local player on a
+   * client, meaningless on a headless server (which addresses players by id).
+   */
+  primaryPlayerId: PlayerId;
+  // ── Primary-player aliases ─────────────────────────────────────────────────
+  // Accessor properties delegating to players.get(primaryPlayerId), installed
+  // by players.ts. They keep the shell, tests, and window.__monecraft working
+  // unchanged; ENGINE SYSTEMS MUST NOT USE THEM — take a PlayerState param.
   player: PlayerState;
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
@@ -275,7 +351,7 @@ export type GameState = {
   raid: RaidState | null;
 };
 
-export function createTimers(): GameTimers {
+export function createPlayerTimers(): PlayerTimers {
   return {
     voidTimer: 0,
     regenTimer: 0,
@@ -291,15 +367,29 @@ export function createTimers(): GameTimers {
     effectRegenTimer: 0,
     effectPoisonTimer: 0,
     stuckTimer: 0,
+    spearThrowCooldown: 0,
+    bowCooldownTimer: 0
+  };
+}
+
+/**
+ * Legacy flat-timers builder: a plain data object satisfying the unified
+ * GameTimers view. Used by hand-rolled test states that predate the
+ * players-map split; engine code builds createPlayerTimers/createWorldTimers.
+ */
+export function createTimers(): GameTimers {
+  return { ...createPlayerTimers(), ...createWorldTimers() };
+}
+
+export function createWorldTimers(): WorldTimers {
+  return {
     hostileSpawnTimer: 0,
     aquaticSpawnTimer: 0,
     spawnerTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
-    breedTimer: 0,
-    spearThrowCooldown: 0,
-    bowCooldownTimer: 0
+    breedTimer: 0
   };
 }
 
