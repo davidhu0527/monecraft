@@ -10,7 +10,19 @@ import type { MobKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
 import { decodeServerFrame, encodeClientMessage, gunzipWorldSync } from "./codec";
 import { createPoseBuffer, INTERPOLATION_DELAY_MS, type PoseBuffer } from "./interpolation";
-import { PROTOCOL_VERSION, type MobPose, type SelfDelta, type ServerMessage, type WorldSync } from "./protocol";
+import {
+  CLOSE_BAD_TICKET,
+  CLOSE_KICKED,
+  CLOSE_PROTOCOL_MISMATCH,
+  CLOSE_ROOM_FULL,
+  CLOSE_SLOW_CLIENT,
+  PROTOCOL_VERSION,
+  RECONNECT_DELAYS_MS,
+  type MobPose,
+  type SelfDelta,
+  type WelcomeMessage,
+  type WorldSync
+} from "./protocol";
 
 /**
  * The client end of a multiplayer world: owns the WebSocket and a REPLICA
@@ -21,9 +33,18 @@ import { PROTOCOL_VERSION, type MobPose, type SelfDelta, type ServerMessage, typ
  * replays events into the shell's existing event drain, feeds pose buffers
  * for ~125 ms-delayed interpolation, and overwrites the local player's
  * private state from self-deltas (the server owns your vitals).
+ *
+ * The engine outlives the socket: a dropped connection (anything but a fatal
+ * close — a bad ticket, a kick, a slow-client shed) runs a reconnect ladder
+ * that mints a fresh ticket and redoes the handshake, re-syncing the same
+ * replica in place — the player sees a brief "reconnecting" badge, not a
+ * dead world.
  */
 
-export type NetStatus = "connecting" | "syncing" | "online" | "closed";
+export type NetStatus = "connecting" | "syncing" | "online" | "reconnecting" | "closed";
+
+/** A fresh place to connect: the reconnect ladder calls this to re-mint a ticket. */
+export type JoinGrant = { url: string; ticket: string };
 
 export type NetworkSessionCallbacks = {
   onStatus?(status: NetStatus, detail?: string): void;
@@ -32,8 +53,24 @@ export type NetworkSessionCallbacks = {
   onEvent?(event: GameEvent): void;
 };
 
+export type NetworkSessionOptions = {
+  /** Socket factory (tests inject a fake). */
+  makeSocket?: (url: string) => WebSocket;
+  /** Re-mint a ticket for the reconnect ladder; omit to disable reconnection. */
+  reconnect?: () => Promise<JoinGrant | null>;
+  /** Artificial round-trip delay (ms) for local latency testing; overridable at runtime. */
+  simulatedLatencyMs?: number;
+  /** Replica world footprint — tests shrink it; production must match the server's (default). */
+  worldSize?: { x: number; y: number; z: number };
+};
+
+/** Closes we don't retry: the door said no, or we'd just be kicked again. */
+const FATAL_CLOSES = new Set<number>([CLOSE_BAD_TICKET, CLOSE_PROTOCOL_MISMATCH, CLOSE_ROOM_FULL, CLOSE_KICKED, CLOSE_SLOW_CLIENT]);
+
 /** Commands that never leave the client: pure presentation on the replica. */
 const LOCAL_COMMANDS = new Set<Command["type"]>(["toggleInventory", "toggleAdvancements", "toggleDebug", "toggleCameraView", "pause", "resume"]);
+
+const HANDSHAKE_TIMEOUT_MS = 15000;
 
 export type NetworkSession = {
   readonly engine: GameEngine;
@@ -48,6 +85,9 @@ export type NetworkSession = {
   dispatch(command: Command): void;
   applyLook(deltaYaw: number, deltaPitch: number): void;
   sendChat(text: string): void;
+  /** Debug knob: inject symmetric latency on every send/receive (0 disables). */
+  setSimulatedLatency(ms: number): void;
+  simulatedLatency(): number;
   /** Server events since the last drain — feed the shell's existing event handler. */
   drainEvents(): GameEvent[];
   /** Call once per rAF after engine.step: flushes the pose stream and samples interpolation. */
@@ -59,11 +99,15 @@ export async function connectNetworkSession(
   url: string,
   ticket: string,
   callbacks: NetworkSessionCallbacks = {},
-  makeSocket: (url: string) => WebSocket = (u) => new WebSocket(u)
+  options: NetworkSessionOptions = {}
 ): Promise<NetworkSession> {
-  const ws = makeSocket(`${url.replace(/\/$/, "")}/ws`);
-  ws.binaryType = "arraybuffer";
+  const makeSocket = options.makeSocket ?? ((u: string) => new WebSocket(u));
+  const envLatency = Number.parseInt(process.env.NEXT_PUBLIC_NET_SIM_LATENCY_MS ?? "", 10);
+  let simulatedLatencyMs = options.simulatedLatencyMs ?? (Number.isFinite(envLatency) ? envLatency : 0);
+
   let status: NetStatus = "connecting";
+  let disposed = false;
+  let ws: WebSocket | null = null;
   const chatListeners = new Set<(entry: { from: string; name: string; text: string }) => void>();
   const statusListeners = new Set<(status: NetStatus) => void>();
   const setStatus = (next: NetStatus, detail?: string) => {
@@ -77,21 +121,57 @@ export async function connectNetworkSession(
   const playerBuffers = new Map<string, PoseBuffer>();
   const mobBuffers = new Map<number, PoseBuffer>();
   const names = new Map<string, string>();
+  let serverTickTimeMs = 0;
 
-  // ── handshake: hello → welcome → binary world sync ─────────────────────────
-  const welcome = await new Promise<Extract<ServerMessage, { t: "welcome" }>>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("join timed out")), 15000);
-    ws.onerror = () => reject(new Error("connection failed"));
-    ws.onclose = (event) => reject(new Error(`refused: ${event.code} ${event.reason}`));
-    ws.onopen = () => ws.send(encodeClientMessage({ t: "hello", ticket, protocol: PROTOCOL_VERSION }));
-    ws.onmessage = (event) => {
-      const message = decodeServerFrame(event.data);
-      if (message?.t === "welcome") {
-        clearTimeout(timer);
-        resolve(message);
-      }
-    };
-  });
+  // Latency simulation wraps both directions symmetrically so `ms` reads as a
+  // one-way delay (round-trip ≈ 2×ms), matching how a player would set it.
+  const delayedSend = (data: string) => {
+    const socket = ws;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (simulatedLatencyMs > 0) {
+      setTimeout(() => {
+        try {
+          if (socket.readyState === WebSocket.OPEN) socket.send(data);
+        } catch {
+          /* socket closed under us */
+        }
+      }, simulatedLatencyMs);
+      return;
+    }
+    socket.send(data);
+  };
+
+  // ── handshake: open a socket, send hello, await welcome ─────────────────────
+  const handshake = (currentTicket: string, serverUrl: string): Promise<WelcomeMessage> =>
+    new Promise<WelcomeMessage>((resolve, reject) => {
+      const socket = makeSocket(`${serverUrl.replace(/\/$/, "")}/ws`);
+      socket.binaryType = "arraybuffer";
+      ws = socket;
+      const timer = setTimeout(() => {
+        reject(new Error("join timed out"));
+        try {
+          socket.close();
+        } catch {
+          /* already closing */
+        }
+      }, HANDSHAKE_TIMEOUT_MS);
+      socket.onopen = () => socket.send(encodeClientMessage({ t: "hello", ticket: currentTicket, protocol: PROTOCOL_VERSION }));
+      socket.onerror = () => reject(new Error("connection failed"));
+      socket.onclose = (event) => reject(new Error(`refused: ${event.code} ${event.reason}`));
+      socket.onmessage = (event) => {
+        const message = decodeServerFrame(event.data);
+        if (message?.t === "welcome") {
+          clearTimeout(timer);
+          // Hand the socket over to the steady-state handlers.
+          socket.onmessage = (frame) => onServerFrame(frame.data);
+          socket.onclose = (frame) => onSocketClosed(frame.code, frame.reason);
+          socket.onerror = () => onSocketClosed(1006, "socket error");
+          resolve(message);
+        }
+      };
+    });
+
+  const welcome = await handshake(ticket, url);
   setStatus("syncing");
 
   // The replica: an empty mirror world generated from the server's seed.
@@ -102,41 +182,57 @@ export async function connectNetworkSession(
     hardcore: welcome.hardcore,
     authority: "local",
     replica: true,
-    bootPlayer: false
+    bootPlayer: false,
+    ...(options.worldSize ? { worldSize: options.worldSize } : {})
   });
   const state = engine.state;
+  const playerId = welcome.playerId;
   state.dayClock = welcome.dayClock;
-  state.primaryPlayerId = welcome.playerId;
-  const self = engine.addPlayer({ id: welcome.playerId });
+  state.primaryPlayerId = playerId;
+  const self = engine.addPlayer({ id: playerId });
   self.input = createIdleInput();
   engine.consumeEvents(); // drop the join echo
-  for (const entry of welcome.players) names.set(entry.id, entry.name);
-  const myRoster = welcome.players.find((entry) => entry.id === welcome.playerId);
-  if (myRoster) self.position.set(myRoster.x, myRoster.y, myRoster.z);
+  serverTickTimeMs = welcome.tick * TICK_SECONDS * 1000;
 
   // Every dispatch from the UI/input controller routes here (see
   // GameEngine.routeDispatch): presentation stays local, gameplay goes up.
   engine.routeDispatch = (command) => {
     if (LOCAL_COMMANDS.has(command.type)) {
-      engine.dispatch(command, welcome.playerId);
+      engine.dispatch(command, playerId);
       return;
     }
-    if (command.type === "selectSlot") engine.dispatch(command, welcome.playerId); // optimistic
-    if (ws.readyState === WebSocket.OPEN) sendCmd(command);
+    if (command.type === "selectSlot") engine.dispatch(command, playerId); // optimistic
+    sendCmd(command);
   };
 
   const upsertRemotePlayer = (id: string, name: string) => {
-    if (id === welcome.playerId || state.players.has(id)) return;
+    names.set(id, name);
+    if (id === playerId || state.players.has(id)) return;
     engine.addPlayer({ id });
     engine.consumeEvents();
-    names.set(id, name);
   };
+
+  const applyRoster = (roster: WelcomeMessage["players"]) => {
+    for (const entry of roster) upsertRemotePlayer(entry.id, entry.name);
+    const present = new Set(roster.map((entry) => entry.id));
+    // Anyone who left while we were away is no longer in the roster.
+    for (const id of [...state.players.keys()]) {
+      if (id === playerId || present.has(id)) continue;
+      engine.removePlayer(id);
+      engine.consumeEvents();
+      playerBuffers.delete(id);
+    }
+  };
+
   for (const entry of welcome.players) upsertRemotePlayer(entry.id, entry.name);
+  const myRoster = welcome.players.find((entry) => entry.id === playerId);
+  if (myRoster) self.position.set(myRoster.x, myRoster.y, myRoster.z);
 
   const applyWorldSync = (sync: WorldSync) => {
     state.blockChanges.applySavedChanges(sync.changes);
     state.worldMeshDirty = true;
     state.dayClock = sync.dayClock;
+    serverTickTimeMs = sync.tick * TICK_SECONDS * 1000;
     state.containers.clear();
     for (const entry of sync.blockEntities) {
       const restored = restoreInventorySlots({ id: "container", inventorySlots: entry.slots });
@@ -146,7 +242,7 @@ export async function connectNetworkSession(
     state.mobs = [];
     mobBuffers.clear();
     for (const pose of sync.liveMobs) upsertReplicaMob(pose);
-    for (const entry of sync.players) upsertRemotePlayer(entry.id, entry.name);
+    applyRoster(sync.players);
   };
 
   function upsertReplicaMob(pose: MobPose): MobState {
@@ -220,20 +316,25 @@ export async function connectNetworkSession(
     if (blocks.length > 0) state.worldMeshDirty = true;
   };
 
-  let serverTickTimeMs = welcome.tick * TICK_SECONDS * 1000;
+  // ── inbound frame processing (latency-shifted) ──────────────────────────────
+  const onServerFrame = (data: unknown) => {
+    if (simulatedLatencyMs > 0) {
+      setTimeout(() => void processServerFrame(data), simulatedLatencyMs);
+      return;
+    }
+    void processServerFrame(data);
+  };
 
-  ws.onclose = (event) => setStatus("closed", `${event.code} ${event.reason}`);
-  ws.onerror = () => setStatus("closed", "socket error");
-  ws.onmessage = async (event) => {
-    if (typeof event.data !== "string") {
-      const sync = await gunzipWorldSync(new Uint8Array(event.data as ArrayBuffer));
+  async function processServerFrame(data: unknown): Promise<void> {
+    if (typeof data !== "string") {
+      const sync = await gunzipWorldSync(new Uint8Array(data as ArrayBuffer));
       if (sync) {
         applyWorldSync(sync);
         setStatus("online");
       }
       return;
     }
-    const message = decodeServerFrame(event.data);
+    const message = decodeServerFrame(data);
     if (!message) return;
     switch (message.t) {
       case "tick": {
@@ -278,7 +379,7 @@ export async function connectNetworkSession(
         return;
       }
       case "playerLeft": {
-        if (message.id !== welcome.playerId) engine.removePlayer(message.id);
+        if (message.id !== playerId) engine.removePlayer(message.id);
         playerBuffers.delete(message.id);
         engine.consumeEvents();
         return;
@@ -302,7 +403,54 @@ export async function connectNetworkSession(
       case "welcome":
         return;
     }
+  }
+
+  // ── reconnect ladder ────────────────────────────────────────────────────────
+  let reconnectAttempt = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const onSocketClosed = (code: number, reason: string) => {
+    if (disposed) return;
+    if (FATAL_CLOSES.has(code) || !options.reconnect) {
+      setStatus("closed", `${code} ${reason}`);
+      return;
+    }
+    scheduleReconnect();
   };
+
+  const scheduleReconnect = () => {
+    if (disposed) return;
+    if (reconnectAttempt >= RECONNECT_DELAYS_MS.length) {
+      setStatus("closed", "could not reconnect");
+      return;
+    }
+    const delay = RECONNECT_DELAYS_MS[reconnectAttempt];
+    reconnectAttempt += 1;
+    setStatus("reconnecting", `attempt ${reconnectAttempt}`);
+    reconnectTimer = setTimeout(() => void tryReconnectOnce(), delay);
+  };
+
+  async function tryReconnectOnce(): Promise<void> {
+    if (disposed || !options.reconnect) return;
+    const grant = await options.reconnect();
+    if (disposed) return;
+    if (!grant) {
+      scheduleReconnect();
+      return;
+    }
+    try {
+      const resumed = await handshake(grant.ticket, grant.url);
+      if (disposed) return;
+      // Same room, same id: keep the replica; the world-sync that follows
+      // re-seeds it. Just refresh the roster and the server-time anchor.
+      serverTickTimeMs = resumed.tick * TICK_SECONDS * 1000;
+      applyRoster(resumed.players);
+      reconnectAttempt = 0;
+      setStatus("syncing");
+    } catch {
+      scheduleReconnect();
+    }
+  }
 
   // ── outbound ────────────────────────────────────────────────────────────────
   let seq = 0;
@@ -311,7 +459,7 @@ export async function connectNetworkSession(
 
   const sendCmd = (command: Command) => {
     seq += 1;
-    ws.send(
+    delayedSend(
       encodeClientMessage({
         t: "cmd",
         seq,
@@ -323,7 +471,7 @@ export async function connectNetworkSession(
 
   const session: NetworkSession = {
     engine,
-    playerId: welcome.playerId,
+    playerId,
     subscribeChat(listener) {
       chatListeners.add(listener);
       return () => chatListeners.delete(listener);
@@ -346,15 +494,21 @@ export async function connectNetworkSession(
     },
 
     sendChat(text) {
-      if (ws.readyState === WebSocket.OPEN && text.trim()) ws.send(encodeClientMessage({ t: "chat", text: text.slice(0, 256) }));
+      if (text.trim()) delayedSend(encodeClientMessage({ t: "chat", text: text.slice(0, 256) }));
     },
 
+    setSimulatedLatency(ms) {
+      simulatedLatencyMs = Math.max(0, Math.floor(ms));
+    },
+    simulatedLatency: () => simulatedLatencyMs,
+
     afterFrame(nowMs) {
+      const open = ws?.readyState === WebSocket.OPEN;
       // Pose stream at tick rate.
-      if (ws.readyState === WebSocket.OPEN && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
+      if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
         lastPoseSentMs = nowMs;
         seq += 1;
-        ws.send(
+        delayedSend(
           encodeClientMessage({
             t: "pose",
             seq,
@@ -369,9 +523,9 @@ export async function connectNetworkSession(
           })
         );
       }
-      if (ws.readyState === WebSocket.OPEN && nowMs - lastPingMs >= 2000) {
+      if (open && nowMs - lastPingMs >= 2000) {
         lastPingMs = nowMs;
-        ws.send(encodeClientMessage({ t: "ping", id: seq, tMs: nowMs }));
+        delayedSend(encodeClientMessage({ t: "ping", id: seq, tMs: nowMs }));
       }
       // Interpolation: remote entities render ~125ms in the past.
       const renderTime = (clock.ready() ? clock.estimatedServerTimeMs(nowMs) : serverTickTimeMs) - INTERPOLATION_DELAY_MS;
@@ -395,9 +549,11 @@ export async function connectNetworkSession(
     },
 
     dispose() {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       setStatus("closed", "left world");
       try {
-        ws.close(1000, "leaving");
+        ws?.close(1000, "leaving");
       } catch {
         /* already closed */
       }

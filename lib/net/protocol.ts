@@ -30,6 +30,13 @@ export const CLOSE_SLOW_CLIENT = 4008;
 /** Max players per room (the v1 co-op scale the whole design assumes). */
 export const ROOM_CAPACITY = 8;
 
+/**
+ * Reconnect back-off ladder (ms between attempts). A dropped socket that isn't
+ * a fatal close walks this once — five tries over ~23 s — before the client
+ * gives up and shows the disconnect modal.
+ */
+export const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 8000] as const;
+
 // ── client → server ──────────────────────────────────────────────────────────
 
 /** First frame on the socket: the join ticket (minted by the web API) + the client's protocol. */

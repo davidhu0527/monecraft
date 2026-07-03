@@ -566,6 +566,22 @@
   pointer-events: none;
 }
 
+/* Reconnecting: amber, gently pulsing so a stalled retry still reads as "working". */
+.net-status-warn {
+  color: #ffd54f;
+  animation: net-status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes net-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .net-modal {
   position: absolute;
   inset: 0;

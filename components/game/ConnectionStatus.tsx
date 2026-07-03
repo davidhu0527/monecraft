@@ -34,6 +34,16 @@ export default function ConnectionStatus({ session, onLeave }: { session: Networ
     );
   }
 
+  // A dropped socket runs the reconnect ladder underneath; keep the world on
+  // screen with a banner rather than a modal — it usually resolves in seconds.
+  if (status === "reconnecting") {
+    return (
+      <div className="net-status net-status-warn" role="status">
+        Reconnecting…
+      </div>
+    );
+  }
+
   return (
     <div className="net-status" aria-live="off">
       {status === "online" ? `${rtt} ms` : status}

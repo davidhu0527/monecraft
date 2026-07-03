@@ -88,7 +88,14 @@ export default function GameShell() {
       if (!(await ensureSignedIn())) throw new Error("sign-in failed");
       const grant = await requestJoinTicket(world.id);
       if (!grant) throw new Error("could not get a join ticket (is the game server configured?)");
-      const session = await connectNetworkSession(grant.gameServerUrl, grant.ticket);
+      // The reconnect ladder mints a fresh short-lived ticket each retry — the
+      // 60 s TTL means a stale one is useless a minute after a drop.
+      const session = await connectNetworkSession(grant.gameServerUrl, grant.ticket, undefined, {
+        reconnect: async () => {
+          const next = await requestJoinTicket(world.id);
+          return next ? { url: next.gameServerUrl, ticket: next.ticket } : null;
+        }
+      });
       setScreen({ name: "play-online", profileId, world, session });
     } catch (error) {
       setConnectError(error instanceof Error ? error.message : "connection failed");
