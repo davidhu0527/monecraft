@@ -78,7 +78,7 @@ type GameContext = { engine: GameEngine; node: HTMLDivElement };
 // inspect the live simulation (single-player client game — nothing to protect).
 declare global {
   interface Window {
-    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController; audio: AudioDirector };
+    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController; audio: AudioDirector; net?: NetworkSession };
   }
 }
 
@@ -302,7 +302,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
-    window.__monecraft = { engine: gameEngine, renderer, input, audio };
+    window.__monecraft = { engine: gameEngine, renderer, input, audio, net: online ?? undefined };
 
     let minimap: MinimapRenderer | null = null;
     let animationFrame = 0;

@@ -213,3 +213,27 @@ describe("per-player stepping", () => {
     expect(engine.state.paused).toBe(false);
   });
 });
+
+describe("replica boot (bootPlayer: false, with a React shell)", () => {
+  // The client replica constructs PLAYERLESS but NOT headless — the exact
+  // combination NetworkSession uses. The constructor must not dereference the
+  // missing primary player, and the snapshot must become real when they join.
+  test("constructs with zero players and serves a real snapshot once the primary is seated", () => {
+    const engine = new GameEngine({
+      seed: 1337,
+      rng: mulberry32(42),
+      worldSize: { x: 64, y: 150, z: 64 },
+      authority: "local",
+      replica: true,
+      bootPlayer: false
+    });
+    expect(engine.state.players.size).toBe(0);
+    expect(engine.getSnapshot().inventory).toBeUndefined(); // stub until a primary exists
+
+    engine.state.primaryPlayerId = "acct-1";
+    engine.addPlayer({ id: "acct-1" });
+    expect(engine.getSnapshot().inventory).toBeDefined();
+    engine.step(0.05);
+    expect(engine.getSnapshot().hearts).toBeGreaterThan(0);
+  });
+});

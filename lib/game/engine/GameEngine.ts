@@ -408,9 +408,11 @@ export class GameEngine {
     // Seed weather from the (possibly restored) dayClock + player position so a
     // loaded save's first frame/snapshot is consistent before the first step().
     tickWeather(this.state);
-    // A headless room never serves a snapshot (and may have zero players, so
-    // building one would dereference the primary-player aliases).
-    this.snapshot = this.headless ? ({} as GameSnapshot) : this.buildSnapshot();
+    // A headless room never serves a snapshot, and a replica (bootPlayer:
+    // false) starts with zero players — either way building one here would
+    // dereference the missing primary player's aliases. The replica gets its
+    // real snapshot the moment addPlayer seats the primary.
+    this.snapshot = this.headless || !this.state.players.has(this.state.primaryPlayerId) ? ({} as GameSnapshot) : this.buildSnapshot();
   }
 
   /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
@@ -1016,6 +1018,9 @@ export class GameEngine {
     };
     if (spec.restore) this.restorePlayerFields(player, spec.restore);
     state.players.set(spec.id, player);
+    // A replica boots playerless with a stub snapshot; the primary taking
+    // their seat is when a real one first becomes buildable.
+    if (!this.headless && spec.id === state.primaryPlayerId) this.snapshot = this.buildSnapshot();
     this.emit({ type: "playerJoined", playerId: spec.id });
     return player;
   }

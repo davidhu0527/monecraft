@@ -47,8 +47,28 @@ Single-player cloud saves are gzipped `SaveData` blobs (`lib/game/
 cloudSaves.ts` — block diffs compress extremely well) with last-write-wins
 concurrency: each device sends the `updatedAt` stamp it last saw
 (`x-base-updated-at`); a mismatch is **409** and the client pulls the newer
-save before retrying. Wiring the sync into the world list / autosave path
-lands together with the multiplayer world browser in the online shell phase.
+save before retrying. The transport is built and tested; surfacing it in the
+world list / autosave UX is still to come.
+
+## Playing online (client)
+
+The menu's **Online Worlds** section (`WorldSelect`) lists every world the
+signed-in user may play, creates new ones (same form as local worlds — the
+row lives in Postgres, the game server hosts it), and mints invite links
+(`/join/<token>` — the landing page resolves the token, signs the visitor in
+as a guest if needed, and accepts the membership). Playing one runs
+`GameShell.playOnline`: ensure a session → `POST /api/worlds/:id/ticket` →
+`connectNetworkSession(gameServerUrl, ticket)` → mount the game on the
+session's replica engine. The connection lifecycle (chat, ping badge,
+disconnect modal, leave) lives in the session + two HUD components; the
+architecture of the replica/routing/interpolation stack is in
+[architecture.md](architecture.md#multiplayer-client-libnet).
+
+v1 scope cuts to know about (all documented where they bite): rafts/ships
+can't be boarded online (a mounted pose is server-driven, which would fight
+the client-owned pose stream); in-flight arrows aren't replicated (only
+their hits); advancements/stats don't accrue in server rooms; indirect mob
+kills credit the primary player.
 
 ## Environment & local development
 
@@ -61,7 +81,19 @@ See `.env.example` for every variable (web: `DATABASE_URL`,
 docker compose up -d          # local Postgres (dev only — tests use PGlite)
 bunx drizzle-kit migrate      # apply db/migrations once
 bun run dev                   # web app with accounts + API
+bun run server                # game server (ws://localhost:8080)
 ```
+
+Full co-op on localhost: run all three, open two browser windows (one
+normal, one private — separate guest identities), create an online world in
+the first, and paste its invite link into the second.
+
+**No Docker at all**: `DATABASE_URL=pglite://memory` runs the web app on an
+ephemeral in-process Postgres (`db/index.ts` applies the schema from
+`db/ddl.ts` at boot; data lives as long as the process). Pair it with the
+game server's `PERSISTENCE=memory` and the whole online stack is two
+commands with zero services — exactly how the Playwright multiplayer suite
+boots it (`playwright.config.ts`).
 
 Schema lives in `db/schema.ts` (drizzle); migrations are generated with
 `bunx drizzle-kit generate` and committed under `db/migrations/`. The PGlite
