@@ -19,6 +19,7 @@ function makeState(): GameState {
     world,
     blockChanges,
     player: { position: new THREE.Vector3(8, 6, 8), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+    players: new Map([["local", { position: new THREE.Vector3(8, 6, 8) }]]),
     timers: createTimers(),
     worldMeshDirty: false
   } as unknown as GameState;

@@ -18,6 +18,8 @@ function stubState(biome: BiomeId, dayClock: number, seed: number): GameState {
     dayClock,
     weather: { kind: "clear", intensity: 0 },
     player: { position: { x: 5, y: 64, z: 5 } },
+    players: new Map([["local", { position: { x: 5, y: 64, z: 5 } }]]),
+    primaryPlayerId: "local",
     world: { seed, getBiome: () => biome }
   } as unknown as GameState;
 }

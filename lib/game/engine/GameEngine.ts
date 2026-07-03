@@ -426,11 +426,11 @@ export class GameEngine {
     const mounted = state.mountedVehicleId !== null;
     let move: MoveTickResult;
     if (mounted) {
-      tickVehicles(state, input, dt);
+      tickVehicles(state, state.player, input, dt);
       move = { didSprint: false, didWalk: false, didJump: false, didLand: false, landImpact: 0, horizontalDistance: 0 };
     } else {
       move = tickPlayerMotion(state, state.player, input, dt, this.applyDamage);
-      tickVehicles(state, input, dt);
+      tickVehicles(state, state.player, input, dt);
     }
     if (move.didJump) this.emit({ type: "jumped" });
     if (move.didLand) this.emit({ type: "landed", impact: move.landImpact });
@@ -653,12 +653,12 @@ export class GameEngine {
         if (tryFeedAimedMob(state, state.player, this.emit)) break;
         if (tryToggleSitPet(state, state.player, this.emit)) break;
         if (tryTradeAimedVillager(state, state.player, this.emit)) break;
-        if (tryBoardAimedVehicle(state)) break;
+        if (tryBoardAimedVehicle(state, state.player)) break;
         if (tryInteractBlock(state, state.player, this.emit)) break;
         if (this.trySummonBoss()) break;
         if (this.tryStartRaid()) break;
         if (tryFish(state, state.player, this.emit, this.rng)) break;
-        if (tryPlaceVehicle(state, this.emit)) break;
+        if (tryPlaceVehicle(state, state.player, this.emit)) break;
         if (tryUseHeldItem(state, state.player, this.emit, this.rng)) break;
         placeSelectedBlock(state, state.player, this.emit);
         break;

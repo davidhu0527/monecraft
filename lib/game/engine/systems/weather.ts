@@ -31,12 +31,15 @@ function precipKindFor(biome: BiomeId): WeatherKind {
 
 export function tickWeather(state: GameState): void {
   const { active, intensity } = weatherAt(state.dayClock, state.world.seed);
-  if (!active) {
+  // Weather is presentation: the precip kind follows the PRIMARY player's biome
+  // (each client derives its own locally; a playerless server room stays clear).
+  const anchor = state.players.get(state.primaryPlayerId) ?? [...state.players.values()][0];
+  if (!active || !anchor) {
     state.weather.kind = "clear";
     state.weather.intensity = 0;
     return;
   }
-  const kind = precipKindFor(state.world.getBiome(Math.floor(state.player.position.x), Math.floor(state.player.position.z)));
+  const kind = precipKindFor(state.world.getBiome(Math.floor(anchor.position.x), Math.floor(anchor.position.z)));
   state.weather.kind = kind;
   state.weather.intensity = kind === "clear" ? 0 : intensity;
 }
