@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import MinecraftGame from "@/components/MinecraftGame";
 import ProfileSelect from "@/components/menu/ProfileSelect";
 import WorldSelect from "@/components/menu/WorldSelect";
+import { ensureSignedIn } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { getProfile, setActiveProfile } from "@/lib/game/profiles";
-import { deleteWorld, getWorld, touchWorld } from "@/lib/game/worlds";
+import { deleteWorld, getWorld, touchWorld, type WorldMeta } from "@/lib/game/worlds";
+import { requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
+import { connectNetworkSession, type NetworkSession } from "@/lib/net/NetworkSession";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 /**
@@ -17,7 +20,28 @@ import { installUiTiles } from "@/lib/ui/chromeTiles";
  * disposes the old engine/renderer and a fresh mount boots the next world, with
  * no page reload.
  */
-type Screen = { name: "profile-select" } | { name: "world-select"; profileId: string } | { name: "play"; profileId: string; worldId: string };
+type Screen =
+  | { name: "profile-select" }
+  | { name: "world-select"; profileId: string }
+  | { name: "play"; profileId: string; worldId: string }
+  | { name: "play-online"; profileId: string; world: OnlineWorld; session: NetworkSession };
+
+/** Online worlds mount the same game subtree; the meta is a projection of the server row. */
+function onlineWorldMeta(world: OnlineWorld, profileId: string): WorldMeta {
+  return {
+    id: `online:${world.id}`,
+    profileId,
+    name: world.name,
+    seed: world.seed,
+    worldType: world.worldType as WorldMeta["worldType"],
+    gameMode: world.gameMode as WorldMeta["gameMode"],
+    difficulty: world.difficulty as WorldMeta["difficulty"],
+    hardcore: world.hardcore,
+    worldgenVersion: world.worldgenVersion,
+    createdAt: 0,
+    lastPlayedAt: 0
+  };
+}
 
 /**
  * Remembers the world being played for this tab so a reload resumes it instead
@@ -53,6 +77,25 @@ export default function GameShell() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<Screen>({ name: "profile-select" });
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  /** Guest-or-account → ticket → socket → replica sync → play. */
+  const playOnline = async (profileId: string, world: OnlineWorld) => {
+    setConnectError(null);
+    setConnecting(world.name);
+    try {
+      if (!(await ensureSignedIn())) throw new Error("sign-in failed");
+      const grant = await requestJoinTicket(world.id);
+      if (!grant) throw new Error("could not get a join ticket (is the game server configured?)");
+      const session = await connectNetworkSession(grant.gameServerUrl, grant.ticket);
+      setScreen({ name: "play-online", profileId, world, session });
+    } catch (error) {
+      setConnectError(error instanceof Error ? error.message : "connection failed");
+    } finally {
+      setConnecting(null);
+    }
+  };
 
   useEffect(() => {
     installUiTiles(); // the menu chrome shares the in-game noise tiles
@@ -96,19 +139,54 @@ export default function GameShell() {
     }
   }
 
+  if (screen.name === "play-online") {
+    const profile = getProfile(screen.profileId);
+    if (profile) {
+      return (
+        <MinecraftGame
+          key={`online:${screen.world.id}`}
+          world={onlineWorldMeta(screen.world, profile.id)}
+          profile={profile}
+          online={screen.session}
+          onQuitToWorlds={() => setScreen({ name: "world-select", profileId: profile.id })}
+          onDeleteWorld={() => setScreen({ name: "world-select", profileId: profile.id })}
+          onReloadWorld={() => setScreen({ name: "world-select", profileId: profile.id })}
+        />
+      );
+    }
+  }
+
   if (screen.name === "world-select") {
     const profile = getProfile(screen.profileId);
     if (profile) {
       return (
-        <WorldSelect
-          profile={profile}
-          onPlay={(worldId) => {
-            touchWorld(worldId);
-            writeSessionPointer({ profileId: profile.id, worldId });
-            setScreen({ name: "play", profileId: profile.id, worldId });
-          }}
-          onBack={() => setScreen({ name: "profile-select" })}
-        />
+        <>
+          <WorldSelect
+            profile={profile}
+            onPlay={(worldId) => {
+              touchWorld(worldId);
+              writeSessionPointer({ profileId: profile.id, worldId });
+              setScreen({ name: "play", profileId: profile.id, worldId });
+            }}
+            onPlayOnline={(world) => void playOnline(profile.id, world)}
+            onBack={() => setScreen({ name: "profile-select" })}
+          />
+          {connecting && (
+            <div className="net-modal" role="status">
+              <div className="net-modal-box">Joining “{connecting}”…</div>
+            </div>
+          )}
+          {connectError && (
+            <div className="net-modal" role="alertdialog" aria-label="Connection failed">
+              <div className="net-modal-box">
+                <p>Couldn&apos;t join: {connectError}</p>
+                <button type="button" className="mc-button" onClick={() => setConnectError(null)}>
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       );
     }
   }

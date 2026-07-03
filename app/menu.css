@@ -298,3 +298,27 @@
   color: #ff8a80;
   font-size: 12px;
 }
+
+/* ── Online worlds section + join page ───────────────────────────────────── */
+.menu-online {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 2px solid rgba(0, 0, 0, 0.35);
+}
+
+.menu-online-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.join-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.join-page .net-modal-box {
+  max-width: 420px;
+}
