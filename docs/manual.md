@@ -68,6 +68,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `L`                | Open / close advancements & statistics                                                                        |
 | `F`                | Eat the selected food, or drink a selected potion                                                             |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
+| `T` or `Enter`     | Chat (online worlds only) — `Esc` closes without sending                                                      |
 | `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
 | `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins), Controls tabs |
 | `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                           |
@@ -640,3 +641,44 @@ contents of every chest — so the world regenerates identically and picks up wh
 you left off. Because saves
 live in the browser, they're tied to that browser on that device; "Reset" starts a
 fresh world.
+
+## Playing online
+
+Online worlds are shared worlds that live on a server and hold **2–8 players** —
+private co-op with people you invite, not public matchmaking. Everything offline
+stays exactly as it is: local worlds never need an account or a connection.
+
+**Getting an identity.** The first online action signs you in as a **guest** —
+one click, no form, from the **Account** panel on the profile screen (or
+automatically when you accept an invite). Guests are real accounts: the worlds
+you create and join are yours. When you want to keep them across browsers,
+**Create account** upgrades the guest in place — your worlds come with you.
+
+**Hosting.** On the world list, the **Online Worlds** section appears once
+you've gone online. **New Online World** uses the same form as a local world
+(name, seed, world type, mode, difficulty); creating it connects you straight
+in. Press **Copy invite** on your world's card to put a join link on the
+clipboard — send it to your friends. Invite links expire after a while; copy a
+fresh one any time.
+
+**Joining.** Opening an invite link shows the world's name, signs you in (as a
+guest if you're new), and adds the world to your **Online Worlds** list — click
+its card to play. The world is yours to rejoin from that list from then on;
+the link is only needed once.
+
+**Playing together.** Everyone shares one world: block edits, mobs, chests,
+day and night. You'll see the other players in the world with their names
+overhead. Press **`T`** (or `Enter`) to chat; a ping badge shows your
+connection quality, and losing the connection pops a notice with the option to
+leave. The **server** owns the world — your mining completes when it confirms
+the break (a barely-noticeable beat on a good connection), and your health,
+hunger, and inventory are its word, not the client's.
+
+A few things work differently online, and the rest is the same game:
+
+- **Pause is personal.** `Esc` opens your menu but the world keeps running —
+  nobody can stop a shared world. "Save & Quit" becomes **Leave world**.
+- **Sleeping needs everyone.** The night skips only when **all** players are
+  in bed (dead and Spectator players excepted) — climb back out to cancel.
+- The world saves on the server automatically; there's nothing to manage.
+- **Rafts and ships can't be boarded** in online worlds yet.

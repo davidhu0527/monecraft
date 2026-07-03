@@ -344,13 +344,16 @@ export const SAVE_KEY = "minecraft_save_v7";
 // changes, so old block-diffs (which index against generated terrain) can't be
 // applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
 // lakes; v8 added shallow coal ore; v9 added generated villages; v10 added
-// ocean flora (kelp/coral) and the aquatic-update structures. Each world
+// ocean flora (kelp/coral) and the aquatic-update structures; v11 moved all
+// seed-determined noise to bit-portable implementations (lib/world/noise.ts),
+// so the same seed now generates identical bytes on every JS engine — the
+// prerequisite for a multiplayer server sharing worlds with browsers. Each world
 // records the WORLDGEN_VERSION it was generated under; a world whose recorded
 // version differs from this constant has its block-diffs discarded and is
 // rebooted from its stored seed (lib/game/worlds.ts). The save *schema* (SaveData)
 // is independent of this — lighting is a derived cache and lava is worldgen, so
 // neither is persisted, and additive schema bumps don't touch it.
-export const WORLDGEN_VERSION = 10;
+export const WORLDGEN_VERSION = 11;
 
 // Rendering
 export const RENDER_RADIUS = 90;

@@ -42,4 +42,6 @@ export type Command =
   | { type: "toggleDebug" }
   | { type: "toggleCameraView" }
   | { type: "respawn" }
-  | { type: "dismissVictory" };
+  | { type: "dismissVictory" }
+  /** Get out of bed before the fade starts (multiplayer: stop waiting on the others). */
+  | { type: "wakeUp" };

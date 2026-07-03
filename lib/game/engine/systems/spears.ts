@@ -10,7 +10,7 @@ import {
   SPEAR_THROW_SPEED
 } from "@/lib/game/config";
 import { consumeToolDurability } from "@/lib/game/inventory";
-import type { EmitGameEvent, GameState, ThrownSpearState } from "../state";
+import type { EmitGameEvent, GameState, PlayerState, ThrownSpearState } from "../state";
 import { lookDirection } from "./playerMotion";
 
 const scratchDirection = new THREE.Vector3();
@@ -18,16 +18,13 @@ const scratchDisplacement = new THREE.Vector3();
 const scratchClosest = new THREE.Vector3();
 const scratchToMob = new THREE.Vector3();
 
-export function tryThrowSelectedSpear(state: GameState, emit: EmitGameEvent, rng?: () => number): boolean {
-  const slot = state.inventory[state.selectedSlot];
+export function tryThrowSelectedSpear(state: GameState, player: PlayerState, emit: EmitGameEvent, rng?: () => number): boolean {
+  const slot = player.inventory[player.selectedSlot];
   if (!slot?.id?.endsWith("_spear") || slot.kind !== "weapon" || !slot.throwDamage) return false;
-  if (state.timers.spearThrowCooldown > 0) return true;
+  if (player.timers.spearThrowCooldown > 0) return true;
 
-  lookDirection(state.player.yaw, state.player.pitch, scratchDirection);
-  const position = new THREE.Vector3(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z).addScaledVector(
-    scratchDirection,
-    0.55
-  );
+  lookDirection(player.yaw, player.pitch, scratchDirection);
+  const position = new THREE.Vector3(player.position.x, player.position.y + EYE_HEIGHT, player.position.z).addScaledVector(scratchDirection, 0.55);
   state.thrownSpears.push({
     id: state.nextThrownSpearId,
     itemId: slot.id,
@@ -38,8 +35,8 @@ export function tryThrowSelectedSpear(state: GameState, emit: EmitGameEvent, rng
     stuckTimer: null
   });
   state.nextThrownSpearId += 1;
-  state.timers.spearThrowCooldown = SPEAR_THROW_COOLDOWN_SECONDS;
-  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
+  player.timers.spearThrowCooldown = SPEAR_THROW_COOLDOWN_SECONDS;
+  player.inventory = consumeToolDurability(player.inventory, player.selectedSlot, 1, rng) ?? player.inventory;
   emit({ type: "attackSwung" });
   return true;
 }
@@ -54,7 +51,6 @@ function segmentHitFraction(spear: ThrownSpearState, displacement: THREE.Vector3
 }
 
 export function tickThrownSpears(state: GameState, dt: number, removeMobAt: (index: number) => void, emit: EmitGameEvent): void {
-  state.timers.spearThrowCooldown = Math.max(0, state.timers.spearThrowCooldown - dt);
   if (state.thrownSpears.length === 0) return;
 
   const survivors: ThrownSpearState[] = [];

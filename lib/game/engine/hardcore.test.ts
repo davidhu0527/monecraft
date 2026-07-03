@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
-import type { GameEvent } from "@/lib/game/engine/state";
+import type { GameEvent, PlayerState } from "@/lib/game/engine/state";
+import { applyNonLethalDamage } from "@/lib/game/engine/systems/playerLife";
+import { POISON_FLOOR_HP } from "@/lib/game/config";
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -16,13 +18,18 @@ function makeEngine(opts: { hardcore?: boolean } = {}): GameEngine {
   return new GameEngine({ seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 }, ...opts });
 }
 
-// The lethal seams are private arrow methods; poke them directly for a clean kill.
+// The lethal seams are private per-player arrow methods; poke them directly for a clean kill.
 type DamageHooks = {
-  applyDamage: (amount: number) => void;
-  applyEnvironmentalDamage: (amount: number) => void;
-  applyPoisonDamage: (amount: number) => void;
+  damageCombat: (player: PlayerState, amount: number) => void;
+  damageEnvironmental: (player: PlayerState, amount: number) => void;
 };
-const hooks = (e: GameEngine) => e as unknown as DamageHooks;
+const raw = (e: GameEngine) => e as unknown as DamageHooks;
+const hooks = (e: GameEngine) => ({
+  applyDamage: (amount: number) => raw(e).damageCombat(e.state.player, amount),
+  applyEnvironmentalDamage: (amount: number) => raw(e).damageEnvironmental(e.state.player, amount),
+  // Poison is floored, never lethal — the same wiring the status-effect tick uses.
+  applyPoisonDamage: (amount: number) => void applyNonLethalDamage(e.state.player, amount, POISON_FLOOR_HP)
+});
 const hasEvent = (events: GameEvent[], type: GameEvent["type"]) => events.some((ev) => ev.type === type);
 
 describe("hardcore forcing & locks", () => {
@@ -72,6 +79,11 @@ describe("hardcore permadeath", () => {
     const events = e.consumeEvents();
     expect(hasEvent(events, "gameOver")).toBe(true);
     expect(hasEvent(events, "died")).toBe(false);
+
+    // The game-over spectator keeps hearts=0 (withered display) — regen must
+    // not top it back to full the way it does for a live Creative/Spectator.
+    for (let i = 0; i < 5; i += 1) e.step(0.05);
+    expect(e.state.hearts).toBe(0);
   });
 
   test("a normal world's lethal hit still respawns (died, not game-over)", () => {
@@ -120,9 +132,9 @@ describe("hardcore persistence", () => {
     e.state.hearts = 1;
     hooks(e).applyDamage(100);
     const save = e.serialize();
-    expect(save.version).toBe(16);
+    expect(save.version).toBe(17);
     expect(save.hardcore).toBe(true);
-    expect(save.gameOver).toBe(true);
+    expect(save.players[0].gameOver).toBe(true);
 
     const restored = new GameEngine({ save, rng: mulberry32(1), worldSize: { x: 64, y: 150, z: 64 } });
     expect(restored.state.hardcore).toBe(true);

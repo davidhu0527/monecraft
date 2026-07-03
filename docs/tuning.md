@@ -452,6 +452,42 @@ of this radius around the player, so larger values draw more terrain at higher c
 frequent rebuilds, fresher view). `STUCK_RESET_SECONDS` is how long an overlap is
 tolerated before the auto-unstuck teleport fires.
 
+## Multiplayer networking
+
+Server-side constants live in `server/room.ts` and `lib/net/protocol.ts` (not
+`config.ts` — they shape the wire and the room budget, not gameplay balance).
+None affect single-player, and none are save-sensitive.
+
+- **`ROOM_CAPACITY`** (`8`, protocol.ts) — max players per world. The v1 co-op
+  scale the whole design assumes; raising it grows the per-tick pose/self fan-out
+  quadratically, so re-measure with `loadSim` before nudging it.
+- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~74 MB
+  each). Joins beyond it are refused at the door, not thrashed. Tune from
+  `/rooms` p95 tick + peak memory.
+- **Tick rate** — `TICK_SECONDS` (`0.05` = 20 Hz, `tickDriver.ts`) is the room
+  sim + pose-stream cadence. The whole latency budget hangs off it; not a
+  casual dial.
+- **Replication cadence** — `KEYFRAME_INTERVAL_TICKS` (`100` = 5 s, full mob
+  keyframe / drift correction), mob delta frames at **10 Hz** (half tick rate)
+  with `MOB_DEADBAND_SQ` (`0.05²` — smaller = more mob updates, more bandwidth),
+  `DAY_INTERVAL_TICKS` (`20` = 1 s day-clock sync), `POSE_CHECKPOINT_TICKS`
+  (`20` = 1 s replay-log pose anchors). `INTERPOLATION_DELAY_MS` (`125`,
+  `lib/net/interpolation.ts`) is how far in the past remote entities render —
+  larger absorbs more jitter at the cost of visible lag.
+- **Backpressure** — `BACKPRESSURE_SOFT_BYTES` (256 KB → shed `pp`/`mp`),
+  `BACKPRESSURE_KICK_BYTES` (1 MB) + `BACKPRESSURE_KICK_STRIKES` (~5 s sustained
+  → `4008` kick).
+- **Persistence** — `PERSIST_INTERVAL_TICKS` (`1200` = 60 s dirty-persist; also
+  the crash-loss bound), idle-evict at 5 min (`roomRegistry.ts`).
+- **Reconnect** — `RECONNECT_DELAYS_MS` (`[1,2,4,8,8] s`, protocol.ts) is the
+  client back-off ladder; the join ticket TTL is `TICKET_TTL_SECONDS` (`60`,
+  `tickets.ts`).
+- **Replay log** — `COMMAND_LOG_SIZE` (env, default `4096`) bounds each room's
+  in-memory command ring dumped by `/rooms/:id/log`.
+- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` (env, default `0`) seeds
+  the client's artificial one-way delay; `window.__monecraft.net.setSimulatedLatency(ms)`
+  overrides it live.
+
 ## Save- and worldgen-sensitive tunables
 
 Change these only with care:

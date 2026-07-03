@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { BlockId, VoxelWorld } from "@/lib/world";
 import { spawnArrow } from "@/lib/game/engine/projectiles";
 import { tickProjectiles } from "@/lib/game/engine/systems/projectileAI";
-import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState, MobState, PlayerState } from "@/lib/game/engine/state";
 
 function makeMob(id: number, x: number, y: number, z: number, hp = 10, halfHeight = 0.5): MobState {
   return {
@@ -31,13 +31,23 @@ function makeMob(id: number, x: number, y: number, z: number, hp = 10, halfHeigh
   };
 }
 
+// Real players map: mob arrows sweep every player body.
+const player = {
+  id: "local",
+  position: new THREE.Vector3(16, 14, 16),
+  velocity: new THREE.Vector3(),
+  yaw: 0,
+  pitch: 0,
+  onGround: true
+} as unknown as PlayerState;
 function makeState(world: VoxelWorld, mobs: MobState[] = []): GameState {
   return {
+    players: new Map([["local", player]]),
     world,
     mobs,
     projectiles: [],
     nextProjectileId: 1,
-    player: { position: new THREE.Vector3(16, 14, 16), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true }
+    player
   } as unknown as GameState;
 }
 
@@ -46,7 +56,7 @@ function makeDeps() {
   const removed: number[] = [];
   let damage = 0;
   const deps = {
-    applyDamage: (a: number) => {
+    damagePlayer: (_p: PlayerState, a: number) => {
       damage += a;
     },
     removeMobAt: (i: number) => {

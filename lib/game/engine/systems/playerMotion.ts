@@ -13,7 +13,7 @@ import {
   WALK_SPEED,
   WORLD_BORDER_PADDING
 } from "@/lib/game/config";
-import type { FrameInput, GameState } from "../state";
+import type { FrameInput, GameState, PlayerState } from "../state";
 import { featherFallingReduction } from "@/lib/game/enchantments";
 import { speedScaleFromHunger } from "./playerStats";
 import { jumpBoostBonus, speedMultiplier } from "./statusEffects";
@@ -46,13 +46,14 @@ export function lookDirection(yaw: number, pitch: number, out: THREE.Vector3): T
   return out.set(-cp * Math.sin(yaw), Math.sin(pitch), -cp * Math.cos(yaw));
 }
 
-export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number, applyDamage: (amount: number) => void): MoveTickResult {
-  const { world, player, timers } = state;
-  const keys = input.keys;
+export function tickPlayerMotion(state: GameState, player: PlayerState, input: FrameInput, dt: number, applyDamage: (amount: number) => void): MoveTickResult {
+  const { world } = state;
+  const { timers } = player;
+  const move = input.move;
   // Spectator phases through terrain (noclip); Creative/Spectator fly with direct
   // vertical control instead of gravity.
-  const noclip = isNoclip(state.gameMode);
-  const flying = noclip || (state.isFlying && canFly(state.gameMode));
+  const noclip = isNoclip(player.gameMode);
+  const flying = noclip || (player.isFlying && canFly(player.gameMode));
 
   const stepAxis = (axis: "x" | "y" | "z", amount: number) => {
     if (noclip) {
@@ -74,10 +75,10 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
     }
   };
 
-  const forwardInput = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
-  const strafeInput = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
-  const wantsJump = keys.has("Space");
-  const crouching = keys.has("KeyC");
+  const forwardInput = (move.forward ? 1 : 0) - (move.back ? 1 : 0);
+  const strafeInput = (move.right ? 1 : 0) - (move.left ? 1 : 0);
+  const wantsJump = move.jump;
+  const crouching = move.crouch;
 
   forwardFromYaw(player.yaw, scratchForward);
   scratchRight.crossVectors(scratchForward, UP).normalize();
@@ -86,11 +87,11 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   scratchMoveDir.addScaledVector(scratchRight, strafeInput);
   if (scratchMoveDir.lengthSq() > 0) scratchMoveDir.normalize();
 
-  const speedScale = speedScaleFromHunger(state.hunger);
-  const canSprint = state.hunger > SPRINT_MIN_HUNGER;
-  const sprinting = canSprint && forwardInput > 0 && keys.has("KeyW") && input.capsActive && !crouching;
+  const speedScale = speedScaleFromHunger(player.hunger);
+  const canSprint = player.hunger > SPRINT_MIN_HUNGER;
+  const sprinting = canSprint && forwardInput > 0 && move.sprint && !crouching;
   const baseSpeed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
-  const speed = baseSpeed * speedMultiplier(state);
+  const speed = baseSpeed * speedMultiplier(player);
 
   player.velocity.x = scratchMoveDir.x * speed;
   player.velocity.z = scratchMoveDir.z * speed;
@@ -106,7 +107,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
   } else {
     player.velocity.y -= GRAVITY * dt;
     if (wantsJump && player.onGround && !crouching) {
-      player.velocity.y = JUMP_VELOCITY + jumpBoostBonus(state);
+      player.velocity.y = JUMP_VELOCITY + jumpBoostBonus(player);
       player.onGround = false;
       didJump = true;
     }
@@ -146,7 +147,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
     // Any fall hard enough to trigger this deals at least half a heart; Feather
     // Falling on worn boots softens the landing before armor mitigation.
     const raw = Math.min(19, Math.floor((-vyBeforeMove - 13) * 0.5));
-    const softened = raw * (1 - featherFallingReduction(state.equippedArmor.boots));
+    const softened = raw * (1 - featherFallingReduction(player.equippedArmor.boots));
     applyDamage(Math.max(1, Math.round(softened)));
   }
 

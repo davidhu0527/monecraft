@@ -210,7 +210,8 @@ describe("tickAquaticSpawnDirector", () => {
       mobs: [],
       nextMobId: 1,
       timers: createTimers(),
-      player: { position: new THREE.Vector3(32, 16, 32) }
+      player: { position: new THREE.Vector3(32, 16, 32) },
+      players: new Map([["local", { position: new THREE.Vector3(32, 16, 32) }]])
     } as unknown as GameState;
   }
 

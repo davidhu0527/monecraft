@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { BlockId, VoxelWorld } from "@/lib/world";
 import { TNT_FUSE_SECONDS } from "@/lib/game/config";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
-import { createTimers, type GameEvent, type GameState, type MobState } from "@/lib/game/engine/state";
+import { createTimers, type GameEvent, type GameState, type MobState, type PlayerState } from "@/lib/game/engine/state";
 import { explode, primeTnt, tickPrimedTnt } from "@/lib/game/engine/systems/explosion";
 
 /** A 24³ world whose lower half is solid dirt — soft blocks the blast can clear. */
@@ -44,10 +44,21 @@ function makeMob(x: number, y: number, z: number, hp = 20): MobState {
 }
 
 function makeState(world: VoxelWorld, mobs: MobState[] = []): GameState {
+  // Real players map (explode damages every player in range); `player` stays a
+  // plain data property so tests can keep poking positions.
+  const player = {
+    id: "local",
+    position: new THREE.Vector3(0, 64, 0),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true
+  } as unknown as PlayerState;
   return {
     world,
     blockChanges: createBlockChangeTracker(world),
-    player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+    players: new Map([["local", player]]),
+    player,
     mobs,
     primedTnt: new Map<number, number>(),
     worldMeshDirty: false,
@@ -57,7 +68,7 @@ function makeState(world: VoxelWorld, mobs: MobState[] = []): GameState {
 
 function deps(events: GameEvent[], damages: number[]) {
   return {
-    applyDamage: (amount: number) => damages.push(amount),
+    damagePlayer: (_p: PlayerState, amount: number) => damages.push(amount),
     rng: () => 0.5,
     emit: (e: GameEvent) => events.push(e)
   };

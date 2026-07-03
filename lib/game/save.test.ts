@@ -19,6 +19,7 @@ import {
   migrateSaveV13toV14,
   migrateSaveV14toV15,
   migrateSaveV15toV16,
+  migrateSaveV16toV17,
   isPersistentMob,
   readContainers,
   readLootedChests,
@@ -67,7 +68,9 @@ import type {
   SaveDataV13,
   SaveDataV14,
   SaveDataV15,
-  SavedMob
+  SaveDataV16,
+  SavedMob,
+  SavedPlayer
 } from "@/lib/game/types";
 import type { MobState } from "@/lib/game/engine/state";
 
@@ -87,7 +90,8 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
 
 const KEY = "test_save";
 
-function sampleSave(): SaveData {
+/** The flat pre-v17 shape — kept flat so round-trips exercise the v16→v17 players migration. */
+function sampleSaveV16(): SaveDataV16 {
   return {
     version: 16,
     gameMode: "creative",
@@ -118,10 +122,61 @@ function sampleSave(): SaveData {
   };
 }
 
+/** The v17 player entry equivalent to sampleSaveV16's flat per-player fields. */
+function samplePlayer(): SavedPlayer {
+  return {
+    id: "local",
+    position: { x: 100.5, y: 48, z: 200.25 },
+    inventorySlots: [
+      { id: "dirt", count: 12 },
+      { id: "wood_pickaxe", count: 1, durability: 35 },
+      { id: null, count: 0 }
+    ],
+    equippedArmor: { helmet: { id: "helmet", count: 1 } },
+    selectedSlot: 2,
+    gameMode: "creative",
+    hearts: 14,
+    hunger: 9,
+    spawnPoint: { x: 10, y: 40, z: 20 },
+    stats: [
+      { id: "blocks_mined", value: 42 },
+      { id: "play_time", value: 123.5 }
+    ],
+    advancements: ["getting_wood", "stone_age"]
+  };
+}
+
+/** The current (v17) shape — exactly what sampleSaveV16 migrates to. */
+function sampleSave(): SaveData {
+  return {
+    version: 17,
+    difficulty: "hard",
+    seed: 1337,
+    changes: [
+      [42, 0],
+      [99, 3]
+    ],
+    dayClock: 123.5,
+    lootedChests: [100, 200],
+    players: [samplePlayer()]
+  };
+}
+
+/** Persists a flat pre-v17 save so a subsequent readSave has to run the players migration. */
+function writeSaveV16(storage: Storage, save: SaveDataV16): void {
+  writeSave(KEY, save as unknown as SaveData, storage);
+}
+
 describe("save round-trip", () => {
   test("writeSave then readSave preserves every field", () => {
     const storage = memoryStorage();
     writeSave(KEY, sampleSave(), storage);
+    expect(readSave(KEY, storage)).toEqual(sampleSave());
+  });
+
+  test("a stored flat v16 save reads back as the migrated v17 shape", () => {
+    const storage = memoryStorage();
+    writeSaveV16(storage, sampleSaveV16());
     expect(readSave(KEY, storage)).toEqual(sampleSave());
   });
 
@@ -137,9 +192,9 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(16);
+    expect(parsed!.version).toBe(17);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
-    expect(parsed!.inventorySlots).toBeUndefined();
+    expect(parsed!.players[0].inventorySlots).toBeUndefined();
   });
 });
 
@@ -159,8 +214,8 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(16); // chained v1 -> v2 -> … -> v15 -> v16
-    expect(parsed!.selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
+    expect(parsed!.version).toBe(17); // chained v1 -> v2 -> … -> v16 -> v17
+    expect(parsed!.players[0].selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
   });
@@ -248,21 +303,21 @@ describe("v2 to v3 migration", () => {
     expect(migrated.changes).toEqual([[42, 0]]);
   });
 
-  test("readSave migrates a v2 save through to v13", () => {
+  test("readSave migrates a v2 save through to the current version", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(16);
+    expect(parsed!.version).toBe(17);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
     const storage = memoryStorage();
-    writeSave(KEY, sampleSave(), storage);
+    writeSaveV16(storage, sampleSaveV16());
     const parsed = readSave(KEY, storage)!;
     expect(parsed.dayClock).toBe(123.5);
-    expect(parsed.hearts).toBe(14);
-    expect(parsed.hunger).toBe(9);
-    expect(parsed.spawnPoint).toEqual({ x: 10, y: 40, z: 20 });
+    expect(parsed.players[0].hearts).toBe(14);
+    expect(parsed.players[0].hunger).toBe(9);
+    expect(parsed.players[0].spawnPoint).toEqual({ x: 10, y: 40, z: 20 });
   });
 });
 
@@ -289,7 +344,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
+    expect(parsed.version).toBe(17);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -309,9 +364,9 @@ describe("v3 to v4 migration & chest containers", () => {
 
   test("a chest round-trips through save with durability preserved", () => {
     const slots = [createSlot("dirt", 5), { ...createSlot("diamond_sword", 1), durability: 200 }];
-    const save: SaveData = { ...sampleSave(), blockEntities: serializeContainers(new Map([[100, slots]])) };
+    const save: SaveDataV16 = { ...sampleSaveV16(), blockEntities: serializeContainers(new Map([[100, slots]])) };
     const storage = memoryStorage();
-    writeSave(KEY, save, storage);
+    writeSaveV16(storage, save);
     const restored = readContainers(readSave(KEY, storage)!);
     expect(restored).toHaveLength(1);
     expect(restored[0].index).toBe(100);
@@ -364,7 +419,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
+    expect(parsed.version).toBe(17);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -381,7 +436,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
 
   test("lootedChests survive a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, sampleSave(), storage);
+    writeSaveV16(storage, sampleSaveV16());
     expect(readSave(KEY, storage)!.lootedChests).toEqual([100, 200]);
   });
 });
@@ -409,8 +464,8 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
-    expect(restoreEffects(parsed)).toEqual([]);
+    expect(parsed.version).toBe(17);
+    expect(restoreEffects(parsed.players[0])).toEqual([]);
   });
 
   test("migrateSaveV6toV7 is a pure version bump leaving xp absent", () => {
@@ -431,20 +486,20 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
-    expect(restoreGameMode(parsed)).toBe("survival");
+    expect(parsed.version).toBe(17);
+    expect(restoreGameMode(parsed.players[0])).toBe("survival");
   });
 
   test("restoreGameMode reads a valid mode and rejects garbage", () => {
-    expect(restoreGameMode({ ...sampleSave(), gameMode: "spectator" })).toBe("spectator");
-    expect(restoreGameMode({ ...sampleSave(), gameMode: "bogus" as never })).toBe("survival");
-    expect(restoreGameMode({ ...sampleSave(), gameMode: undefined })).toBe("survival");
+    expect(restoreGameMode({ ...samplePlayer(), gameMode: "spectator" })).toBe("spectator");
+    expect(restoreGameMode({ ...samplePlayer(), gameMode: "bogus" })).toBe("survival");
+    expect(restoreGameMode({ ...samplePlayer(), gameMode: undefined })).toBe("survival");
   });
 
   test("gameMode survives a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, { ...sampleSave(), gameMode: "adventure" }, storage);
-    expect(readSave(KEY, storage)!.gameMode).toBe("adventure");
+    writeSaveV16(storage, { ...sampleSaveV16(), gameMode: "adventure" });
+    expect(readSave(KEY, storage)!.players[0].gameMode).toBe("adventure");
   });
 
   test("migrateSaveV8toV9 is a pure version bump leaving difficulty absent", () => {
@@ -458,7 +513,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v8: SaveDataV8 = { ...v5Save(), version: 8 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
+    expect(parsed.version).toBe(17);
     expect(restoreDifficulty(parsed)).toBe("normal");
   });
 
@@ -470,7 +525,7 @@ describe("v5 to v6 migration & status effects", () => {
 
   test("difficulty survives a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, { ...sampleSave(), difficulty: "easy" }, storage);
+    writeSaveV16(storage, { ...sampleSaveV16(), difficulty: "easy" });
     expect(readSave(KEY, storage)!.difficulty).toBe("easy");
   });
 
@@ -486,28 +541,28 @@ describe("v5 to v6 migration & status effects", () => {
     const v9: SaveDataV9 = { ...v5Save(), version: 9 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v9) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
+    expect(parsed.version).toBe(17);
     expect(restoreHardcore(parsed)).toBe(false);
-    expect(restoreGameOver(parsed)).toBe(false);
+    expect(restoreGameOver(parsed, parsed.players[0])).toBe(false);
   });
 
   test("restoreHardcore/restoreGameOver read true and coerce garbage to false", () => {
     expect(restoreHardcore({ ...sampleSave(), hardcore: true })).toBe(true);
     expect(restoreHardcore({ ...sampleSave(), hardcore: undefined })).toBe(false);
     expect(restoreHardcore({ ...sampleSave(), hardcore: 1 as never })).toBe(false);
-    expect(restoreGameOver({ ...sampleSave(), hardcore: true, gameOver: true })).toBe(true);
-    expect(restoreGameOver({ ...sampleSave(), gameOver: undefined })).toBe(false);
+    expect(restoreGameOver({ hardcore: true }, { ...samplePlayer(), gameOver: true })).toBe(true);
+    expect(restoreGameOver({ hardcore: true }, { ...samplePlayer(), gameOver: undefined })).toBe(false);
     // gameOver only ever lands on a hardcore save — a stray flag on a non-hardcore
     // (corrupt) save must not lock it into spectator.
-    expect(restoreGameOver({ ...sampleSave(), hardcore: false, gameOver: true })).toBe(false);
+    expect(restoreGameOver({ hardcore: false }, { ...samplePlayer(), gameOver: true })).toBe(false);
   });
 
   test("hardcore + gameOver survive a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, { ...sampleSave(), hardcore: true, gameOver: true }, storage);
+    writeSaveV16(storage, { ...sampleSaveV16(), hardcore: true, gameOver: true });
     const parsed = readSave(KEY, storage)!;
     expect(parsed.hardcore).toBe(true);
-    expect(parsed.gameOver).toBe(true);
+    expect(parsed.players[0].gameOver).toBe(true);
   });
 
   test("migrateSaveV10toV11 is a pure version bump leaving custom names absent", () => {
@@ -543,29 +598,29 @@ describe("v5 to v6 migration & status effects", () => {
 
   test("worn armor survives a full save round-trip with durability + enchantments", () => {
     const storage = memoryStorage();
-    const save: SaveData = {
-      ...sampleSave(),
+    const save: SaveDataV16 = {
+      ...sampleSaveV16(),
       equippedArmor: { chestplate: { id: "chestplate", count: 1, durability: 100, enchantments: [{ id: "protection", level: 1 }] } }
     };
-    writeSave(KEY, save, storage);
-    const restored = restoreEquippedArmor(readSave(KEY, storage)!)!;
+    writeSaveV16(storage, save);
+    const restored = restoreEquippedArmor(readSave(KEY, storage)!.players[0])!;
     expect(restored.chestplate?.durability).toBe(100);
     expect(restored.chestplate?.enchantments).toEqual([{ id: "protection", level: 1 }]);
   });
 
   test("a custom name survives a full save round-trip on durable gear", () => {
     const storage = memoryStorage();
-    const save: SaveData = {
-      ...sampleSave(),
+    const save: SaveDataV16 = {
+      ...sampleSaveV16(),
       inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, customName: "Excalibur" }]
     };
-    writeSave(KEY, save, storage);
-    expect(readSave(KEY, storage)!.inventorySlots?.[0].customName).toBe("Excalibur");
+    writeSaveV16(storage, save);
+    expect(readSave(KEY, storage)!.players[0].inventorySlots?.[0].customName).toBe("Excalibur");
   });
 
   test("restoreInventorySlots trims and caps a custom name, drops blanks, and ignores names on non-durable items", () => {
-    const dirty: SaveData = {
-      ...sampleSave(),
+    const dirty: SavedPlayer = {
+      ...samplePlayer(),
       inventorySlots: [
         { id: "diamond_sword", count: 1, durability: 700, customName: `  ${"x".repeat(50)}  ` }, // trimmed + capped
         { id: "ruby_sword", count: 1, durability: 360, customName: "   " }, // blank → dropped
@@ -579,29 +634,29 @@ describe("v5 to v6 migration & status effects", () => {
   });
 
   test("restoreXp clamps to a non-negative integer; absent/garbage → 0", () => {
-    expect(restoreXp({ ...sampleSave(), xp: 42.9 })).toBe(42);
-    expect(restoreXp({ ...sampleSave(), xp: -5 })).toBe(0);
-    expect(restoreXp({ ...sampleSave(), xp: Number.NaN })).toBe(0);
-    expect(restoreXp({ ...sampleSave(), xp: undefined })).toBe(0);
+    expect(restoreXp({ ...samplePlayer(), xp: 42.9 })).toBe(42);
+    expect(restoreXp({ ...samplePlayer(), xp: -5 })).toBe(0);
+    expect(restoreXp({ ...samplePlayer(), xp: Number.NaN })).toBe(0);
+    expect(restoreXp({ ...samplePlayer(), xp: undefined })).toBe(0);
   });
 
   test("xp and per-slot enchantments survive a full save round-trip", () => {
     const storage = memoryStorage();
-    const save: SaveData = {
-      ...sampleSave(),
+    const save: SaveDataV16 = {
+      ...sampleSaveV16(),
       xp: 57,
       inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, enchantments: [{ id: "sharpness", level: 2 }] }]
     };
-    writeSave(KEY, save, storage);
+    writeSaveV16(storage, save);
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.xp).toBe(57);
-    expect(parsed.inventorySlots?.[0].enchantments).toEqual([{ id: "sharpness", level: 2 }]);
+    expect(parsed.players[0].xp).toBe(57);
+    expect(parsed.players[0].inventorySlots?.[0].enchantments).toEqual([{ id: "sharpness", level: 2 }]);
   });
 
   test("a bow's Power and Punch enchantments survive a full save round-trip", () => {
     const storage = memoryStorage();
-    const save: SaveData = {
-      ...sampleSave(),
+    const save: SaveDataV16 = {
+      ...sampleSaveV16(),
       inventorySlots: [
         {
           id: "bow",
@@ -614,17 +669,17 @@ describe("v5 to v6 migration & status effects", () => {
         }
       ]
     };
-    writeSave(KEY, save, storage);
+    writeSaveV16(storage, save);
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.inventorySlots?.[0].enchantments).toEqual([
+    expect(parsed.players[0].inventorySlots?.[0].enchantments).toEqual([
       { id: "power", level: 3 },
       { id: "punch", level: 1 }
     ]);
   });
 
   test("restoreInventorySlots drops unknown enchant ids and clamps levels; non-durable items carry none", () => {
-    const dirty: SaveData = {
-      ...sampleSave(),
+    const dirty: SavedPlayer = {
+      ...samplePlayer(),
       inventorySlots: [
         {
           id: "diamond_sword",
@@ -643,8 +698,8 @@ describe("v5 to v6 migration & status effects", () => {
   });
 
   test("restoreInventorySlots clamps each enchant to its own cap (a tampered mending:3 loads as 1)", () => {
-    const dirty: SaveData = {
-      ...sampleSave(),
+    const dirty: SavedPlayer = {
+      ...samplePlayer(),
       inventorySlots: [{ id: "diamond_sword", count: 1, durability: 700, enchantments: [{ id: "mending", level: 3 }] as never }]
     };
     const slots = restoreInventorySlots(dirty)!;
@@ -661,7 +716,7 @@ describe("v5 to v6 migration & status effects", () => {
       { id: "speed", remaining: 30 },
       { id: "poison", remaining: 4.5 }
     ]);
-    expect(restoreEffects({ ...sampleSave(), effects: out })).toEqual(out);
+    expect(restoreEffects({ ...samplePlayer(), effects: out })).toEqual(out);
   });
 
   test("restoreEffects drops unknown ids and non-positive / garbage durations", () => {
@@ -672,14 +727,14 @@ describe("v5 to v6 migration & status effects", () => {
       { id: "poison", remaining: 0 },
       { id: "strength", remaining: Number.NaN }
     ] as never;
-    expect(restoreEffects({ ...sampleSave(), effects: dirty })).toEqual([{ id: "speed", remaining: 30 }]);
-    expect(restoreEffects({ ...sampleSave(), effects: undefined })).toEqual([]);
+    expect(restoreEffects({ ...samplePlayer(), effects: dirty })).toEqual([{ id: "speed", remaining: 30 }]);
+    expect(restoreEffects({ ...samplePlayer(), effects: undefined })).toEqual([]);
   });
 
   test("active effects survive a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, { ...sampleSave(), effects: [{ id: "regeneration", remaining: 12 }] }, storage);
-    expect(readSave(KEY, storage)!.effects).toEqual([{ id: "regeneration", remaining: 12 }]);
+    writeSaveV16(storage, { ...sampleSaveV16(), effects: [{ id: "regeneration", remaining: 12 }] });
+    expect(readSave(KEY, storage)!.players[0].effects).toEqual([{ id: "regeneration", remaining: 12 }]);
   });
 
   test("the new haste/resistance/jump_boost effect ids survive a round-trip (additive, no save bump)", () => {
@@ -689,8 +744,8 @@ describe("v5 to v6 migration & status effects", () => {
       { id: "resistance", remaining: 30 },
       { id: "jump_boost", remaining: 45 }
     ] as const;
-    writeSave(KEY, { ...sampleSave(), effects: [...effects] }, storage);
-    expect(readSave(KEY, storage)!.effects).toEqual([...effects]);
+    writeSaveV16(storage, { ...sampleSaveV16(), effects: [...effects] });
+    expect(readSave(KEY, storage)!.players[0].effects).toEqual([...effects]);
   });
 });
 
@@ -718,8 +773,8 @@ describe("v12 to v13 migration & statistics", () => {
   test("a pre-progression (v12) save loads with no statistics", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v12Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
-    expect(restoreStats(parsed)).toEqual([]);
+    expect(parsed.version).toBe(17);
+    expect(restoreStats(parsed.players[0])).toEqual([]);
   });
 
   test("serializeStats keeps only positive, finite counters", () => {
@@ -739,49 +794,51 @@ describe("v12 to v13 migration & statistics", () => {
 
   test("serializeStats / restoreStats round-trip the counters (fractional values preserved)", () => {
     const out = serializeStats(new Map([["distance_walked", 17.25]]));
-    expect(restoreStats({ ...sampleSave(), stats: out })).toEqual(out);
+    expect(restoreStats({ ...samplePlayer(), stats: out })).toEqual(out);
   });
 
   test("restoreStats rejects a non-array and drops non-string ids / negative / garbage values", () => {
-    expect(restoreStats({ ...sampleSave(), stats: undefined })).toEqual([]);
+    expect(restoreStats({ ...samplePlayer(), stats: undefined })).toEqual([]);
     const dirty = [
       { id: "blocks_mined", value: 5 },
       { id: 42, value: 3 }, // non-string id → dropped
       { id: "deaths", value: -1 }, // negative → dropped
       { id: "jumps", value: Number.POSITIVE_INFINITY } // garbage → dropped
     ] as never;
-    expect(restoreStats({ ...sampleSave(), stats: dirty })).toEqual([{ id: "blocks_mined", value: 5 }]);
+    expect(restoreStats({ ...samplePlayer(), stats: dirty })).toEqual([{ id: "blocks_mined", value: 5 }]);
   });
 
   test("statistics survive a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, { ...sampleSave(), stats: [{ id: "fish_caught", value: 9 }] }, storage);
-    expect(readSave(KEY, storage)!.stats).toEqual([{ id: "fish_caught", value: 9 }]);
+    writeSaveV16(storage, { ...sampleSaveV16(), stats: [{ id: "fish_caught", value: 9 }] });
+    expect(readSave(KEY, storage)!.players[0].stats).toEqual([{ id: "fish_caught", value: 9 }]);
   });
 
   test("migrateSaveV12toV13 leaves a v12 save with no advancements", () => {
-    expect(restoreAdvancements(migrateSaveV15toV16(migrateSaveV14toV15(migrateSaveV13toV14(migrateSaveV12toV13(v12Save())))))).toEqual([]);
+    const chained = migrateSaveV16toV17(migrateSaveV15toV16(migrateSaveV14toV15(migrateSaveV13toV14(migrateSaveV12toV13(v12Save())))));
+    expect(restoreAdvancements(chained.players[0])).toEqual([]);
   });
 
   test("restoreAdvancements rejects a non-array and drops non-string / empty ids, de-duplicating", () => {
-    expect(restoreAdvancements({ ...sampleSave(), advancements: undefined })).toEqual([]);
+    expect(restoreAdvancements({ ...samplePlayer(), advancements: undefined })).toEqual([]);
     const dirty = ["getting_wood", "getting_wood", "", 42, null, "stone_age"] as never;
-    expect(restoreAdvancements({ ...sampleSave(), advancements: dirty })).toEqual(["getting_wood", "stone_age"]);
+    expect(restoreAdvancements({ ...samplePlayer(), advancements: dirty })).toEqual(["getting_wood", "stone_age"]);
   });
 
   test("advancements survive a full save round-trip", () => {
     const storage = memoryStorage();
-    writeSave(KEY, { ...sampleSave(), advancements: ["diamonds", "dragon_slayer"] }, storage);
-    expect(readSave(KEY, storage)!.advancements).toEqual(["diamonds", "dragon_slayer"]);
+    writeSaveV16(storage, { ...sampleSaveV16(), advancements: ["diamonds", "dragon_slayer"] });
+    expect(readSave(KEY, storage)!.players[0].advancements).toEqual(["diamonds", "dragon_slayer"]);
   });
 });
 
 describe("stat restoration helpers", () => {
-  const base = sampleSave();
+  const base = samplePlayer();
 
   test("missing fields restore as null so the engine keeps its defaults", () => {
-    const bare: SaveData = { ...base, dayClock: undefined, hearts: undefined, hunger: undefined, spawnPoint: undefined };
-    expect(restoreDayClock(bare)).toBeNull();
+    const bareWorld: SaveData = { ...sampleSave(), dayClock: undefined };
+    const bare: SavedPlayer = { ...base, hearts: undefined, hunger: undefined, spawnPoint: undefined };
+    expect(restoreDayClock(bareWorld)).toBeNull();
     expect(restoreHearts(bare)).toBeNull();
     expect(restoreHungerLevel(bare)).toBeNull();
     expect(restoreSpawnPoint(bare)).toBeNull();
@@ -792,8 +849,8 @@ describe("stat restoration helpers", () => {
     expect(restoreHearts({ ...base, hearts: 0 })).toBe(1);
     expect(restoreHungerLevel({ ...base, hunger: -5 })).toBe(0);
     expect(restoreHungerLevel({ ...base, hunger: 999 })).toBe(MAX_HUNGER);
-    expect(restoreDayClock({ ...base, dayClock: -1 })).toBeNull();
-    expect(restoreDayClock({ ...base, dayClock: Number.NaN })).toBeNull();
+    expect(restoreDayClock({ ...sampleSave(), dayClock: -1 })).toBeNull();
+    expect(restoreDayClock({ ...sampleSave(), dayClock: Number.NaN })).toBeNull();
   });
 
   test("spawnPoint floors coordinates and rejects malformed points", () => {
@@ -804,9 +861,9 @@ describe("stat restoration helpers", () => {
   test("player position is preserved as floats and rejects non-finite coords", () => {
     // Unlike the floored spawn point, the player position keeps its fractional part.
     expect(restorePlayerPosition(base)).toEqual({ x: 100.5, y: 48, z: 200.25 });
-    expect(restorePlayerPosition({ ...base, player: { x: 1, y: Number.NaN, z: 3 } })).toBeNull();
-    expect(restorePlayerPosition({ ...base, player: { x: 1, y: Number.POSITIVE_INFINITY, z: 3 } })).toBeNull();
-    expect(restorePlayerPosition({ ...base, player: undefined as unknown as SaveData["player"] })).toBeNull();
+    expect(restorePlayerPosition({ ...base, position: { x: 1, y: Number.NaN, z: 3 } })).toBeNull();
+    expect(restorePlayerPosition({ ...base, position: { x: 1, y: Number.POSITIVE_INFINITY, z: 3 } })).toBeNull();
+    expect(restorePlayerPosition({ ...base, position: undefined })).toBeNull();
   });
 });
 
@@ -820,7 +877,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 17 };
+    const save = { ...sampleSave(), version: 18 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
@@ -905,7 +962,7 @@ describe("v13 to v14 migration & mob persistence", () => {
   test("a pre-mob (v13) save loads with no persisted mobs", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v13Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(16);
+    expect(parsed.version).toBe(17);
     expect(restoreMobs(parsed)).toEqual([]);
   });
 
@@ -943,11 +1000,15 @@ describe("v13 to v14 migration & mob persistence", () => {
     expect(restoreMobs({ ...sampleSave(), mobs: dirty })).toEqual([{ kind: "wolf", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "player" }]);
   });
 
-  test("persisted pets survive a full save round-trip", () => {
+  test("persisted pets survive a full save round-trip (legacy owner rewritten to local)", () => {
     const storage = memoryStorage();
     const pet = makeMob({ owner: "player", faction: "ally", hp: 16, position: new THREE.Vector3(9, 30, 9) });
-    writeSave(KEY, { ...sampleSave(), mobs: serializeMobs([pet]) }, storage);
-    expect(readSave(KEY, storage)!.mobs).toEqual([{ kind: "sheep", x: 9, y: 30, z: 9, hp: 16, faction: "ally", owner: "player" }]);
+    writeSaveV16(storage, { ...sampleSaveV16(), mobs: serializeMobs([pet]) });
+    const parsed = readSave(KEY, storage)!;
+    // The v16→v17 migration rewrites the legacy owner literal "player" to "local"…
+    expect(parsed.mobs).toEqual([{ kind: "sheep", x: 9, y: 30, z: 9, hp: 16, faction: "ally", owner: "local" }]);
+    // …and restoreMobs accepts the player-id owner.
+    expect(restoreMobs(parsed)).toEqual([{ kind: "sheep", x: 9, y: 30, z: 9, hp: 16, faction: "ally", owner: "local" }]);
   });
 });
 
@@ -1050,7 +1111,95 @@ describe("v15 to v16 migration & vehicles", () => {
   test("vehicles survive a full save round-trip", () => {
     const storage = memoryStorage();
     const vehicles = [{ kind: "ship" as const, x: 9.5, y: 20, z: 12.5, yaw: -0.25 }];
-    writeSave(KEY, { ...sampleSave(), vehicles }, storage);
+    writeSaveV16(storage, { ...sampleSaveV16(), vehicles });
     expect(readSave(KEY, storage)!.vehicles).toEqual(vehicles);
+  });
+});
+
+describe("v16 to v17 migration & the players array", () => {
+  test("migrateSaveV16toV17 wraps every flat player field into players[0], renaming player to position", () => {
+    const v16: SaveDataV16 = {
+      ...sampleSaveV16(),
+      hardcore: true,
+      gameOver: true,
+      effects: [{ id: "speed", remaining: 30 }],
+      xp: 57
+    };
+    const migrated = migrateSaveV16toV17(v16);
+    expect(migrated.version).toBe(17);
+    expect(migrated.players).toHaveLength(1);
+    const local = migrated.players[0];
+    expect(local.id).toBe("local");
+    expect(local.position).toEqual({ x: 100.5, y: 48, z: 200.25 }); // the v16 `player` field, renamed
+    expect(local.inventorySlots).toEqual(v16.inventorySlots);
+    expect(local.equippedArmor).toEqual({ helmet: { id: "helmet", count: 1 } });
+    expect(local.selectedSlot).toBe(2);
+    expect(local.gameMode).toBe("creative");
+    expect(local.gameOver).toBe(true);
+    expect(local.hearts).toBe(14);
+    expect(local.hunger).toBe(9);
+    expect(local.effects).toEqual([{ id: "speed", remaining: 30 }]);
+    expect(local.xp).toBe(57);
+    expect(local.stats).toEqual([
+      { id: "blocks_mined", value: 42 },
+      { id: "play_time", value: 123.5 }
+    ]);
+    expect(local.advancements).toEqual(["getting_wood", "stone_age"]);
+    expect(local.spawnPoint).toEqual({ x: 10, y: 40, z: 20 });
+    // World-level fields stay at the top level…
+    expect(migrated.seed).toBe(1337);
+    expect(migrated.difficulty).toBe("hard");
+    expect(migrated.hardcore).toBe(true);
+    expect(migrated.dayClock).toBe(123.5);
+    expect(migrated.lootedChests).toEqual([100, 200]);
+    expect(migrated.changes).toEqual([
+      [42, 0],
+      [99, 3]
+    ]);
+    // …and the flat per-player fields do not survive as top-level keys.
+    expect("player" in migrated).toBe(false);
+    expect("inventorySlots" in migrated).toBe(false);
+    expect("hearts" in migrated).toBe(false);
+    expect("gameOver" in migrated).toBe(false);
+  });
+
+  test("migrateSaveV16toV17 rewrites a pet's legacy owner literal player to local, leaving residents alone", () => {
+    const v16: SaveDataV16 = {
+      ...sampleSaveV16(),
+      mobs: [
+        { kind: "wolf", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "player", sitting: true },
+        { kind: "villager", x: 8, y: 30, z: 9, hp: 20, faction: "villager" }
+      ]
+    };
+    const migrated = migrateSaveV16toV17(v16);
+    expect(migrated.mobs).toEqual([
+      { kind: "wolf", x: 2, y: 3, z: 4, hp: 5, faction: "ally", owner: "local", sitting: true },
+      { kind: "villager", x: 8, y: 30, z: 9, hp: 20, faction: "villager" }
+    ]);
+  });
+
+  test("readSave chains a stored v15 save all the way to v17", () => {
+    const v15: SaveDataV15 = {
+      version: 15,
+      seed: 1337,
+      changes: [[42, 0]],
+      inventorySlots: [{ id: "dirt", count: 3 }],
+      selectedSlot: 0,
+      player: { x: 1, y: 2, z: 3 }
+    };
+    const storage = memoryStorage({ [KEY]: JSON.stringify(v15) });
+    const parsed = readSave(KEY, storage);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.version).toBe(17);
+    expect(parsed!.players).toHaveLength(1);
+    expect(parsed!.players[0].id).toBe("local");
+    expect(parsed!.players[0].position).toEqual({ x: 1, y: 2, z: 3 });
+    expect(parsed!.players[0].inventorySlots).toEqual([{ id: "dirt", count: 3 }]);
+    expect(parsed!.players[0].selectedSlot).toBe(0);
+  });
+
+  test("readSave rejects a v17 save missing its players array", () => {
+    const noPlayers = { ...sampleSave(), players: undefined }; // JSON.stringify drops the key entirely
+    expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(noPlayers) }))).toBeNull();
   });
 });

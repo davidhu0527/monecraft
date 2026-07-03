@@ -16,14 +16,85 @@ export function nextCameraMode(mode: CameraMode): CameraMode {
   return CAMERA_MODE_CYCLE[(CAMERA_MODE_CYCLE.indexOf(mode) + 1) % CAMERA_MODE_CYCLE.length];
 }
 
+/** Stable player identity within a world. SP uses the single LOCAL_PLAYER_ID; multiplayer uses account ids. */
+export type PlayerId = string;
+export const LOCAL_PLAYER_ID: PlayerId = "local";
+
+/**
+ * Everything that belongs to ONE player: avatar, inventory, vitals,
+ * progression, and in-progress activities. `GameState.players` holds one of
+ * these per player; single-player is simply the one-entry case. The flat
+ * legacy fields on GameState (`state.inventory`, `state.hearts`, …) are
+ * accessor aliases onto the primary player (see players.ts) kept for the
+ * shell/tests/console — engine systems must take a PlayerState explicitly.
+ */
 export type PlayerState = {
+  id: PlayerId;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   /** Look direction; the renderer derives the camera from these. Order YXZ. */
   yaw: number;
   pitch: number;
   onGround: boolean;
+  /** Per-player mode (a server may host a Creative owner beside Survival guests). Persisted (save v8). */
+  gameMode: GameMode;
+  /** True while flying (Creative toggle, always on for Spectator). Session-only, never serialized. */
+  isFlying: boolean;
+  /** This player's hardcore run ended in death (spectator over the dead world). Persisted (save v10). */
+  gameOver: boolean;
+  inventory: InventorySlot[];
+  equippedArmor: EquippedArmor;
+  selectedSlot: number;
+  hearts: number;
+  hunger: number;
+  /** Remaining breath, 0..MAX_OXYGEN. Session-only; refills out of water. */
+  oxygen: number;
+  /** Active status effects → remaining seconds. Persisted (save v6); cleared on death. */
+  effects: Map<EffectId, number>;
+  /** Banked XP points. Persisted (save v7); NOT cleared on death. */
+  xp: number;
+  /** Gameplay statistics → running counter. Persisted (save v13); NOT cleared on death. */
+  stats: Map<string, number>;
+  /** Unlocked advancement ids. Persisted (save v13); NOT cleared on death. */
+  advancements: Set<string>;
+  isDead: boolean;
+  respawnTimer: number;
+  /** Bed respawn point (block coords), or null to respawn at a random land point. */
+  spawnPoint: { x: number; y: number; z: number } | null;
+  mining: MiningState;
+  /** The active fishing cast, or null (session-only). */
+  fishing: FishingState | null;
+  mountedVehicleId: number | null;
+  inventoryOpen: boolean;
+  /** True while the advancements & statistics overlay is open. Session-only. */
+  advancementsOpen: boolean;
+  /** Crafting station whose recipes are unlocked while the inventory is open, or null. */
+  craftingStation: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" | null;
+  /** The open villager's trade profession while a "villager" station is up, else null. Session-only. */
+  activeVillagerProfession: Profession | null;
+  /** Voxel index of the chest open in this player's inventory panel, or null. */
+  openContainerIndex: number | null;
+  /** In bed, waiting for everyone: the sleep fade engages once ALL eligible players sleep. Session-only. */
+  sleeping: boolean;
+  /**
+   * This player's live continuous input, applied each step. The SP shell feeds
+   * the primary player's via step(dt, input); a server stores each client's
+   * latest packet here via setPlayerInput. Session-only.
+   */
+  input: FrameInput;
+  /**
+   * Server authority only: movement synthesized from this tick's accepted
+   * client pose (distance/sprint/jump/landing), consumed by stepPlayer for
+   * hunger/stats in place of tickPlayerMotion's result. Session-only.
+   */
+  remoteMove: { didSprint: boolean; didWalk: boolean; didJump: boolean; didLand: boolean; landImpact: number; horizontalDistance: number } | null;
+  timers: PlayerTimers;
 };
+
+/** A fresh all-idle FrameInput (per player — mutable, unlike the shared frozen IDLE_INPUT). */
+export function createIdleInput(): FrameInput {
+  return { move: { forward: false, back: false, left: false, right: false, jump: false, sprint: false, crouch: false }, mineHeld: false };
+}
 
 /** Simulation-side mob — no Three.js objects; visuals live in the renderer. */
 export type MobState = {
@@ -32,8 +103,8 @@ export type MobState = {
   hostile: boolean;
   /** Targeting allegiance (set at spawn from FACTION_BY_KIND; a tamed pet becomes "ally"). Persisted (save v14). */
   faction: MobFaction;
-  /** Pet owner once tamed (currently always "player"); undefined for wild mobs. Persisted (save v14). */
-  owner?: "player";
+  /** Pet owner's PlayerId once tamed; undefined for wild mobs. Persisted (save v14; ids since v17). */
+  owner?: PlayerId;
   /** A tamed pet told to stay put (sit/stay) — no follow, wander, or pursuit. Persisted (save v14). */
   sitting?: boolean;
   /** Villager-only: trade profession (drives its trade subset + tint). Persisted (save v15). */
@@ -119,7 +190,7 @@ export type VehicleState = {
   kind: VehicleKind;
   position: THREE.Vector3;
   yaw: number;
-  rider: "player" | null;
+  rider: PlayerId | null;
 };
 
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
@@ -130,7 +201,8 @@ export type DebugInfo = {
   daylight: number;
 };
 
-export type GameTimers = {
+/** Timers scoped to one player's body/activities — live on PlayerState.timers. */
+export type PlayerTimers = {
   voidTimer: number;
   regenTimer: number;
   waterExposureTimer: number;
@@ -150,6 +222,13 @@ export type GameTimers = {
   /** Poison-effect damage accumulator. */
   effectPoisonTimer: number;
   stuckTimer: number;
+  spearThrowCooldown: number;
+  /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
+  bowCooldownTimer: number;
+};
+
+/** World-scoped director/sampler timers — live on GameState.timers. */
+export type WorldTimers = {
   hostileSpawnTimer: number;
   aquaticSpawnTimer: number;
   spawnerTimer: number;
@@ -157,10 +236,15 @@ export type GameTimers = {
   debugHudTimer: number;
   randomTickTimer: number;
   breedTimer: number;
-  spearThrowCooldown: number;
-  /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
-  bowCooldownTimer: number;
 };
+
+/**
+ * The unified view legacy call sites read as `state.timers`: world timers are
+ * real properties; player timers are accessor aliases onto the primary
+ * player's PlayerTimers (installed by players.ts). New/converted code should
+ * read `player.timers` / the world timers directly.
+ */
+export type GameTimers = WorldTimers & PlayerTimers;
 
 export type WeatherKind = "clear" | "rain" | "snow";
 export type WeatherState = { kind: WeatherKind; intensity: number };
@@ -182,6 +266,17 @@ export type RaidState = {
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
+  /** Every player in the world, by id. Single-player is the one-entry case. */
+  players: Map<PlayerId, PlayerState>;
+  /**
+   * The player the legacy flat aliases below resolve to: the local player on a
+   * client, meaningless on a headless server (which addresses players by id).
+   */
+  primaryPlayerId: PlayerId;
+  // ── Primary-player aliases ─────────────────────────────────────────────────
+  // Accessor properties delegating to players.get(primaryPlayerId), installed
+  // by players.ts. They keep the shell, tests, and window.__monecraft working
+  // unchanged; ENGINE SYSTEMS MUST NOT USE THEM — take a PlayerState param.
   player: PlayerState;
   inventory: InventorySlot[];
   equippedArmor: EquippedArmor;
@@ -275,7 +370,7 @@ export type GameState = {
   raid: RaidState | null;
 };
 
-export function createTimers(): GameTimers {
+export function createPlayerTimers(): PlayerTimers {
   return {
     voidTimer: 0,
     regenTimer: 0,
@@ -291,32 +386,62 @@ export function createTimers(): GameTimers {
     effectRegenTimer: 0,
     effectPoisonTimer: 0,
     stuckTimer: 0,
+    spearThrowCooldown: 0,
+    bowCooldownTimer: 0
+  };
+}
+
+/**
+ * Legacy flat-timers builder: a plain data object satisfying the unified
+ * GameTimers view. Used by hand-rolled test states that predate the
+ * players-map split; engine code builds createPlayerTimers/createWorldTimers.
+ */
+export function createTimers(): GameTimers {
+  return { ...createPlayerTimers(), ...createWorldTimers() };
+}
+
+export function createWorldTimers(): WorldTimers {
+  return {
     hostileSpawnTimer: 0,
     aquaticSpawnTimer: 0,
     spawnerTimer: 0,
     daylightHudTimer: 0,
     debugHudTimer: 0,
     randomTickTimer: 0,
-    breedTimer: 0,
-    spearThrowCooldown: 0,
-    bowCooldownTimer: 0
+    breedTimer: 0
   };
 }
 
-/** Per-frame continuous input, owned by the input controller. */
-export type FrameInput = {
-  keys: ReadonlySet<string>;
-  capsActive: boolean;
-  leftMouseHeld: boolean;
-  pointerLocked: boolean;
+/**
+ * Movement intents, decoded from key bindings by the input controller. The
+ * engine never sees DOM key codes — an abstract intent packet is what a
+ * multiplayer client will put on the wire, and what any input source
+ * (keyboard, gamepad, replay, network) reduces to.
+ */
+export type MoveIntents = {
+  forward: boolean;
+  back: boolean;
+  left: boolean;
+  right: boolean;
+  jump: boolean;
+  sprint: boolean;
+  crouch: boolean;
 };
 
-export const IDLE_INPUT: FrameInput = {
-  keys: new Set<string>(),
-  capsActive: false,
-  leftMouseHeld: false,
-  pointerLocked: false
+/** Per-frame continuous input, owned by the input controller. */
+export type FrameInput = {
+  move: MoveIntents;
+  /**
+   * Mine button held during gameplay pointer capture. The controller folds
+   * pointer-lock state in here, so the engine needs no notion of the cursor.
+   */
+  mineHeld: boolean;
 };
+
+export const IDLE_INPUT: FrameInput = Object.freeze({
+  move: Object.freeze({ forward: false, back: false, left: false, right: false, jump: false, sprint: false, crouch: false }),
+  mineHeld: false
+});
 
 /** The engine surface the UI may touch: intents in, save data out. */
 export type GameApi = {
@@ -414,6 +539,8 @@ export type GameEvent =
   | { type: "sleepStarted" }
   | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
   | { type: "wokeUp" }
+  | { type: "playerJoined"; playerId: PlayerId }
+  | { type: "playerLeft"; playerId: PlayerId }
   | { type: "tilledSoil" }
   | { type: "plantedSeed" }
   | { type: "plantedSapling" }

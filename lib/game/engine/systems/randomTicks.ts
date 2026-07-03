@@ -96,15 +96,23 @@ export function tickRandomBlocks(state: GameState, dt: number, rng: () => number
   if (state.timers.randomTickTimer < RANDOM_TICK_INTERVAL_SECONDS) return;
   state.timers.randomTickTimer = 0;
 
-  const { world, player } = state;
-  const px = Math.floor(player.position.x);
-  const pz = Math.floor(player.position.z);
-  for (let i = 0; i < RANDOM_TICK_SAMPLES; i += 1) {
-    const x = px + Math.floor((rng() * 2 - 1) * RANDOM_TICK_RADIUS);
-    const z = pz + Math.floor((rng() * 2 - 1) * RANDOM_TICK_RADIUS);
-    if (!world.inBounds(x, 0, z)) continue;
-    const y = world.highestSolidY(x, z);
-    const handler = RANDOM_TICK_HANDLERS[world.get(x, y, z) as BlockId];
-    if (handler) handler(state, x, y, z, rng);
+  const { world } = state;
+  if (state.players.size === 0) return; // an idle server room grows nothing
+  // The sample budget splits across players (each interval stays constant-cost),
+  // so crops grow around everyone. Single-player: the full budget around the
+  // one player — exactly the old behavior, same rng stream.
+  const players = [...state.players.values()];
+  const perPlayer = Math.max(1, Math.floor(RANDOM_TICK_SAMPLES / players.length));
+  for (const player of players) {
+    const px = Math.floor(player.position.x);
+    const pz = Math.floor(player.position.z);
+    for (let i = 0; i < perPlayer; i += 1) {
+      const x = px + Math.floor((rng() * 2 - 1) * RANDOM_TICK_RADIUS);
+      const z = pz + Math.floor((rng() * 2 - 1) * RANDOM_TICK_RADIUS);
+      if (!world.inBounds(x, 0, z)) continue;
+      const y = world.highestSolidY(x, z);
+      const handler = RANDOM_TICK_HANDLERS[world.get(x, y, z) as BlockId];
+      if (handler) handler(state, x, y, z, rng);
+    }
   }
 }

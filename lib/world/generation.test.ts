@@ -14,6 +14,7 @@ import {
   type WorldType
 } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
+import { WORLDGEN_BASELINES } from "@/lib/world/generationBaselines";
 
 /**
  * Worldgen determinism characterization tests.
@@ -24,9 +25,10 @@ import { GEN } from "@/lib/world/generation";
  *
  * If a test here fails after a refactor, THE REFACTOR BROKE SAVE COMPATIBILITY —
  * fix the code, never the hash. Re-baselining is only legitimate for a deliberate,
- * CHANGELOG-flagged worldgen change, or for a Bun/JSC engine bump (the noise
- * functions use Math.sin, whose exact results are engine-defined; CI pins the Bun
- * version for this reason — see docs/testing.md).
+ * CHANGELOG-flagged worldgen change (WORLDGEN_VERSION bump). Since worldgen v11
+ * all seed-determined noise is bit-portable (lib/world/noise.ts), so these
+ * digests hold on every JS engine — e2e/determinism.e2e.ts re-proves that in
+ * Chromium against the same constants (see docs/testing.md).
  */
 
 function hashBytes(bytes: Uint8Array): string {
@@ -62,13 +64,15 @@ function fullWorld(): VoxelWorld {
 }
 
 describe("worldgen determinism", () => {
-  // Worldgen v10 (ocean flora, shipwrecks, buried treasure) re-baselined every
-  // digest except flat (no water, so no flora/wrecks/treasure) and 999999937
-  // (its small map yields no buried-treasure site).
+  // Worldgen v11 (bit-portable noise, lib/world/noise.ts) re-baselined every
+  // digest: same formulas on portable trig, plus an integer hash2D — terrain
+  // structure is unchanged (the probes below passed the re-baseline untouched)
+  // but exact bytes shift. Digests live in generationBaselines.ts so the
+  // Chromium determinism e2e can assert against the same constants.
   test.each([
-    [1337, "7da958b085877874a085d614651d725c879008843f5ae097e643a6825be72567"],
-    [1, "0f3951fb2ec22ef4dc01dd29f6f666a3c71a0ae3af65e62710a172e9a9e7a793"],
-    [999999937, "39cec267e6f440af669b82e14235752f214d7b5b371fabcf9c7316a03d837a7d"]
+    [1337, WORLDGEN_BASELINES.small128[1337]],
+    [1, WORLDGEN_BASELINES.small128[1]],
+    [999999937, WORLDGEN_BASELINES.small128[999999937]]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -76,7 +80,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("ac72eaa21d71185c498f2115fa0684a06da3cbbe5a10205611de1a73e8a9efae");
+      expect(hashBytes(fullWorld().blocks)).toBe(WORLDGEN_BASELINES.full512Seed1337);
     },
     { timeout: 60000 }
   );
@@ -131,9 +135,9 @@ describe("world types", () => {
   // refactor can't silently corrupt worlds created with it. Re-baseline only on
   // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
   test.each([
-    ["flat", "28e1e3ea69e01b02b8452f27bf88acc8a7b81edcfe24a4293363553379d072d3"],
-    ["amplified", "9089c6d843f599746cbacc401d0ce2853fd9981cb12b13123a9487955b0ca9e0"],
-    ["islands", "b46ea3f79d23f9b254a499f886a4ec4430e678c48c58f4f3fdb04f89997a4cec"]
+    ["flat", WORLDGEN_BASELINES.typed.flat],
+    ["amplified", WORLDGEN_BASELINES.typed.amplified],
+    ["islands", WORLDGEN_BASELINES.typed.islands]
   ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
     expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
   });

@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { voxelRaycast } from "@/lib/world";
 import { ARROW_GRAVITY, ARROW_HIT_RADIUS, ARROW_MAX_SEGMENT, ARROW_MAX_SUBSTEPS, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
-import type { EmitGameEvent, GameState, MobState } from "../state";
+import type { EmitGameEvent, GameState, MobState, PlayerState } from "../state";
 
 export type ProjectileTickDeps = {
-  applyDamage: (amount: number) => void;
+  /** Armor-mitigated combat damage to a specific player — a mob arrow hits whoever it strikes. */
+  damagePlayer: (player: PlayerState, amount: number) => void;
   removeMobAt: (index: number) => void;
   emit: EmitGameEvent;
 };
@@ -66,6 +67,7 @@ export function tickProjectiles(state: GameState, dt: number, deps: ProjectileTi
       // Nearest entity along the segment.
       let entityT = Number.POSITIVE_INFINITY;
       let hitMobIndex = -1;
+      let hitPlayer: PlayerState | null = null;
       if (p.fromPlayer) {
         for (let m = 0; m < state.mobs.length; m += 1) {
           const mob = state.mobs[m];
@@ -89,12 +91,18 @@ export function tickProjectiles(state: GameState, dt: number, deps: ProjectileTi
           }
         }
       } else {
-        const feet = state.player.position;
-        const midY = feet.y + PLAYER_HEIGHT / 2;
-        const t = closestParam(p.position.x, p.position.y, p.position.z, segDir.x, segDir.y, segDir.z, segLen, feet.x, midY, feet.z);
-        const horiz = Math.hypot(p.position.x + segDir.x * t - feet.x, p.position.z + segDir.z * t - feet.z);
-        const vert = Math.abs(p.position.y + segDir.y * t - midY);
-        if (horiz <= PLAYER_HALF_WIDTH + ARROW_HIT_RADIUS && vert <= PLAYER_HEIGHT / 2 + ARROW_HIT_RADIUS) entityT = t;
+        // A mob arrow tests every player's body cylinder — nearest hit wins.
+        for (const player of state.players.values()) {
+          const feet = player.position;
+          const midY = feet.y + PLAYER_HEIGHT / 2;
+          const t = closestParam(p.position.x, p.position.y, p.position.z, segDir.x, segDir.y, segDir.z, segLen, feet.x, midY, feet.z);
+          const horiz = Math.hypot(p.position.x + segDir.x * t - feet.x, p.position.z + segDir.z * t - feet.z);
+          const vert = Math.abs(p.position.y + segDir.y * t - midY);
+          if (horiz <= PLAYER_HALF_WIDTH + ARROW_HIT_RADIUS && vert <= PLAYER_HEIGHT / 2 + ARROW_HIT_RADIUS && t < entityT) {
+            entityT = t;
+            hitPlayer = player;
+          }
+        }
       }
 
       if (entityT !== Number.POSITIVE_INFINITY && entityT <= blockT) {
@@ -114,10 +122,10 @@ export function tickProjectiles(state: GameState, dt: number, deps: ProjectileTi
           deps.emit({ type: "mobHit", kind: mob.kind });
           deps.emit({ type: "arrowHit", x: hx, y: hy, z: hz, target: "mob" });
           if (mob.hp <= 0) deps.removeMobAt(hitMobIndex);
-        } else {
-          deps.applyDamage(p.damage);
-          state.player.velocity.x += segDir.x * p.knockback;
-          state.player.velocity.z += segDir.z * p.knockback;
+        } else if (hitPlayer) {
+          deps.damagePlayer(hitPlayer, p.damage);
+          hitPlayer.velocity.x += segDir.x * p.knockback;
+          hitPlayer.velocity.z += segDir.z * p.knockback;
           deps.emit({ type: "arrowHit", x: hx, y: hy, z: hz, target: "player" });
         }
         removed = true;

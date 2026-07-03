@@ -7,8 +7,11 @@ export type BossTracking = {
   distanceBlocks: number;
 };
 
+/** The slice of a player this module needs — structural, so tests pass a bare pose. */
+type PlayerPose = Pick<PlayerState, "position" | "yaw">;
+
 /** Derives a compass-style bearing and ground distance from the player to any world point. */
-export function trackTarget(player: PlayerState, x: number, z: number): BossTracking {
+export function trackTarget(player: PlayerPose, x: number, z: number): BossTracking {
   const dx = x - player.position.x;
   const dz = z - player.position.z;
   const forward = -dx * Math.sin(player.yaw) - dz * Math.cos(player.yaw);
@@ -22,6 +25,6 @@ export function trackTarget(player: PlayerState, x: number, z: number): BossTrac
 }
 
 /** Bearing/distance from the player to the boss (see trackTarget — the treasure compass shares it). */
-export function bossTracking(player: PlayerState, boss: MobState): BossTracking {
+export function bossTracking(player: PlayerPose, boss: MobState): BossTracking {
   return trackTarget(player, boss.position.x, boss.position.z);
 }
