@@ -38,6 +38,9 @@ const LOCAL_COMMANDS = new Set<Command["type"]>(["toggleInventory", "toggleAdvan
 export type NetworkSession = {
   readonly engine: GameEngine;
   readonly playerId: PlayerId;
+  /** UI subscriptions (React components mount after connect; unsubscribe on cleanup). */
+  subscribeChat(listener: (entry: { from: string; name: string; text: string }) => void): () => void;
+  subscribeStatus(listener: (status: NetStatus) => void): () => void;
   status(): NetStatus;
   rttMs(): number;
   /** Names for remote player ids (name tags, chat). */
@@ -61,9 +64,12 @@ export async function connectNetworkSession(
   const ws = makeSocket(`${url.replace(/\/$/, "")}/ws`);
   ws.binaryType = "arraybuffer";
   let status: NetStatus = "connecting";
+  const chatListeners = new Set<(entry: { from: string; name: string; text: string }) => void>();
+  const statusListeners = new Set<(status: NetStatus) => void>();
   const setStatus = (next: NetStatus, detail?: string) => {
     status = next;
     callbacks.onStatus?.(next, detail);
+    for (const listener of statusListeners) listener(next);
   };
 
   const clock = createClockSync();
@@ -284,6 +290,7 @@ export async function connectNetworkSession(
       }
       case "chat":
         callbacks.onChat?.(message);
+        for (const listener of chatListeners) listener(message);
         return;
       case "pong":
         clock.onPong(message.tMs, performance.now(), message.serverTick);
@@ -314,9 +321,17 @@ export async function connectNetworkSession(
     );
   };
 
-  return {
+  const session: NetworkSession = {
     engine,
     playerId: welcome.playerId,
+    subscribeChat(listener) {
+      chatListeners.add(listener);
+      return () => chatListeners.delete(listener);
+    },
+    subscribeStatus(listener) {
+      statusListeners.add(listener);
+      return () => statusListeners.delete(listener);
+    },
     drainEvents: () => pendingEvents.splice(0, pendingEvents.length),
     status: () => status,
     rttMs: () => clock.rttMs(),
@@ -388,4 +403,5 @@ export async function connectNetworkSession(
       }
     }
   };
+  return session;
 }

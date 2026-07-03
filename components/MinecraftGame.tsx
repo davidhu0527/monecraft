@@ -21,17 +21,22 @@ import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { takesDamage, usesInventory } from "@/lib/game/gameModes";
 import type { WorldMeta } from "@/lib/game/worlds";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
+import ChatPanel from "@/components/game/ChatPanel";
+import ConnectionStatus from "@/components/game/ConnectionStatus";
+import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 type MinecraftGameProps = {
   world: WorldMeta;
   profile: Profile;
+  /** A connected multiplayer session — this world lives on the server. */
+  online?: NetworkSession;
   onQuitToWorlds: () => void;
   /** Hardcore Game Over: erase the dead world and return to the world list. */
   onDeleteWorld: () => void;
   onReloadWorld: () => void;
 };
 
-export default function MinecraftGame({ world, profile, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
+export default function MinecraftGame({ world, profile, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -102,7 +107,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     loadNow,
     resetNow,
     quitToWorlds
-  } = useMinecraftGame({ world, profile, onQuitToWorlds, onReloadWorld });
+  } = useMinecraftGame({ world, profile, online, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
     installUiTiles();
@@ -148,6 +153,8 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
 
       <ActiveEffects effects={activeEffects} />
 
+      {online && <ChatPanel session={online} locked={locked} />}
+      {online && <ConnectionStatus session={online} onLeave={quitToWorlds} />}
       {saveMessage && !paused ? (
         <div className="hud-toast" role="status">
           {saveMessage}
