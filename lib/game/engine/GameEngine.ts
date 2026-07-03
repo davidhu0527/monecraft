@@ -200,6 +200,13 @@ export class GameEngine {
   readonly authority: "local" | "server";
   /** See GameEngineOptions.replica — a client-side mirror of a server world. */
   readonly replica: boolean;
+  /**
+   * When set (a multiplayer replica), dispatch() with no explicit playerId
+   * delegates here instead of running the switch — the network session routes
+   * the command (locally, to the server, or both). Routed re-entry passes the
+   * primary id explicitly, which bypasses this hook.
+   */
+  routeDispatch: ((command: Command) => void) | null = null;
   private readonly headless: boolean;
   private readonly rng: () => number;
   private readonly worldType: WorldType;
@@ -647,9 +654,13 @@ export class GameEngine {
    * the single-player shell omits it (primary); a server passes the sender's
    * id, so every mutation in here acts on the commanding player.
    */
-  dispatch(command: Command, playerId: PlayerId = this.state.primaryPlayerId): void {
+  dispatch(command: Command, playerId?: PlayerId): void {
+    if (this.routeDispatch && playerId === undefined) {
+      this.routeDispatch(command);
+      return;
+    }
     const state = this.state;
-    const player = mustGetPlayer(state, playerId);
+    const player = mustGetPlayer(state, playerId ?? state.primaryPlayerId);
     switch (command.type) {
       case "selectSlot": {
         if (command.index >= 0 && command.index < Math.min(HOTBAR_SLOTS, player.inventory.length)) {

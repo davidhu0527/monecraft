@@ -45,6 +45,8 @@ export type NetworkSession = {
   dispatch(command: Command): void;
   applyLook(deltaYaw: number, deltaPitch: number): void;
   sendChat(text: string): void;
+  /** Server events since the last drain — feed the shell's existing event handler. */
+  drainEvents(): GameEvent[];
   /** Call once per rAF after engine.step: flushes the pose stream and samples interpolation. */
   afterFrame(nowMs: number): void;
   dispose(): void;
@@ -65,6 +67,7 @@ export async function connectNetworkSession(
   };
 
   const clock = createClockSync();
+  const pendingEvents: GameEvent[] = [];
   const playerBuffers = new Map<string, PoseBuffer>();
   const mobBuffers = new Map<number, PoseBuffer>();
   const names = new Map<string, string>();
@@ -104,6 +107,17 @@ export async function connectNetworkSession(
   for (const entry of welcome.players) names.set(entry.id, entry.name);
   const myRoster = welcome.players.find((entry) => entry.id === welcome.playerId);
   if (myRoster) self.position.set(myRoster.x, myRoster.y, myRoster.z);
+
+  // Every dispatch from the UI/input controller routes here (see
+  // GameEngine.routeDispatch): presentation stays local, gameplay goes up.
+  engine.routeDispatch = (command) => {
+    if (LOCAL_COMMANDS.has(command.type)) {
+      engine.dispatch(command, welcome.playerId);
+      return;
+    }
+    if (command.type === "selectSlot") engine.dispatch(command, welcome.playerId); // optimistic
+    if (ws.readyState === WebSocket.OPEN) sendCmd(command);
+  };
 
   const upsertRemotePlayer = (id: string, name: string) => {
     if (id === welcome.playerId || state.players.has(id)) return;
@@ -234,7 +248,10 @@ export async function connectNetworkSession(
           upsertReplicaMob(pose);
           mobBuffers.get(pose.id)?.push({ tMs: serverTickTimeMs, x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw });
         }
-        for (const gameEvent of message.ev) callbacks.onEvent?.(gameEvent as GameEvent);
+        for (const gameEvent of message.ev) {
+          pendingEvents.push(gameEvent as GameEvent);
+          callbacks.onEvent?.(gameEvent as GameEvent);
+        }
         return;
       }
       case "mobsKeyframe": {
@@ -300,18 +317,13 @@ export async function connectNetworkSession(
   return {
     engine,
     playerId: welcome.playerId,
+    drainEvents: () => pendingEvents.splice(0, pendingEvents.length),
     status: () => status,
     rttMs: () => clock.rttMs(),
     playerName: (id) => names.get(id) ?? "player",
 
     dispatch(command) {
-      if (LOCAL_COMMANDS.has(command.type)) {
-        engine.dispatch(command);
-        return;
-      }
-      // Optimistic hotbar: instant local feedback, server confirms via self-delta.
-      if (command.type === "selectSlot") engine.dispatch(command);
-      if (ws.readyState === WebSocket.OPEN) sendCmd(command);
+      engine.dispatch(command); // routeDispatch handles the local/network split
     },
 
     applyLook(deltaYaw, deltaPitch) {

@@ -20,6 +20,7 @@ import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
+import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 /**
  * Thin React shell around the headless GameEngine and the GameRenderer.
@@ -98,6 +99,13 @@ function persistGame(api: GameApi, saveKey: string, onMessage: (text: string) =>
 export type UseMinecraftGameOptions = {
   world: WorldMeta;
   profile: Profile;
+  /**
+   * A connected multiplayer session: its replica engine is mounted instead of
+   * constructing one, dispatch routes through it (GameEngine.routeDispatch),
+   * localStorage persistence is skipped (the server owns the world), and its
+   * pose stream flushes each frame. Absent = classic offline single-player.
+   */
+  online?: NetworkSession;
   /** Leave this world and return to the world list (the shell unmounts us). */
   onQuitToWorlds: () => void;
   /** Re-read this world from disk by forcing a fresh mount (used by Load/Reset). */
@@ -168,6 +176,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     [opts.profile.id]
   );
 
+  // The session is fixed for the mount (the shell keys the game subtree).
+  const onlineRef = useRef(opts.online ?? null);
+
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
   const attachMount = useCallback((node: HTMLDivElement | null) => {
@@ -175,17 +186,20 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setCtx(null);
       return;
     }
-    // A saved blob carries its own seed + type + mode + difficulty (engine prefers
-    // them); a fresh world (no blob yet) boots from the world's stored values.
+    // Online: the session already holds the synced replica engine. Offline: a
+    // saved blob carries its own seed + type + mode + difficulty (engine
+    // prefers them); a fresh world boots from the world's stored values.
     setCtx({
-      engine: new GameEngine({
-        save: readSave(saveKeyRef.current),
-        seed: worldSeedRef.current,
-        worldType: worldTypeRef.current,
-        gameMode: worldModeRef.current,
-        difficulty: worldDifficultyRef.current,
-        hardcore: worldHardcoreRef.current
-      }),
+      engine:
+        onlineRef.current?.engine ??
+        new GameEngine({
+          save: readSave(saveKeyRef.current),
+          seed: worldSeedRef.current,
+          worldType: worldTypeRef.current,
+          gameMode: worldModeRef.current,
+          difficulty: worldDifficultyRef.current,
+          hardcore: worldHardcoreRef.current
+        }),
       node
     });
   }, []);
@@ -254,6 +268,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     rendererRef.current = renderer;
     // Before the first rAF, so no frame can ever show the default palette.
     renderer.setPlayerSkin(getSkinPreset(skinIdRef.current).palette);
+    const onlineForNames = onlineRef.current;
+    if (onlineForNames) renderer.remotePlayerInfo = (id) => ({ name: onlineForNames.playerName(id), skinId: null });
 
     const audio = createAudioDirector();
     audio.setSettings(audioSettingsRef.current);
@@ -277,8 +293,12 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
 
     // The save key is fixed for the mount's life (the shell keys this hook by
     // world id), so capture it once — also keeps it out of the cleanup's ref read.
+    // Online worlds never touch localStorage: the SERVER persists them.
+    const online = onlineRef.current;
     const saveKey = saveKeyRef.current;
-    const autoSave = () => persistGame(gameEngine, saveKey, flashMessage);
+    const autoSave = () => {
+      if (!online) persistGame(gameEngine, saveKey, flashMessage);
+    };
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
@@ -293,7 +313,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       const now = performance.now();
       const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, input.input));
 
-      for (const event of gameEngine.consumeEvents()) {
+      // Online: replicated server events (mob deaths, other players' block
+      // edits, …) join the local drain so toasts/audio/particles treat them
+      // exactly like local ones.
+      const events = online ? [...gameEngine.consumeEvents(), ...online.drainEvents()] : gameEngine.consumeEvents();
+      for (const event of events) {
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
           // Free the cursor so the death/victory/game-over button is clickable; the
           // pause command ignores those states, so the lock-loss won't open the menu too.
@@ -302,7 +326,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         }
         // Hardcore permadeath is permanent — persist it now so closing the tab right
         // after death still reloads the dead world spectating (not a fresh run).
-        if (event.type === "gameOver") persistGame(gameEngine, saveKey, () => {});
+        if (event.type === "gameOver" && !online) persistGame(gameEngine, saveKey, () => {});
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -350,6 +374,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         audio.handleEvent(event);
       }
 
+      online?.afterFrame(now);
       if (!minimap && minimapNodeRef.current) minimap = createMinimapRenderer(minimapNodeRef.current);
       // The minimap must read worldMeshDirty before renderer.sync clears it.
       minimap?.sync(gameEngine.state, now);
@@ -367,7 +392,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
       // intentionally re-read or discard the on-disk save.
       if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
-      else persistGame(gameEngine, saveKey, () => {});
+      else if (!online) persistGame(gameEngine, saveKey, () => {});
+      online?.dispose();
       delete window.__monecraft;
       canvasRef.current = null;
       rendererRef.current = null;
@@ -397,6 +423,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     attachMinimap,
     locked,
     rendererError,
+    online: opts.online ?? null,
     gameMode: snapshot.gameMode,
     difficulty: snapshot.difficulty,
     hardcore: snapshot.hardcore,
@@ -464,7 +491,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
     dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
-      if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
+      if (onlineRef.current) flashMessage("The server saves online worlds");
+      else if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
     },
     loadNow: () => {
       if (!readSave(saveKeyRef.current)) {
@@ -492,7 +520,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     quitToWorlds: () => {
       // The autosave interval is cleared on unmount and beforeunload won't fire
       // on an in-app navigation, so persist synchronously before leaving.
-      if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
+      // Online: the unmount cleanup disposes the session; the server persists.
+      if (engine && !onlineRef.current) persistGame(engine, saveKeyRef.current, flashMessage);
       opts.onQuitToWorlds();
     }
   };
