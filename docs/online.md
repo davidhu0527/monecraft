@@ -79,7 +79,7 @@ See `.env.example` for every variable (web: `DATABASE_URL`,
 
 ```bash
 docker compose up -d          # local Postgres (dev only — tests use PGlite)
-bunx drizzle-kit migrate      # apply db/migrations once
+bun run db:migrate            # apply db/migrations once
 bun run dev                   # web app with accounts + API
 bun run server                # game server (ws://localhost:8080)
 ```

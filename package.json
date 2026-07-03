@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
-    "server": "bun server/index.ts"
+    "server": "bun server/index.ts",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "better-auth": "^1.6.23",

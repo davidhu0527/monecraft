@@ -62,12 +62,12 @@ openssl rand -base64 24   # ADMIN_TOKEN (game server only; guards /rooms* admin 
 2. Apply the schema (runs the committed `db/migrations/0000_online-foundation.sql`):
 
    ```bash
-   DATABASE_URL='postgres://…neon.tech/…?sslmode=require' bunx drizzle-kit migrate
+   DATABASE_URL='postgres://…neon.tech/…?sslmode=require' bun run db:migrate
    ```
 
    Migrations are generated from `db/schema.ts` and committed under
-   `db/migrations/`; only `drizzle-kit migrate` needs a live database. Re-run this
-   after any future schema change lands.
+   `db/migrations/`; `bun run db:migrate` (drizzle-kit) is the only step that
+   needs a live database. Re-run it after any future schema change lands.
 
 ## Step 2 — Game server (Fly.io)
 
@@ -114,9 +114,12 @@ then set these environment variables (see `.env.example` for the full list):
 | `GAME_TICKET_SECRET`          | the **same** shared secret as the game server            |
 | `NEXT_PUBLIC_GAME_SERVER_URL` | `wss://monecraft-server.fly.dev` (note **wss**, not ws)  |
 
-`next build` needs no env (the auth mount and DB connection are both lazy), so a
-missing variable won't fail the build — it fails at _runtime_ instead. Double-check
-all five before calling it done.
+`next build` won't _fail_ on a missing var (the auth mount and DB connection are
+both lazy — a missing server-side var surfaces at runtime instead). But
+`NEXT_PUBLIC_GAME_SERVER_URL` is the exception: it's **inlined into the client
+bundle at build time**, so it must be set in the Vercel project **before** the
+build runs, or online play ships pointing at nothing (single-player still works).
+Set all five in Vercel before the first deploy, then double-check them.
 
 > **Ordering / chicken-and-egg:** `BETTER_AUTH_URL` is your Vercel origin and
 > `NEXT_PUBLIC_GAME_SERVER_URL` is your Fly origin, so each side wants the other's
@@ -148,7 +151,7 @@ game-server URL — see below.
 - **Game server:** `fly deploy --config server/fly.toml --dockerfile server/Dockerfile`.
   Rooms drain to Postgres on the rollout; connected clients reconnect on their
   back-off ladder and re-sync (they'll see a brief "Reconnecting…" badge).
-- **Schema change:** land the new migration, then run `bunx drizzle-kit migrate`
+- **Schema change:** land the new migration, then run `bun run db:migrate`
   against production **before** deploying the code that depends on it.
 
 ## Troubleshooting
