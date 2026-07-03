@@ -1,10 +1,13 @@
 import { DAY_CYCLE_SECONDS } from "@/lib/game/config";
+import { portableSin } from "@/lib/world/noise";
 import type { GameState } from "../state";
 
 /** Daylight level 0.04–1.0 for a given day clock. The single source of the formula. */
 export function daylightAt(dayClock: number): number {
+  // portableSin: daylight gates hostile spawn/burn, so an authoritative server
+  // and its clients must agree on it bit-for-bit — see lib/world/noise.ts.
   const phase = (dayClock % DAY_CYCLE_SECONDS) / DAY_CYCLE_SECONDS;
-  return Math.max(0.04, Math.sin(phase * Math.PI * 2) * 0.95 + 0.05);
+  return Math.max(0.04, portableSin(phase * Math.PI * 2) * 0.95 + 0.05);
 }
 
 /** Sun angle in radians for a given day clock (renderer positions lights from it). */

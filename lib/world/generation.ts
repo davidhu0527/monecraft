@@ -1,4 +1,5 @@
 import { BiomeId, BlockId } from "./blocks";
+import { hash2D, portableCos, portableSin } from "./noise";
 import { VoxelWorld } from "./voxelWorld";
 import type { WorldType } from "./worldTypes";
 
@@ -133,18 +134,15 @@ export function terrainConfigFor(worldType: WorldType): TerrainConfig {
   }
 }
 
-function hash2D(x: number, z: number): number {
-  const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
-  return n - Math.floor(n);
-}
-
+// Same four-wave composition as ever, but on the bit-portable trig from
+// noise.ts — native Math.sin here would make worlds engine-dependent.
 function smoothNoise2D(x: number, z: number, seed: number): number {
   const s = seed * 0.013;
   const val =
-    Math.sin(x * 0.015 + s) * 1.2 +
-    Math.cos(z * 0.012 + s * 1.4) * 1.2 +
-    Math.sin(x * 0.005 - z * 0.007 + s * 0.7) * 3.5 +
-    Math.cos(x * 0.031 + z * 0.027 + s * 2.1) * 0.4;
+    portableSin(x * 0.015 + s) * 1.2 +
+    portableCos(z * 0.012 + s * 1.4) * 1.2 +
+    portableSin(x * 0.005 - z * 0.007 + s * 0.7) * 3.5 +
+    portableCos(x * 0.031 + z * 0.027 + s * 2.1) * 0.4;
   return val;
 }
 
@@ -286,9 +284,9 @@ function carveCaves(world: VoxelWorld, rand: () => number): void {
       if (rand() > 0.968) carveSphere(x, y, z, 4.8 + rand() * 4.6);
       yaw += (rand() - 0.5) * 0.28;
       pitch = Math.max(-0.55, Math.min(0.55, pitch + (rand() - 0.5) * 0.16));
-      x += Math.cos(yaw);
-      z += Math.sin(yaw);
-      y += Math.sin(pitch) * 0.8;
+      x += portableCos(yaw);
+      z += portableSin(yaw);
+      y += portableSin(pitch) * 0.8;
       if (x < 8 || x > world.sizeX - 8 || z < 8 || z > world.sizeZ - 8 || y < 2 || y > world.sizeY - 4) break;
     }
   }

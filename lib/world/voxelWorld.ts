@@ -1,5 +1,6 @@
 import { BiomeId, BlockId, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "./blocks";
 import { isDoorBlock } from "./doors";
+import { portableSin } from "./noise";
 
 /**
  * Voxel data store plus cheap world queries. Terrain generation lives in
@@ -80,11 +81,13 @@ export class VoxelWorld {
     // dominant wavelengths of ~250-900 blocks: each field traverses several
     // cycles across the 512-block map, so every world gets coherent patches
     // of all five biomes (~60-150 block scale).
+    // portableSin (not Math.sin): the biome field feeds terrain generation, so
+    // it must be bit-identical across JS engines — see lib/world/noise.ts.
     const s = this.seed * 0.007;
-    const temp = Math.sin(x * 0.013 + z * 0.006 + s * 1.3) * 0.6 + Math.sin(x * 0.029 - z * 0.017 + s * 2.4) * 0.4;
-    const moisture = Math.sin(x * 0.007 - z * 0.012 + s * 0.8) * 0.6 + Math.sin(x * 0.019 + z * 0.023 - s * 1.6) * 0.4;
-    const continental = Math.sin(x * 0.008 + z * 0.01 + s * 2.1) * 0.55 + Math.sin(x * 0.014 - z * 0.009 - s * 1.7) * 0.45;
-    const ridge = Math.sin(x * 0.024 + z * 0.02 + s) * 0.5 + Math.sin(x * 0.016 - z * 0.024 - s) * 0.5;
+    const temp = portableSin(x * 0.013 + z * 0.006 + s * 1.3) * 0.6 + portableSin(x * 0.029 - z * 0.017 + s * 2.4) * 0.4;
+    const moisture = portableSin(x * 0.007 - z * 0.012 + s * 0.8) * 0.6 + portableSin(x * 0.019 + z * 0.023 - s * 1.6) * 0.4;
+    const continental = portableSin(x * 0.008 + z * 0.01 + s * 2.1) * 0.55 + portableSin(x * 0.014 - z * 0.009 - s * 1.7) * 0.45;
+    const ridge = portableSin(x * 0.024 + z * 0.02 + s) * 0.5 + portableSin(x * 0.016 - z * 0.024 - s) * 0.5;
 
     if (continental < -0.52) return BiomeId.Ocean;
     if ((continental > 0.5 && ridge > 0) || ridge > 0.8) return BiomeId.Mountains;

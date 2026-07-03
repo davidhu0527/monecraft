@@ -1,5 +1,6 @@
 import { WEATHER_CYCLE_SECONDS, WEATHER_RAIN_FRACTION } from "@/lib/game/config";
 import { BiomeId } from "@/lib/world";
+import { hash01 } from "@/lib/world/noise";
 import type { GameState, WeatherKind } from "../state";
 
 /**
@@ -13,11 +14,6 @@ import type { GameState, WeatherKind } from "../state";
  * more or fewer steps yields the identical result. Weather is NEVER persisted
  * and NEVER touches spawn/daylight balance — it only sets `state.weather`.
  */
-
-function hash01(n: number, seed: number): number {
-  const v = Math.sin((n + 1) * 12.9898 + seed * 78.233) * 43758.5453;
-  return v - Math.floor(v);
-}
 
 export function weatherAt(dayClock: number, seed: number): { active: boolean; intensity: number } {
   const cycle = Math.floor(dayClock / WEATHER_CYCLE_SECONDS);
