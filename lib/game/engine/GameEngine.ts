@@ -365,7 +365,9 @@ export class GameEngine {
       this.refreshSnapshot();
       return;
     }
-    state.capsActive = input.capsActive;
+    // The HUD indicator still reads (and names) CapsLock, but the engine only
+    // knows the abstract sprint intent — the binding lives in the controller.
+    state.capsActive = input.move.sprint;
 
     // Stuck detection / auto-unstuck — skipped for Spectator, which legitimately
     // sits inside terrain while noclipping and must never be teleported out.

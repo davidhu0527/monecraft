@@ -79,12 +79,12 @@ function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): 
 
 /** Advances mining progress while the mouse is held; breaks the block at full progress. */
 export function tickMining(state: GameState, input: FrameInput, dt: number, emit: EmitGameEvent, rng: () => number): void {
-  if (!input.leftMouseHeld) {
+  if (!input.mineHeld) {
     // Releasing the button abandons progress (matching the crack overlay).
     if (state.mining.progress > 0) resetMining(state);
     return;
   }
-  if (state.inventoryOpen || state.isDead || !input.pointerLocked) return;
+  if (state.inventoryOpen || state.isDead) return;
   // Adventure and Spectator can't break terrain.
   if (!canEditBlocks(state.gameMode)) {
     resetMining(state);

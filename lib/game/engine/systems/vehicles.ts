@@ -239,9 +239,9 @@ export function tryPlaceVehicle(state: GameState, emit: EmitGameEvent): boolean 
 export function tickVehicles(state: GameState, input: FrameInput, dt: number): void {
   const mounted = state.mountedVehicleId === null ? null : (state.vehicles.find((vehicle) => vehicle.id === state.mountedVehicleId) ?? null);
   if (mounted) {
-    if (input.keys.has("KeyC") && dismountVehicle(state, mounted)) return;
-    const forwardInput = (input.keys.has("KeyW") ? 1 : 0) - (input.keys.has("KeyS") ? 1 : 0);
-    const turnInput = (input.keys.has("KeyD") ? 1 : 0) - (input.keys.has("KeyA") ? 1 : 0);
+    if (input.move.crouch && dismountVehicle(state, mounted)) return;
+    const forwardInput = (input.move.forward ? 1 : 0) - (input.move.back ? 1 : 0);
+    const turnInput = (input.move.right ? 1 : 0) - (input.move.left ? 1 : 0);
     mounted.yaw -= turnInput * VEHICLE_TURN_RATE * dt;
     scratchForward.set(-Math.sin(mounted.yaw), 0, -Math.cos(mounted.yaw));
     const speed = specFor(mounted.kind).speed * forwardInput;

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
 import { EYE_HEIGHT, MAX_HEARTS, MAX_OXYGEN, MINE_REACH } from "@/lib/game/config";
@@ -8,7 +9,6 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { lookDirection } from "@/lib/game/engine/systems/playerMotion";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage } from "@/lib/game/engine/systems/playerLife";
 import type { GameMode } from "@/lib/game/gameModes";
-import type { FrameInput } from "@/lib/game/engine/state";
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -24,14 +24,7 @@ function makeEngine(gameMode: GameMode): GameEngine {
   return new GameEngine({ seed: 1337, gameMode, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
 }
 
-function input(overrides: Partial<{ keys: string[]; leftMouseHeld: boolean; pointerLocked: boolean }> = {}): FrameInput {
-  return {
-    keys: new Set(overrides.keys ?? []),
-    capsActive: false,
-    leftMouseHeld: overrides.leftMouseHeld ?? false,
-    pointerLocked: overrides.pointerLocked ?? false
-  };
-}
+const input = frameInput;
 
 function calmDaytime(engine: GameEngine): void {
   engine.state.mobs = engine.state.mobs.filter((mob) => !mob.hostile);
@@ -56,7 +49,7 @@ describe("creative invulnerability", () => {
     e.state.hunger = 4;
     e.state.oxygen = 1;
     // Move around for a bit — survival would drain hunger and the bars would not refill.
-    for (let i = 0; i < 120; i += 1) e.step(1 / 60, input({ keys: ["KeyW"], pointerLocked: true }));
+    for (let i = 0; i < 120; i += 1) e.step(1 / 60, input({ keys: ["KeyW"] }));
     expect(e.state.hearts).toBe(MAX_HEARTS);
     expect(e.state.hunger).toBe(4); // unchanged: no drain in creative
     expect(e.state.oxygen).toBe(MAX_OXYGEN);
@@ -83,13 +76,13 @@ describe("flight", () => {
     const startY = e.state.player.position.y;
 
     // Space ascends.
-    e.step(1 / 60, input({ keys: ["Space"], pointerLocked: true }));
+    e.step(1 / 60, input({ keys: ["Space"] }));
     expect(e.state.player.velocity.y).toBeGreaterThan(0);
     expect(e.state.player.position.y).toBeGreaterThan(startY);
 
     // No keys hovers — no gravity pulls the player down.
     const hoverY = e.state.player.position.y;
-    e.step(1 / 60, input({ pointerLocked: true }));
+    e.step(1 / 60, input());
     expect(e.state.player.velocity.y).toBe(0);
     expect(e.state.player.position.y).toBeCloseTo(hoverY, 5);
   });
@@ -117,7 +110,7 @@ describe("creative free build", () => {
 
     // One short frame: survival could never break a block this fast (and bare
     // hands can't break stone at all) — creative breaks instantly, no tool.
-    e.step(1 / 60, input({ leftMouseHeld: true, pointerLocked: true }));
+    e.step(1 / 60, input({ mineHeld: true }));
 
     expect(e.state.world.get(x, y, z)).toBe(BlockId.Air);
     expect(countsById(e.state.inventory)).toEqual(before); // no drop collected
@@ -165,7 +158,7 @@ describe("creative free build", () => {
     e.state.containers.set(idx, [createSlot("diamond_ore", 5)]);
     const before = countsById(e.state.inventory);
 
-    e.step(1 / 60, input({ leftMouseHeld: true, pointerLocked: true }));
+    e.step(1 / 60, input({ mineHeld: true }));
 
     expect(e.state.world.get(x, y, z)).toBe(BlockId.Air); // broken instantly
     expect(e.state.containers.has(idx)).toBe(false); // contents vanished, not spilled into the inventory

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
 import {
@@ -65,14 +66,7 @@ function makeEngine(save: ReturnType<GameEngine["serialize"]> | null = null): Ga
   return new GameEngine({ save, seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
 }
 
-function input(overrides: Partial<{ keys: string[]; capsActive: boolean; leftMouseHeld: boolean; pointerLocked: boolean }> = {}): FrameInput {
-  return {
-    keys: new Set(overrides.keys ?? []),
-    capsActive: overrides.capsActive ?? false,
-    leftMouseHeld: overrides.leftMouseHeld ?? false,
-    pointerLocked: overrides.pointerLocked ?? false
-  };
-}
+const input = frameInput;
 
 function run(engine: GameEngine, seconds: number, frame: FrameInput = input()): void {
   const dt = 1 / 60;
@@ -218,7 +212,7 @@ describe("movement and stats", () => {
     // pre-seed the budget and sprint the last stretch.
     engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 10;
     // Space held: the player hops over one-block terrain rises while sprinting.
-    run(engine, 4, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    run(engine, 4, input({ keys: ["KeyW", "Space"], sprint: true }));
     expect(engine.state.hunger).toBeLessThan(MAX_HUNGER);
   });
 
@@ -228,7 +222,7 @@ describe("movement and stats", () => {
     run(engine, 1);
     engine.state.hunger = SPRINT_MIN_HUNGER;
     engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 1;
-    run(engine, 2, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    run(engine, 2, input({ keys: ["KeyW", "Space"], sprint: true }));
     // No sprint drain fired: movement counted as walking instead.
     expect(engine.state.hunger).toBe(SPRINT_MIN_HUNGER);
     expect(engine.state.timers.sprintDistanceBudget).toBe(SPRINT_BLOCKS_PER_HUNGER - 1);
@@ -418,7 +412,7 @@ describe("mining", () => {
     state.player.position.z = pz + 0.5;
     state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
     const before = countsById(state.inventory);
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.get(px, py, pz)).toBe(BlockId.Air);
     const after = countsById(state.inventory);
@@ -445,7 +439,7 @@ describe("mining", () => {
       state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
       state.inventory[state.selectedSlot] = createSlot("wood_pickaxe", 1);
       if (haste) addEffect(state, "haste", 60);
-      run(engine, 0.5, input({ leftMouseHeld: true, pointerLocked: true }));
+      run(engine, 0.5, input({ mineHeld: true }));
       return state.mining.progress;
     };
     const plain = progressAfter(false);
@@ -459,7 +453,7 @@ describe("mining", () => {
     calmDaytime(engine);
     run(engine, 1);
     engine.state.player.pitch = -Math.PI / 2 + 0.02;
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: false }));
+    run(engine, 4, input({ mineHeld: false }));
     expect(engine.state.blockChanges.changes().length).toBe(0);
   });
 
@@ -484,7 +478,7 @@ describe("mining", () => {
     state.blockChanges.set(ex, ey + 2, ez - 2, BlockId.Water);
 
     const before = countsById(state.inventory).get("kelp") ?? 0;
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     // The hit cell and everything above it turned to water (no air pocket)...
     expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Water);
@@ -619,7 +613,7 @@ describe("chests", () => {
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
     expect(state.containers.has(idx)).toBe(false);
@@ -636,7 +630,7 @@ describe("chests", () => {
     state.containers.set(idx, slots);
     engine.consumeEvents();
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
     expect(state.containers.has(idx)).toBe(false);
@@ -655,7 +649,7 @@ describe("chests", () => {
     state.inventory = Array.from({ length: state.inventory.length }, () => createSlot("stone", 99));
     engine.consumeEvents();
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
     const events = engine.consumeEvents();
 
     expect(state.world.blocks[idx]).toBe(BlockId.Chest); // not broken
@@ -737,7 +731,7 @@ describe("chests", () => {
     state.inventory = Array.from({ length: state.inventory.length }, () => createEmptySlot()); // room to receive
     engine.consumeEvents();
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
     expect(state.lootedWorldgenChests.has(idx)).toBe(true);
@@ -947,7 +941,7 @@ describe("doors", () => {
     const engine = makeEngine();
     const door = setAimedDoor(engine);
     const before = countsById(engine.state.inventory).get("door") ?? 0;
-    run(engine, 5, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 5, input({ mineHeld: true }));
     expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.Air);
     expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.Air);
     expect(countsById(engine.state.inventory).get("door")).toBe(before + 1);
@@ -1203,7 +1197,7 @@ describe("gameplay events", () => {
     state.player.position.z = pz + 0.5;
     state.player.pitch = -Math.PI / 2 + 0.02;
     engine.consumeEvents();
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
     const events = engine.consumeEvents();
     expect(events.some((event) => event.type === "blockBroken" && event.blockId === targetBlock)).toBe(true);
   });
@@ -1959,7 +1953,7 @@ describe("farming", () => {
     calmDaytime(engine);
     const crop = harvestUnderfoot(engine, BlockId.WheatStage3);
     const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
-    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 2, input({ mineHeld: true }));
     expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
     expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore + 1);
     expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBeGreaterThanOrEqual(1);
@@ -1971,7 +1965,7 @@ describe("farming", () => {
     const crop = harvestUnderfoot(engine, BlockId.WheatStage1);
     const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
     const seedsBefore = countsById(engine.state.inventory).get("seeds") ?? 0;
-    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 2, input({ mineHeld: true }));
     expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
     expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore);
     expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBe(seedsBefore + 1);

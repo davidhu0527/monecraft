@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
 import { EYE_HEIGHT, MINE_REACH } from "@/lib/game/config";
@@ -8,7 +9,6 @@ import { lookDirection } from "@/lib/game/engine/systems/playerMotion";
 import { applyDamageWithArmor } from "@/lib/game/engine/systems/playerLife";
 import { pushMob } from "@/lib/game/engine/systems/spawnDirector";
 import type { GameMode } from "@/lib/game/gameModes";
-import type { FrameInput } from "@/lib/game/engine/state";
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -24,14 +24,7 @@ function makeEngine(gameMode: GameMode): GameEngine {
   return new GameEngine({ seed: 1337, gameMode, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
 }
 
-function input(overrides: Partial<{ keys: string[]; leftMouseHeld: boolean; pointerLocked: boolean }> = {}): FrameInput {
-  return {
-    keys: new Set(overrides.keys ?? []),
-    capsActive: false,
-    leftMouseHeld: overrides.leftMouseHeld ?? false,
-    pointerLocked: overrides.pointerLocked ?? false
-  };
-}
+const input = frameInput;
 
 describe("spectator", () => {
   test("boots flying and phases straight through solid terrain", () => {
@@ -44,7 +37,7 @@ describe("spectator", () => {
     for (let dy = -1; dy <= 2; dy += 1) for (let dz = -1; dz <= 1; dz += 1) e.state.blockChanges.set(10, 50 + dy, 36 + dz, BlockId.Stone);
     p.yaw = -Math.PI / 2; // forward = +x, straight at the wall
 
-    for (let i = 0; i < 50; i += 1) e.step(1 / 60, input({ keys: ["KeyW"], pointerLocked: true }));
+    for (let i = 0; i < 50; i += 1) e.step(1 / 60, input({ keys: ["KeyW"] }));
 
     expect(p.position.x).toBeGreaterThan(10); // walked clean through the wall
     expect(p.position.y).toBeCloseTo(50, 0); // no gravity — held altitude
@@ -70,7 +63,7 @@ describe("spectator", () => {
     const hit = voxelRaycast(e.state.world, origin, dir, MINE_REACH);
     expect(hit).not.toBeNull();
     const { x, y, z } = hit!.hit;
-    for (let i = 0; i < 30; i += 1) e.step(1 / 60, input({ leftMouseHeld: true, pointerLocked: true }));
+    for (let i = 0; i < 30; i += 1) e.step(1 / 60, input({ mineHeld: true }));
     expect(e.state.world.get(x, y, z)).not.toBe(BlockId.Air); // never mined
   });
 
@@ -110,7 +103,7 @@ function hostileAttacks(mode: GameMode): boolean {
   pushMob(e.state, "zombie", true, p.x + 1, p.y, p.z, mulberry32(7));
   let attacked = false;
   for (let i = 0; i < 120; i += 1) {
-    e.step(1 / 60, input({ pointerLocked: true }));
+    e.step(1 / 60, input());
     if (e.consumeEvents().some((event) => event.type === "mobAttacked")) attacked = true;
   }
   return attacked;

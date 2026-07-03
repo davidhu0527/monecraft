@@ -48,7 +48,7 @@ export function lookDirection(yaw: number, pitch: number, out: THREE.Vector3): T
 
 export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number, applyDamage: (amount: number) => void): MoveTickResult {
   const { world, player, timers } = state;
-  const keys = input.keys;
+  const move = input.move;
   // Spectator phases through terrain (noclip); Creative/Spectator fly with direct
   // vertical control instead of gravity.
   const noclip = isNoclip(state.gameMode);
@@ -74,10 +74,10 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
     }
   };
 
-  const forwardInput = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
-  const strafeInput = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
-  const wantsJump = keys.has("Space");
-  const crouching = keys.has("KeyC");
+  const forwardInput = (move.forward ? 1 : 0) - (move.back ? 1 : 0);
+  const strafeInput = (move.right ? 1 : 0) - (move.left ? 1 : 0);
+  const wantsJump = move.jump;
+  const crouching = move.crouch;
 
   forwardFromYaw(player.yaw, scratchForward);
   scratchRight.crossVectors(scratchForward, UP).normalize();
@@ -88,7 +88,7 @@ export function tickPlayerMotion(state: GameState, input: FrameInput, dt: number
 
   const speedScale = speedScaleFromHunger(state.hunger);
   const canSprint = state.hunger > SPRINT_MIN_HUNGER;
-  const sprinting = canSprint && forwardInput > 0 && keys.has("KeyW") && input.capsActive && !crouching;
+  const sprinting = canSprint && forwardInput > 0 && move.sprint && !crouching;
   const baseSpeed = crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED * speedScale : WALK_SPEED * speedScale;
   const speed = baseSpeed * speedMultiplier(state);
 

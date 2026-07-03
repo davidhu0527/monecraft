@@ -303,20 +303,36 @@ export function createTimers(): GameTimers {
   };
 }
 
-/** Per-frame continuous input, owned by the input controller. */
-export type FrameInput = {
-  keys: ReadonlySet<string>;
-  capsActive: boolean;
-  leftMouseHeld: boolean;
-  pointerLocked: boolean;
+/**
+ * Movement intents, decoded from key bindings by the input controller. The
+ * engine never sees DOM key codes — an abstract intent packet is what a
+ * multiplayer client will put on the wire, and what any input source
+ * (keyboard, gamepad, replay, network) reduces to.
+ */
+export type MoveIntents = {
+  forward: boolean;
+  back: boolean;
+  left: boolean;
+  right: boolean;
+  jump: boolean;
+  sprint: boolean;
+  crouch: boolean;
 };
 
-export const IDLE_INPUT: FrameInput = {
-  keys: new Set<string>(),
-  capsActive: false,
-  leftMouseHeld: false,
-  pointerLocked: false
+/** Per-frame continuous input, owned by the input controller. */
+export type FrameInput = {
+  move: MoveIntents;
+  /**
+   * Mine button held during gameplay pointer capture. The controller folds
+   * pointer-lock state in here, so the engine needs no notion of the cursor.
+   */
+  mineHeld: boolean;
 };
+
+export const IDLE_INPUT: FrameInput = Object.freeze({
+  move: Object.freeze({ forward: false, back: false, left: false, right: false, jump: false, sprint: false, crouch: false }),
+  mineHeld: false
+});
 
 /** The engine surface the UI may touch: intents in, save data out. */
 export type GameApi = {
