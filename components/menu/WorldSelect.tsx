@@ -7,7 +7,7 @@ import { DIFFICULTY_PRESETS, type Difficulty } from "@/lib/game/difficulties";
 import { createWorld, deleteWorld, MAX_WORLD_NAME, renameWorld, WORLD_TYPE_PRESETS, worldsForProfile } from "@/lib/game/worlds";
 import type { WorldType } from "@/lib/world";
 import { onlineUsed } from "@/lib/auth/client";
-import { createInviteLink, createOnlineWorld, listOnlineWorlds, type OnlineWorld } from "@/lib/online/onlineClient";
+import { createInviteLink, createOnlineWorld, listOnlineWorlds, revokeInviteLinks, type OnlineWorld } from "@/lib/online/onlineClient";
 import { resolveSeed } from "@/lib/game/worlds";
 
 /** Short label for a world type (the default type is left unlabelled on cards). */
@@ -41,6 +41,7 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
   const [creatingOnline, setCreatingOnline] = useState(false);
   const [onlineWorlds, setOnlineWorlds] = useState<OnlineWorld[] | null>(null);
   const [inviteCopied, setInviteCopied] = useState<string | null>(null);
+  const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
 
   // Online worlds appear only once this browser has used online features —
   // offline-first: no fetch, no section, no account until the player opts in.
@@ -188,6 +189,7 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
                       <button
                         className="mc-button"
                         onClick={() => {
+                          setInvitesRevoked(null);
                           void createInviteLink(world.id).then((link) => {
                             if (!link) return;
                             void navigator.clipboard?.writeText(link).catch(() => {});
@@ -196,6 +198,18 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
                         }}
                       >
                         {inviteCopied === world.id ? "Link copied!" : "Copy invite"}
+                      </button>
+                      <button
+                        className="mc-button"
+                        title="Invalidate every invite link you've shared for this world"
+                        onClick={() => {
+                          setInviteCopied(null);
+                          void revokeInviteLinks(world.id).then((count) => {
+                            if (count !== null) setInvitesRevoked(world.id);
+                          });
+                        }}
+                      >
+                        {invitesRevoked === world.id ? "Links revoked" : "Revoke links"}
                       </button>
                     </div>
                   )}

@@ -55,6 +55,18 @@ export async function createInviteLink(worldId: string): Promise<string | null> 
   }
 }
 
+/** Revokes every outstanding invite link for a world (owner only). Returns the count, or null on failure. */
+export async function revokeInviteLinks(worldId: string): Promise<number | null> {
+  try {
+    const response = await fetch(`/api/worlds/${worldId}/invites`, { method: "DELETE" });
+    if (!response.ok) return null;
+    const { revoked } = (await response.json()) as { revoked: number };
+    return revoked;
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveInviteToken(token: string): Promise<{ worldId: string; worldName: string } | null> {
   try {
     const response = await fetch(`/api/invite/${token}`);

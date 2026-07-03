@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { failureResponse, sessionUser, unauthorized } from "@/lib/online/http";
-import { createInvite } from "@/lib/online/worldsService";
+import { createInvite, revokeInvites } from "@/lib/online/worldsService";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,4 +13,14 @@ export async function POST(request: Request, { params }: Params) {
   const result = await createInvite(db(), user.id, id);
   if (!result.ok) return failureResponse(result.error);
   return NextResponse.json({ token: result.token }, { status: 201 });
+}
+
+/** DELETE /api/worlds/:id/invites — revoke every outstanding invite link (owner only). */
+export async function DELETE(request: Request, { params }: Params) {
+  const user = await sessionUser(request);
+  if (!user) return unauthorized();
+  const { id } = await params;
+  const result = await revokeInvites(db(), user.id, id);
+  if (!result.ok) return failureResponse(result.error);
+  return NextResponse.json({ revoked: result.revoked });
 }

@@ -13,7 +13,8 @@ import {
   mintTicket,
   putSaveBlob,
   renameWorld,
-  resolveInvite
+  resolveInvite,
+  revokeInvites
 } from "./worldsService";
 
 let db: TestDb;
@@ -98,6 +99,21 @@ describe("invites", () => {
     expect(await acceptInvite(asDb(), "bob", "tok-max")).toMatchObject({ ok: false, error: "expired" });
 
     expect(await resolveInvite(asDb(), "tok-nope")).toMatchObject({ ok: false, error: "not-found" });
+  });
+
+  test("the owner revokes every outstanding link; members keep access, outsiders/members can't revoke", async () => {
+    const id = await makeWorld();
+    const first = await createInvite(asDb(), "alice", id);
+    if (!first.ok) throw new Error("invite failed");
+    await acceptInvite(asDb(), "bob", first.token); // bob is a member now
+    await createInvite(asDb(), "alice", id); // a second, still-outstanding link
+
+    expect(await revokeInvites(asDb(), "bob", id)).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await revokeInvites(asDb(), "mallory", id)).toMatchObject({ ok: false, error: "not-found" });
+
+    expect(await revokeInvites(asDb(), "alice", id)).toMatchObject({ ok: true, revoked: 2 });
+    expect(await resolveInvite(asDb(), first.token)).toMatchObject({ ok: false, error: "not-found" }); // dead link
+    expect((await getWorld(asDb(), "bob", id)).ok).toBe(true); // bob still a member
   });
 });
 

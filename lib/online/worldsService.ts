@@ -179,6 +179,19 @@ export async function createInvite(db: Db, userId: string, worldId: string): Pro
   return { ok: true, token };
 }
 
+/**
+ * Owner revokes every outstanding invite for a world — a shared link that
+ * escaped is instantly dead (existing members keep their access). Returns how
+ * many links were killed so the UI can confirm.
+ */
+export async function revokeInvites(db: Db, userId: string, worldId: string): Promise<{ ok: true; revoked: number } | Failure> {
+  const member = await membership(db, userId, worldId);
+  if (!member) return fail("not-found");
+  if (member.role !== "owner") return fail("forbidden");
+  const killed = await db.delete(schema.worldInvites).where(eq(schema.worldInvites.worldId, worldId)).returning({ id: schema.worldInvites.id });
+  return { ok: true, revoked: killed.length };
+}
+
 /** 128 bits of URL-safe randomness. */
 function base64urlToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
