@@ -117,8 +117,10 @@ export class Room {
   emptySinceMs: number | null;
   /** p95-ish diagnostics: the slowest tick of the last window. */
   private slowestTickMs = 0;
-  /** Bytes sent downstream since the last diagnostics read (bandwidth gauge). */
+  /** Total bytes sent downstream (monotonic); diagnostics reports the delta since its last read. */
   private bytesOut = 0;
+  private lastDiagBytes = 0;
+  private lastDiagTick = 0;
   /** Rolling replay log: recent commands + pose anchors (ring-bounded). */
   private readonly commandLog: CommandLogEntry[] = [];
   private readonly commandLogSize: number;
@@ -161,14 +163,17 @@ export class Room {
   }
 
   diagnostics(): { worldId: string; players: number; tick: number; slowestTickMs: number; kbOutPerSec: number } {
-    // bytesOut accumulates since the last read; the tick counter times the window.
-    const seconds = this.tickCount > 0 ? this.tickCount * TICK_SECONDS : 1;
+    // Bandwidth over the window since the last read (not a lifetime average).
+    const windowTicks = Math.max(1, this.tickCount - this.lastDiagTick);
+    const windowBytes = this.bytesOut - this.lastDiagBytes;
+    this.lastDiagTick = this.tickCount;
+    this.lastDiagBytes = this.bytesOut;
     return {
       worldId: this.worldId,
       players: this.clients.size,
       tick: this.tickCount,
       slowestTickMs: Math.round(this.slowestTickMs * 100) / 100,
-      kbOutPerSec: Math.round((this.bytesOut / 1024 / seconds) * 10) / 10
+      kbOutPerSec: Math.round((windowBytes / 1024 / (windowTicks * TICK_SECONDS)) * 10) / 10
     };
   }
 
@@ -192,7 +197,10 @@ export class Room {
 
   /** Admits a verified ticket onto a socket: joins the engine and syncs the world. */
   async join(claims: TicketClaims, sink: ClientSink): Promise<boolean> {
-    if (this.clients.size >= ROOM_CAPACITY) {
+    // A reconnecting member already owns a slot — only a genuinely NEW player
+    // counts against capacity, so a dropped socket can always come back.
+    const reconnecting = this.clients.has(claims.sub);
+    if (!reconnecting && this.clients.size >= ROOM_CAPACITY) {
       sink.close(CLOSE_ROOM_FULL, "room full");
       return false;
     }
@@ -294,10 +302,19 @@ export class Room {
       case "cmd": {
         if (conn.budget.cmd >= 60) return; // per-second flood guard
         conn.budget.cmd += 1;
-        // Apply the claimed eye pose (same clamps as the stream) so the
-        // command's raycast happens from where the client actually aimed.
+        // Room-wide settings are the owner's call, not any member's.
+        if ((message.cmd.type === "setDifficulty" || message.cmd.type === "setGameMode") && conn.role !== "owner") return;
+        // Apply the claimed pose (same clamps as the stream) so the command's
+        // raycast happens from where the client actually stood/aimed.
         const elapsed = Math.max(1, this.tickCount - conn.lastPoseTick) * TICK_SECONDS;
-        this.engine.applyRemotePose(playerId, { ...message.pose, onGround: this.engine.state.players.get(playerId)?.onGround ?? false }, elapsed);
+        const { accepted } = this.engine.applyRemotePose(
+          playerId,
+          { ...message.pose, onGround: this.engine.state.players.get(playerId)?.onGround ?? false },
+          elapsed
+        );
+        // Advance the pose clock on an accepted cmd pose too — otherwise a
+        // client sending only cmds lets `elapsed` grow and inflate the clamp.
+        if (accepted) conn.lastPoseTick = this.tickCount;
         this.recordLog({ tick: this.tickCount, playerId, cmd: message.cmd, pose: message.pose });
         this.engine.dispatch(message.cmd, playerId);
         return;

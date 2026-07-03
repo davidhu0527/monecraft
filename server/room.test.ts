@@ -235,5 +235,58 @@ describe("ops surface", () => {
     expect(diag.players).toBe(1);
     expect(diag.tick).toBe(20);
     expect(diag.kbOutPerSec).toBeGreaterThan(0);
+    // Windowed, not lifetime: a second read with no new traffic reports ~0.
+    expect(room.diagnostics().kbOutPerSec).toBe(0);
+  });
+
+  test("world-wide settings are owner-only over the wire", async () => {
+    const { room } = await makeRoom();
+    const owner = fakeSink();
+    const member = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), owner);
+    await room.join(claimsFor("bob", "w1", "member"), member);
+    const pose = { x: 0, y: 40, z: 0, yaw: 0, pitch: 0 };
+
+    await room.handleMessage("bob", { t: "cmd", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    expect(room.engine.state.difficulty).not.toBe("peaceful"); // member ignored
+
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    expect(room.engine.state.difficulty).toBe("peaceful"); // owner honored
+  });
+
+  test("a member can reconnect into a full room (their own slot doesn't count against capacity)", async () => {
+    const { room } = await makeRoom();
+    // Fill the room to capacity (ROOM_CAPACITY = 8).
+    for (let i = 0; i < 8; i += 1) expect(await room.join(claimsFor(`p${i}`, "w1"), fakeSink())).toBe(true);
+    expect(room.playerCount()).toBe(8);
+
+    // A NEW 9th player is refused…
+    const stranger = fakeSink();
+    expect(await room.join(claimsFor("stranger", "w1"), stranger)).toBe(false);
+    expect(stranger.frames.some((f) => f.kind === "close" && f.code === 4002)).toBe(true); // CLOSE_ROOM_FULL
+
+    // …but an already-present member reconnecting is admitted (replaces their socket).
+    const reconnect = fakeSink();
+    expect(await room.join(claimsFor("p3", "w1"), reconnect)).toBe(true);
+    expect(room.playerCount()).toBe(8);
+  });
+
+  test("a cmd-only client can't inflate the pose clamp (lastPoseTick advances on accepted cmd poses)", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const alice = room.engine.state.players.get("alice")!;
+    const { x, y, z } = alice.position;
+    const tickRoom = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    // Let many ticks pass WITHOUT sending poses, sending only in-place cmds so
+    // each advances lastPoseTick. Then a teleport-sized cmd pose must be rejected.
+    for (let i = 0; i < 40; i += 1) {
+      tickRoom();
+      await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "toggleInventory" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
+    }
+    a.frames.length = 0;
+    await room.handleMessage("alice", { t: "cmd", seq: 999, cmd: { type: "attack" }, pose: { x: x + 60, y, z: z + 60, yaw: 0, pitch: 0 } });
+    expect(alice.position.x).toBeCloseTo(x, 3); // the jump was clamped, not admitted
   });
 });

@@ -54,6 +54,10 @@ describe("client message validation", () => {
     expect(readCommand({ type: "craft", recipeId: { evil: true } })).toBeNull();
     expect(readCommand({ type: "anvilRename", name: "y".repeat(200) })).toMatchObject({ type: "anvilRename", name: "y".repeat(64) });
     expect(readCommand({ type: "selectSlot", index: 3.7 })).toMatchObject({ type: "selectSlot", index: 3 });
+    // enchant ids are allow-listed: an unknown one would throw in canEnchant.
+    expect(readCommand({ type: "enchant", enchant: "sharpness" })).toMatchObject({ type: "enchant", enchant: "sharpness" });
+    expect(readCommand({ type: "enchant", enchant: "not_a_real_enchant" })).toBeNull();
+    expect(readCommand({ type: "enchant", enchant: "__proto__" })).toBeNull();
   });
 
   test("decodeClientFrame handles non-JSON and binary", () => {

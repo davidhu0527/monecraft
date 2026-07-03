@@ -459,12 +459,15 @@ export async function connectNetworkSession(
 
   const sendCmd = (command: Command) => {
     seq += 1;
+    // Foot position (matching the pose stream): the server clamps it into
+    // player.position, then the engine derives the eye/aim ray from it by
+    // adding EYE_HEIGHT — sending eye height here would double that offset.
     delayedSend(
       encodeClientMessage({
         t: "cmd",
         seq,
         cmd: command,
-        pose: { x: self.position.x, y: self.position.y + 1.62, z: self.position.z, yaw: self.yaw, pitch: self.pitch }
+        pose: { x: self.position.x, y: self.position.y, z: self.position.z, yaw: self.yaw, pitch: self.pitch }
       })
     );
   };

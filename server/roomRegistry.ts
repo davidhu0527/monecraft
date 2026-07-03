@@ -31,7 +31,9 @@ export class RoomRegistry {
     if (existing) return existing;
     const inFlight = this.loading.get(worldId);
     if (inFlight) return inFlight;
-    if (this.rooms.size >= this.maxRooms) return null;
+    // Count in-flight loads too: two concurrent loads of different worlds must
+    // not both slip past the cap before either registers in `rooms`.
+    if (this.rooms.size + this.loading.size >= this.maxRooms) return null;
 
     const promise = (async (): Promise<Room | null> => {
       const record = await this.persistence.loadWorld(worldId);

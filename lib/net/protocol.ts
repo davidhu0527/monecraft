@@ -1,6 +1,7 @@
 import type { Command } from "@/lib/game/engine/commands";
 import type { GameEvent } from "@/lib/game/engine/state";
-import type { SavedContainer, SavedMob, SavedPlayer, SavedVehicle } from "@/lib/game/types";
+import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
+import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedVehicle } from "@/lib/game/types";
 
 /**
  * The client↔game-server wire protocol. Versioned as a whole: a client built
@@ -220,7 +221,11 @@ export function readCommand(v: unknown): Command | null {
     case "anvilRename":
       return isStr(c.name) ? { type: "anvilRename", name: c.name.slice(0, 64) } : null;
     case "enchant":
-      return isStr(c.enchant) ? ({ type: "enchant", enchant: c.enchant } as Command) : null;
+      // Allow-list the id: an unknown one would throw in canEnchant (indexes
+      // ENCHANTMENT_DEFS). hasOwnProperty (not `in`) so "__proto__"/"toString" don't slip through.
+      return isStr(c.enchant) && Object.prototype.hasOwnProperty.call(ENCHANTMENT_DEFS, c.enchant)
+        ? { type: "enchant", enchant: c.enchant as EnchantmentId }
+        : null;
     case "creativeGiveItem":
       return isStr(c.itemId) ? { type: "creativeGiveItem", itemId: c.itemId } : null;
     case "setGameMode":
