@@ -16,12 +16,13 @@ import { signTicket } from "@/lib/net/tickets";
 
 const PORT = 20000 + Math.floor(Math.random() * 10000);
 const SECRET = "smoke-secret";
+const ADMIN = "smoke-admin";
 let proc: ReturnType<typeof Bun.spawn> | null = null;
 
 beforeAll(async () => {
   proc = Bun.spawn(["bun", "server/index.ts"], {
     cwd: import.meta.dir + "/..",
-    env: { ...process.env, PORT: String(PORT), GAME_TICKET_SECRET: SECRET, PERSISTENCE: "memory" },
+    env: { ...process.env, PORT: String(PORT), GAME_TICKET_SECRET: SECRET, PERSISTENCE: "memory", ADMIN_TOKEN: ADMIN },
     stdout: "pipe",
     stderr: "pipe"
   });
@@ -79,5 +80,23 @@ describe("game server over a real socket", () => {
   test("/health answers; /rooms requires the admin token", async () => {
     expect((await natives.fetch(`http://localhost:${PORT}/health`)).ok).toBe(true);
     expect((await natives.fetch(`http://localhost:${PORT}/rooms`)).status).toBe(403);
+  });
+
+  test("admin diagnostics + replay log are token-gated and report the joined room", async () => {
+    const auth = { headers: { authorization: `Bearer ${ADMIN}` } };
+    // The prior test joined "smoke-world"; it lingers loaded (idle-evict is 5 min).
+    const rooms = (await (await natives.fetch(`http://localhost:${PORT}/rooms`, auth)).json()) as { rooms: Array<{ worldId: string; kbOutPerSec: number }> };
+    expect(rooms.rooms.some((r) => r.worldId === "smoke-world")).toBe(true);
+
+    expect((await natives.fetch(`http://localhost:${PORT}/rooms/smoke-world/log`)).status).toBe(403); // no token
+    const dump = (await (await natives.fetch(`http://localhost:${PORT}/rooms/smoke-world/log`, auth)).json()) as {
+      worldId: string;
+      seed: number;
+      entries: unknown[];
+    };
+    expect(dump.worldId).toBe("smoke-world");
+    expect(dump.seed).toBeGreaterThan(0);
+
+    expect((await natives.fetch(`http://localhost:${PORT}/rooms/does-not-exist/log`, auth)).status).toBe(404);
   });
 });

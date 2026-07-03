@@ -181,3 +181,59 @@ describe("room lifecycle", () => {
     expect(a.messagesOf("tick").at(-1)?.self?.hearts).toBeDefined();
   });
 });
+
+describe("ops surface", () => {
+  const eyePose = { x: 0, y: 40, z: 0, yaw: 0, pitch: 0 };
+
+  test("the command log records dispatched commands (with pose) and pose anchors", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "toggleInventory" }, pose: eyePose });
+    for (let i = 0; i < 20; i += 1) (room as unknown as { tick(dt: number): void }).tick(0.05); // triggers a pose checkpoint at tick 20
+
+    const dump = room.logDump();
+    expect(dump.worldId).toBe("w1");
+    expect(dump.seed).toBeGreaterThan(0);
+    const commands = dump.entries.filter((e): e is Extract<typeof e, { cmd: unknown }> => "cmd" in e);
+    expect(commands.some((e) => e.cmd.type === "toggleInventory")).toBe(true);
+    expect(commands[0].pose).toEqual(eyePose);
+    expect(dump.entries.some((e) => !("cmd" in e) && e.playerId === "alice")).toBe(true); // a pose anchor
+  });
+
+  test("the ring buffer is bounded to its configured size", async () => {
+    const persistence = createMemoryPersistence();
+    const record = await persistence.loadWorld("w1");
+    const room = new Room(record!, persistence, () => 0, 5); // tiny log
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    for (let i = 0; i < 30; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "toggleInventory" }, pose: eyePose });
+    expect(room.logDump().entries.length).toBeLessThanOrEqual(5);
+  });
+
+  test("kick ejects a live player with a fatal close and returns false for a stranger", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+
+    expect(room.kick("bob")).toBe(true);
+    expect(room.playerCount()).toBe(1);
+    expect(b.frames.some((f) => f.kind === "close" && f.code === 4003)).toBe(true); // CLOSE_KICKED
+    expect(a.messagesOf("playerLeft").some((m) => m.id === "bob")).toBe(true);
+    expect(room.kick("nobody")).toBe(false);
+  });
+
+  test("diagnostics report bandwidth once traffic flows", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    for (let i = 0; i < 20; i += 1) (room as unknown as { tick(dt: number): void }).tick(0.05);
+    const diag = room.diagnostics();
+    expect(diag.players).toBe(1);
+    expect(diag.tick).toBe(20);
+    expect(diag.kbOutPerSec).toBeGreaterThan(0);
+  });
+});

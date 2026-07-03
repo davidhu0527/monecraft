@@ -34,6 +34,13 @@ const persistence = process.env.PERSISTENCE === "memory" ? createMemoryPersisten
 const registry = new RoomRegistry(persistence, MAX_ROOMS);
 registry.startSweeper();
 
+const forbidden = new Response("forbidden", { status: 403 });
+/** Bearer-token gate shared by every /rooms* admin endpoint. Absent ADMIN_TOKEN = always denied. */
+function authorized(request: Request): boolean {
+  const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
+  return Boolean(process.env.ADMIN_TOKEN) && token === process.env.ADMIN_TOKEN;
+}
+
 type SocketData = {
   helloTimer: ReturnType<typeof setTimeout> | null;
   room: Room | null;
@@ -46,9 +53,23 @@ const server = Bun.serve<SocketData>({
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true, rooms: registry.diagnostics().length });
     if (url.pathname === "/rooms") {
-      const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
-      if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) return new Response("forbidden", { status: 403 });
+      if (!authorized(request)) return forbidden;
       return Response.json({ rooms: registry.diagnostics() });
+    }
+    // GET /rooms/:id/log — the replay ring buffer for offline debugging.
+    const logMatch = url.pathname.match(/^\/rooms\/([^/]+)\/log$/);
+    if (logMatch) {
+      if (!authorized(request)) return forbidden;
+      const room = registry.getExisting(decodeURIComponent(logMatch[1]));
+      return room ? Response.json(room.logDump()) : new Response("no such room", { status: 404 });
+    }
+    // POST /rooms/:id/kick/:playerId — owner-initiated eject (via the web API's admin token).
+    const kickMatch = url.pathname.match(/^\/rooms\/([^/]+)\/kick\/([^/]+)$/);
+    if (kickMatch && request.method === "POST") {
+      if (!authorized(request)) return forbidden;
+      const room = registry.getExisting(decodeURIComponent(kickMatch[1]));
+      const kicked = room?.kick(decodeURIComponent(kickMatch[2])) ?? false;
+      return Response.json({ kicked });
     }
     if (url.pathname === "/ws") {
       const upgraded = bunServer.upgrade(request, { data: { helloTimer: null, room: null, playerId: null } satisfies SocketData });

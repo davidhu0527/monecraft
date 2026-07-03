@@ -45,6 +45,11 @@ export class RoomRegistry {
     return promise;
   }
 
+  /** A currently-loaded room, or null (admin endpoints operate on live rooms only, never load one). */
+  getExisting(worldId: string): Room | null {
+    return this.rooms.get(worldId) ?? null;
+  }
+
   diagnostics(): Array<ReturnType<Room["diagnostics"]>> {
     return [...this.rooms.values()].map((room) => room.diagnostics());
   }

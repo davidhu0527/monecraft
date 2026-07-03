@@ -1,4 +1,5 @@
 import { GameEngine } from "@/lib/game/engine/GameEngine";
+import type { Command } from "@/lib/game/engine/commands";
 import { createFixedTicker, TICK_SECONDS, type FixedTicker } from "@/lib/game/engine/tickDriver";
 import {
   serializeEffects,
@@ -78,10 +79,28 @@ type ClientConn = {
 const PERSIST_INTERVAL_TICKS = 20 * 60; // 60s
 const KEYFRAME_INTERVAL_TICKS = 20 * 5; // 5s
 const DAY_INTERVAL_TICKS = 20; // 1s
+const POSE_CHECKPOINT_TICKS = 20; // 1s — log pose anchors between commands
 const MOB_DEADBAND_SQ = 0.05 * 0.05;
 const BACKPRESSURE_SOFT_BYTES = 256 * 1024;
 const BACKPRESSURE_KICK_BYTES = 1024 * 1024;
 const BACKPRESSURE_KICK_STRIKES = 100; // ~5s of sustained >1MB at 20Hz
+const DEFAULT_COMMAND_LOG_SIZE = 4096;
+
+/** One entry in a room's replay log: a dispatched command (with its claimed eye pose) or a periodic pose anchor. */
+export type CommandLogEntry =
+  | { tick: number; playerId: string; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number } }
+  | { tick: number; playerId: string; pose: { x: number; y: number; z: number; yaw: number; pitch: number } };
+
+/** A room's replay log plus the world constants needed to reconstruct it offline (see server/scripts/replay.ts). */
+export type RoomLogDump = {
+  worldId: string;
+  seed: number;
+  worldType: string;
+  difficulty: string;
+  hardcore: boolean;
+  tick: number;
+  entries: CommandLogEntry[];
+};
 
 export class Room {
   readonly worldId: string;
@@ -98,14 +117,21 @@ export class Room {
   emptySinceMs: number | null;
   /** p95-ish diagnostics: the slowest tick of the last window. */
   private slowestTickMs = 0;
+  /** Bytes sent downstream since the last diagnostics read (bandwidth gauge). */
+  private bytesOut = 0;
+  /** Rolling replay log: recent commands + pose anchors (ring-bounded). */
+  private readonly commandLog: CommandLogEntry[] = [];
+  private readonly commandLogSize: number;
 
   constructor(
     record: WorldRecord,
     persistence: Persistence,
-    private readonly now: () => number = () => Date.now()
+    private readonly now: () => number = () => Date.now(),
+    commandLogSize = Number.parseInt(process.env.COMMAND_LOG_SIZE ?? "", 10) || DEFAULT_COMMAND_LOG_SIZE
   ) {
     this.worldId = record.id;
     this.persistence = persistence;
+    this.commandLogSize = commandLogSize;
     this.engine = new GameEngine({
       save: record.save,
       seed: record.seed,
@@ -134,8 +160,34 @@ export class Room {
     return this.clients.size;
   }
 
-  diagnostics(): { worldId: string; players: number; tick: number; slowestTickMs: number } {
-    return { worldId: this.worldId, players: this.clients.size, tick: this.tickCount, slowestTickMs: this.slowestTickMs };
+  diagnostics(): { worldId: string; players: number; tick: number; slowestTickMs: number; kbOutPerSec: number } {
+    // bytesOut accumulates since the last read; the tick counter times the window.
+    const seconds = this.tickCount > 0 ? this.tickCount * TICK_SECONDS : 1;
+    return {
+      worldId: this.worldId,
+      players: this.clients.size,
+      tick: this.tickCount,
+      slowestTickMs: Math.round(this.slowestTickMs * 100) / 100,
+      kbOutPerSec: Math.round((this.bytesOut / 1024 / seconds) * 10) / 10
+    };
+  }
+
+  /** The replay log + world constants (admin-only; drives server/scripts/replay.ts). */
+  logDump(): RoomLogDump {
+    return {
+      worldId: this.worldId,
+      seed: this.engine.state.world.seed,
+      worldType: this.engine.worldTypeName,
+      difficulty: this.engine.state.difficulty,
+      hardcore: this.engine.state.hardcore,
+      tick: this.tickCount,
+      entries: [...this.commandLog]
+    };
+  }
+
+  private recordLog(entry: CommandLogEntry): void {
+    this.commandLog.push(entry);
+    if (this.commandLog.length > this.commandLogSize) this.commandLog.splice(0, this.commandLog.length - this.commandLogSize);
   }
 
   /** Admits a verified ticket onto a socket: joins the engine and syncs the world. */
@@ -188,6 +240,15 @@ export class Room {
     return true;
   }
 
+  /** Owner-initiated eject: close the socket with a fatal code so the client won't retry, then leave. Returns false if not present. */
+  kick(playerId: string): boolean {
+    const conn = this.clients.get(playerId);
+    if (!conn) return false;
+    conn.sink.close(CLOSE_KICKED, "removed by the world owner");
+    this.leave(playerId);
+    return true;
+  }
+
   /** Removes a player (socket closed or kicked); persists their slice into the offline set. */
   leave(playerId: string): void {
     const conn = this.clients.get(playerId);
@@ -237,6 +298,7 @@ export class Room {
         // command's raycast happens from where the client actually aimed.
         const elapsed = Math.max(1, this.tickCount - conn.lastPoseTick) * TICK_SECONDS;
         this.engine.applyRemotePose(playerId, { ...message.pose, onGround: this.engine.state.players.get(playerId)?.onGround ?? false }, elapsed);
+        this.recordLog({ tick: this.tickCount, playerId, cmd: message.cmd, pose: message.pose });
         this.engine.dispatch(message.cmd, playerId);
         return;
       }
@@ -319,7 +381,20 @@ export class Room {
         ...(day !== undefined ? { day } : {}),
         ...(this.buildSelfDelta(conn) ?? {})
       };
-      conn.sink.send(encodeServerMessage(message));
+      const encoded = encodeServerMessage(message);
+      this.bytesOut += encoded.length;
+      conn.sink.send(encoded);
+    }
+
+    // Pose anchors between commands keep an offline replay's positions aligned.
+    if (this.tickCount % POSE_CHECKPOINT_TICKS === 0) {
+      for (const player of this.engine.state.players.values()) {
+        this.recordLog({
+          tick: this.tickCount,
+          playerId: player.id,
+          pose: { x: player.position.x, y: player.position.y, z: player.position.z, yaw: player.yaw, pitch: player.pitch }
+        });
+      }
     }
 
     if (this.tickCount % KEYFRAME_INTERVAL_TICKS === 0 && this.clients.size > 0) {
@@ -447,6 +522,7 @@ export class Room {
     const encoded = encodeServerMessage(message);
     for (const conn of this.clients.values()) {
       if (conn.playerId === except) continue;
+      this.bytesOut += encoded.length;
       conn.sink.send(encoded);
     }
   }
