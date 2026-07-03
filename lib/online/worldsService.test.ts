@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, test } from "bun:test";
-import { createTestDb, type TestDb } from "@/db/testDb";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { closeTestDb, createTestDb, type TestDb } from "@/db/testDb";
 import { schema } from "@/db";
 import { verifyTicket } from "@/lib/net/tickets";
 import {
@@ -29,6 +29,11 @@ beforeEach(async () => {
   await addUser("alice");
   await addUser("bob");
   await addUser("mallory");
+});
+
+// An unclosed PGlite leaks a pending WASM op that Bun flags as exit code 99.
+afterEach(async () => {
+  await closeTestDb(db);
 });
 
 async function makeWorld(owner = "alice", kind: "sp-cloud" | "mp" = "mp"): Promise<string> {

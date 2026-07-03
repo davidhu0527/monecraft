@@ -1,6 +1,6 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createTestDb, type TestDb } from "@/db/testDb";
+import { closeTestDb, createTestDb, type TestDb } from "@/db/testDb";
 import { schema } from "@/db";
 import { createAuth, type Auth } from "./server";
 
@@ -19,6 +19,11 @@ let auth: Auth;
 beforeAll(async () => {
   db = await createTestDb();
   auth = createAuth(db as never, { baseURL: "http://localhost:3000", secret: "test-secret-test-secret-test-secret" });
+});
+
+// An unclosed PGlite leaks a pending WASM op that Bun flags as exit code 99.
+afterAll(async () => {
+  await closeTestDb(db);
 });
 
 /**

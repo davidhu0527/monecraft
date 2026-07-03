@@ -20,3 +20,14 @@ export async function createTestDb() {
 }
 
 export type TestDb = Awaited<ReturnType<typeof createTestDb>>;
+
+/**
+ * Releases a fixture's PGlite instance. **Call this in an `afterEach`** — an
+ * unclosed PGlite leaves a pending WASM operation that surfaces as an
+ * unhandled rejection at process exit, which Bun reports as exit code 99 (all
+ * tests "pass" but the run is marked failed). Closing per test keeps the
+ * suite leak-free.
+ */
+export async function closeTestDb(db: TestDb): Promise<void> {
+  await db.$client.close();
+}
