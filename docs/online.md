@@ -39,6 +39,13 @@ Postgres.
   first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
   sign in / register is reachable before any local profile exists; a guest can
   **Sign out** back to the offline/login state.
+- When signed in as a real account the menu opens into an **account home**
+  (`components/menu/AccountProfileSelect.tsx`) listing that account's
+  server-side profiles (create/rename/delete, capped at `MAX_ONLINE_PROFILES`);
+  picking one shows its online worlds (`OnlineWorldSelect`, capped at
+  `MAX_WORLDS_PER_PROFILE`), and the join ticket carries the profile's name/skin.
+  Logged-out **Local Players** stay on the browser-local profile flow. (Guests
+  still reach online play via the legacy path pending the guest-layer retirement.)
 
 ## Worlds, invites, cloud saves
 
