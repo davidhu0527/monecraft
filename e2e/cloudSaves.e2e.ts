@@ -5,9 +5,9 @@ import { expect, test, type Page } from "@playwright/test";
  * the real online stack (the Next app on DATABASE_URL=pglite://memory — no game
  * server needed; cloud saves are the /api/worlds blob API, not a WS session).
  *
- * A signed-in guest uploads a local world, then downloads it "on another device"
- * — simulated in one context by clearing this device's sync cursor, since guest
- * identities differ per browser context. The proof is that a distinctive edit
+ * A signed-in ACCOUNT steps through the "Play locally" door, uploads a local
+ * world, then downloads it "on another device" — simulated in one context by
+ * clearing this device's sync cursor. The proof is that a distinctive edit
  * made before the upload survives the push → delete → pull cycle.
  */
 
@@ -45,9 +45,18 @@ test("a single-player world uploads to the cloud and downloads onto a fresh devi
     });
     await page.goto("/");
 
-    // ── sign in as a guest, then create a local world ────────────────────────
-    await page.getByRole("button", { name: "Play online as guest" }).click();
-    await expect(page.getByText("Playing as guest")).toBeVisible({ timeout: 15000 });
+    // ── register an account, then reach the local menus through the door ────
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "I need an account" }).click();
+    await page.getByLabel("Email").fill("cloudy@example.com");
+    await page.getByLabel("Display name").fill("Cloudy");
+    await page.getByLabel("Password").fill("hunter2hunter2");
+    await page.getByRole("button", { name: "Create account" }).click();
+
+    // Signing in flips the menu to the account home; cloud saves live with the
+    // LOCAL worlds, one "Play locally" click away.
+    await expect(page.getByText("Your Profiles")).toBeVisible({ timeout: 15000 });
+    await page.getByTestId("play-locally").click();
     await page.getByTestId("profile-cloud-profile").click();
 
     await page.getByTestId("new-world").click();
