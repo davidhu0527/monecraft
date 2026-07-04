@@ -13,7 +13,6 @@ export const SCHEMA_DDL = `
       image text,
       created_at timestamp NOT NULL DEFAULT now(),
       updated_at timestamp NOT NULL DEFAULT now(),
-      is_anonymous boolean,
       skin_id text
     );
     CREATE TABLE "session" (

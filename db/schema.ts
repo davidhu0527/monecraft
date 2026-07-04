@@ -3,8 +3,8 @@ import { customType } from "drizzle-orm/pg-core";
 
 /**
  * The online schema: better-auth's core tables (user/session/account/
- * verification, plus the anonymous plugin's isAnonymous and our skinId
- * additional field) and the game's own tables (worlds, memberships, invites).
+ * verification, plus our skinId additional field) and the game's own tables
+ * (worlds, memberships, invites, profiles).
  *
  * Shared by the Next.js app (Vercel, via node-postgres) and the game server
  * (Fly, via the same drizzle schema); tests run it against PGlite so CI needs
@@ -28,8 +28,6 @@ export const user = pgTable("user", {
   image: text("image"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  /** Anonymous-plugin flag: a guest identity that can upgrade in place. */
-  isAnonymous: boolean("is_anonymous"),
   /** Game profile: the player's skin palette id (additional field). */
   skinId: text("skin_id")
 });
