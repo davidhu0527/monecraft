@@ -25,9 +25,19 @@ export default function AccountPanel() {
   }, []);
 
   const refresh = async () => setUser(await currentUser());
+  // Mirror submit / "Play online as guest": guard against a failed request (no
+  // unhandled rejection, a visible error) and against concurrent double-clicks.
   const signOut = async () => {
-    await authClient().signOut();
-    await refresh();
+    setBusy(true);
+    setError(null);
+    try {
+      await authClient().signOut();
+      await refresh();
+    } catch {
+      setError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -97,20 +107,21 @@ export default function AccountPanel() {
           <span className="account-status">{user.isAnonymous ? "Playing as guest" : `Signed in as ${user.name}`}</span>
           {user.isAnonymous ? (
             <>
-              <button type="button" className="mc-button" onClick={() => setMode("signup")}>
+              <button type="button" className="mc-button" onClick={() => setMode("signup")} disabled={busy}>
                 Keep my worlds — create account
               </button>
               {/* A guest could previously never get back to the login screen; sign
                   out drops to the "Offline" state where Sign in / register live. */}
-              <button type="button" className="mc-button" onClick={signOut}>
+              <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
                 Sign out
               </button>
             </>
           ) : (
-            <button type="button" className="mc-button" onClick={signOut}>
+            <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
               Sign out
             </button>
           )}
+          {error && <div className="account-error">{error}</div>}
         </>
       ) : (
         <>
