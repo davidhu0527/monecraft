@@ -10,10 +10,13 @@ import { deleteWorldsForProfile, worldsForProfile } from "@/lib/game/worlds";
 type ProfileSelectProps = {
   /** Enter a profile: select it and show its worlds. */
   onPlay: (profileId: string) => void;
+  /** Fired when the account panel changes auth state (sign in/out/guest) so the
+   *  shell can flip into (or out of) account mode. */
+  onAuthChange?: () => void;
 };
 
 /** The top menu: pick a player profile, or create / rename / delete one. */
-export default function ProfileSelect({ onPlay }: ProfileSelectProps) {
+export default function ProfileSelect({ onPlay, onAuthChange }: ProfileSelectProps) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -30,7 +33,7 @@ export default function ProfileSelect({ onPlay }: ProfileSelectProps) {
         {/* First run has no profile list to host the account controls, so surface
             them here too — otherwise sign in / register is unreachable until a
             local profile exists. (The list view renders its own panel below.) */}
-        {firstRun && <AccountPanel />}
+        {firstRun && <AccountPanel onAuthChange={onAuthChange} />}
         <CreateProfileForm
           onCreate={(name, skinId) => {
             const profile = createProfile(name, skinId);
@@ -45,7 +48,7 @@ export default function ProfileSelect({ onPlay }: ProfileSelectProps) {
 
   return (
     <MenuScreen title="Select Profile">
-      <AccountPanel />
+      <AccountPanel onAuthChange={onAuthChange} />
       <ul className="menu-list">
         {profiles.map((profile) => (
           <li key={profile.id} className="menu-card">

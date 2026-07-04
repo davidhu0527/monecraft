@@ -9,7 +9,13 @@ import { authClient, currentUser, ensureSignedIn, markOnlineUsed, onlineUsed, ty
  * (the server re-parents them — see lib/auth/server.ts). Purely additive to
  * the offline game: with no online features touched, no account ever exists.
  */
-export default function AccountPanel() {
+type AccountPanelProps = {
+  /** Notified after any auth mutation (sign in/up/out, guest) so a parent shell
+   *  can react — e.g. flip the menu into account mode. */
+  onAuthChange?: () => void;
+};
+
+export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
   const [user, setUser] = useState<OnlineUser | null>(null);
   const [mode, setMode] = useState<"closed" | "signin" | "signup">("closed");
   const [email, setEmail] = useState("");
@@ -24,7 +30,10 @@ export default function AccountPanel() {
     if (onlineUsed()) void currentUser().then(setUser);
   }, []);
 
-  const refresh = async () => setUser(await currentUser());
+  const refresh = async () => {
+    setUser(await currentUser());
+    onAuthChange?.();
+  };
   // Mirror submit / "Play online as guest": guard against a failed request (no
   // unhandled rejection, a visible error) and against concurrent double-clicks.
   const signOut = async () => {
