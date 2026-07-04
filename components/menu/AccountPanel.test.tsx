@@ -5,19 +5,21 @@ import userEvent from "@testing-library/user-event";
 // The panel talks to better-auth over fetch; component tests swap the client
 // module for a controllable fake so no network (or server) exists.
 const fake = {
-  user: null as null | { id: string; name: string; email: string; isAnonymous: boolean },
-  signInAnonymousCalls: 0,
+  user: null as null | { id: string; name: string; email: string },
   signOutRejects: false
 };
 
 void mock.module("@/lib/auth/client", () => ({
   authClient: () => ({
-    signUp: { email: async () => ({ error: null }) },
+    signUp: {
+      email: async ({ email, name }: { email: string; name: string }) => {
+        fake.user = { id: "u-new", name, email };
+        return { error: null };
+      }
+    },
     signIn: {
-      email: async () => ({ error: null }),
-      anonymous: async () => {
-        fake.signInAnonymousCalls += 1;
-        fake.user = { id: "guest-1", name: "Anonymous", email: "temp@x", isAnonymous: true };
+      email: async ({ email }: { email: string }) => {
+        fake.user = { id: "u-known", name: email.split("@")[0], email };
         return { error: null };
       }
     },
@@ -29,50 +31,40 @@ void mock.module("@/lib/auth/client", () => ({
   }),
   onlineUsed: () => true,
   markOnlineUsed: () => {},
-  currentUser: async () => fake.user,
-  ensureSignedIn: async () => {
-    if (!fake.user) {
-      fake.signInAnonymousCalls += 1;
-      fake.user = { id: "guest-1", name: "Anonymous", email: "temp@x", isAnonymous: true };
-    }
-    return fake.user;
-  }
+  currentUser: async () => fake.user
 }));
 
 const { default: AccountPanel } = await import("./AccountPanel");
 
 describe("AccountPanel", () => {
-  test("offline → guest → upgrade offer", async () => {
+  test("logged out offers Sign in only — no guest path", async () => {
     fake.user = null;
     render(<AccountPanel />);
     await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
 
-    await userEvent.click(screen.getByRole("button", { name: "Play online as guest" }));
-    await waitFor(() => expect(screen.getByText("Playing as guest")).toBeTruthy());
-    expect(fake.signInAnonymousCalls).toBe(1);
-
-    // A guest is offered the worlds-keeping upgrade, which opens the sign-up form.
-    await userEvent.click(screen.getByRole("button", { name: "Keep my worlds — create account" }));
-    expect(screen.getByText("Create account (keeps your worlds)")).toBeTruthy();
-    expect(screen.getByText("Email")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /guest/i })).toBeNull();
   });
 
-  test("a guest can sign out and return to the login screen", async () => {
+  test("registering through the sign-up form signs the account in", async () => {
     fake.user = null;
-    render(<AccountPanel />);
+    const onAuthChange = mock();
+    render(<AccountPanel onAuthChange={onAuthChange} />);
     await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
 
-    await userEvent.click(screen.getByRole("button", { name: "Play online as guest" }));
-    await waitFor(() => expect(screen.getByText("Playing as guest")).toBeTruthy());
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await userEvent.click(screen.getByRole("button", { name: "I need an account" }));
+    await userEvent.type(screen.getByLabelText("Email"), "new@example.com");
+    await userEvent.type(screen.getByLabelText("Display name"), "Newbie");
+    await userEvent.type(screen.getByLabelText("Password"), "hunter2hunter2");
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
 
-    // A guest previously had no way back; sign out returns to the offline/login state.
-    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Signed in as Newbie")).toBeTruthy());
+    expect(onAuthChange).toHaveBeenCalled();
   });
 
   test("a signed-in account shows its name and can sign out", async () => {
-    fake.user = { id: "u1", name: "Keeper", email: "k@example.com", isAnonymous: false };
+    fake.user = { id: "u1", name: "Keeper", email: "k@example.com" };
     render(<AccountPanel />);
     await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
@@ -80,7 +72,7 @@ describe("AccountPanel", () => {
   });
 
   test("a failed sign-out surfaces an error and keeps you signed in", async () => {
-    fake.user = { id: "u1", name: "Keeper", email: "k@example.com", isAnonymous: false };
+    fake.user = { id: "u1", name: "Keeper", email: "k@example.com" };
     fake.signOutRejects = true;
     render(<AccountPanel />);
     await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());

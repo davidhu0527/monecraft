@@ -5,9 +5,10 @@ import { acquirePointerLock } from "./helpers";
  * The full co-op journey against the real online stack: the Next app backed
  * by an in-process Postgres (DATABASE_URL=pglite://memory) plus the Bun game
  * server, both from playwright.config's webServer list — no Docker, no cloud.
- * Two isolated browser contexts play two guests: the host creates an online
- * world through the menus, the friend joins through the invite link, and the
- * pair must see each other, share block edits, and chat.
+ * Two isolated browser contexts play two ACCOUNTS (online play is
+ * accounts-only): the host registers, creates an online profile and world
+ * through the account menus, the friend registers on the invite landing page,
+ * and the pair must see each other, share block edits, and chat.
  */
 
 /** Console/page errors collected like the smoke fixture does (favicon 404 is noise). */
@@ -27,31 +28,45 @@ async function waitForOnlineGame(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__monecraft!.renderer.renderedTriangles() > 0, undefined, { timeout: 30000 });
 }
 
-test("two guests share an online world via an invite link", async ({ browser }) => {
+/** Registers a fresh account through the account panel's sign-up form. */
+async function signUp(page: Page, name: string, email: string): Promise<void> {
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "I need an account" }).click();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Display name").fill(name);
+  await page.getByLabel("Password").fill("hunter2hunter2");
+  await page.getByRole("button", { name: "Create account" }).click();
+}
+
+/** From the account home, creates an online profile and enters its world list. */
+async function createOnlineProfile(page: Page, name: string): Promise<void> {
+  // Sign-up → session probe → account home spans two network hops.
+  await expect(page.getByText("Your Profiles")).toBeVisible({ timeout: 15000 });
+  await page.getByTestId("new-online-profile").click();
+  await page.getByLabel("Profile name").fill(name);
+  // exact: "Create account" (panel) and "Create World" share the substring.
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+}
+
+test("two accounts share an online world via an invite link", async ({ browser }) => {
   // Two production builds of the game plus a WebSocket handshake each; CI
   // renders with software GL, so the whole journey gets a generous ceiling.
   test.setTimeout(240000);
   const errors: string[] = [];
+  // The pglite webServer keeps its data across retries within one run, so a
+  // fixed email means every retry dies on "User already exists" — tag them.
+  const runTag = Date.now().toString(36);
 
-  // ── the host: guest account → online world → in-game ─────────────────────
+  // ── the host: register → online profile → online world → in-game ─────────
   const hostContext = await browser.newContext();
   const host = await hostContext.newPage();
   watchErrors(host, errors);
-  // Seed a profile so the menu opens on the profile LIST (where the account
-  // panel lives) instead of the first-run create form.
-  await host.addInitScript(() => {
-    if (!localStorage.getItem("minecraft_profiles_v1")) {
-      localStorage.setItem(
-        "minecraft_profiles_v1",
-        JSON.stringify({ version: 1, profiles: [{ id: "host-profile", name: "Hosta", skinId: "default", createdAt: 1 }], activeProfileId: "host-profile" })
-      );
-    }
-  });
   await host.goto("/");
 
-  await host.getByRole("button", { name: "Play online as guest" }).click();
-  await expect(host.getByText("Playing as guest")).toBeVisible({ timeout: 15000 });
-  await host.getByTestId("profile-host-profile").click();
+  // The first-run screen surfaces the account panel, so registration needs no
+  // local profile at all — a pure account never touches the local menus.
+  await signUp(host, "Hosta", `host-${runTag}@example.com`);
+  await createOnlineProfile(host, "Hosta");
 
   // Creative, so the host's block breaks are instant on the server side.
   await host.getByTestId("new-online-world").click();
@@ -74,21 +89,25 @@ test("two guests share an online world via an invite link", async ({ browser }) 
     return token;
   }, worldId);
 
-  // ── the friend: invite link → guest account → same world ─────────────────
+  // ── the friend: invite link → register on the landing page → same world ──
   const friendContext = await browser.newContext();
   const friend = await friendContext.newPage();
   watchErrors(friend, errors);
   await friend.goto(`/join/${inviteToken}`);
+
+  // The landing page previews the world before any sign-in, then embeds the
+  // account panel; registering accepts the invite in place.
+  await expect(friend.getByText("Co-op Test")).toBeVisible({ timeout: 15000 });
+  await expect(friend.getByText(/sign in to join/)).toBeVisible();
+  await signUp(friend, "Frienda", `friend-${runTag}@example.com`);
   await expect(friend.getByText(/You've joined/)).toBeVisible({ timeout: 15000 });
   await friend.getByRole("link", { name: "Open the game" }).click();
 
-  // First run in this fresh context: create the friend's local profile; the
-  // invited world is already waiting in the Online Worlds section. The friend
-  // is already a guest (the invite link signed them in), so the first-run screen
-  // also shows the account panel — `exact` avoids matching its
-  // "Keep my worlds — create account" button.
-  await friend.getByLabel("Profile name").fill("Friend");
-  await friend.getByRole("button", { name: "Create", exact: true }).click();
+  // The landing page marked online-used, so the shell finds the fresh session
+  // and opens the account home. The joined world surfaces under any profile
+  // (membership is account-level), labelled as joined rather than owned.
+  await createOnlineProfile(friend, "Friend");
+  await expect(friend.getByTestId(`online-world-${worldId}`)).toContainText("Joined");
   await friend.getByTestId(`online-world-${worldId}`).click();
   await waitForOnlineGame(friend);
 
@@ -113,10 +132,12 @@ test("two guests share an online world via an invite link", async ({ browser }) 
   await host.mouse.up();
 
   // ── chat round-trips, rendering in the other player's log ────────────────
+  // 30s like the block-edit poll: a slammed CI runner has been seen lagging
+  // the second page's connection by tens of seconds (10s flaked in CI).
   await host.evaluate(() => window.__monecraft!.net!.sendChat("hello from the host"));
-  await expect(friend.getByText("hello from the host")).toBeVisible({ timeout: 10000 });
+  await expect(friend.getByText("hello from the host")).toBeVisible({ timeout: 30000 });
   await friend.evaluate(() => window.__monecraft!.net!.sendChat("hi back"));
-  await expect(host.getByText("hi back")).toBeVisible({ timeout: 10000 });
+  await expect(host.getByText("hi back")).toBeVisible({ timeout: 30000 });
 
   // ── the roster lists both players; only the owner (host) gets a Kick control ─
   for (const page of [host, friend]) {
@@ -138,9 +159,9 @@ test("two guests share an online world via an invite link", async ({ browser }) 
     return net.roster().find((member) => member.id !== net.playerId)!.id;
   });
   await host.evaluate((id) => window.__monecraft!.net!.kick(id), friendId);
-  await expect.poll(() => friend.evaluate(() => window.__monecraft!.net!.status()), { timeout: 15000 }).toBe("closed");
+  await expect.poll(() => friend.evaluate(() => window.__monecraft!.net!.status()), { timeout: 30000 }).toBe("closed");
   await expect(friend.getByRole("alertdialog", { name: "Disconnected" })).toBeVisible({ timeout: 10000 });
-  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.players.size), { timeout: 15000 }).toBe(1);
+  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.players.size), { timeout: 30000 }).toBe(1);
 
   expect(errors, "no console/page errors during the test").toEqual([]);
   await hostContext.close();

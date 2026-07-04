@@ -10,13 +10,16 @@ import { deleteWorldsForProfile, worldsForProfile } from "@/lib/game/worlds";
 type ProfileSelectProps = {
   /** Enter a profile: select it and show its worlds. */
   onPlay: (profileId: string) => void;
-  /** Fired when the account panel changes auth state (sign in/out/guest) so the
+  /** Fired when the account panel changes auth state (sign in/out) so the
    *  shell can flip into (or out of) account mode. */
   onAuthChange?: () => void;
+  /** Return to the account home — only offered while a signed-in account is
+   *  browsing its local worlds through the "Play locally" door. */
+  onBackToAccount?: () => void;
 };
 
 /** The top menu: pick a player profile, or create / rename / delete one. */
-export default function ProfileSelect({ onPlay, onAuthChange }: ProfileSelectProps) {
+export default function ProfileSelect({ onPlay, onAuthChange, onBackToAccount }: ProfileSelectProps) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -32,8 +35,15 @@ export default function ProfileSelect({ onPlay, onAuthChange }: ProfileSelectPro
       <MenuScreen title={firstRun ? "Create Your Profile" : "New Profile"}>
         {/* First run has no profile list to host the account controls, so surface
             them here too — otherwise sign in / register is unreachable until a
-            local profile exists. (The list view renders its own panel below.) */}
+            local profile exists. (The list view renders its own panel below.)
+            Same for the way back to account mode: without it, an account with
+            zero local profiles would be trapped on this create form. */}
         {firstRun && <AccountPanel onAuthChange={onAuthChange} />}
+        {firstRun && onBackToAccount && (
+          <button type="button" className="mc-button" data-testid="back-to-account" onClick={onBackToAccount}>
+            Back to account
+          </button>
+        )}
         <CreateProfileForm
           onCreate={(name, skinId) => {
             const profile = createProfile(name, skinId);
@@ -49,6 +59,11 @@ export default function ProfileSelect({ onPlay, onAuthChange }: ProfileSelectPro
   return (
     <MenuScreen title="Select Profile">
       <AccountPanel onAuthChange={onAuthChange} />
+      {onBackToAccount && (
+        <button type="button" className="mc-button" data-testid="back-to-account" onClick={onBackToAccount}>
+          Back to account
+        </button>
+      )}
       <ul className="menu-list">
         {profiles.map((profile) => (
           <li key={profile.id} className="menu-card">

@@ -10,13 +10,13 @@ export async function GET(request: Request) {
   return NextResponse.json({ profiles: await listProfiles(db(), user.id) });
 }
 
-/** POST /api/profiles — create an account profile (guests can't; capped per account). */
+/** POST /api/profiles — create an account profile (capped per account). */
 export async function POST(request: Request) {
   const user = await sessionUser(request);
   if (!user) return unauthorized();
   const body = (await request.json().catch(() => null)) as { name?: string; skinId?: string | null } | null;
   if (!body) return failureResponse("invalid");
-  const result = await createProfile(db(), { id: user.id, isAnonymous: user.isAnonymous }, { name: body.name ?? "", skinId: body.skinId ?? null });
+  const result = await createProfile(db(), user.id, { name: body.name ?? "", skinId: body.skinId ?? null });
   if (!result.ok) return failureResponse(result.error);
   return NextResponse.json({ profile: result.profile }, { status: 201 });
 }

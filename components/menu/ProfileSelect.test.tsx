@@ -31,6 +31,33 @@ describe("ProfileSelect", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
   });
 
+  test("Back to account renders only for the Play-locally door and fires", async () => {
+    const user = userEvent.setup();
+    createProfile("Alice", "alex");
+    const onBackToAccount = mock();
+    const { unmount } = render(<ProfileSelect onPlay={mock()} onBackToAccount={onBackToAccount} />);
+
+    await user.click(screen.getByTestId("back-to-account"));
+    expect(onBackToAccount).toHaveBeenCalled();
+    unmount();
+
+    // Without the door (logged out) there is no account to go back to.
+    render(<ProfileSelect onPlay={mock()} />);
+    expect(screen.queryByTestId("back-to-account")).toBeNull();
+  });
+
+  test("Back to account is reachable from the first-run create form too", async () => {
+    // An account with zero local profiles lands on the create form — the way
+    // back must not require creating a local profile first.
+    const user = userEvent.setup();
+    const onBackToAccount = mock();
+    render(<ProfileSelect onPlay={mock()} onBackToAccount={onBackToAccount} />);
+    expect(screen.getByText("Create Your Profile")).toBeTruthy();
+
+    await user.click(screen.getByTestId("back-to-account"));
+    expect(onBackToAccount).toHaveBeenCalled();
+  });
+
   test("first-run create enters the new profile", async () => {
     const user = userEvent.setup();
     const onPlay = mock();

@@ -7,14 +7,14 @@ import { auth } from "@/lib/auth/server";
  * routes stay one-screen adapters; the rules live (tested) in worldsService.
  */
 
-export type SessionUser = { id: string; name: string; skinId: string | null; isAnonymous: boolean };
+export type SessionUser = { id: string; name: string; skinId: string | null };
 
 /** The signed-in user, or null (routes answer 401). */
 export async function sessionUser(request: Request): Promise<SessionUser | null> {
   const session = await auth().api.getSession({ headers: request.headers as Headers });
   if (!session?.user) return null;
-  const user = session.user as { id: string; name: string; skinId?: string | null; isAnonymous?: boolean | null };
-  return { id: user.id, name: user.name, skinId: user.skinId ?? null, isAnonymous: user.isAnonymous === true };
+  const user = session.user as { id: string; name: string; skinId?: string | null };
+  return { id: user.id, name: user.name, skinId: user.skinId ?? null };
 }
 
 export const unauthorized = (): NextResponse => NextResponse.json({ error: "unauthorized" }, { status: 401 });

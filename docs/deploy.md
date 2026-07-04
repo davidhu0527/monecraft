@@ -135,11 +135,13 @@ Set all five in Vercel before the first deploy, then double-check them.
 1. `curl https://<fly-app>.fly.dev/health` → `{"ok":true,…}`.
 2. Open the deployed web app. It should look and play exactly like single-player
    (offline-first: no account, no network until you go online).
-3. Click **Play online as guest** (profile screen → Account panel). It should say
-   "Playing as guest" — that proves Vercel ↔ Neon ↔ better-auth work.
-4. Create a **New Online World**, then **Copy invite**. Open the link in a second
-   browser (or a private window), accept, and play the world from its card. Both
-   players seeing each other proves the join ticket + Fly game server work.
+3. Click **Sign in** (profile screen → Account panel), register an account, and
+   confirm it reads "Signed in as …" and opens the account home — that proves
+   Vercel ↔ Neon ↔ better-auth work.
+4. Create an online profile, a **New Online World**, then **Copy invite**. Open
+   the link in a second browser (or a private window), register there, and play
+   the world from its card ("Joined"). Both players seeing each other proves the
+   join ticket + Fly game server work.
 
 If step 3 fails, it's the web/DB side (auth or `DATABASE_URL`). If step 4 connects
 as far as "Joining…" then errors, it's almost always the ticket secret or the
@@ -163,7 +165,7 @@ game-server URL — see below.
 | "could not get a join ticket"   | `NEXT_PUBLIC_GAME_SERVER_URL` unset, or the world isn't a `mp` world.              |
 | Connects then instantly drops   | Wrong scheme — must be **`wss://`** (not `ws://`) against an https Fly app.        |
 | 500s on any `/api/worlds*`      | `DATABASE_URL` wrong, or the migration wasn't applied (Step 1).                    |
-| Guest sign-in hangs             | `BETTER_AUTH_URL` doesn't match the actual origin, or `BETTER_AUTH_SECRET` unset.  |
+| Sign-in hangs                   | `BETTER_AUTH_URL` doesn't match the actual origin, or `BETTER_AUTH_SECRET` unset.  |
 | Game server won't boot          | Missing `GAME_TICKET_SECRET` (it exits on start) or an unreachable `DATABASE_URL`. |
 
 Admin diagnostics on the game server (all behind `Authorization: Bearer $ADMIN_TOKEN`):

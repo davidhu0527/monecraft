@@ -25,6 +25,9 @@ function mpWorld(id: string, profileId: string, overrides: Partial<OnlineWorld> 
   };
 }
 
+// Mirror the real module's full export surface: bun's mock.module can't add
+// names to an already-created module namespace, so whichever test file mocks
+// this module first fixes the shape every later import sees.
 void mock.module("@/lib/online/onlineClient", () => ({
   listOnlineWorlds: async () => fake.worlds,
   createOnlineWorld: async ({ name, profileId }: { name: string; profileId?: string }) => {
@@ -33,7 +36,11 @@ void mock.module("@/lib/online/onlineClient", () => ({
     return created;
   },
   createInviteLink: async () => "http://localhost/join/tok",
-  revokeInviteLinks: async () => 1
+  revokeInviteLinks: async () => 1,
+  deleteOnlineWorld: async () => true,
+  resolveInviteToken: async () => null,
+  acceptInviteToken: async () => false,
+  requestJoinTicket: async () => null
 }));
 
 const { default: OnlineWorldSelect } = await import("./OnlineWorldSelect");
@@ -41,7 +48,7 @@ const { default: OnlineWorldSelect } = await import("./OnlineWorldSelect");
 const profile = { id: "p1", name: "Steve", skinId: "default", createdAt: "1" };
 
 describe("OnlineWorldSelect", () => {
-  test("lists only this profile's mp worlds and joins the chosen one", async () => {
+  test("lists this profile's own mp worlds and joins the chosen one", async () => {
     fake.worlds = [mpWorld("w1", "p1"), mpWorld("w2", "p2"), mpWorld("w3", "p1", { kind: "sp-cloud" })];
     const onPlay = mock();
     render(<OnlineWorldSelect profile={profile} onPlay={onPlay} onBack={mock()} />);
@@ -51,6 +58,18 @@ describe("OnlineWorldSelect", () => {
 
     await userEvent.click(screen.getByTestId("online-world-w1"));
     expect(onPlay).toHaveBeenCalled();
+  });
+
+  test("worlds joined by invite show under every profile, without owner actions", async () => {
+    // Membership is account-level: the joined world carries the HOST's profile
+    // id, so it must surface via its member role, not a profileId match.
+    fake.worlds = [mpWorld("mine", "p1"), mpWorld("theirs", "host-profile", { role: "member" })];
+    render(<OnlineWorldSelect profile={profile} onPlay={mock()} onBack={mock()} />);
+    await waitFor(() => expect(screen.getByText("W-theirs")).toBeTruthy());
+    expect(screen.getByText(/Joined/)).toBeTruthy();
+    // Invite management stays owner-only: exactly one card (the owned one) has it.
+    expect(screen.getAllByRole("button", { name: "Copy invite" }).length).toBe(1);
+    expect(screen.getAllByRole("button", { name: "Revoke links" }).length).toBe(1);
   });
 
   test("creating an online world enters it", async () => {
@@ -70,5 +89,18 @@ describe("OnlineWorldSelect", () => {
     render(<OnlineWorldSelect profile={profile} onPlay={mock()} onBack={mock()} />);
     await waitFor(() => expect(screen.getByText("W-w0")).toBeTruthy());
     expect((screen.getByTestId("new-online-world") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("joined worlds don't count toward the create cap", async () => {
+    // One short of the cap in owned worlds; joined ones must not tip it over
+    // (the server only counts owned worlds against the quota).
+    fake.worlds = [
+      ...Array.from({ length: MAX_WORLDS_PER_PROFILE - 1 }, (_, i) => mpWorld(`w${i}`, "p1")),
+      mpWorld("j1", "host-profile", { role: "member" }),
+      mpWorld("j2", "host-profile", { role: "member" })
+    ];
+    render(<OnlineWorldSelect profile={profile} onPlay={mock()} onBack={mock()} />);
+    await waitFor(() => expect(screen.getByText("W-j1")).toBeTruthy());
+    expect((screen.getByTestId("new-online-world") as HTMLButtonElement).disabled).toBe(false);
   });
 });

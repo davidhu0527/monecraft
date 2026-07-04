@@ -6,7 +6,7 @@ import AccountProfileSelect from "@/components/menu/AccountProfileSelect";
 import OnlineWorldSelect from "@/components/menu/OnlineWorldSelect";
 import ProfileSelect from "@/components/menu/ProfileSelect";
 import WorldSelect from "@/components/menu/WorldSelect";
-import { currentUser, ensureSignedIn, onlineUsed, type OnlineUser } from "@/lib/auth/client";
+import { currentUser, onlineUsed, type OnlineUser } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { DEFAULT_SKIN_ID, isSkinId } from "@/lib/game/playerSkins";
 import { getProfile, setActiveProfile, type Profile } from "@/lib/game/profiles";
@@ -31,10 +31,9 @@ type Screen =
   | { name: "world-select"; profileId: string }
   | { name: "online-worlds"; profile: OnlineProfile }
   | { name: "play"; profileId: string; worldId: string }
-  // play-online carries the resolved player identity (a local Profile for a
-  // guest, or one derived from the account profile) plus that account profile
-  // (null for the guest path) so "quit to worlds" returns to the right list.
-  | { name: "play-online"; profile: Profile; world: OnlineWorld; session: NetworkSession; onlineProfile: OnlineProfile | null };
+  // play-online carries the play-usable identity derived from the account
+  // profile, plus that profile itself so "quit to worlds" returns to its list.
+  | { name: "play-online"; profile: Profile; world: OnlineWorld; session: NetworkSession; onlineProfile: OnlineProfile };
 
 /** A play-usable Profile from a server-side account profile (skin sanitized). */
 function profileFromOnline(profile: OnlineProfile): Profile {
@@ -97,11 +96,18 @@ export default function GameShell() {
   // A join is in flight — guards against a double-click opening (and leaking) a
   // second socket. A ref, not `connecting`, so it's set synchronously.
   const joiningRef = useRef(false);
-  // The signed-in account (a real, non-anonymous one flips the menu into
-  // account mode). Offline-first: never asked until this browser went online.
+  // The signed-in account (its presence flips the menu into account mode).
+  // Offline-first: never asked until this browser went online.
   const [onlineUser, setOnlineUser] = useState<OnlineUser | null>(null);
+  // The "Play locally" door: a signed-in account browsing its local (browser)
+  // profiles/worlds — where cloud-save sync lives — without signing out.
+  const [browsingLocal, setBrowsingLocal] = useState(false);
   const refreshOnlineUser = useCallback(() => {
-    if (onlineUsed()) void currentUser().then(setOnlineUser);
+    if (onlineUsed())
+      void currentUser().then((user) => {
+        setOnlineUser(user);
+        if (!user) setBrowsingLocal(false); // signed out: the door has no "back"
+      });
   }, []);
 
   /**
@@ -160,18 +166,19 @@ export default function GameShell() {
     }
   };
 
-  /** Guest-or-account → ticket → socket → replica sync → play. When an account
-   *  profile is given, its id rides the ticket so the roster shows that profile. */
-  const playOnline = async (profile: Profile, world: OnlineWorld, onlineProfile: OnlineProfile | null) => {
+  /** Account profile → ticket → socket → replica sync → play. The profile's id
+   *  rides the ticket so the roster shows that profile's name and skin. */
+  const playOnline = async (profile: Profile, world: OnlineWorld, onlineProfile: OnlineProfile) => {
     if (joiningRef.current) return; // a join is already in flight
     joiningRef.current = true;
     setConnectError(null);
     setConnecting(world.name);
-    const ticketProfileId = onlineProfile?.id;
+    const ticketProfileId = onlineProfile.id;
     try {
-      if (!(await ensureSignedIn())) throw new Error("sign-in failed");
+      // No sign-in pre-check: this is only reachable from account mode, and an
+      // expired session just fails the ticket mint into the dialog below.
       const grant = await requestJoinTicket(world.id, ticketProfileId);
-      if (!grant) throw new Error("could not get a join ticket (is the game server configured?)");
+      if (!grant) throw new Error("could not get a join ticket — are you still signed in, and is the game server configured?");
       // The reconnect ladder mints a fresh short-lived ticket each retry — the
       // 60 s TTL means a stale one is useless a minute after a drop.
       const session = await connectNetworkSession(grant.gameServerUrl, grant.ticket, undefined, {
@@ -198,7 +205,13 @@ export default function GameShell() {
       pointer && getProfile(pointer.profileId) && getWorld(pointer.worldId) ? { name: "play", profileId: pointer.profileId, worldId: pointer.worldId } : null;
     // Microtask hop keeps this off the synchronous effect path (cascading-render lint).
     queueMicrotask(() => {
-      if (resume) setScreen(resume);
+      if (resume) {
+        setScreen(resume);
+        // A resumed local world means the player came through the local menus —
+        // quitting should walk back out through them, even for a signed-in
+        // account, not jump abruptly to the account home.
+        setBrowsingLocal(true);
+      }
       setReady(true);
     });
   }, []);
@@ -257,11 +270,8 @@ export default function GameShell() {
   }
 
   if (screen.name === "play-online") {
-    // Quit returns to the account profile's online worlds, or (guest path) the
-    // local world list the join came from.
-    const backToWorlds: Screen = screen.onlineProfile
-      ? { name: "online-worlds", profile: screen.onlineProfile }
-      : { name: "world-select", profileId: screen.profile.id };
+    // Quit returns to the account profile's online worlds.
+    const backToWorlds: Screen = { name: "online-worlds", profile: screen.onlineProfile };
     return (
       <MinecraftGame
         key={`online:${screen.world.id}`}
@@ -289,8 +299,8 @@ export default function GameShell() {
           <WorldSelect
             profile={profile}
             onPlay={(worldId) => void playLocal(profile.id, worldId)}
-            onPlayOnline={(world) => void playOnline(profile, world, null)}
             onDownloadCloud={(world) => void downloadCloud(profile.id, world)}
+            cloudEnabled={onlineUser !== null}
             onBack={() => setScreen({ name: "profile-select" })}
           />
           {netModals}
@@ -313,10 +323,17 @@ export default function GameShell() {
   }
 
   // The profile-select screen is auth-aware: a signed-in account browses its
-  // synced online profiles; everyone else gets the local (browser) profiles.
-  if (onlineUser && !onlineUser.isAnonymous) {
+  // synced online profiles (unless it stepped through the "Play locally" door);
+  // everyone else gets the local (browser) profiles.
+  const accountMode = onlineUser !== null;
+  if (accountMode && !browsingLocal) {
     return (
-      <AccountProfileSelect user={onlineUser} onPlay={(profile) => setScreen({ name: "online-worlds", profile })} onSignedOut={() => setOnlineUser(null)} />
+      <AccountProfileSelect
+        user={onlineUser}
+        onPlay={(profile) => setScreen({ name: "online-worlds", profile })}
+        onPlayLocally={() => setBrowsingLocal(true)}
+        onSignedOut={() => setOnlineUser(null)}
+      />
     );
   }
 
@@ -327,6 +344,7 @@ export default function GameShell() {
         setScreen({ name: "world-select", profileId });
       }}
       onAuthChange={refreshOnlineUser}
+      onBackToAccount={accountMode ? () => setBrowsingLocal(false) : undefined}
     />
   );
 }

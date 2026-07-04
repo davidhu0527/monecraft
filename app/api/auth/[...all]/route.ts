@@ -2,8 +2,8 @@ import { toNextJsHandler } from "better-auth/next-js";
 import { auth } from "@/lib/auth/server";
 
 /**
- * The better-auth mount: sign-in/up (email + anonymous guests), session,
- * sign-out — everything under /api/auth/* is handled by the library.
+ * The better-auth mount: sign-in/up (email/password), session, sign-out —
+ * everything under /api/auth/* is handled by the library.
  * Constructed lazily per process: building the app must not require
  * DATABASE_URL (next build imports every route module to collect page data).
  */

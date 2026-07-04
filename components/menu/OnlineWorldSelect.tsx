@@ -13,9 +13,9 @@ import type { OnlineProfile } from "@/lib/online/profilesClient";
 
 /**
  * An account profile's online worlds: the account-mode counterpart to
- * WorldSelect. Lists only this profile's server-hosted (mp) worlds, creates new
- * ones (capped at MAX_WORLDS_PER_PROFILE), and copies/revokes invite links. All
- * worlds here live on the server and belong to `profile` via `world.profileId`.
+ * WorldSelect. Lists this profile's own server-hosted (mp) worlds plus every
+ * world the account has joined by invite, creates new ones (capped at
+ * MAX_WORLDS_PER_PROFILE), and copies/revokes invite links for owned worlds.
  */
 
 function worldTypeLabel(id: WorldType): string {
@@ -44,14 +44,18 @@ export default function OnlineWorldSelect({ profile, onPlay, onBack }: OnlineWor
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
 
-  // Only this profile's server rooms (the account may own others under a
-  // different profile); listOnlineWorlds returns everything the account plays.
+  // This profile's own rooms, plus joined ones. Joined worlds appear under
+  // every profile: membership is account-level and their profileId is the
+  // host's, so an owned-only filter would hide them everywhere.
   const refresh = useCallback(() => {
-    void listOnlineWorlds().then((all) => setWorlds((all ?? []).filter((world) => world.kind === "mp" && world.profileId === profile.id)));
+    void listOnlineWorlds().then((all) =>
+      setWorlds((all ?? []).filter((world) => world.kind === "mp" && (world.profileId === profile.id || world.role === "member")))
+    );
   }, [profile.id]);
   useEffect(() => refresh(), [refresh]);
 
-  const atCap = (worlds?.length ?? 0) >= MAX_WORLDS_PER_PROFILE;
+  // The server caps owned worlds only — joined ones must not eat the quota.
+  const atCap = (worlds?.filter((world) => world.profileId === profile.id).length ?? 0) >= MAX_WORLDS_PER_PROFILE;
 
   if (creating) {
     return (

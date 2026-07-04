@@ -25,6 +25,9 @@ void mock.module("@/lib/online/profilesClient", () => ({
   }
 }));
 
+// Mirror the real module's full export surface: bun's mock.module can't add
+// names to an already-created module namespace, so whichever test file mocks
+// this module first fixes the shape every later import sees.
 void mock.module("@/lib/auth/client", () => ({
   authClient: () => ({
     signOut: async () => {
@@ -32,12 +35,15 @@ void mock.module("@/lib/auth/client", () => ({
       fake.signedOut = true;
       return { error: null };
     }
-  })
+  }),
+  onlineUsed: () => true,
+  markOnlineUsed: () => {},
+  currentUser: async () => null
 }));
 
 const { default: AccountProfileSelect } = await import("./AccountProfileSelect");
 
-const user = { id: "u1", name: "Keeper", email: "k@example.com", isAnonymous: false };
+const user = { id: "u1", name: "Keeper", email: "k@example.com" };
 
 describe("AccountProfileSelect", () => {
   test("lists the account's profiles and enters the chosen one", async () => {
@@ -46,7 +52,7 @@ describe("AccountProfileSelect", () => {
       { id: "p2", name: "Alex", skinId: "alex", createdAt: "2" }
     ];
     const onPlay = mock();
-    render(<AccountProfileSelect user={user} onPlay={onPlay} onSignedOut={mock()} />);
+    render(<AccountProfileSelect user={user} onPlay={onPlay} onPlayLocally={mock()} onSignedOut={mock()} />);
     await waitFor(() => expect(screen.getByText("Steve")).toBeTruthy());
     expect(screen.getByText("Alex")).toBeTruthy();
     expect(screen.getByText("Signed in as Keeper")).toBeTruthy();
@@ -58,7 +64,7 @@ describe("AccountProfileSelect", () => {
   test("creating a profile enters it", async () => {
     fake.profiles = [];
     const onPlay = mock();
-    render(<AccountProfileSelect user={user} onPlay={onPlay} onSignedOut={mock()} />);
+    render(<AccountProfileSelect user={user} onPlay={onPlay} onPlayLocally={mock()} onSignedOut={mock()} />);
     await waitFor(() => expect(screen.getByText(/No profiles yet/)).toBeTruthy());
 
     await userEvent.click(screen.getByRole("button", { name: "New Profile" }));
@@ -69,16 +75,26 @@ describe("AccountProfileSelect", () => {
 
   test("the create button is disabled once the profile cap is reached", async () => {
     fake.profiles = Array.from({ length: MAX_ONLINE_PROFILES }, (_, i) => ({ id: `p${i}`, name: `P${i}`, skinId: null, createdAt: `${i}` }));
-    render(<AccountProfileSelect user={user} onPlay={mock()} onSignedOut={mock()} />);
+    render(<AccountProfileSelect user={user} onPlay={mock()} onPlayLocally={mock()} onSignedOut={mock()} />);
     await waitFor(() => expect(screen.getByText("P0")).toBeTruthy());
     expect((screen.getByTestId("new-online-profile") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("the Play locally door notifies the parent", async () => {
+    fake.profiles = [];
+    const onPlayLocally = mock();
+    render(<AccountProfileSelect user={user} onPlay={mock()} onPlayLocally={onPlayLocally} onSignedOut={mock()} />);
+    await waitFor(() => expect(screen.getByText(/No profiles yet/)).toBeTruthy());
+
+    await userEvent.click(screen.getByTestId("play-locally"));
+    expect(onPlayLocally).toHaveBeenCalled();
   });
 
   test("sign out clears the session and notifies the parent", async () => {
     fake.profiles = [];
     fake.signedOut = false;
     const onSignedOut = mock();
-    render(<AccountProfileSelect user={user} onPlay={mock()} onSignedOut={onSignedOut} />);
+    render(<AccountProfileSelect user={user} onPlay={mock()} onPlayLocally={mock()} onSignedOut={onSignedOut} />);
     await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());
 
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
@@ -90,7 +106,7 @@ describe("AccountProfileSelect", () => {
     fake.profiles = [];
     fake.signOutRejects = true;
     const onSignedOut = mock();
-    render(<AccountProfileSelect user={user} onPlay={mock()} onSignedOut={onSignedOut} />);
+    render(<AccountProfileSelect user={user} onPlay={mock()} onPlayLocally={mock()} onSignedOut={onSignedOut} />);
     await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());
 
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));

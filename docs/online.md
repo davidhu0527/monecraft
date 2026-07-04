@@ -9,7 +9,7 @@ flag gates even the session check).
 
 ```
 Browser ──(cookies)── Next.js app          ── Neon/Postgres
-   │                   /api/auth/*   better-auth (guests + accounts)
+   │                   /api/auth/*   better-auth (accounts)
    │                   /api/worlds…  world CRUD, invites, cloud saves
    │                   /api/worlds/:id/ticket   mints 60s HS256 join ticket
    │
@@ -22,30 +22,28 @@ join ticket (`lib/net/tickets.ts`, signed with the shared
 `GAME_TICKET_SECRET`) is the only trust link, and both read the same
 Postgres.
 
-## Identity: guests first
+## Identity: Local Players and accounts
 
-- "Play online as guest" (menu → Account panel) creates a real better-auth
-  user with `isAnonymous` — no form, instant play. Guests own worlds and
-  memberships like anyone else.
-- Upgrading (sign-up, or sign-in to an existing account, while holding the
-  guest session) triggers the anonymous plugin's `onLinkAccount` hook
-  (`lib/auth/server.ts`): worlds, memberships, and invites re-parent onto the
-  new account before the guest row is deleted. **This hook is the "guests
-  keep their worlds" promise** — `lib/auth/auth.test.ts` proves it against
-  the real better-auth flow on real SQL (PGlite), including the
-  duplicate-membership collision case.
+- **Online play is accounts-only** (email/password via better-auth). There is
+  no anonymous-guest layer: an invite link, cloud sync, or hosting all start
+  with sign-in/register. Logged-out **Local Players** keep any number of
+  browser-local profiles and worlds and make **zero** server calls.
+- When signed in, the menu opens into an **account home**
+  (`components/menu/AccountProfileSelect.tsx`) listing that account's
+  server-side profiles (create/rename/delete, capped at `MAX_ONLINE_PROFILES`,
+  synced across devices); picking one shows its online worlds
+  (`OnlineWorldSelect`, capped at `MAX_WORLDS_PER_PROFILE` owned worlds), and
+  the join ticket carries the profile's name/skin. Worlds joined by invite are
+  account-level memberships, so they appear under **every** profile with a
+  "Joined" tag.
+- Local worlds are **hidden but preserved** while signed in — never deleted,
+  never auto-uploaded. The account home's **"Play locally"** button opens the
+  local menus without signing out (that's also where cloud-save sync lives);
+  "Back to account" returns. Signing out lands on the local flow directly.
 - Sessions are better-auth cookies; the game server never sees them.
 - The Account panel renders on the profile-select screen **and on the
   first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
-  sign in / register is reachable before any local profile exists; a guest can
-  **Sign out** back to the offline/login state.
-- When signed in as a real account the menu opens into an **account home**
-  (`components/menu/AccountProfileSelect.tsx`) listing that account's
-  server-side profiles (create/rename/delete, capped at `MAX_ONLINE_PROFILES`);
-  picking one shows its online worlds (`OnlineWorldSelect`, capped at
-  `MAX_WORLDS_PER_PROFILE`), and the join ticket carries the profile's name/skin.
-  Logged-out **Local Players** stay on the browser-local profile flow. (Guests
-  still reach online play via the legacy path pending the guest-layer retirement.)
+  sign in / register is reachable before any local profile exists.
 
 ## Worlds, invites, cloud saves
 
@@ -63,8 +61,8 @@ newer save on the next open.
 
 **How it flows through the menu** (all opt-in per world):
 
-- **Upload** — a local world's card gets an "Upload to cloud" action once
-  you've gone online: it creates an `sp-cloud` world row, links it via
+- **Upload** — a local world's card gets an "Upload to cloud" action while
+  signed in: it creates an `sp-cloud` world row, links it via
   `WorldMeta.cloudId` (a local-manifest field, not part of the save format),
   and pushes the current save. The card then reads "☁ Synced".
 - **On another device** — your `sp-cloud` saves you haven't downloaded yet
@@ -80,14 +78,14 @@ newer save on the next open.
 
 ## Playing online (client)
 
-The menu's **Online Worlds** section (`WorldSelect`) lists every world the
-signed-in user may play, creates new ones (same form as local worlds — the
-row lives in Postgres, the game server hosts it), and mints invite links
-(`/join/<token>` — the landing page resolves the token, signs the visitor in
-as a guest if needed, and accepts the membership). Playing one runs
-`GameShell.playOnline`: ensure a session → `POST /api/worlds/:id/ticket` →
-`connectNetworkSession(gameServerUrl, ticket)` → mount the game on the
-session's replica engine. The connection lifecycle (chat, ping badge,
+The account's per-profile world list (`OnlineWorldSelect`) shows owned and
+joined worlds, creates new ones (same form as local worlds — the row lives in
+Postgres, the game server hosts it), and mints invite links (`/join/<token>`
+— the landing page previews the world's name, asks the visitor to sign in or
+register if they aren't, then accepts the membership; the world appears in
+their account's world list). Playing one runs `GameShell.playOnline`:
+`POST /api/worlds/:id/ticket` → `connectNetworkSession(gameServerUrl, ticket)`
+→ mount the game on the session's replica engine. The connection lifecycle (chat, ping badge,
 disconnect modal, leave) lives in the session + three HUD components
 (`ChatPanel`, `ConnectionStatus`, `RosterPanel`); the architecture of the
 replica/routing/interpolation stack is in
@@ -133,8 +131,8 @@ bun run server                # game server (ws://localhost:8080)
 ```
 
 Full co-op on localhost: run all three, open two browser windows (one
-normal, one private — separate guest identities), create an online world in
-the first, and paste its invite link into the second.
+normal, one private — each registers its own account), create an online
+world in the first, and paste its invite link into the second.
 
 **No Docker at all**: `DATABASE_URL=pglite://memory` runs the web app on an
 ephemeral in-process Postgres (`db/index.ts` applies the schema from
@@ -146,8 +144,9 @@ boots it (`playwright.config.ts`).
 Schema lives in `db/schema.ts` (drizzle); migrations are generated with
 `bunx drizzle-kit generate` and committed under `db/migrations/`. The PGlite
 fixture (`db/testDb.ts`) applies the same DDL in-memory so `bun test` needs
-no daemon; the auth integration test exercises every table, which keeps the
-fixture DDL and the schema module honest against each other.
+no daemon; the auth integration test (`lib/auth/auth.test.ts`) runs the real
+better-auth wiring against it, which keeps the fixture DDL, the schema
+module, and the adapter honest against each other.
 
 ## Production
 
