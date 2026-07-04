@@ -1,14 +1,65 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import WorldSelect from "@/components/menu/WorldSelect";
 import { createProfile, type Profile } from "@/lib/game/profiles";
 import { createWorld, readWorlds } from "@/lib/game/worlds";
+import type { OnlineWorld } from "@/lib/online/onlineClient";
+
+// The cloud-save section talks to the server through onlineClient; swap the
+// module for a controllable fake so no network exists. Mirror the real
+// module's full export surface: bun's mock.module can't add names to an
+// already-created module namespace, so whichever test file mocks this module
+// first fixes the shape every later import sees.
+const cloud = {
+  worlds: [] as OnlineWorld[],
+  createRejects: false,
+  listCalls: 0
+};
+
+void mock.module("@/lib/online/onlineClient", () => ({
+  listOnlineWorlds: async () => {
+    cloud.listCalls += 1;
+    return cloud.worlds;
+  },
+  createOnlineWorld: async ({ name, kind }: { name: string; kind?: string }) => {
+    if (cloud.createRejects) return null;
+    const created = summary(`new-${cloud.worlds.length}`, name, (kind ?? "mp") as "mp" | "sp-cloud");
+    cloud.worlds = [...cloud.worlds, created];
+    return created;
+  },
+  createInviteLink: async () => null,
+  revokeInviteLinks: async () => null,
+  deleteOnlineWorld: async () => true,
+  resolveInviteToken: async () => null,
+  acceptInviteToken: async () => false,
+  requestJoinTicket: async () => null
+}));
+
+const { default: WorldSelect } = await import("@/components/menu/WorldSelect");
+
+function summary(id: string, name: string, kind: "mp" | "sp-cloud"): OnlineWorld {
+  return {
+    id,
+    name,
+    kind,
+    seed: 1,
+    worldType: "default",
+    gameMode: "survival",
+    difficulty: "normal",
+    hardcore: false,
+    worldgenVersion: 11,
+    role: "owner",
+    updatedAt: "x"
+  } as OnlineWorld;
+}
 
 const PROFILE: Profile = { id: "p1", name: "Tester", skinId: "default", createdAt: 1 };
 
 beforeEach(() => {
   localStorage.clear();
+  cloud.worlds = [];
+  cloud.createRejects = false;
+  cloud.listCalls = 0;
   // createWorld requires the owning profile to exist, so seed it with a known id.
   createProfile("Tester", "default", { uid: () => "p1" });
 });
@@ -99,88 +150,46 @@ describe("WorldSelect", () => {
   });
 
   test("with cloud enabled: sp-cloud saves download, mp rooms stay out, upload vs synced per local world", async () => {
-    const summary = (id: string, name: string, kind: "mp" | "sp-cloud") => ({
-      id,
-      name,
-      kind,
-      seed: 1,
-      worldType: "default",
-      gameMode: "survival",
-      difficulty: "normal",
-      hardcore: false,
-      worldgenVersion: 11,
-      role: "owner",
-      updatedAt: "x"
-    });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: string) =>
-      typeof url === "string" && url.includes("/api/worlds")
-        ? ({
-            ok: true,
-            json: async () => ({ worlds: [summary("mp1", "Co-op World", "mp"), summary("cloud1", "Cloud World", "sp-cloud")] })
-          } as unknown as Response)
-        : ({ ok: false } as Response)) as typeof fetch;
-    try {
-      const user = userEvent.setup();
-      createWorld("p1", "Local", "1", { uid: () => "wl" }); // no cloudId → Upload button
-      createWorld("p1", "Backed", "1", { uid: () => "ws", cloudId: "cloudX" }); // linked → Synced badge
+    cloud.worlds = [summary("mp1", "Co-op World", "mp"), summary("cloud1", "Cloud World", "sp-cloud")];
+    const user = userEvent.setup();
+    createWorld("p1", "Local", "1", { uid: () => "wl" }); // no cloudId → Upload button
+    createWorld("p1", "Backed", "1", { uid: () => "ws", cloudId: "cloudX" }); // linked → Synced badge
 
-      const onDownload = mock();
-      render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={onDownload} cloudEnabled={true} onBack={mock()} />);
+    const onDownload = mock();
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={onDownload} cloudEnabled={true} onBack={mock()} />);
 
-      // The sp-cloud save is downloadable; mp rooms live in the account menu now.
-      await user.click(await screen.findByTestId("cloud-world-cloud1"));
-      expect(onDownload).toHaveBeenCalledTimes(1);
-      expect(screen.queryByTestId("online-world-mp1")).toBeNull();
-      expect(screen.queryByText("Online Worlds")).toBeNull();
+    // The sp-cloud save is downloadable; mp rooms live in the account menu now.
+    await user.click(await screen.findByTestId("cloud-world-cloud1"));
+    expect(onDownload).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("online-world-mp1")).toBeNull();
+    expect(screen.queryByText("Online Worlds")).toBeNull();
 
-      // Local worlds: the unlinked one offers upload, the linked one reads Synced.
-      expect(screen.getByRole("button", { name: /Upload to cloud/ })).toBeTruthy();
-      expect(screen.getByText(/Synced/)).toBeTruthy();
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    // Local worlds: the unlinked one offers upload, the linked one reads Synced.
+    expect(screen.getByRole("button", { name: /Upload to cloud/ })).toBeTruthy();
+    expect(screen.getByText(/Synced/)).toBeTruthy();
   });
 
-  test("logged out (cloud disabled) the list is purely local — no fetch, no cloud buttons", async () => {
-    const originalFetch = globalThis.fetch;
-    let fetched = 0;
-    globalThis.fetch = (async () => {
-      fetched += 1;
-      return { ok: true, json: async () => ({ worlds: [] }) } as unknown as Response;
-    }) as typeof fetch;
-    try {
-      createWorld("p1", "Backed", "1", { uid: () => "ws", cloudId: "cloudX" }); // linked, but logged out
-      render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
+  test("logged out (cloud disabled) the list is purely local — no fetch, no cloud buttons", () => {
+    createWorld("p1", "Backed", "1", { uid: () => "ws", cloudId: "cloudX" }); // linked, but logged out
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
 
-      expect(screen.getByText("Backed")).toBeTruthy();
-      expect(screen.queryByText(/Synced/)).toBeNull();
-      expect(screen.queryByRole("button", { name: /Upload to cloud/ })).toBeNull();
-      expect(fetched).toBe(0);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    expect(screen.getByText("Backed")).toBeTruthy();
+    expect(screen.queryByText(/Synced/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Upload to cloud/ })).toBeNull();
+    expect(cloud.listCalls).toBe(0);
   });
 
   test("a failed upload keeps the world local and surfaces the error (never a false Synced)", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: string, init?: RequestInit) =>
-      (init?.method ?? "GET") === "POST"
-        ? ({ ok: false, status: 500 } as Response) // creating the cloud row fails
-        : ({ ok: true, json: async () => ({ worlds: [] }) } as unknown as Response)) as typeof fetch;
-    try {
-      const user = userEvent.setup();
-      createWorld("p1", "Local", "1", { uid: () => "wl" });
-      render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={true} onBack={mock()} />);
+    cloud.createRejects = true; // creating the cloud row fails
+    const user = userEvent.setup();
+    createWorld("p1", "Local", "1", { uid: () => "wl" });
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={true} onBack={mock()} />);
 
-      await user.click(await screen.findByRole("button", { name: "Upload to cloud" }));
+    await user.click(await screen.findByRole("button", { name: "Upload to cloud" }));
 
-      // The upload failed → the button reports it, the world was NOT linked, no false badge.
-      expect(await screen.findByRole("button", { name: "Upload failed" })).toBeTruthy();
-      expect(screen.queryByText(/Synced/)).toBeNull();
-      expect(readWorlds().worlds.find((w) => w.id === "wl")?.cloudId).toBeUndefined();
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    // The upload failed → the button reports it, the world was NOT linked, no false badge.
+    expect(await screen.findByRole("button", { name: "Upload failed" })).toBeTruthy();
+    expect(screen.queryByText(/Synced/)).toBeNull();
+    expect(readWorlds().worlds.find((w) => w.id === "wl")?.cloudId).toBeUndefined();
   });
 });

@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { authClient, currentUser, ensureSignedIn, markOnlineUsed, onlineUsed, type OnlineUser } from "@/lib/auth/client";
+import { authClient, currentUser, markOnlineUsed, onlineUsed, type OnlineUser } from "@/lib/auth/client";
 
 /**
- * The account corner of the menu: shows who you are online, offers instant
- * guest play, and upgrades a guest to a real account without losing worlds
- * (the server re-parents them — see lib/auth/server.ts). Purely additive to
+ * The account corner of the menu: shows who you are online and hosts the
+ * sign-in / register form — online play is accounts-only. Purely additive to
  * the offline game: with no online features touched, no account ever exists.
  */
 type AccountPanelProps = {
-  /** Notified after any auth mutation (sign in/up/out, guest) so a parent shell
-   *  can react — e.g. flip the menu into account mode. */
+  /** Notified after any auth mutation (sign in/up/out) so a parent shell can
+   *  react — e.g. flip the menu into account mode. */
   onAuthChange?: () => void;
 };
 
@@ -34,8 +33,8 @@ export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
     setUser(await currentUser());
     onAuthChange?.();
   };
-  // Mirror submit / "Play online as guest": guard against a failed request (no
-  // unhandled rejection, a visible error) and against concurrent double-clicks.
+  // Mirror submit: guard against a failed request (no unhandled rejection, a
+  // visible error) and against concurrent double-clicks.
   const signOut = async () => {
     setBusy(true);
     setError(null);
@@ -53,9 +52,9 @@ export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    // This form and the invite landing page are the only places that flip the
+    // offline-first flag — nothing else may trigger session probes.
     markOnlineUsed();
-    // Sign-up (and sign-in) while holding a guest session links the account:
-    // the guest's worlds move over server-side before the guest is deleted.
     try {
       const result =
         mode === "signup"
@@ -96,7 +95,7 @@ export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
         {error && <div className="account-error">{error}</div>}
         <div className="menu-form-actions">
           <button type="submit" className="mc-button" disabled={busy}>
-            {mode === "signup" ? (user?.isAnonymous ? "Create account (keeps your worlds)" : "Create account") : "Sign in"}
+            {mode === "signup" ? "Create account" : "Sign in"}
           </button>
           <button type="button" className="mc-button" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>
             {mode === "signup" ? "I have an account" : "I need an account"}
@@ -113,47 +112,15 @@ export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
     <div className="account-panel">
       {user ? (
         <>
-          <span className="account-status">{user.isAnonymous ? "Playing as guest" : `Signed in as ${user.name}`}</span>
-          {user.isAnonymous ? (
-            <>
-              <button type="button" className="mc-button" onClick={() => setMode("signup")} disabled={busy}>
-                Keep my worlds — create account
-              </button>
-              {/* A guest could previously never get back to the login screen; sign
-                  out drops to the "Offline" state where Sign in / register live. */}
-              <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
-                Sign out
-              </button>
-            </>
-          ) : (
-            <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
-              Sign out
-            </button>
-          )}
+          <span className="account-status">Signed in as {user.name}</span>
+          <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
+            Sign out
+          </button>
           {error && <div className="account-error">{error}</div>}
         </>
       ) : (
         <>
           <span className="account-status">Offline</span>
-          <button
-            type="button"
-            className="mc-button"
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              try {
-                await ensureSignedIn();
-                await refresh();
-              } catch {
-                setError("Couldn't reach the server — check your connection and try again.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-            disabled={busy}
-          >
-            Play online as guest
-          </button>
           <button type="button" className="mc-button" onClick={() => setMode("signin")}>
             Sign in
           </button>

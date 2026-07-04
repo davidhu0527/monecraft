@@ -25,6 +25,9 @@ void mock.module("@/lib/online/profilesClient", () => ({
   }
 }));
 
+// Mirror the real module's full export surface: bun's mock.module can't add
+// names to an already-created module namespace, so whichever test file mocks
+// this module first fixes the shape every later import sees.
 void mock.module("@/lib/auth/client", () => ({
   authClient: () => ({
     signOut: async () => {
@@ -32,12 +35,15 @@ void mock.module("@/lib/auth/client", () => ({
       fake.signedOut = true;
       return { error: null };
     }
-  })
+  }),
+  onlineUsed: () => true,
+  markOnlineUsed: () => {},
+  currentUser: async () => null
 }));
 
 const { default: AccountProfileSelect } = await import("./AccountProfileSelect");
 
-const user = { id: "u1", name: "Keeper", email: "k@example.com", isAnonymous: false };
+const user = { id: "u1", name: "Keeper", email: "k@example.com" };
 
 describe("AccountProfileSelect", () => {
   test("lists the account's profiles and enters the chosen one", async () => {

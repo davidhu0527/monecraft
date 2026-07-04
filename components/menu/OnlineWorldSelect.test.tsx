@@ -25,6 +25,9 @@ function mpWorld(id: string, profileId: string, overrides: Partial<OnlineWorld> 
   };
 }
 
+// Mirror the real module's full export surface: bun's mock.module can't add
+// names to an already-created module namespace, so whichever test file mocks
+// this module first fixes the shape every later import sees.
 void mock.module("@/lib/online/onlineClient", () => ({
   listOnlineWorlds: async () => fake.worlds,
   createOnlineWorld: async ({ name, profileId }: { name: string; profileId?: string }) => {
@@ -33,7 +36,11 @@ void mock.module("@/lib/online/onlineClient", () => ({
     return created;
   },
   createInviteLink: async () => "http://localhost/join/tok",
-  revokeInviteLinks: async () => 1
+  revokeInviteLinks: async () => 1,
+  deleteOnlineWorld: async () => true,
+  resolveInviteToken: async () => null,
+  acceptInviteToken: async () => false,
+  requestJoinTicket: async () => null
 }));
 
 const { default: OnlineWorldSelect } = await import("./OnlineWorldSelect");

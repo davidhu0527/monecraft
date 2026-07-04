@@ -74,27 +74,25 @@ export async function listProfiles(db: Db, ownerId: string): Promise<ProfileSumm
 }
 
 /**
- * Creates an account profile. Guests can't (online identities are account-only,
- * see [[Local Player]]); the account is capped at MAX_ONLINE_PROFILES — a 6th
- * request is a `conflict` the UI reports as "limit reached".
+ * Creates an account profile. The account is capped at MAX_ONLINE_PROFILES —
+ * a 6th request is a `conflict` the UI reports as "limit reached".
  */
 export async function createProfile(
   db: Db,
-  owner: { id: string; isAnonymous: boolean },
+  ownerId: string,
   input: { name: string; skinId?: string | null }
 ): Promise<{ ok: true; profile: ProfileSummary } | Failure> {
-  if (owner.isAnonymous) return fail("forbidden");
   const name = input.name?.trim();
   if (!name || name.length > MAX_PROFILE_NAME) return fail("invalid");
   // Count and insert under a per-account lock so two concurrent creates can't
   // both slip past MAX_ONLINE_PROFILES.
   return db.transaction(async (tx) => {
-    await tx.execute(lockAccount(owner.id));
-    const existing = await tx.select({ id: schema.profiles.id }).from(schema.profiles).where(eq(schema.profiles.ownerId, owner.id));
+    await tx.execute(lockAccount(ownerId));
+    const existing = await tx.select({ id: schema.profiles.id }).from(schema.profiles).where(eq(schema.profiles.ownerId, ownerId));
     if (existing.length >= MAX_ONLINE_PROFILES) return fail("conflict");
     const [profile] = await tx
       .insert(schema.profiles)
-      .values({ id: crypto.randomUUID(), ownerId: owner.id, name, skinId: input.skinId ?? null })
+      .values({ id: crypto.randomUUID(), ownerId, name, skinId: input.skinId ?? null })
       .returning();
     return { ok: true, profile: toProfileSummary(profile) };
   });

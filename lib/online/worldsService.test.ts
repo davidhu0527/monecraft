@@ -164,11 +164,9 @@ describe("save blobs (LWW)", () => {
 });
 
 describe("account profiles", () => {
-  const acct = (id: string, isAnonymous = false) => ({ id, isAnonymous });
-
   test("create, list (oldest first), and rename/reskin — all owner-scoped", async () => {
-    const a = await createProfile(asDb(), acct("alice"), { name: "Steve", skinId: "default" });
-    const b = await createProfile(asDb(), acct("alice"), { name: "Alex", skinId: "alex" });
+    const a = await createProfile(asDb(), "alice", { name: "Steve", skinId: "default" });
+    const b = await createProfile(asDb(), "alice", { name: "Alex", skinId: "alex" });
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok) throw new Error("create failed");
 
@@ -180,23 +178,17 @@ describe("account profiles", () => {
     expect((await listProfiles(asDb(), "alice")).find((p) => p.id === a.profile.id)).toMatchObject({ name: "Renamed", skinId: "robot" });
   });
 
-  test("guests can't create a profile (online identities are account-only)", async () => {
-    await db.insert(schema.user).values({ id: "guest", name: "Guest", email: "guest@example.com", isAnonymous: true });
-    expect(await createProfile(asDb(), acct("guest", true), { name: "Nope" })).toMatchObject({ ok: false, error: "forbidden" });
-    expect(await listProfiles(asDb(), "guest")).toEqual([]);
-  });
-
   test("an account is capped at MAX_ONLINE_PROFILES; blank/over-long names are rejected", async () => {
     for (let i = 0; i < MAX_ONLINE_PROFILES; i += 1) {
-      expect((await createProfile(asDb(), acct("alice"), { name: `P${i}` })).ok).toBe(true);
+      expect((await createProfile(asDb(), "alice", { name: `P${i}` })).ok).toBe(true);
     }
-    expect(await createProfile(asDb(), acct("alice"), { name: "one too many" })).toMatchObject({ ok: false, error: "conflict" });
-    expect(await createProfile(asDb(), acct("bob"), { name: "   " })).toMatchObject({ ok: false, error: "invalid" });
-    expect(await createProfile(asDb(), acct("bob"), { name: "x".repeat(25) })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createProfile(asDb(), "alice", { name: "one too many" })).toMatchObject({ ok: false, error: "conflict" });
+    expect(await createProfile(asDb(), "bob", { name: "   " })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createProfile(asDb(), "bob", { name: "x".repeat(25) })).toMatchObject({ ok: false, error: "invalid" });
   });
 
   test("deleting a profile cascades its online worlds; delete is owner-scoped", async () => {
-    const p = await createProfile(asDb(), acct("alice"), { name: "Steve" });
+    const p = await createProfile(asDb(), "alice", { name: "Steve" });
     if (!p.ok) throw new Error("create failed");
     const world = await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id });
     if (!world.ok) throw new Error("world failed");
@@ -208,7 +200,7 @@ describe("account profiles", () => {
   });
 
   test("createWorld enforces profile ownership and the per-profile world cap", async () => {
-    const p = await createProfile(asDb(), acct("alice"), { name: "Steve" });
+    const p = await createProfile(asDb(), "alice", { name: "Steve" });
     if (!p.ok) throw new Error("create failed");
     // A profile that isn't yours can't own your world.
     expect(await createWorld(asDb(), "bob", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id })).toMatchObject({ ok: false, error: "forbidden" });
@@ -220,7 +212,7 @@ describe("account profiles", () => {
   });
 
   test("a join ticket carries the chosen profile's name + skin, not the account's; a foreign profile is refused", async () => {
-    const p = await createProfile(asDb(), acct("alice"), { name: "Steve", skinId: "robot" });
+    const p = await createProfile(asDb(), "alice", { name: "Steve", skinId: "robot" });
     if (!p.ok) throw new Error("create failed");
     const world = await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id });
     if (!world.ok) throw new Error("world failed");
