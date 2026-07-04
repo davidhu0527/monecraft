@@ -648,23 +648,24 @@ Online worlds are shared worlds that live on a server and hold **2–8 players**
 private co-op with people you invite, not public matchmaking. Everything offline
 stays exactly as it is: local worlds never need an account or a connection.
 
-**Getting an identity.** The first online action signs you in as a **guest** —
-one click, no form, from the **Account** panel on the profile screen (or
-automatically when you accept an invite). Guests are real accounts: the worlds
-you create and join are yours. When you want to keep them across browsers,
-**Create account** upgrades the guest in place — your worlds come with you.
+**Getting an identity.** Online play needs an **account** — a one-time
+email/password registration from the **Account** panel on the profile screen
+(or right on an invite page). Signed in, the menu becomes your account home:
+up to five **online profiles** (name + skin) that follow you across devices,
+each owning its online worlds. Your local worlds stay put — press **Play
+locally** to visit them (and their cloud-save controls) without signing out.
 
-**Hosting.** On the world list, the **Online Worlds** section appears once
-you've gone online. **New Online World** uses the same form as a local world
-(name, seed, world type, mode, difficulty); creating it connects you straight
-in. Press **Copy invite** on your world's card to put a join link on the
-clipboard — send it to your friends. Invite links expire after a while; copy a
-fresh one any time.
+**Hosting.** Pick an online profile to see its worlds. **New Online World**
+uses the same form as a local world (name, seed, world type, mode,
+difficulty); creating it connects you straight in. Press **Copy invite** on
+your world's card to put a join link on the clipboard — send it to your
+friends. Invite links expire after a while; copy a fresh one any time.
 
-**Joining.** Opening an invite link shows the world's name, signs you in (as a
-guest if you're new), and adds the world to your **Online Worlds** list — click
-its card to play. The world is yours to rejoin from that list from then on;
-the link is only needed once.
+**Joining.** Opening an invite link shows the world's name and asks you to
+sign in (or register) if you aren't; the world then joins your account and
+shows up in every profile's world list with a **Joined** tag — click its card
+to play. The world is yours to rejoin from that list from then on; the link
+is only needed once.
 
 **Playing together.** Everyone shares one world: block edits, mobs, chests,
 day and night. You'll see the other players in the world with their names

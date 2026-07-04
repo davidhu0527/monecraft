@@ -495,8 +495,8 @@ in `config.ts` and are enforced in `lib/online/worldsService.ts` (the UI only
 surfaces a friendly "limit reached"); they don't affect single-player.
 
 - **`MAX_ONLINE_PROFILES`** (`5`) — profiles one signed-in account may create.
-  A profile is a cross-device identity (name + skin) that owns online worlds;
-  guests (anonymous) can't create any. Raising it grows the profile list and the
+  A profile is a cross-device identity (name + skin) that owns online worlds.
+  Raising it grows the profile list and the
   worlds an account can accumulate (`MAX_ONLINE_PROFILES × MAX_WORLDS_PER_PROFILE`).
 - **`MAX_WORLDS_PER_PROFILE`** (`10`) — online worlds one profile may own. The
   11th create is refused server-side. Bounds save-blob storage per profile.
