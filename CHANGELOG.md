@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-04
+
 ### Added
 
 - **Multiplayer hardening & ops**: the online session now survives dropped connections and ships an operator toolkit. The replica engine outlives its socket — a non-fatal drop (idle timeout, redeploy, network blip) walks a back-off ladder (1/2/4/8/8 s), mints a **fresh** join ticket each rung, and re-handshakes to re-sync the same world in place (an amber "Reconnecting…" badge, not a dead-end modal); fatal closes (bad ticket, kick, slow-client) don't retry. A `setSimulatedLatency(ms)` knob on `window.__monecraft.net` (and `NEXT_PUBLIC_NET_SIM_LATENCY_MS`) injects artificial delay for local testing. World owners can **revoke every outstanding invite link** in one click from the menu. The game server gains admin ops behind `ADMIN_TOKEN`: a per-room replay log (`GET /rooms/:id/log`) that `scripts/replay.ts` reconstructs offline, an owner **kick** (`POST /rooms/:id/kick/:playerId`), and `/rooms` bandwidth (`kbOutPerSec`) alongside the tick gauges — plus `scripts/loadSim.ts`, a synthetic N-client soak that reports server tick p95 vs the 50 ms budget for tuning `MAX_ROOMS`. Net constants are documented in tuning.md and an ops runbook in online.md.
