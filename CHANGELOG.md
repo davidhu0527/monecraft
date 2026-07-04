@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Online co-op parity — vehicles & arrows (protocol v1→v2)**: rafts and ships are now boardable in a shared world, and in-flight arrows are replicated (not just their hits). Vehicles and arrows travel on their own per-tick channels (`vp`/`prj`, mirroring the mob-pose skeleton) and the join world-sync, so the existing renderer draws them unchanged. A **mounted** rider is the one hybrid-model exception: the server owns their position (driven from their input intents) and streams it on the private `SelfDelta` (`mountedVehicleId` + authoritative position), so the client replica stops predicting its own motion while mounted rather than rubber-banding against the boat — and the server no longer answers a mounted player's (expected-rejected) pose with a `forcePose` snap-back. The version bump means a stale v1 client is cleanly refused at the door during a rollover. Single-player is unchanged; the boarding gate that made vehicles single-player-only is lifted.
+
 ## [0.13.0] - 2026-07-04
 
 ### Added

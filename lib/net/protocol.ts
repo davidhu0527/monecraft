@@ -1,7 +1,7 @@
 import type { Command } from "@/lib/game/engine/commands";
 import type { GameEvent } from "@/lib/game/engine/state";
 import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
-import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedVehicle } from "@/lib/game/types";
+import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer } from "@/lib/game/types";
 
 /**
  * The client↔game-server wire protocol. Versioned as a whole: a client built
@@ -17,7 +17,7 @@ import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedVehicle
  * feeds hostile bytes through these readers and gets a typed message or
  * null — never an exception, never a partially-checked object.
  */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 // ── close codes (WebSocket application range) ────────────────────────────────
 export const CLOSE_BAD_TICKET = 4000;
@@ -105,12 +105,25 @@ export type WorldSync = {
   lootedChests: number[];
   mobs: SavedMob[];
   liveMobs: MobPose[];
-  vehicles: SavedVehicle[];
+  /** Live vehicles keyed by server id (poses, not the SavedVehicle save shape) so per-tick `vp` deltas line up. */
+  vehicles: VehiclePose[];
+  /** In-flight arrows at join time (usually empty — arrows are short-lived). */
+  projectiles: ProjectilePose[];
   players: RosterEntry[];
 };
 
 /** One mob's replicated pose (10 Hz, deadbanded; keyframed every ~5s). */
 export type MobPose = { id: number; kind: string; hostile: boolean; x: number; y: number; z: number; yaw: number; hp: number; moveSpeed: number };
+
+/** One vehicle's replicated pose (deadbanded per tick). `riderId` is cosmetic on the client (the server owns mounted motion). */
+export type VehiclePose = { id: number; kind: string; x: number; y: number; z: number; yaw: number; riderId: string | null };
+
+/**
+ * One arrow's replicated pose. Velocity travels so the client orients the mesh
+ * from it (projectileVisuals derives yaw/pitch from velocity, unchanged). Arrows
+ * are fast and short-lived, so they snap per frame — no interpolation buffer.
+ */
+export type ProjectilePose = { id: number; x: number; y: number; z: number; vx: number; vy: number; vz: number };
 
 /** One player's replicated pose (20 Hz). */
 export type PlayerPose = { id: string; x: number; y: number; z: number; yaw: number; pitch: number };
@@ -132,6 +145,16 @@ export type SelfDelta = {
   respawnSeconds?: number;
   gameMode?: string;
   sleeping?: boolean;
+  /**
+   * Which vehicle the recipient is riding (id), or null when they dismount.
+   * Present only on the tick the mount state changes. While it is non-null the
+   * server owns the rider's position: `x`/`y`/`z` below carry that authoritative
+   * position (the client snaps to it and skips its own motion integration).
+   */
+  mountedVehicleId?: number | null;
+  x?: number;
+  y?: number;
+  z?: number;
 };
 
 export type TickMessage = {
@@ -145,6 +168,10 @@ export type TickMessage = {
   pp: PlayerPose[];
   /** Mob poses that moved past the deadband this window (10 Hz). */
   mp: MobPose[];
+  /** Vehicle poses that moved past the deadband this tick (absent when nothing moved). */
+  vp?: VehiclePose[];
+  /** Every live arrow this tick (the full authoritative list — absence prunes); one empty frame signals the last arrow cleared. */
+  prj?: ProjectilePose[];
   /** Day clock, every ~20 ticks (clients advance it locally in between). */
   day?: number;
   /** The recipient's private state changes. */

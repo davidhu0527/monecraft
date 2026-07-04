@@ -64,11 +64,15 @@ disconnect modal, leave) lives in the session + two HUD components; the
 architecture of the replica/routing/interpolation stack is in
 [architecture.md](architecture.md#multiplayer-client-libnet).
 
-v1 scope cuts to know about (all documented where they bite): rafts/ships
-can't be boarded online (a mounted pose is server-driven, which would fight
-the client-owned pose stream); in-flight arrows aren't replicated (only
-their hits); advancements/stats don't accrue in server rooms; indirect mob
-kills credit the primary player.
+Boarding works online (protocol v2): a mounted rider's position is
+server-owned and streamed on the `SelfDelta` (`mountedVehicleId` + `x/y/z`),
+so the replica stops predicting its own motion while mounted rather than
+rubber-banding against the boat. Vehicles and in-flight arrows replicate on
+their own tick channels (`vp`/`prj`), mirroring the mob-pose skeleton.
+
+Remaining v1 scope cuts (closed in later MP v2 phases): advancements/stats
+don't yet accrue in server rooms, and indirect mob kills credit the primary
+player.
 
 ## Environment & local development
 

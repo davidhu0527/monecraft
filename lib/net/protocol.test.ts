@@ -78,7 +78,8 @@ describe("world-sync codec", () => {
       lootedChests: [1, 2, 3],
       mobs: [],
       liveMobs: [{ id: 1, kind: "zombie", hostile: true, x: 1, y: 2, z: 3, yaw: 0, hp: 20, moveSpeed: 2 }],
-      vehicles: [],
+      vehicles: [{ id: 5, kind: "raft", x: 4, y: 5, z: 6, yaw: 1, riderId: null }],
+      projectiles: [{ id: 2, x: 7, y: 8, z: 9, vx: 1, vy: -1, vz: 0 }],
       players: [{ id: "p1", name: "P", skinId: null, x: 0, y: 64, z: 0, yaw: 0 }]
     };
     const bytes = await gzipWorldSync(sync);

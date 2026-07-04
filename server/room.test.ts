@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as THREE from "three";
 import { PROTOCOL_VERSION, type ServerMessage, type WorldSync } from "@/lib/net/protocol";
 import { gunzipWorldSync } from "@/lib/net/codec";
+import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
 import type { TicketClaims } from "@/lib/net/tickets";
 import { createMemoryPersistence, parseSaveBlob } from "./persistence";
 import { Room, type ClientSink } from "./room";
@@ -146,6 +148,81 @@ describe("room lifecycle", () => {
     const bobChats = b.messagesOf("chat");
     expect(bobChats).toHaveLength(3); // 3/s budget
     expect(bobChats[0]).toMatchObject({ from: "alice", name: "ALICE" });
+  });
+
+  test("vehicle and arrow poses reach other clients; the world-sync carries them; arrows prune, parked boats deadband", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const state = room.engine.state;
+    restoreVehicle(state, "raft", 10, 41, 12, 1.2);
+    const vehicleId = state.vehicles[0].id;
+    // High and moving horizontally so the authoritative step doesn't sink it into
+    // terrain before we can observe the broadcast (arrows are simulated server-side).
+    state.projectiles.push({
+      id: 99,
+      position: new THREE.Vector3(5, 100, 5),
+      velocity: new THREE.Vector3(8, 0, 0),
+      yaw: 0,
+      pitch: 0,
+      damage: 3,
+      knockback: 0,
+      fromPlayer: true,
+      ttl: 5
+    });
+
+    // First tick: the freshly-seeded boat (no shadow yet) and the live arrow
+    // reach the already-connected client.
+    const tickRoom = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+    tickRoom();
+    const t = b.messagesOf("tick").at(-1);
+    expect(t?.vp?.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
+    expect(t?.prj?.some((p) => p.id === 99 && p.vx === 8)).toBe(true);
+
+    // A late joiner's world-sync keyframe carries both (force-emits past the deadband).
+    const c = fakeSink();
+    await room.join(claimsFor("carol", "w1"), c);
+    const sync = await (c.frames.find((f) => f.kind === "binary") as Extract<Frame, { kind: "binary" }>).sync;
+    expect(sync!.vehicles.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
+    expect(sync!.projectiles.some((p) => p.id === 99)).toBe(true);
+
+    // The arrow despawns: exactly one trailing empty `prj` prunes it client-side,
+    // and the unmoved raft is deadbanded out (no `vp`).
+    state.projectiles.length = 0;
+    tickRoom();
+    const t2 = b.messagesOf("tick").at(-1);
+    expect(t2?.prj).toEqual([]);
+    expect(t2?.vp).toBeUndefined();
+    tickRoom();
+    expect(b.messagesOf("tick").at(-1)?.prj).toBeUndefined(); // steady state: no arrows, no frame
+  });
+
+  test("a mounted rider's self-delta carries the server-owned position and suppresses forcePose", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const state = room.engine.state;
+    restoreVehicle(state, "raft", 10, 41, 12, 0);
+    const alice = state.players.get("alice")!;
+    const vehicleId = state.vehicles[0].id;
+    // Seat her directly (the aim flow is covered in the engine suite): what we
+    // assert here is the mount transition surfacing on the wire.
+    alice.mountedVehicleId = vehicleId;
+    state.vehicles[0].rider = "alice";
+
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+    const first = a.messagesOf("tick").at(-1);
+    expect(first?.self?.mountedVehicleId).toBe(vehicleId);
+    expect(first?.self?.x).toBeCloseTo(10, 6); // syncPlayerToVehicle put her on the raft
+
+    // A pose while mounted is ignored (position is server-owned) and must NOT be
+    // answered with forcePose — that reject means "ignore the stream", not "desync".
+    a.frames.length = 0;
+    await room.handleMessage("alice", { t: "pose", seq: 1, x: 999, y: 41, z: 999, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    expect(alice.position.x).toBeCloseTo(10, 6);
+    expect(a.messagesOf("forcePose")).toHaveLength(0);
   });
 
   test("leave persists the player's slice; rejoin restores it; shutdown stores the merged world", async () => {

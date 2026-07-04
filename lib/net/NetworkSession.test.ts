@@ -31,7 +31,7 @@ const WELCOME: WelcomeMessage = {
   players: [{ id: "acct-1", name: "Alpha", skinId: null, x: 5, y: 40, z: 5, yaw: 0 }]
 };
 
-function worldSync(players: WorldSync["players"]): WorldSync {
+function worldSync(players: WorldSync["players"], overrides: Partial<WorldSync> = {}): WorldSync {
   return {
     t: "worldSync",
     tick: 100,
@@ -42,7 +42,9 @@ function worldSync(players: WorldSync["players"]): WorldSync {
     mobs: [],
     liveMobs: [],
     vehicles: [],
-    players
+    projectiles: [],
+    players,
+    ...overrides
   };
 }
 
@@ -108,7 +110,8 @@ async function pushWorldSync(socket: FakeSocket, sync: WorldSync): Promise<void>
   await Promise.resolve();
 }
 
-const tick = (self?: SelfDelta) => JSON.stringify({ t: "tick", n: 101, ev: [], pp: [], mp: [], ...(self ? { self } : {}) });
+const tick = (self?: SelfDelta, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ t: "tick", n: 101, ev: [], pp: [], mp: [], ...extra, ...(self ? { self } : {}) });
 
 describe("connectNetworkSession", () => {
   test("handshakes, syncs, and mounts a replica engine seeded from the welcome", async () => {
@@ -154,6 +157,71 @@ describe("connectNetworkSession", () => {
 
     instances[0].emit(JSON.stringify({ t: "chat", from: "acct-2", name: "Beta", text: "hi" }));
     expect(chats).toEqual(["Beta:hi"]);
+    session.dispose();
+  });
+
+  test("restores vehicles and arrows from the world-sync keyframe", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(
+      instances[0],
+      worldSync(WELCOME.players, {
+        vehicles: [{ id: 7, kind: "raft", x: 10, y: 41, z: 12, yaw: 1.5, riderId: null }],
+        projectiles: [{ id: 3, x: 1, y: 42, z: 2, vx: 8, vy: 0, vz: 0 }]
+      })
+    );
+
+    const vehicle = session.engine.state.vehicles.find((v) => v.id === 7);
+    expect(vehicle).toBeDefined();
+    expect(vehicle?.kind).toBe("raft");
+    expect(vehicle?.position.x).toBe(10);
+    expect(session.engine.state.projectiles.find((p) => p.id === 3)?.velocity.x).toBe(8);
+    session.dispose();
+  });
+
+  test("upserts vehicle/arrow poses from ticks and prunes arrows by absence", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    // A boat appears and an arrow flies.
+    instances[0].emit(
+      tick(undefined, {
+        vp: [{ id: 7, kind: "ship", x: 20, y: 41, z: 20, yaw: 0, riderId: "acct-2" }],
+        prj: [{ id: 3, x: 1, y: 42, z: 2, vx: 8, vy: 0, vz: 0 }]
+      })
+    );
+    expect(session.engine.state.vehicles.find((v) => v.id === 7)?.rider).toBe("acct-2");
+    expect(session.engine.state.projectiles).toHaveLength(1);
+
+    // The boat moves; the arrow is gone (empty list prunes it), boat persists.
+    instances[0].emit(tick(undefined, { vp: [{ id: 7, kind: "ship", x: 21, y: 41, z: 20, yaw: 0.1, riderId: "acct-2" }], prj: [] }));
+    expect(session.engine.state.vehicles.find((v) => v.id === 7)?.position.x).toBe(21);
+    expect(session.engine.state.projectiles).toHaveLength(0);
+    session.dispose();
+  });
+
+  test("a mounted self-delta snaps position and stops the replica predicting local motion", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    const self = session.engine.state.player;
+
+    instances[0].emit(tick({ mountedVehicleId: 7, x: 30, y: 41, z: 30 }));
+    expect(self.mountedVehicleId).toBe(7);
+    expect(self.position.x).toBe(30);
+
+    // Even fed forward-walk input, a mounted replica does not integrate motion —
+    // the server-driven position stands until the next self-delta.
+    self.input = { move: { forward: true, back: false, left: false, right: false, jump: false, sprint: false, crouch: false }, mineHeld: false };
+    session.engine.step(0.05);
+    expect(self.position.x).toBe(30);
+    expect(self.position.z).toBe(30);
+
+    // Dismount: the server clears the mount and hands back a ground position.
+    instances[0].emit(tick({ mountedVehicleId: null, x: 31, y: 40, z: 31 }));
+    expect(self.mountedVehicleId).toBeNull();
+    expect(self.position.x).toBe(31);
     session.dispose();
   });
 

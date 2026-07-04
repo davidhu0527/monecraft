@@ -518,7 +518,9 @@ export class GameEngine {
     // that NetworkSession writes in, never simulated here.
     if (this.replica) {
       if (primary && !primary.isDead && state.sleepTimer <= 0) {
-        tickPlayerMotion(state, primary, primary.input, dt, () => {});
+        // While mounted the server owns our position (SelfDelta snaps it every
+        // tick); predicting motion here would rubber-band against that stream.
+        if (primary.mountedVehicleId === null) tickPlayerMotion(state, primary, primary.input, dt, () => {});
         tickMining(state, primary, primary.input, dt, this.emit, this.rng, { cosmetic: true });
       }
       if (state.sleepTimer > 0) state.sleepTimer = Math.max(0, state.sleepTimer - dt);
@@ -854,9 +856,12 @@ export class GameEngine {
         if (tryFeedAimedMob(state, player, this.emit)) break;
         if (tryToggleSitPet(state, player, this.emit)) break;
         if (tryTradeAimedVillager(state, player, this.emit)) break;
-        // Vehicles are single-player-only in multiplayer v1: a mounted player's
-        // pose is server-driven, which fights the client-owned pose stream.
-        if (this.authority !== "server" && !this.replica && tryBoardAimedVehicle(state, player)) break;
+        // Boarding runs everywhere the switch runs: single-player, and on the
+        // authoritative server (the right-click arrives as a networked placeBlock
+        // cmd). While mounted the server owns the rider's position and streams it
+        // via the SelfDelta — the replica never dispatches placeBlock locally
+        // (routeDispatch sends it up), so no client-owned pose fights it.
+        if (tryBoardAimedVehicle(state, player)) break;
         if (tryInteractBlock(state, player, this.emit)) break;
         if (this.trySummonBoss(player)) break;
         if (this.tryStartRaid(player)) break;

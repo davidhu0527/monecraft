@@ -6,7 +6,7 @@ import { TICK_SECONDS } from "@/lib/game/engine/tickDriver";
 import { restoreEffects, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { FACTION_BY_KIND } from "@/lib/game/mobs";
-import type { MobKind } from "@/lib/game/types";
+import type { MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
 import { decodeServerFrame, encodeClientMessage, gunzipWorldSync } from "./codec";
 import { createPoseBuffer, INTERPOLATION_DELAY_MS, type PoseBuffer } from "./interpolation";
@@ -19,7 +19,9 @@ import {
   PROTOCOL_VERSION,
   RECONNECT_DELAYS_MS,
   type MobPose,
+  type ProjectilePose,
   type SelfDelta,
+  type VehiclePose,
   type WelcomeMessage,
   type WorldSync
 } from "./protocol";
@@ -242,8 +244,58 @@ export async function connectNetworkSession(
     state.mobs = [];
     mobBuffers.clear();
     for (const pose of sync.liveMobs) upsertReplicaMob(pose);
+    // Vehicles and in-flight arrows are replicated in (never simulated on the
+    // replica); the join sync is their keyframe. Both were dropped in v1.
+    state.vehicles = [];
+    for (const pose of sync.vehicles) upsertReplicaVehicle(pose);
+    applyProjectiles(sync.projectiles);
     applyRoster(sync.players);
   };
+
+  function upsertReplicaVehicle(pose: VehiclePose): void {
+    const kind = (pose.kind === "ship" ? "ship" : "raft") as VehicleKind;
+    let vehicle = state.vehicles.find((v) => v.id === pose.id);
+    if (!vehicle) {
+      vehicle = { id: pose.id, kind, position: new THREE.Vector3(pose.x, pose.y, pose.z), yaw: pose.yaw, rider: pose.riderId };
+      state.vehicles.push(vehicle);
+    } else {
+      vehicle.position.set(pose.x, pose.y, pose.z);
+      vehicle.yaw = pose.yaw;
+      vehicle.rider = pose.riderId;
+    }
+  }
+
+  // Arrows snap per frame (they outrun the ~125 ms interpolation delay). Each
+  // tick carries the FULL live set, so absence prunes: an arrow no longer listed
+  // has landed/despawned server-side.
+  function applyProjectiles(poses: ProjectilePose[]): void {
+    const present = new Set(poses.map((p) => p.id));
+    state.projectiles = state.projectiles.filter((p) => present.has(p.id));
+    for (const pose of poses) upsertReplicaProjectile(pose);
+  }
+
+  function upsertReplicaProjectile(pose: ProjectilePose): void {
+    let projectile = state.projectiles.find((p) => p.id === pose.id);
+    if (!projectile) {
+      // Non-simulated on the replica: only position + velocity feed the visual
+      // (which derives orientation from velocity); the rest are inert placeholders.
+      projectile = {
+        id: pose.id,
+        position: new THREE.Vector3(pose.x, pose.y, pose.z),
+        velocity: new THREE.Vector3(pose.vx, pose.vy, pose.vz),
+        yaw: 0,
+        pitch: 0,
+        damage: 0,
+        knockback: 0,
+        fromPlayer: true,
+        ttl: 999
+      };
+      state.projectiles.push(projectile);
+    } else {
+      projectile.position.set(pose.x, pose.y, pose.z);
+      projectile.velocity.set(pose.vx, pose.vy, pose.vz);
+    }
+  }
 
   function upsertReplicaMob(pose: MobPose): MobState {
     let mob = state.mobs.find((m) => m.id === pose.id);
@@ -302,6 +354,14 @@ export async function connectNetworkSession(
       self.effects.clear();
       for (const { id, remaining } of restoreEffects(shim)) self.effects.set(id, remaining);
     }
+    // Mounted: the server owns our position. Adopt the mount state and snap to
+    // the authoritative position (the replica step skips its own motion while
+    // mountedVehicleId is set, so the boat — not prediction — drives the camera).
+    if (delta.mountedVehicleId !== undefined) self.mountedVehicleId = delta.mountedVehicleId;
+    if (delta.x !== undefined && delta.y !== undefined && delta.z !== undefined) {
+      self.position.set(delta.x, delta.y, delta.z);
+      self.velocity.set(0, 0, 0);
+    }
   };
 
   const applyBlocks = (blocks: Array<[number, number]>) => {
@@ -355,6 +415,8 @@ export async function connectNetworkSession(
           upsertReplicaMob(pose);
           mobBuffers.get(pose.id)?.push({ tMs: serverTickTimeMs, x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw });
         }
+        if (message.vp) for (const pose of message.vp) upsertReplicaVehicle(pose);
+        if (message.prj) applyProjectiles(message.prj);
         for (const gameEvent of message.ev) {
           pendingEvents.push(gameEvent as GameEvent);
           callbacks.onEvent?.(gameEvent as GameEvent);

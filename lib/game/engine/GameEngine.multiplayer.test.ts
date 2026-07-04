@@ -4,6 +4,7 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { frameInput } from "@/lib/game/engine/testSupport";
 import { LOCAL_PLAYER_ID } from "@/lib/game/engine/state";
 import { allEligiblePlayersSleeping, nearestTargetablePlayer } from "@/lib/game/engine/players";
+import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 
 function mulberry32(seed: number): () => number {
@@ -253,6 +254,24 @@ describe("per-player stepping", () => {
     engine.dispatch({ type: "pause" });
     expect(engine.state.paused).toBe(false);
   });
+
+  test("boarding works under server authority (the v1 mounted-vehicle gate is lifted)", () => {
+    const engine = makeEngine("server");
+    engine.state.mobs = [];
+    const player = engine.state.player;
+    player.position.set(10, 40, 10);
+    player.yaw = 0; // look down -z (lookDirection(0,0) = (0,0,-1))
+    player.pitch = 0;
+    // A raft two blocks ahead along the aim ray, within VEHICLE_BOARD_REACH.
+    restoreVehicle(engine.state, "raft", 10, 41, 8, 0);
+    const vehicleId = engine.state.vehicles[0].id;
+
+    // The right-click arrives as a networked placeBlock cmd (playerId set → runs
+    // the switch, exactly as the authoritative server dispatches it).
+    engine.dispatch({ type: "placeBlock" }, LOCAL_PLAYER_ID);
+    expect(player.mountedVehicleId).toBe(vehicleId);
+    expect(engine.state.vehicles[0].rider).toBe(LOCAL_PLAYER_ID);
+  });
 });
 
 describe("replica boot (bootPlayer: false, with a React shell)", () => {
@@ -276,5 +295,31 @@ describe("replica boot (bootPlayer: false, with a React shell)", () => {
     expect(engine.getSnapshot().inventory).toBeDefined();
     engine.step(0.05);
     expect(engine.getSnapshot().hearts).toBeGreaterThan(0);
+  });
+
+  test("a mounted replica stops predicting its own motion (the server-driven position wins)", () => {
+    const engine = new GameEngine({
+      seed: 1337,
+      rng: mulberry32(42),
+      worldSize: { x: 64, y: 150, z: 64 },
+      authority: "local",
+      replica: true,
+      bootPlayer: false
+    });
+    engine.state.primaryPlayerId = "acct-1";
+    const self = engine.addPlayer({ id: "acct-1" });
+    self.position.set(20, 100, 20); // high up: unmounted, gravity alone moves it
+    self.input = frameInput({ keys: ["KeyW"] });
+
+    const start = self.position.clone();
+    for (let i = 0; i < 20; i += 1) engine.step(0.05);
+    expect(self.position.distanceTo(start)).toBeGreaterThan(0.5); // predicted motion
+
+    // Mounted: the SelfDelta owns the position, so the replica must not integrate
+    // motion — it stays put between server updates even with forward held.
+    self.mountedVehicleId = 7;
+    const mountedStart = self.position.clone();
+    for (let i = 0; i < 20; i += 1) engine.step(0.05);
+    expect(self.position.distanceTo(mountedStart)).toBe(0);
   });
 });
