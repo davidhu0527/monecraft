@@ -30,6 +30,8 @@ export async function createOnlineWorld(input: {
   hardcore: boolean;
   /** "mp" (a server-hosted co-op room, the default) or "sp-cloud" (a synced single-player save). */
   kind?: "mp" | "sp-cloud";
+  /** The account profile that owns this world (enforces the per-profile world cap). */
+  profileId?: string;
 }): Promise<OnlineWorld | null> {
   try {
     const response = await fetch("/api/worlds", {
@@ -99,9 +101,13 @@ export async function acceptInviteToken(token: string): Promise<boolean> {
 }
 
 /** The join ticket + where to connect. Null covers "not a member" and misconfiguration alike. */
-export async function requestJoinTicket(worldId: string): Promise<{ ticket: string; gameServerUrl: string } | null> {
+export async function requestJoinTicket(worldId: string, profileId?: string): Promise<{ ticket: string; gameServerUrl: string } | null> {
   try {
-    const response = await fetch(`/api/worlds/${worldId}/ticket`, { method: "POST" });
+    const response = await fetch(`/api/worlds/${worldId}/ticket`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ profileId: profileId ?? null })
+    });
     if (!response.ok) return null;
     const { ticket, gameServerUrl } = (await response.json()) as { ticket: string; gameServerUrl: string | null };
     if (!gameServerUrl) return null;
