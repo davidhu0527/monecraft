@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
 /**
@@ -82,16 +82,21 @@ export const verification = pgTable("verification", {
  * browser (lib/game/profiles.ts); these are the server-side ones an account
  * syncs. Capped per account (config MAX_ONLINE_PROFILES).
  */
-export const profiles = pgTable("profiles", {
-  id: text("id").primaryKey(),
-  ownerId: text("owner_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  /** Skin palette id (mirrors the local Profile's skinId). */
-  skinId: text("skin_id"),
-  createdAt: timestamp("created_at").notNull().defaultNow()
-});
+export const profiles = pgTable(
+  "profiles",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Skin palette id (mirrors the local Profile's skinId). */
+    skinId: text("skin_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow()
+  },
+  // Listing/quota-counting a profile always filters by owner.
+  (table) => [index("profiles_owner_idx").on(table.ownerId)]
+);
 
 /**
  * One world. `kind` separates a cloud-synced single-player world (the blob is
@@ -99,29 +104,34 @@ export const profiles = pgTable("profiles", {
  * server's authoritative persistence). One save blob either way: gzipped
  * SaveData JSON (v17 carries every player's slice).
  */
-export const worlds = pgTable("worlds", {
-  id: text("id").primaryKey(),
-  ownerId: text("owner_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  /**
-   * Which of the owner's profiles owns this world. Nullable: pre-profile rows
-   * (and the account's default profile backfill) leave it null until claimed.
-   */
-  profileId: text("profile_id").references(() => profiles.id, { onDelete: "cascade" }),
-  kind: text("kind", { enum: ["sp-cloud", "mp"] }).notNull(),
-  name: text("name").notNull(),
-  seed: integer("seed").notNull(),
-  worldType: text("world_type").notNull().default("default"),
-  gameMode: text("game_mode").notNull().default("survival"),
-  difficulty: text("difficulty").notNull().default("normal"),
-  hardcore: boolean("hardcore").notNull().default(false),
-  worldgenVersion: integer("worldgen_version").notNull(),
-  saveVersion: integer("save_version"),
-  saveBlob: bytea("save_blob"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow()
-});
+export const worlds = pgTable(
+  "worlds",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /**
+     * Which of the owner's profiles owns this world. Nullable: pre-profile rows
+     * (and the account's default profile backfill) leave it null until claimed.
+     */
+    profileId: text("profile_id").references(() => profiles.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["sp-cloud", "mp"] }).notNull(),
+    name: text("name").notNull(),
+    seed: integer("seed").notNull(),
+    worldType: text("world_type").notNull().default("default"),
+    gameMode: text("game_mode").notNull().default("survival"),
+    difficulty: text("difficulty").notNull().default("normal"),
+    hardcore: boolean("hardcore").notNull().default(false),
+    worldgenVersion: integer("worldgen_version").notNull(),
+    saveVersion: integer("save_version"),
+    saveBlob: bytea("save_blob"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow()
+  },
+  // Counting a profile's worlds (the cap check) and listing filter by profile.
+  (table) => [index("worlds_profile_idx").on(table.profileId)]
+);
 
 /** Who may play a world. The owner also has a row (role "owner") so one query lists a user's playable worlds. */
 export const worldMembers = pgTable(
