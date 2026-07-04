@@ -21,7 +21,7 @@ describe("WorldSelect", () => {
     createWorld("p1", "Beta", "2", { now: () => 20, uid: () => "wb" });
     createWorld("other", "Hidden", "3", { uid: () => "wo" });
     const onPlay = mock();
-    render(<WorldSelect profile={PROFILE} onPlay={onPlay} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+    render(<WorldSelect profile={PROFILE} onPlay={onPlay} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
 
     expect(screen.queryByText("Hidden")).toBeNull();
     const names = screen.getAllByText(/Alpha|Beta/).map((n) => n.textContent);
@@ -32,14 +32,14 @@ describe("WorldSelect", () => {
   });
 
   test("empty state invites creating the first world", () => {
-    render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
     expect(screen.getByText(/No worlds yet/i)).toBeTruthy();
   });
 
   test("creating a world persists it for the profile and enters it", async () => {
     const user = userEvent.setup();
     const onPlay = mock();
-    render(<WorldSelect profile={PROFILE} onPlay={onPlay} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+    render(<WorldSelect profile={PROFILE} onPlay={onPlay} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
 
     await user.click(screen.getByTestId("new-world"));
     await user.type(screen.getByLabelText("World name"), "Hardcore");
@@ -54,7 +54,7 @@ describe("WorldSelect", () => {
 
   test("creating a world of a chosen type persists that type", async () => {
     const user = userEvent.setup();
-    render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
 
     await user.click(screen.getByTestId("new-world"));
     await user.type(screen.getByLabelText("World name"), "Sky");
@@ -67,7 +67,7 @@ describe("WorldSelect", () => {
   test("deleting a world removes it after confirmation", async () => {
     const user = userEvent.setup();
     createWorld("p1", "Doomed", "1", { uid: () => "wd" });
-    render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Delete" })); // confirm
@@ -78,7 +78,7 @@ describe("WorldSelect", () => {
   test("renaming a world updates the manifest", async () => {
     const user = userEvent.setup();
     createWorld("p1", "Old", "1", { uid: () => "wr" });
-    render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
 
     await user.click(screen.getByRole("button", { name: "Rename" }));
     const input = screen.getByLabelText("Rename world");
@@ -93,13 +93,12 @@ describe("WorldSelect", () => {
   test("back returns to the profile list", async () => {
     const user = userEvent.setup();
     const onBack = mock();
-    render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={onBack} />);
+    render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={onBack} />);
     await user.click(screen.getByTestId("back-to-profiles"));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  test("splits the server list by kind: mp joins, sp-cloud downloads; local worlds show upload vs synced", async () => {
-    localStorage.setItem("minecraft_online_v1", "1"); // opt into the online sections (onlineUsed())
+  test("with cloud enabled: sp-cloud saves download, mp rooms stay out, upload vs synced per local world", async () => {
     const summary = (id: string, name: string, kind: "mp" | "sp-cloud") => ({
       id,
       name,
@@ -127,12 +126,13 @@ describe("WorldSelect", () => {
       createWorld("p1", "Backed", "1", { uid: () => "ws", cloudId: "cloudX" }); // linked → Synced badge
 
       const onDownload = mock();
-      render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={onDownload} onBack={mock()} />);
+      render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={onDownload} cloudEnabled={true} onBack={mock()} />);
 
-      // The mp world lands in Online Worlds (join); the sp-cloud one is downloadable.
-      expect(await screen.findByTestId("online-world-mp1")).toBeTruthy();
-      await user.click(screen.getByTestId("cloud-world-cloud1"));
+      // The sp-cloud save is downloadable; mp rooms live in the account menu now.
+      await user.click(await screen.findByTestId("cloud-world-cloud1"));
       expect(onDownload).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId("online-world-mp1")).toBeNull();
+      expect(screen.queryByText("Online Worlds")).toBeNull();
 
       // Local worlds: the unlinked one offers upload, the linked one reads Synced.
       expect(screen.getByRole("button", { name: /Upload to cloud/ })).toBeTruthy();
@@ -142,8 +142,27 @@ describe("WorldSelect", () => {
     }
   });
 
+  test("logged out (cloud disabled) the list is purely local — no fetch, no cloud buttons", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetched = 0;
+    globalThis.fetch = (async () => {
+      fetched += 1;
+      return { ok: true, json: async () => ({ worlds: [] }) } as unknown as Response;
+    }) as typeof fetch;
+    try {
+      createWorld("p1", "Backed", "1", { uid: () => "ws", cloudId: "cloudX" }); // linked, but logged out
+      render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
+
+      expect(screen.getByText("Backed")).toBeTruthy();
+      expect(screen.queryByText(/Synced/)).toBeNull();
+      expect(screen.queryByRole("button", { name: /Upload to cloud/ })).toBeNull();
+      expect(fetched).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("a failed upload keeps the world local and surfaces the error (never a false Synced)", async () => {
-    localStorage.setItem("minecraft_online_v1", "1");
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string, init?: RequestInit) =>
       (init?.method ?? "GET") === "POST"
@@ -152,7 +171,7 @@ describe("WorldSelect", () => {
     try {
       const user = userEvent.setup();
       createWorld("p1", "Local", "1", { uid: () => "wl" });
-      render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+      render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={true} onBack={mock()} />);
 
       await user.click(await screen.findByRole("button", { name: "Upload to cloud" }));
 

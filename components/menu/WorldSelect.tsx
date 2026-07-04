@@ -18,9 +18,7 @@ import {
 import { readSave } from "@/lib/game/save";
 import { pushSave } from "@/lib/game/cloudSaves";
 import type { WorldType } from "@/lib/world";
-import { onlineUsed } from "@/lib/auth/client";
-import { createInviteLink, createOnlineWorld, listOnlineWorlds, revokeInviteLinks, type OnlineWorld } from "@/lib/online/onlineClient";
-import { resolveSeed } from "@/lib/game/worlds";
+import { createOnlineWorld, listOnlineWorlds, type OnlineWorld } from "@/lib/online/onlineClient";
 
 /** Short label for a world type (the default type is left unlabelled on cards). */
 function worldTypeLabel(id: WorldType): string {
@@ -41,34 +39,31 @@ type WorldSelectProps = {
   profile: Profile;
   /** Enter a world (the shell records last-played and boots it). */
   onPlay: (worldId: string) => void;
-  /** Join an online (server-hosted) world. */
-  onPlayOnline: (world: OnlineWorld) => void;
   /** Materialize a cloud save (sp-cloud) as a local world and open it. */
   onDownloadCloud: (world: OnlineWorld) => void;
+  /** Cloud-save sync (upload / download) is offered — i.e. the shell knows a
+   *  signed-in account. Logged-out Local Players get a purely local list with
+   *  zero server calls. */
+  cloudEnabled: boolean;
   /** Back to the profile list. */
   onBack: () => void;
 };
 
 /** A profile's world list: pick a world, or create / rename / delete one. */
-export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadCloud, onBack }: WorldSelectProps) {
+export default function WorldSelect({ profile, onPlay, onDownloadCloud, cloudEnabled, onBack }: WorldSelectProps) {
   const [creating, setCreating] = useState(false);
-  const [creatingOnline, setCreatingOnline] = useState(false);
-  const [onlineWorlds, setOnlineWorlds] = useState<OnlineWorld[] | null>(null);
-  const [inviteCopied, setInviteCopied] = useState<string | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
-  const [onlineCreateError, setOnlineCreateError] = useState<string | null>(null);
+  const [cloudWorldList, setCloudWorldList] = useState<OnlineWorld[] | null>(null);
   // Per-world (not single scalars): uploads run independently, so tracking one
   // id would re-enable another card's button mid-flight and allow a double-upload.
   const [uploading, setUploading] = useState<ReadonlySet<string>>(() => new Set());
   const [uploadError, setUploadError] = useState<ReadonlySet<string>>(() => new Set());
 
-  // Online worlds appear only once this browser has used online features —
-  // offline-first: no fetch, no section, no account until the player opts in.
-  const refreshOnline = useCallback(() => {
-    if (onlineUsed()) void listOnlineWorlds().then(setOnlineWorlds);
-  }, []);
-  useEffect(() => refreshOnline(), [refreshOnline]);
+  // Cloud saves exist only for a signed-in account — offline-first: a
+  // logged-out Local Player triggers no fetch and sees no cloud section.
+  const refreshCloud = useCallback(() => {
+    if (cloudEnabled) void listOnlineWorlds().then(setCloudWorldList);
+  }, [cloudEnabled]);
+  useEffect(() => refreshCloud(), [refreshCloud]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
@@ -83,31 +78,6 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
             onPlay(world.id); // straight into the freshly created world
           }}
           onCancel={() => setCreating(false)}
-        />
-      </MenuScreen>
-    );
-  }
-
-  if (creatingOnline) {
-    return (
-      <MenuScreen title={`${profile.name} — New Online World`}>
-        {onlineCreateError && <p className="account-error">{onlineCreateError}</p>}
-        <CreateWorldForm
-          onCreate={(name, seed, worldType, gameMode, difficulty, hardcore) => {
-            // Same form, different home: the world row lives on the server and
-            // the game server hosts it — friends join by invite link.
-            setOnlineCreateError(null);
-            void createOnlineWorld({ name, seed: resolveSeed(seed), worldType, gameMode, difficulty, hardcore }).then((world) => {
-              if (world) {
-                setCreatingOnline(false);
-                onPlayOnline(world);
-              } else {
-                // Keep the form open so the entered settings aren't lost on a retry.
-                setOnlineCreateError("Couldn't create the online world — are you signed in and online?");
-              }
-            });
-          }}
-          onCancel={() => setCreatingOnline(false)}
         />
       </MenuScreen>
     );
@@ -142,7 +112,7 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
       const pushed = cloud && save ? await pushSave(cloud.id, save) : "saved";
       if (cloud && pushed === "saved") {
         linkWorldCloud(world.id, cloud.id);
-        refreshOnline();
+        refreshCloud();
       } else {
         setUploadError((prev) => new Set(prev).add(world.id)); // keep the world local — surface the failure
       }
@@ -150,11 +120,10 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
     });
   };
 
-  // Split the server world list: mp rooms stay in Online Worlds; sp-cloud saves
-  // not yet on this device become downloadable in the Cloud Saves section.
-  const mpWorlds = onlineWorlds?.filter((world) => world.kind === "mp") ?? [];
+  // Online (mp) rooms live in the account menu; here only the account's
+  // sp-cloud saves not yet on this device become downloadable.
   const linkedCloudIds = new Set(worlds.map((world) => world.cloudId).filter((id): id is string => Boolean(id)));
-  const cloudWorlds = onlineWorlds?.filter((world) => world.kind === "sp-cloud" && !linkedCloudIds.has(world.id)) ?? [];
+  const cloudWorlds = cloudWorldList?.filter((world) => world.kind === "sp-cloud" && !linkedCloudIds.has(world.id)) ?? [];
 
   return (
     <MenuScreen title={`${profile.name} — Worlds`}>
@@ -218,7 +187,7 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
                     </span>
                   </button>
                   <div className="menu-card-actions">
-                    {onlineUsed() &&
+                    {cloudEnabled &&
                       (world.cloudId ? (
                         <span className="menu-cloud-badge" title="This world syncs to your account across devices">
                           ☁ Synced
@@ -265,67 +234,6 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
               </li>
             ))}
           </ul>
-        </section>
-      )}
-      {onlineWorlds !== null && (
-        <section className="menu-online">
-          <h3 className="menu-online-title">Online Worlds</h3>
-          {mpWorlds.length === 0 ? (
-            <p className="menu-empty">No online worlds yet — create one and share the invite link.</p>
-          ) : (
-            <ul className="menu-list">
-              {mpWorlds.map((world) => (
-                <li key={world.id} className="menu-card">
-                  <button className="menu-card-play" data-testid={`online-world-${world.id}`} onClick={() => onPlayOnline(world)}>
-                    <span className="menu-card-name">{world.name}</span>
-                    <span className="menu-card-sub">
-                      {world.role === "owner" ? "Your world" : "Joined"} · Seed {world.seed}
-                    </span>
-                  </button>
-                  {world.role === "owner" && (
-                    <div className="menu-card-actions">
-                      <button
-                        className="mc-button"
-                        onClick={() => {
-                          setInvitesRevoked(null);
-                          setInviteError(null);
-                          setInviteCopied(null);
-                          void createInviteLink(world.id).then((link) => {
-                            const clipboard = navigator.clipboard;
-                            // Mint failure (offline/auth) or no clipboard: report it, don't lie.
-                            if (!link || !clipboard) return void setInviteError(world.id);
-                            // Only claim "copied" once the write actually resolves (it can reject, e.g. no focus).
-                            void clipboard
-                              .writeText(link)
-                              .then(() => setInviteCopied(world.id))
-                              .catch(() => setInviteError(world.id));
-                          });
-                        }}
-                      >
-                        {inviteError === world.id ? "Copy failed" : inviteCopied === world.id ? "Link copied!" : "Copy invite"}
-                      </button>
-                      <button
-                        className="mc-button"
-                        title="Invalidate every invite link you've shared for this world"
-                        onClick={() => {
-                          setInviteCopied(null);
-                          setInviteError(null);
-                          void revokeInviteLinks(world.id).then((count) => {
-                            if (count !== null) setInvitesRevoked(world.id);
-                          });
-                        }}
-                      >
-                        {invitesRevoked === world.id ? "Links revoked" : "Revoke links"}
-                      </button>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          <button className="mc-button" data-testid="new-online-world" onClick={() => setCreatingOnline(true)}>
-            New Online World
-          </button>
         </section>
       )}
       <div className="menu-bottom-row">

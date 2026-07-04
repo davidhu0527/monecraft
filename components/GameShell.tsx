@@ -302,8 +302,8 @@ export default function GameShell() {
           <WorldSelect
             profile={profile}
             onPlay={(worldId) => void playLocal(profile.id, worldId)}
-            onPlayOnline={(world) => void playOnline(profile, world, null)}
             onDownloadCloud={(world) => void downloadCloud(profile.id, world)}
+            cloudEnabled={onlineUser !== null}
             onBack={() => setScreen({ name: "profile-select" })}
           />
           {netModals}
