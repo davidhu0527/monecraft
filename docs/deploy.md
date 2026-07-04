@@ -151,11 +151,21 @@ game-server URL — see below.
 
 - **Web app:** push to the branch Vercel tracks (or `vercel --prod`). Changing a
   `NEXT_PUBLIC_*` value requires a redeploy, not just an env edit.
-- **Game server:** `fly deploy --config server/fly.toml --dockerfile server/Dockerfile`.
+- **Game server:** `bun run deploy:server` (from the repo root — it wraps
+  `fly deploy --config server/fly.toml --dockerfile server/Dockerfile`).
   Rooms drain to Postgres on the rollout; connected clients reconnect on their
   back-off ladder and re-sync (they'll see a brief "Reconnecting…" badge).
+  **Never run a bare `fly deploy`**: there is no Dockerfile at the repo root, so
+  flyctl's framework scanner generates a Next.js web-app image (`bun run start`,
+  port 3000) and ships *that* to the game-server app — it crash-loops with
+  exit 127 (`next` needs `node`, absent from the `oven/bun` base) and takes
+  online play down until a correct redeploy.
 - **Schema change:** land the new migration, then run `bun run db:migrate`
-  against production **before** deploying the code that depends on it.
+  against production **before** deploying the code that depends on it —
+  **unless the migration removes something the old code reads** (a dropped
+  column, like `0003`'s `is_anonymous`): then deploy the new code first and
+  migrate second, since the old build would error on the missing column while
+  the new build just ignores it until the migration lands.
 
 ## Troubleshooting
 

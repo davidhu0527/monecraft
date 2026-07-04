@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
     "server": "bun server/index.ts",
+    "deploy:server": "fly deploy --config server/fly.toml --dockerfile server/Dockerfile",
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
