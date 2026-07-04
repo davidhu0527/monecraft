@@ -118,6 +118,14 @@
   outline-width: 1px;
 }
 
+.menu-cloud-badge {
+  font-size: 11px;
+  color: #b9f6ca;
+  text-align: center;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
 .menu-primary {
   width: 100%;
 }

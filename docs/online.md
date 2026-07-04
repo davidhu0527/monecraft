@@ -46,9 +46,26 @@ routes are thin HTTP adapters over it.
 Single-player cloud saves are gzipped `SaveData` blobs (`lib/game/
 cloudSaves.ts` — block diffs compress extremely well) with last-write-wins
 concurrency: each device sends the `updatedAt` stamp it last saw
-(`x-base-updated-at`); a mismatch is **409** and the client pulls the newer
-save before retrying. The transport is built and tested; surfacing it in the
-world list / autosave UX is still to come.
+(`x-base-updated-at`); a mismatch is **409** and the pushing client stops
+syncing and warns (rather than clobber the other device), then adopts the
+newer save on the next open.
+
+**How it flows through the menu** (all opt-in per world):
+
+- **Upload** — a local world's card gets an "Upload to cloud" action once
+  you've gone online: it creates an `sp-cloud` world row, links it via
+  `WorldMeta.cloudId` (a local-manifest field, not part of the save format),
+  and pushes the current save. The card then reads "☁ Synced".
+- **On another device** — your `sp-cloud` saves you haven't downloaded yet
+  appear under **Cloud Saves**; **Download** materializes a local world (linked
+  by `cloudId`) and opens it, pulling the blob in.
+- **Open** — a cloud-linked world reconciles first (`pullCloudSaveIfNewer`):
+  the remote is adopted only when it advanced past this device's sync cursor,
+  so a world you played offline keeps its newer local progress instead of being
+  overwritten by an older cloud copy. Reuses GameShell's "Opening…" gate.
+- **Save** — `useMinecraftGame` mirrors each local autosave/quit up to the
+  cloud when the world is `cloudId`-linked and the player is signed in
+  (fire-and-forget so the fetch survives the unmount).
 
 ## Playing online (client)
 

@@ -33,6 +33,12 @@ export type WorldMeta = {
   worldgenVersion: number;
   createdAt: number;
   lastPlayedAt: number;
+  /**
+   * Set when this world is linked to a cloud save (a server `sp-cloud` world row):
+   * its save blob syncs across devices for a signed-in player. This is a local
+   * manifest field only — it is NOT part of the world save format.
+   */
+  cloudId?: string;
 };
 
 /** UI metadata for the world-type picker (the engine side lives in lib/world/worldTypes.ts). */
@@ -95,6 +101,7 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
   // Hardcore is the source of truth — keep the persisted mode/difficulty consistent
   // with it (the engine forces them at runtime, but the meta drives the UI/card too).
   const hardcore = entry.hardcore === true;
+  const cloudId = typeof entry.cloudId === "string" && entry.cloudId.length > 0 ? entry.cloudId : undefined;
   return {
     id: entry.id,
     profileId: entry.profileId,
@@ -106,7 +113,10 @@ function sanitizeWorld(raw: unknown): WorldMeta | null {
     hardcore,
     worldgenVersion: num(entry.worldgenVersion, WORLDGEN_VERSION),
     createdAt: num(entry.createdAt, 0),
-    lastPlayedAt: num(entry.lastPlayedAt, 0)
+    lastPlayedAt: num(entry.lastPlayedAt, 0),
+    // The sanitizer rebuilds a fresh object with only known keys, so cloudId
+    // must be copied through explicitly or it'd be silently dropped on every read.
+    ...(cloudId ? { cloudId } : {})
   };
 }
 
@@ -135,7 +145,17 @@ export function createWorld(
   profileId: string,
   name: string,
   seedInput: string | null,
-  deps: ManifestDeps & { rng?: () => number; worldType?: WorldType; gameMode?: GameMode; difficulty?: Difficulty; hardcore?: boolean } = {}
+  deps: ManifestDeps & {
+    rng?: () => number;
+    worldType?: WorldType;
+    gameMode?: GameMode;
+    difficulty?: Difficulty;
+    hardcore?: boolean;
+    /** Link the fresh world to a cloud save (materializing a downloaded `sp-cloud` world). */
+    cloudId?: string;
+    /** Preserve the source world's worldgen version (materialize); defaults to the current one. */
+    worldgenVersion?: number;
+  } = {}
 ): WorldMeta {
   const { storage, now, uid } = resolveDeps(deps);
   // Worlds must belong to a real profile — refuse to persist an orphan record.
@@ -152,13 +172,25 @@ export function createWorld(
     gameMode: hardcore ? "survival" : isGameMode(deps.gameMode) ? deps.gameMode : "survival",
     difficulty: hardcore ? "hard" : isDifficulty(deps.difficulty) ? deps.difficulty : "normal",
     hardcore,
-    worldgenVersion: WORLDGEN_VERSION,
+    worldgenVersion: typeof deps.worldgenVersion === "number" && Number.isFinite(deps.worldgenVersion) ? deps.worldgenVersion : WORLDGEN_VERSION,
     createdAt,
-    lastPlayedAt: createdAt
+    lastPlayedAt: createdAt,
+    ...(deps.cloudId ? { cloudId: deps.cloudId } : {})
   };
   const manifest = readWorlds(storage);
   writeManifest(WORLDS_KEY, { version: 1, worlds: [...manifest.worlds, world] }, storage);
   return world;
+}
+
+/** Links an existing local world to a cloud save (the "Upload to cloud" action). No-op if the world is gone. */
+export function linkWorldCloud(id: string, cloudId: string, storage: Storage = localStorage): WorldsManifest {
+  const manifest = readWorlds(storage);
+  const next: WorldsManifest = {
+    version: 1,
+    worlds: manifest.worlds.map((w) => (w.id === id ? { ...w, cloudId } : w))
+  };
+  writeManifest(WORLDS_KEY, next, storage);
+  return next;
 }
 
 export function renameWorld(id: string, name: string, storage: Storage = localStorage): WorldsManifest {

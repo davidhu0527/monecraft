@@ -7,7 +7,9 @@ import WorldSelect from "@/components/menu/WorldSelect";
 import { ensureSignedIn } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { getProfile, setActiveProfile } from "@/lib/game/profiles";
-import { deleteWorld, getWorld, touchWorld, type WorldMeta } from "@/lib/game/worlds";
+import { createWorld, deleteWorld, getWorld, touchWorld, worldSaveKey, type WorldMeta } from "@/lib/game/worlds";
+import { writeSave } from "@/lib/game/save";
+import { pullCloudSaveIfNewer } from "@/lib/game/cloudSaves";
 import { deleteOnlineWorld, requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
 import { connectNetworkSession, type NetworkSession } from "@/lib/net/NetworkSession";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
@@ -82,6 +84,45 @@ export default function GameShell() {
   // A join is in flight — guards against a double-click opening (and leaking) a
   // second socket. A ref, not `connecting`, so it's set synchronously.
   const joiningRef = useRef(false);
+
+  /**
+   * Enter a local world. A cloud-linked one (WorldMeta.cloudId) reconciles first:
+   * pull the remote save if it advanced past this device's cursor, write it to
+   * disk, and boot from disk like any other world — reusing the "Opening…" gate.
+   */
+  const playLocal = async (profileId: string, worldId: string) => {
+    if (joiningRef.current) return;
+    const world = getWorld(worldId);
+    touchWorld(worldId);
+    writeSessionPointer({ profileId, worldId });
+    if (world?.cloudId) {
+      joiningRef.current = true;
+      setConnecting(world.name);
+      try {
+        const decision = await pullCloudSaveIfNewer(world.cloudId);
+        if (decision.adopt) writeSave(worldSaveKey(worldId), decision.save);
+      } catch {
+        // Offline or a bad blob → fall through and play the local copy.
+      } finally {
+        setConnecting(null);
+        joiningRef.current = false;
+      }
+    }
+    setScreen({ name: "play", profileId, worldId });
+  };
+
+  /** Materialize a cloud save as a local world (linked by cloudId), then open it — the pull-on-open fills it in. */
+  const downloadCloud = async (profileId: string, world: OnlineWorld) => {
+    const local = createWorld(profileId, world.name, String(world.seed), {
+      worldType: world.worldType as WorldMeta["worldType"],
+      gameMode: world.gameMode as WorldMeta["gameMode"],
+      difficulty: world.difficulty as WorldMeta["difficulty"],
+      hardcore: world.hardcore,
+      worldgenVersion: world.worldgenVersion,
+      cloudId: world.id
+    });
+    await playLocal(profileId, local.id);
+  };
 
   /** Guest-or-account → ticket → socket → replica sync → play. */
   const playOnline = async (profileId: string, world: OnlineWorld) => {
@@ -182,17 +223,14 @@ export default function GameShell() {
         <>
           <WorldSelect
             profile={profile}
-            onPlay={(worldId) => {
-              touchWorld(worldId);
-              writeSessionPointer({ profileId: profile.id, worldId });
-              setScreen({ name: "play", profileId: profile.id, worldId });
-            }}
+            onPlay={(worldId) => void playLocal(profile.id, worldId)}
             onPlayOnline={(world) => void playOnline(profile.id, world)}
+            onDownloadCloud={(world) => void downloadCloud(profile.id, world)}
             onBack={() => setScreen({ name: "profile-select" })}
           />
           {connecting && (
             <div className="net-modal" role="status">
-              <div className="net-modal-box">Joining “{connecting}”…</div>
+              <div className="net-modal-box">Opening “{connecting}”…</div>
             </div>
           )}
           {connectError && (

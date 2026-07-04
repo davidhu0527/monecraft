@@ -4,7 +4,19 @@ import MenuScreen from "@/components/menu/MenuScreen";
 import type { Profile } from "@/lib/game/profiles";
 import { GAME_MODE_PRESETS, type GameMode } from "@/lib/game/gameModes";
 import { DIFFICULTY_PRESETS, type Difficulty } from "@/lib/game/difficulties";
-import { createWorld, deleteWorld, MAX_WORLD_NAME, renameWorld, WORLD_TYPE_PRESETS, worldsForProfile } from "@/lib/game/worlds";
+import {
+  createWorld,
+  deleteWorld,
+  linkWorldCloud,
+  MAX_WORLD_NAME,
+  renameWorld,
+  WORLD_TYPE_PRESETS,
+  worldSaveKey,
+  worldsForProfile,
+  type WorldMeta
+} from "@/lib/game/worlds";
+import { readSave } from "@/lib/game/save";
+import { pushSave } from "@/lib/game/cloudSaves";
 import type { WorldType } from "@/lib/world";
 import { onlineUsed } from "@/lib/auth/client";
 import { createInviteLink, createOnlineWorld, listOnlineWorlds, revokeInviteLinks, type OnlineWorld } from "@/lib/online/onlineClient";
@@ -31,12 +43,14 @@ type WorldSelectProps = {
   onPlay: (worldId: string) => void;
   /** Join an online (server-hosted) world. */
   onPlayOnline: (world: OnlineWorld) => void;
+  /** Materialize a cloud save (sp-cloud) as a local world and open it. */
+  onDownloadCloud: (world: OnlineWorld) => void;
   /** Back to the profile list. */
   onBack: () => void;
 };
 
 /** A profile's world list: pick a world, or create / rename / delete one. */
-export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: WorldSelectProps) {
+export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadCloud, onBack }: WorldSelectProps) {
   const [creating, setCreating] = useState(false);
   const [creatingOnline, setCreatingOnline] = useState(false);
   const [onlineWorlds, setOnlineWorlds] = useState<OnlineWorld[] | null>(null);
@@ -44,6 +58,8 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
   const [onlineCreateError, setOnlineCreateError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Online worlds appear only once this browser has used online features —
   // offline-first: no fetch, no section, no account until the player opts in.
@@ -96,6 +112,40 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
   }
 
   const worlds = worldsForProfile(profile.id);
+
+  // "Upload to cloud": create an sp-cloud world row, link it to this local world,
+  // and push the current save. Re-renders (setUploading) re-read the manifest so
+  // the card flips to "Synced".
+  const uploadToCloud = (world: WorldMeta) => {
+    setUploadError(null);
+    setUploading(world.id);
+    const save = readSave(worldSaveKey(world.id));
+    void createOnlineWorld({
+      name: world.name,
+      seed: world.seed,
+      worldType: world.worldType,
+      gameMode: world.gameMode,
+      difficulty: world.difficulty,
+      hardcore: world.hardcore,
+      kind: "sp-cloud"
+    }).then(async (cloud) => {
+      if (!cloud) {
+        setUploading(null);
+        setUploadError(world.id); // keep the world local — surface the failure
+        return;
+      }
+      linkWorldCloud(world.id, cloud.id);
+      if (save) await pushSave(cloud.id, save);
+      refreshOnline();
+      setUploading(null);
+    });
+  };
+
+  // Split the server world list: mp rooms stay in Online Worlds; sp-cloud saves
+  // not yet on this device become downloadable in the Cloud Saves section.
+  const mpWorlds = onlineWorlds?.filter((world) => world.kind === "mp") ?? [];
+  const linkedCloudIds = new Set(worlds.map((world) => world.cloudId).filter((id): id is string => Boolean(id)));
+  const cloudWorlds = onlineWorlds?.filter((world) => world.kind === "sp-cloud" && !linkedCloudIds.has(world.id)) ?? [];
 
   return (
     <MenuScreen title={`${profile.name} — Worlds`}>
@@ -159,6 +209,21 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
                     </span>
                   </button>
                   <div className="menu-card-actions">
+                    {onlineUsed() &&
+                      (world.cloudId ? (
+                        <span className="menu-cloud-badge" title="This world syncs to your account across devices">
+                          ☁ Synced
+                        </span>
+                      ) : (
+                        <button
+                          className="mc-button"
+                          disabled={uploading === world.id}
+                          title="Sync this world to your account so it follows you across devices"
+                          onClick={() => uploadToCloud(world)}
+                        >
+                          {uploading === world.id ? "Uploading…" : uploadError === world.id ? "Upload failed" : "Upload to cloud"}
+                        </button>
+                      ))}
                     <button
                       className="mc-button"
                       onClick={() => {
@@ -178,14 +243,29 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onBack }: W
           ))}
         </ul>
       )}
+      {cloudWorlds.length > 0 && (
+        <section className="menu-online">
+          <h3 className="menu-online-title">Cloud Saves</h3>
+          <ul className="menu-list">
+            {cloudWorlds.map((world) => (
+              <li key={world.id} className="menu-card">
+                <button className="menu-card-play" data-testid={`cloud-world-${world.id}`} onClick={() => onDownloadCloud(world)}>
+                  <span className="menu-card-name">{world.name}</span>
+                  <span className="menu-card-sub">Download to this device · Seed {world.seed}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {onlineWorlds !== null && (
         <section className="menu-online">
           <h3 className="menu-online-title">Online Worlds</h3>
-          {onlineWorlds.length === 0 ? (
+          {mpWorlds.length === 0 ? (
             <p className="menu-empty">No online worlds yet — create one and share the invite link.</p>
           ) : (
             <ul className="menu-list">
-              {onlineWorlds.map((world) => (
+              {mpWorlds.map((world) => (
                 <li key={world.id} className="menu-card">
                   <button className="menu-card-play" data-testid={`online-world-${world.id}`} onClick={() => onPlayOnline(world)}>
                     <span className="menu-card-name">{world.name}</span>

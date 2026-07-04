@@ -691,3 +691,17 @@ A few things work differently online, and the rest is the same game:
 - **Boats are shared.** Rafts and ships are boardable online — pile into one
   together.
 - The world saves on the server automatically; there's nothing to manage.
+
+### Cloud saves — your single-player worlds across devices
+
+Signed in, you can make a **single-player** world follow you between browsers
+and machines. On the world's card, **Upload to cloud** copies it to your
+account (the card then reads **☁ Synced**), and from there every save syncs up
+automatically as you play. On another device, your synced worlds appear under
+**Cloud Saves** — **Download** brings one onto that device to play.
+
+It's last-write-wins: if the same world is played on two devices, the most
+recent save wins. Open a synced world and it always catches up to the latest
+first; a world you played offline keeps its newer progress rather than being
+overwritten by an older cloud copy. Local worlds you never upload stay entirely
+offline, exactly as before — cloud saves are opt-in, one world at a time.

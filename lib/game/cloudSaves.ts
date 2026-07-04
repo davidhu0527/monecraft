@@ -7,9 +7,9 @@ import type { SaveData } from "@/lib/game/types";
  * cursor); a 409 means another device wrote in between — the caller pulls
  * the newer save and lets the player continue from it.
  *
- * This module is transport only. Wiring into the world list / autosave path
- * lands with the online shell (the same GameShell rework that adds the
- * multiplayer world browser), so the sync UX ships in one piece.
+ * Wired into the shell: WorldSelect uploads/downloads sp-cloud worlds, GameShell
+ * reconciles on open (`pullCloudSaveIfNewer`), and useMinecraftGame pushes on
+ * autosave/quit for a `WorldMeta.cloudId`-linked, signed-in world.
  */
 
 const STAMPS_KEY = "minecraft_cloud_stamps_v1";
@@ -70,16 +70,41 @@ export async function pushSave(cloudWorldId: string, save: SaveData, storage: St
   }
 }
 
-/** Downloads the latest cloud save (null when the world has no blob yet). Advances the sync cursor. */
-export async function pullSave(cloudWorldId: string, storage: Storage = localStorage): Promise<SaveData | null> {
+/** Fetches the cloud blob + its stamp (null when the world has no blob yet or the fetch fails). */
+async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; updatedAt: string | null } | null> {
   try {
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`);
     if (!response.ok) return null;
-    const stamp = response.headers.get("x-updated-at");
+    const updatedAt = response.headers.get("x-updated-at");
     const save = await gunzipJson<SaveData>(new Uint8Array(await response.arrayBuffer()));
-    if (stamp) writeStamp(cloudWorldId, stamp, storage);
-    return save;
+    return { save, updatedAt };
   } catch {
     return null;
   }
+}
+
+/** Downloads the latest cloud save (null when the world has no blob yet). Advances the sync cursor. */
+export async function pullSave(cloudWorldId: string, storage: Storage = localStorage): Promise<SaveData | null> {
+  const result = await fetchCloudSave(cloudWorldId);
+  if (!result) return null;
+  if (result.updatedAt) writeStamp(cloudWorldId, result.updatedAt, storage);
+  return result.save;
+}
+
+export type PullDecision = { adopt: true; save: SaveData } | { adopt: false };
+
+/**
+ * Open-time reconcile: adopt the remote save ONLY when it advanced past what this
+ * device last synced (its cursor). So re-opening a world you played offline keeps
+ * your newer local progress instead of clobbering it with an older cloud copy;
+ * a first download (no cursor yet) always adopts, and a genuine remote write from
+ * another device wins (last-write-wins — the push side warns on the conflict).
+ */
+export async function pullCloudSaveIfNewer(cloudWorldId: string, storage: Storage = localStorage): Promise<PullDecision> {
+  const result = await fetchCloudSave(cloudWorldId);
+  if (!result) return { adopt: false }; // no blob yet, or offline → keep local
+  const cursor = readStamps(storage)[cloudWorldId];
+  if (result.updatedAt && result.updatedAt === cursor) return { adopt: false }; // unchanged since our last sync
+  if (result.updatedAt) writeStamp(cloudWorldId, result.updatedAt, storage);
+  return { adopt: true, save: result.save };
 }

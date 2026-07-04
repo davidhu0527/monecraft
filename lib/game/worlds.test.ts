@@ -4,7 +4,9 @@ import {
   createWorld,
   deleteWorld,
   deleteWorldsForProfile,
+  getWorld,
   hashStringToSeed,
+  linkWorldCloud,
   MAX_SEED,
   readWorlds,
   renameWorld,
@@ -219,5 +221,27 @@ describe("worlds manifest", () => {
       ]
     });
     expect(readWorlds(fakeStorage({ [WORLDS_KEY]: raw })).worlds[0]).toMatchObject({ hardcore: true, gameMode: "survival", difficulty: "hard" });
+  });
+});
+
+describe("cloud linking", () => {
+  test("createWorld records a cloudId (and a source worldgen version) that survives the sanitizer", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "p1");
+    const world = createWorld("p1", "Cloudy", "7", { storage, uid: () => "w1", cloudId: "cloud-1", worldgenVersion: 9 });
+    expect(world.cloudId).toBe("cloud-1");
+    expect(world.worldgenVersion).toBe(9);
+    // Re-read through readWorlds (which rebuilds each entry via sanitizeWorld):
+    // cloudId is not a known key by default, so it must be copied through explicitly.
+    expect(readWorlds(storage).worlds.find((w) => w.id === "w1")?.cloudId).toBe("cloud-1");
+  });
+
+  test("an ordinary world has no cloudId until it is linked", () => {
+    const storage = fakeStorage();
+    seedProfile(storage, "p1");
+    createWorld("p1", "Local", "7", { storage, uid: () => "w1" });
+    expect(getWorld("w1", storage)?.cloudId).toBeUndefined();
+    linkWorldCloud("w1", "cloud-9", storage);
+    expect(getWorld("w1", storage)?.cloudId).toBe("cloud-9");
   });
 });
