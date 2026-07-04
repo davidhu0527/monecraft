@@ -157,7 +157,7 @@ game-server URL — see below.
   back-off ladder and re-sync (they'll see a brief "Reconnecting…" badge).
   **Never run a bare `fly deploy`**: there is no Dockerfile at the repo root, so
   flyctl's framework scanner generates a Next.js web-app image (`bun run start`,
-  port 3000) and ships *that* to the game-server app — it crash-loops with
+  port 3000) and ships _that_ to the game-server app — it crash-loops with
   exit 127 (`next` needs `node`, absent from the `oven/bun` base) and takes
   online play down until a correct redeploy.
 - **Schema change:** land the new migration, then run `bun run db:migrate`

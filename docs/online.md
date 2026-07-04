@@ -31,11 +31,15 @@ Postgres.
 - When signed in, the menu opens into an **account home**
   (`components/menu/AccountProfileSelect.tsx`) listing that account's
   server-side profiles (create/rename/delete, capped at `MAX_ONLINE_PROFILES`,
-  synced across devices); picking one shows its online worlds
-  (`OnlineWorldSelect`, capped at `MAX_WORLDS_PER_PROFILE` owned worlds), and
-  the join ticket carries the profile's name/skin. Worlds joined by invite are
-  account-level memberships, so they appear under **every** profile with a
-  "Joined" tag.
+  synced across devices); picking one shows its worlds (`OnlineWorldSelect`)
+  in two sections: **Online Worlds** (server-hosted mp rooms; the join ticket
+  carries the profile's name/skin) and **Singleplayer** (`sp-cloud` worlds —
+  full client-side engine, **no game server**, saves synced to the account so
+  any signed-in device continues them). Owned worlds of both kinds share the
+  `MAX_WORLDS_PER_PROFILE` cap. Worlds joined by invite are account-level
+  memberships, so they appear under **every** profile with a "Joined" tag;
+  so do singleplayer saves uploaded from the local menus (`profileId` null —
+  account-level).
 - Local worlds are **hidden but preserved** while signed in — never deleted,
   never auto-uploaded. The account home's **"Play locally"** button opens the
   local menus without signing out (that's also where cloud-save sync lives);
@@ -61,10 +65,15 @@ newer save on the next open.
 
 **How it flows through the menu** (all opt-in per world):
 
+- **Create in account mode** — the profile world screen's **New Singleplayer
+  World** makes an `sp-cloud` row owned by the profile and opens it directly:
+  the engine runs client-side against a device save cache keyed
+  `cloud:<world id>` (a fabricated `WorldMeta` with `cloudId` set, so the same
+  reconcile/push machinery below applies — no local-manifest entry needed).
 - **Upload** — a local world's card gets an "Upload to cloud" action while
-  signed in: it creates an `sp-cloud` world row, links it via
-  `WorldMeta.cloudId` (a local-manifest field, not part of the save format),
-  and pushes the current save. The card then reads "☁ Synced".
+  signed in: it creates an `sp-cloud` world row (account-level, no profile),
+  links it via `WorldMeta.cloudId` (a local-manifest field, not part of the
+  save format), and pushes the current save. The card then reads "☁ Synced".
 - **On another device** — your `sp-cloud` saves you haven't downloaded yet
   appear under **Cloud Saves**; **Download** materializes a local world (linked
   by `cloudId`) and opens it, pulling the blob in.
@@ -79,8 +88,9 @@ newer save on the next open.
 ## Playing online (client)
 
 The account's per-profile world list (`OnlineWorldSelect`) shows owned and
-joined worlds, creates new ones (same form as local worlds — the row lives in
-Postgres, the game server hosts it), and mints invite links (`/join/<token>`
+joined online worlds plus the profile's singleplayer ones, creates new worlds
+of either kind (same form as local worlds — the row lives in Postgres; the
+game server hosts only the mp kind), and mints invite links (`/join/<token>`
 — the landing page previews the world's name, asks the visitor to sign in or
 register if they aren't, then accepts the membership; the world appears in
 their account's world list). Playing one runs `GameShell.playOnline`:

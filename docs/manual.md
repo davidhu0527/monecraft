@@ -661,6 +661,13 @@ difficulty); creating it connects you straight in. Press **Copy invite** on
 your world's card to put a join link on the clipboard — send it to your
 friends. Invite links expire after a while; copy a fresh one any time.
 
+**Singleplayer, synced.** A profile can also hold **singleplayer** worlds
+(**New Singleplayer World** on the same screen): they play exactly like local
+worlds — entirely on your machine, no game-server connection — but the save
+lives with your account, so signing in on another computer picks up right
+where you left off. Online and singleplayer worlds share the same per-profile
+limit.
+
 **Joining.** Opening an invite link shows the world's name and asks you to
 sign in (or register) if you aren't; the world then joins your account and
 shows up in every profile's world list with a **Joined** tag — click its card
