@@ -100,8 +100,15 @@ export default function GameShell() {
   // The signed-in account (a real, non-anonymous one flips the menu into
   // account mode). Offline-first: never asked until this browser went online.
   const [onlineUser, setOnlineUser] = useState<OnlineUser | null>(null);
+  // The "Play locally" door: a signed-in account browsing its local (browser)
+  // profiles/worlds — where cloud-save sync lives — without signing out.
+  const [browsingLocal, setBrowsingLocal] = useState(false);
   const refreshOnlineUser = useCallback(() => {
-    if (onlineUsed()) void currentUser().then(setOnlineUser);
+    if (onlineUsed())
+      void currentUser().then((user) => {
+        setOnlineUser(user);
+        if (!user) setBrowsingLocal(false); // signed out: the door has no "back"
+      });
   }, []);
 
   /**
@@ -198,7 +205,13 @@ export default function GameShell() {
       pointer && getProfile(pointer.profileId) && getWorld(pointer.worldId) ? { name: "play", profileId: pointer.profileId, worldId: pointer.worldId } : null;
     // Microtask hop keeps this off the synchronous effect path (cascading-render lint).
     queueMicrotask(() => {
-      if (resume) setScreen(resume);
+      if (resume) {
+        setScreen(resume);
+        // A resumed local world means the player came through the local menus —
+        // quitting should walk back out through them, even for a signed-in
+        // account, not jump abruptly to the account home.
+        setBrowsingLocal(true);
+      }
       setReady(true);
     });
   }, []);
@@ -313,10 +326,17 @@ export default function GameShell() {
   }
 
   // The profile-select screen is auth-aware: a signed-in account browses its
-  // synced online profiles; everyone else gets the local (browser) profiles.
-  if (onlineUser && !onlineUser.isAnonymous) {
+  // synced online profiles (unless it stepped through the "Play locally" door);
+  // everyone else gets the local (browser) profiles.
+  const accountMode = onlineUser && !onlineUser.isAnonymous;
+  if (accountMode && !browsingLocal) {
     return (
-      <AccountProfileSelect user={onlineUser} onPlay={(profile) => setScreen({ name: "online-worlds", profile })} onSignedOut={() => setOnlineUser(null)} />
+      <AccountProfileSelect
+        user={onlineUser}
+        onPlay={(profile) => setScreen({ name: "online-worlds", profile })}
+        onPlayLocally={() => setBrowsingLocal(true)}
+        onSignedOut={() => setOnlineUser(null)}
+      />
     );
   }
 
@@ -327,6 +347,7 @@ export default function GameShell() {
         setScreen({ name: "world-select", profileId });
       }}
       onAuthChange={refreshOnlineUser}
+      onBackToAccount={accountMode ? () => setBrowsingLocal(false) : undefined}
     />
   );
 }

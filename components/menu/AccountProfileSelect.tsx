@@ -15,18 +15,21 @@ import { skinPortraitUrl } from "@/lib/ui/sprites";
  * The signed-in account's home: its server-side profiles (name + skin), synced
  * across devices. The account-mode counterpart to ProfileSelect — picking a
  * profile shows that profile's online worlds. Local Players (logged out) never
- * see this; guests can't have profiles. Capped at MAX_ONLINE_PROFILES.
+ * see this. Capped at MAX_ONLINE_PROFILES. "Play locally" opens the browser's
+ * local profiles/worlds (where cloud-save sync lives) without signing out.
  */
 
 type AccountProfileSelectProps = {
   user: OnlineUser;
   /** Enter an online profile: show its server-hosted worlds. */
   onPlay: (profile: OnlineProfile) => void;
+  /** Browse the local (browser) profiles and worlds while staying signed in. */
+  onPlayLocally: () => void;
   /** After signing out — the caller drops back to the local (logged-out) menu. */
   onSignedOut: () => void;
 };
 
-export default function AccountProfileSelect({ user, onPlay, onSignedOut }: AccountProfileSelectProps) {
+export default function AccountProfileSelect({ user, onPlay, onPlayLocally, onSignedOut }: AccountProfileSelectProps) {
   const [profiles, setProfiles] = useState<OnlineProfile[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -169,15 +172,20 @@ export default function AccountProfileSelect({ user, onPlay, onSignedOut }: Acco
           ))}
         </ul>
       )}
-      <button
-        className="mc-button menu-primary"
-        data-testid="new-online-profile"
-        disabled={atCap}
-        title={atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : undefined}
-        onClick={() => setCreating(true)}
-      >
-        {atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : "New Profile"}
-      </button>
+      <div className="menu-bottom-row">
+        <button className="mc-button" data-testid="play-locally" onClick={onPlayLocally}>
+          Play locally
+        </button>
+        <button
+          className="mc-button menu-primary"
+          data-testid="new-online-profile"
+          disabled={atCap}
+          title={atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : undefined}
+          onClick={() => setCreating(true)}
+        >
+          {atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : "New Profile"}
+        </button>
+      </div>
     </MenuScreen>
   );
 }
