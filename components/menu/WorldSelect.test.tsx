@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createProfile, type Profile } from "@/lib/game/profiles";
 import { createWorld, readWorlds } from "@/lib/game/worlds";
@@ -167,6 +167,16 @@ describe("WorldSelect", () => {
     // Local worlds: the unlinked one offers upload, the linked one reads Synced.
     expect(screen.getByRole("button", { name: /Upload to cloud/ })).toBeTruthy();
     expect(screen.getByText(/Synced/)).toBeTruthy();
+  });
+
+  test("cloud access flipping off clears the fetched cloud list", async () => {
+    cloud.worlds = [summary("cloud1", "Cloud World", "sp-cloud")];
+    const { rerender } = render(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={true} onBack={mock()} />);
+    await waitFor(() => expect(screen.getByTestId("cloud-world-cloud1")).toBeTruthy());
+
+    rerender(<WorldSelect profile={PROFILE} onPlay={mock()} onDownloadCloud={() => {}} cloudEnabled={false} onBack={mock()} />);
+    await waitFor(() => expect(screen.queryByTestId("cloud-world-cloud1")).toBeNull());
+    expect(screen.queryByText("Cloud Saves")).toBeNull();
   });
 
   test("logged out (cloud disabled) the list is purely local — no fetch, no cloud buttons", () => {

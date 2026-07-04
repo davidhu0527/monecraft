@@ -121,9 +121,10 @@ export default function WorldSelect({ profile, onPlay, onDownloadCloud, cloudEna
   };
 
   // Online (mp) rooms live in the account menu; here only the account's
-  // sp-cloud saves not yet on this device become downloadable.
+  // sp-cloud saves not yet on this device become downloadable. Derived behind
+  // cloudEnabled so a list fetched before a sign-out can't linger as stale UI.
   const linkedCloudIds = new Set(worlds.map((world) => world.cloudId).filter((id): id is string => Boolean(id)));
-  const cloudWorlds = cloudWorldList?.filter((world) => world.kind === "sp-cloud" && !linkedCloudIds.has(world.id)) ?? [];
+  const cloudWorlds = cloudEnabled ? (cloudWorldList?.filter((world) => world.kind === "sp-cloud" && !linkedCloudIds.has(world.id)) ?? []) : [];
 
   return (
     <MenuScreen title={`${profile.name} — Worlds`}>

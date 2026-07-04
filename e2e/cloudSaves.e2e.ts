@@ -46,9 +46,11 @@ test("a single-player world uploads to the cloud and downloads onto a fresh devi
     await page.goto("/");
 
     // ── register an account, then reach the local menus through the door ────
+    // Unique per attempt: the pglite webServer keeps its data across retries
+    // within one run, and a re-registered email fails with "already exists".
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "I need an account" }).click();
-    await page.getByLabel("Email").fill("cloudy@example.com");
+    await page.getByLabel("Email").fill(`cloudy-${Date.now().toString(36)}@example.com`);
     await page.getByLabel("Display name").fill("Cloudy");
     await page.getByLabel("Password").fill("hunter2hunter2");
     await page.getByRole("button", { name: "Create account" }).click();

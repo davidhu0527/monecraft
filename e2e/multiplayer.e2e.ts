@@ -53,6 +53,9 @@ test("two accounts share an online world via an invite link", async ({ browser }
   // renders with software GL, so the whole journey gets a generous ceiling.
   test.setTimeout(240000);
   const errors: string[] = [];
+  // The pglite webServer keeps its data across retries within one run, so a
+  // fixed email means every retry dies on "User already exists" — tag them.
+  const runTag = Date.now().toString(36);
 
   // ── the host: register → online profile → online world → in-game ─────────
   const hostContext = await browser.newContext();
@@ -62,7 +65,7 @@ test("two accounts share an online world via an invite link", async ({ browser }
 
   // The first-run screen surfaces the account panel, so registration needs no
   // local profile at all — a pure account never touches the local menus.
-  await signUp(host, "Hosta", "host@example.com");
+  await signUp(host, "Hosta", `host-${runTag}@example.com`);
   await createOnlineProfile(host, "Hosta");
 
   // Creative, so the host's block breaks are instant on the server side.
@@ -96,7 +99,7 @@ test("two accounts share an online world via an invite link", async ({ browser }
   // account panel; registering accepts the invite in place.
   await expect(friend.getByText("Co-op Test")).toBeVisible({ timeout: 15000 });
   await expect(friend.getByText(/sign in to join/)).toBeVisible();
-  await signUp(friend, "Frienda", "friend@example.com");
+  await signUp(friend, "Frienda", `friend-${runTag}@example.com`);
   await expect(friend.getByText(/You've joined/)).toBeVisible({ timeout: 15000 });
   await friend.getByRole("link", { name: "Open the game" }).click();
 
@@ -129,10 +132,12 @@ test("two accounts share an online world via an invite link", async ({ browser }
   await host.mouse.up();
 
   // ── chat round-trips, rendering in the other player's log ────────────────
+  // 30s like the block-edit poll: a slammed CI runner has been seen lagging
+  // the second page's connection by tens of seconds (10s flaked in CI).
   await host.evaluate(() => window.__monecraft!.net!.sendChat("hello from the host"));
-  await expect(friend.getByText("hello from the host")).toBeVisible({ timeout: 10000 });
+  await expect(friend.getByText("hello from the host")).toBeVisible({ timeout: 30000 });
   await friend.evaluate(() => window.__monecraft!.net!.sendChat("hi back"));
-  await expect(host.getByText("hi back")).toBeVisible({ timeout: 10000 });
+  await expect(host.getByText("hi back")).toBeVisible({ timeout: 30000 });
 
   // ── the roster lists both players; only the owner (host) gets a Kick control ─
   for (const page of [host, friend]) {
@@ -154,9 +159,9 @@ test("two accounts share an online world via an invite link", async ({ browser }
     return net.roster().find((member) => member.id !== net.playerId)!.id;
   });
   await host.evaluate((id) => window.__monecraft!.net!.kick(id), friendId);
-  await expect.poll(() => friend.evaluate(() => window.__monecraft!.net!.status()), { timeout: 15000 }).toBe("closed");
+  await expect.poll(() => friend.evaluate(() => window.__monecraft!.net!.status()), { timeout: 30000 }).toBe("closed");
   await expect(friend.getByRole("alertdialog", { name: "Disconnected" })).toBeVisible({ timeout: 10000 });
-  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.players.size), { timeout: 15000 }).toBe(1);
+  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.players.size), { timeout: 30000 }).toBe(1);
 
   expect(errors, "no console/page errors during the test").toEqual([]);
   await hostContext.close();

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AccountPanel from "@/components/menu/AccountPanel";
 import { currentUser, markOnlineUsed } from "@/lib/auth/client";
@@ -22,6 +22,10 @@ export default function JoinPage({ params }: { params: Promise<{ token: string }
   // accept. The accept lives HERE (not in onAuthChange): the phase flip
   // unmounts the panel, and the effect owns the cancellation story.
   const [authNonce, setAuthNonce] = useState(0);
+  // The resolved invite survives auth retries: re-resolving after sign-in
+  // could hit a transient failure and claim the (already validated) link is
+  // invalid right after the user registered.
+  const inviteRef = useRef<{ token: string; worldName: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,8 +34,13 @@ export default function JoinPage({ params }: { params: Promise<{ token: string }
     // and a freshly signed-in visitor would land back on the local menus.
     markOnlineUsed();
     void (async () => {
-      const invite = await resolveInviteToken(token);
+      // Back to the spinner during an auth retry — not the stale sign-in
+      // prompt next to an already-signed-in panel.
+      if (!cancelled) setState({ phase: "loading" });
+      const cached = inviteRef.current?.token === token ? inviteRef.current : null;
+      const invite = cached ?? (await resolveInviteToken(token));
       if (!invite) return void (!cancelled && setState({ phase: "error", message: "This invite link is invalid or has expired." }));
+      inviteRef.current = { token, worldName: invite.worldName };
       const user = await currentUser();
       if (!user) return void (!cancelled && setState({ phase: "signin", worldName: invite.worldName }));
       const accepted = await acceptInviteToken(token);
