@@ -58,8 +58,10 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
   const [onlineCreateError, setOnlineCreateError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Per-world (not single scalars): uploads run independently, so tracking one
+  // id would re-enable another card's button mid-flight and allow a double-upload.
+  const [uploading, setUploading] = useState<ReadonlySet<string>>(() => new Set());
+  const [uploadError, setUploadError] = useState<ReadonlySet<string>>(() => new Set());
 
   // Online worlds appear only once this browser has used online features —
   // offline-first: no fetch, no section, no account until the player opts in.
@@ -113,12 +115,18 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
 
   const worlds = worldsForProfile(profile.id);
 
-  // "Upload to cloud": create an sp-cloud world row, link it to this local world,
-  // and push the current save. Re-renders (setUploading) re-read the manifest so
-  // the card flips to "Synced".
+  const without = (set: ReadonlySet<string>, id: string) => {
+    const next = new Set(set);
+    next.delete(id);
+    return next;
+  };
+
+  // "Upload to cloud": create an sp-cloud world row, push the current save, and —
+  // only if the push actually lands — link it so the card flips to "Synced".
+  // Linking on a failed push would falsely claim the (empty) cloud row is synced.
   const uploadToCloud = (world: WorldMeta) => {
-    setUploadError(null);
-    setUploading(world.id);
+    setUploadError((prev) => without(prev, world.id));
+    setUploading((prev) => new Set(prev).add(world.id));
     const save = readSave(worldSaveKey(world.id));
     void createOnlineWorld({
       name: world.name,
@@ -129,15 +137,16 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
       hardcore: world.hardcore,
       kind: "sp-cloud"
     }).then(async (cloud) => {
-      if (!cloud) {
-        setUploading(null);
-        setUploadError(world.id); // keep the world local — surface the failure
-        return;
+      // A world with no local save yet has nothing to push — link it now and let
+      // the first play autosave upload the blob.
+      const pushed = cloud && save ? await pushSave(cloud.id, save) : "saved";
+      if (cloud && pushed === "saved") {
+        linkWorldCloud(world.id, cloud.id);
+        refreshOnline();
+      } else {
+        setUploadError((prev) => new Set(prev).add(world.id)); // keep the world local — surface the failure
       }
-      linkWorldCloud(world.id, cloud.id);
-      if (save) await pushSave(cloud.id, save);
-      refreshOnline();
-      setUploading(null);
+      setUploading((prev) => without(prev, world.id));
     });
   };
 
@@ -217,11 +226,11 @@ export default function WorldSelect({ profile, onPlay, onPlayOnline, onDownloadC
                       ) : (
                         <button
                           className="mc-button"
-                          disabled={uploading === world.id}
+                          disabled={uploading.has(world.id)}
                           title="Sync this world to your account so it follows you across devices"
                           onClick={() => uploadToCloud(world)}
                         >
-                          {uploading === world.id ? "Uploading…" : uploadError === world.id ? "Upload failed" : "Upload to cloud"}
+                          {uploading.has(world.id) ? "Uploading…" : uploadError.has(world.id) ? "Upload failed" : "Upload to cloud"}
                         </button>
                       ))}
                     <button

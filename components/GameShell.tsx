@@ -86,17 +86,17 @@ export default function GameShell() {
   const joiningRef = useRef(false);
 
   /**
-   * Enter a local world. A cloud-linked one (WorldMeta.cloudId) reconciles first:
-   * pull the remote save if it advanced past this device's cursor, write it to
-   * disk, and boot from disk like any other world — reusing the "Opening…" gate.
+   * Open a world for play. A cloud-linked one (WorldMeta.cloudId) reconciles
+   * first: pull the remote save if it advanced past this device's cursor, write
+   * it to disk, and boot from disk like any other world — reusing the "Opening…"
+   * gate. The caller owns the `joiningRef` guard (this helper does not), so the
+   * materialize-then-open path can hold it across `createWorld` too.
    */
-  const playLocal = async (profileId: string, worldId: string) => {
-    if (joiningRef.current) return;
+  const openWorld = async (profileId: string, worldId: string) => {
     const world = getWorld(worldId);
     touchWorld(worldId);
     writeSessionPointer({ profileId, worldId });
     if (world?.cloudId) {
-      joiningRef.current = true;
       setConnecting(world.name);
       try {
         const decision = await pullCloudSaveIfNewer(world.cloudId);
@@ -105,23 +105,40 @@ export default function GameShell() {
         // Offline or a bad blob → fall through and play the local copy.
       } finally {
         setConnecting(null);
-        joiningRef.current = false;
       }
     }
     setScreen({ name: "play", profileId, worldId });
   };
 
+  const playLocal = async (profileId: string, worldId: string) => {
+    if (joiningRef.current) return;
+    joiningRef.current = true;
+    try {
+      await openWorld(profileId, worldId);
+    } finally {
+      joiningRef.current = false;
+    }
+  };
+
   /** Materialize a cloud save as a local world (linked by cloudId), then open it — the pull-on-open fills it in. */
   const downloadCloud = async (profileId: string, world: OnlineWorld) => {
-    const local = createWorld(profileId, world.name, String(world.seed), {
-      worldType: world.worldType as WorldMeta["worldType"],
-      gameMode: world.gameMode as WorldMeta["gameMode"],
-      difficulty: world.difficulty as WorldMeta["difficulty"],
-      hardcore: world.hardcore,
-      worldgenVersion: world.worldgenVersion,
-      cloudId: world.id
-    });
-    await playLocal(profileId, local.id);
+    // Guard BEFORE createWorld so a fast double-click can't persist two local
+    // worlds sharing the same cloudId (the second open would just be dropped).
+    if (joiningRef.current) return;
+    joiningRef.current = true;
+    try {
+      const local = createWorld(profileId, world.name, String(world.seed), {
+        worldType: world.worldType as WorldMeta["worldType"],
+        gameMode: world.gameMode as WorldMeta["gameMode"],
+        difficulty: world.difficulty as WorldMeta["difficulty"],
+        hardcore: world.hardcore,
+        worldgenVersion: world.worldgenVersion,
+        cloudId: world.id
+      });
+      await openWorld(profileId, local.id);
+    } finally {
+      joiningRef.current = false;
+    }
   };
 
   /** Guest-or-account → ticket → socket → replica sync → play. */

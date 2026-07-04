@@ -141,4 +141,27 @@ describe("WorldSelect", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("a failed upload keeps the world local and surfaces the error (never a false Synced)", async () => {
+    localStorage.setItem("minecraft_online_v1", "1");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) =>
+      (init?.method ?? "GET") === "POST"
+        ? ({ ok: false, status: 500 } as Response) // creating the cloud row fails
+        : ({ ok: true, json: async () => ({ worlds: [] }) } as unknown as Response)) as typeof fetch;
+    try {
+      const user = userEvent.setup();
+      createWorld("p1", "Local", "1", { uid: () => "wl" });
+      render(<WorldSelect profile={PROFILE} onPlay={mock()} onPlayOnline={() => {}} onDownloadCloud={() => {}} onBack={mock()} />);
+
+      await user.click(await screen.findByRole("button", { name: "Upload to cloud" }));
+
+      // The upload failed → the button reports it, the world was NOT linked, no false badge.
+      expect(await screen.findByRole("button", { name: "Upload failed" })).toBeTruthy();
+      expect(screen.queryByText(/Synced/)).toBeNull();
+      expect(readWorlds().worlds.find((w) => w.id === "wl")?.cloudId).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
