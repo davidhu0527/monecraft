@@ -39,6 +39,11 @@ the join payload is KBs, not the 37 MB voxel field.
   looked). Validated against a per-type **allow-list**; local-presentation
   commands (pause/debug/camera) never travel. Budget: 60/s.
 - `chat` (≤256 chars, 3/s), `ping`, `resync`.
+- `kick { targetId }` — **owner-only**: eject a player. The server re-checks
+  the sender's ticket `role` (same gate as the owner-wide `setDifficulty`/
+  `setGameMode`), so a forged kick from a member is dropped; self-kick is a
+  no-op. The `welcome` carries the recipient's own `role`, so the client shows
+  the control only to the owner.
 
 **Server → client**
 

@@ -58,7 +58,7 @@ describe("room lifecycle", () => {
     expect(await room.join(claimsFor("alice", "w1", "owner"), a)).toBe(true);
 
     const welcome = a.messagesOf("welcome")[0];
-    expect(welcome).toMatchObject({ protocol: PROTOCOL_VERSION, playerId: "alice", worldId: "w1" });
+    expect(welcome).toMatchObject({ protocol: PROTOCOL_VERSION, playerId: "alice", worldId: "w1", role: "owner" });
     expect(welcome.seed).toBeGreaterThan(0);
 
     const binary = a.frames.find((f) => f.kind === "binary");
@@ -328,6 +328,30 @@ describe("ops surface", () => {
     expect(b.frames.some((f) => f.kind === "close" && f.code === 4003)).toBe(true); // CLOSE_KICKED
     expect(a.messagesOf("playerLeft").some((m) => m.id === "bob")).toBe(true);
     expect(room.kick("nobody")).toBe(false);
+  });
+
+  test("a kick MESSAGE is owner-gated: the owner ejects a member, a member's kick is ignored, self-kick is a no-op", async () => {
+    const { room } = await makeRoom();
+    const owner = fakeSink();
+    const member = fakeSink();
+    const target = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), owner);
+    await room.join(claimsFor("bob", "w1", "member"), member);
+    await room.join(claimsFor("carol", "w1", "member"), target);
+    expect((member.messagesOf("welcome")[0] as { role: string }).role).toBe("member");
+
+    // A member trying to kick someone is ignored (the server re-checks the ticket role).
+    await room.handleMessage("bob", { t: "kick", targetId: "carol" });
+    expect(room.playerCount()).toBe(3);
+
+    // The owner can't kick themselves…
+    await room.handleMessage("alice", { t: "kick", targetId: "alice" });
+    expect(room.playerCount()).toBe(3);
+
+    // …but the owner ejects carol with a fatal close.
+    await room.handleMessage("alice", { t: "kick", targetId: "carol" });
+    expect(room.playerCount()).toBe(2);
+    expect(target.frames.some((f) => f.kind === "close" && f.code === 4003)).toBe(true); // CLOSE_KICKED
   });
 
   test("diagnostics report bandwidth once traffic flows", async () => {

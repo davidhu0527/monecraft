@@ -74,19 +74,30 @@ const LOCAL_COMMANDS = new Set<Command["type"]>(["toggleInventory", "toggleAdvan
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 
+/** One player as the roster panel shows them. */
+export type RosterMember = { id: PlayerId; name: string };
+
 export type NetworkSession = {
   readonly engine: GameEngine;
   readonly playerId: PlayerId;
+  /** The local player's role in this world (from the join ticket) — gates the owner controls. */
+  readonly role: "owner" | "member";
   /** UI subscriptions (React components mount after connect; unsubscribe on cleanup). */
   subscribeChat(listener: (entry: { from: string; name: string; text: string }) => void): () => void;
   subscribeStatus(listener: (status: NetStatus) => void): () => void;
+  /** Fires whenever a player joins or leaves — the roster panel re-reads roster(). */
+  subscribeRoster(listener: () => void): () => void;
   status(): NetStatus;
   rttMs(): number;
+  /** Everyone currently in the world (including you). */
+  roster(): RosterMember[];
   /** Names for remote player ids (name tags, chat). */
   playerName(id: PlayerId): string;
   dispatch(command: Command): void;
   applyLook(deltaYaw: number, deltaPitch: number): void;
   sendChat(text: string): void;
+  /** Owner-only: eject a player (no-op server-side for a non-owner). */
+  kick(targetId: PlayerId): void;
   /** Debug knob: inject symmetric latency on every send/receive (0 disables). */
   setSimulatedLatency(ms: number): void;
   simulatedLatency(): number;
@@ -112,10 +123,14 @@ export async function connectNetworkSession(
   let ws: WebSocket | null = null;
   const chatListeners = new Set<(entry: { from: string; name: string; text: string }) => void>();
   const statusListeners = new Set<(status: NetStatus) => void>();
+  const rosterListeners = new Set<() => void>();
   const setStatus = (next: NetStatus, detail?: string) => {
     status = next;
     callbacks.onStatus?.(next, detail);
     for (const listener of statusListeners) listener(next);
+  };
+  const notifyRoster = () => {
+    for (const listener of rosterListeners) listener();
   };
 
   const clock = createClockSync();
@@ -212,6 +227,7 @@ export async function connectNetworkSession(
     if (id === playerId || state.players.has(id)) return;
     engine.addPlayer({ id });
     engine.consumeEvents();
+    notifyRoster();
   };
 
   const applyRoster = (roster: WelcomeMessage["players"]) => {
@@ -224,6 +240,7 @@ export async function connectNetworkSession(
       engine.consumeEvents();
       playerBuffers.delete(id);
     }
+    notifyRoster();
   };
 
   for (const entry of welcome.players) upsertRemotePlayer(entry.id, entry.name);
@@ -449,6 +466,7 @@ export async function connectNetworkSession(
         if (message.id !== playerId) engine.removePlayer(message.id);
         playerBuffers.delete(message.id);
         engine.consumeEvents();
+        notifyRoster();
         return;
       }
       case "container": {
@@ -542,6 +560,7 @@ export async function connectNetworkSession(
   const session: NetworkSession = {
     engine,
     playerId,
+    role: welcome.role,
     subscribeChat(listener) {
       chatListeners.add(listener);
       return () => chatListeners.delete(listener);
@@ -549,6 +568,14 @@ export async function connectNetworkSession(
     subscribeStatus(listener) {
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
+    },
+    subscribeRoster(listener) {
+      rosterListeners.add(listener);
+      return () => rosterListeners.delete(listener);
+    },
+    roster: () => [...state.players.keys()].map((id) => ({ id, name: names.get(id) ?? "player" })),
+    kick(targetId) {
+      if (targetId !== playerId) delayedSend(encodeClientMessage({ t: "kick", targetId }));
     },
     drainEvents: () => pendingEvents.splice(0, pendingEvents.length),
     status: () => status,

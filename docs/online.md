@@ -60,9 +60,19 @@ as a guest if needed, and accepts the membership). Playing one runs
 `GameShell.playOnline`: ensure a session → `POST /api/worlds/:id/ticket` →
 `connectNetworkSession(gameServerUrl, ticket)` → mount the game on the
 session's replica engine. The connection lifecycle (chat, ping badge,
-disconnect modal, leave) lives in the session + two HUD components; the
-architecture of the replica/routing/interpolation stack is in
+disconnect modal, leave) lives in the session + three HUD components
+(`ChatPanel`, `ConnectionStatus`, `RosterPanel`); the architecture of the
+replica/routing/interpolation stack is in
 [architecture.md](architecture.md#multiplayer-client-libnet).
+
+**Owner controls.** The `welcome` carries the recipient's `role` (from the
+join ticket), exposed as `session.role`. `RosterPanel` lists everyone in the
+world (top-right HUD) and, for the **owner** only, shows a Kick button per
+other player — it sends a `kick` message that the server re-checks against the
+sender's ticket role (a member's kick is dropped), reusing the same in-process
+`Room.kick` as the admin endpoint. It renders above the pause overlay, so the
+owner frees the cursor (Escape) and ejects a griefer without leaving. No
+web→game admin bridge: the protocol path keeps the game server stateless.
 
 Boarding works online (protocol v2): a mounted rider's position is
 server-owned and streamed on the `SelfDelta` (`mountedVehicleId` + `x/y/z`),

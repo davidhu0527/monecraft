@@ -20,6 +20,9 @@ describe("client message validation", () => {
     expect(readClientMessage({ t: "chat", text: "hi" })).toMatchObject({ t: "chat", text: "hi" });
     expect(readClientMessage({ t: "ping", id: 1, tMs: 123 })).toMatchObject({ t: "ping" });
     expect(readClientMessage({ t: "resync" })).toMatchObject({ t: "resync" });
+    expect(readClientMessage({ t: "kick", targetId: "acct-2" })).toMatchObject({ t: "kick", targetId: "acct-2" });
+    expect(readClientMessage({ t: "kick" })).toBeNull(); // missing targetId
+    expect(readClientMessage({ t: "kick", targetId: 5 })).toBeNull(); // non-string targetId
   });
 
   test("rejects garbage totally (no exceptions, just null)", () => {

@@ -28,6 +28,7 @@ const WELCOME: WelcomeMessage = {
   hardcore: false,
   dayClock: 60,
   tick: 100,
+  role: "owner",
   players: [{ id: "acct-1", name: "Alpha", skinId: null, x: 5, y: 40, z: 5, yaw: 0 }]
 };
 
@@ -168,6 +169,43 @@ describe("connectNetworkSession", () => {
     instances[0].emit(tick({ advancements: ["take_aim", "monster_hunter"], stats: [{ id: "hostiles_killed", value: 3 }] }));
     expect([...session.engine.state.player.advancements].sort()).toEqual(["monster_hunter", "take_aim"]);
     expect(session.engine.state.player.stats.get("hostiles_killed")).toBe(3);
+    session.dispose();
+  });
+
+  test("tracks the roster, fires its subscription on join/leave, and sends owner kicks", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    expect(session.role).toBe("owner"); // from the welcome
+    let notifications = 0;
+    const unsubscribe = session.subscribeRoster(() => {
+      notifications += 1;
+    });
+
+    // A second player joins → the roster grows and the subscription fires.
+    instances[0].emit(JSON.stringify({ t: "playerJoined", player: { id: "acct-2", name: "Beta", skinId: null, x: 0, y: 40, z: 0, yaw: 0 } }));
+    expect(
+      session
+        .roster()
+        .map((m) => m.id)
+        .sort()
+    ).toEqual(["acct-1", "acct-2"]);
+    expect(notifications).toBeGreaterThan(0);
+
+    // The owner kicks them — a kick frame goes on the wire (self-kick is dropped client-side).
+    session.kick("acct-1");
+    expect(instances[0].sentTypes()).not.toContain("kick");
+    session.kick("acct-2");
+    expect(instances[0].sentTypes()).toContain("kick");
+
+    // They leave → the roster shrinks and the subscription fires again.
+    const before = notifications;
+    instances[0].emit(JSON.stringify({ t: "playerLeft", id: "acct-2" }));
+    expect(session.roster().map((m) => m.id)).toEqual(["acct-1"]);
+    expect(notifications).toBeGreaterThan(before);
+
+    unsubscribe();
     session.dispose();
   });
 

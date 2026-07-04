@@ -70,8 +70,10 @@ export type ChatMessage = { t: "chat"; text: string };
 export type PingMessage = { t: "ping"; id: number; tMs: number };
 /** Ask for a fresh world-sync + mob keyframe (reconnect resume). */
 export type ResyncMessage = { t: "resync" };
+/** Owner-only: eject a player from the world. Ignored from a non-owner (server re-checks the ticket role). */
+export type KickMessage = { t: "kick"; targetId: string };
 
-export type ClientMessage = HelloMessage | PoseMessage | CmdMessage | ChatMessage | PingMessage | ResyncMessage;
+export type ClientMessage = HelloMessage | PoseMessage | CmdMessage | ChatMessage | PingMessage | ResyncMessage | KickMessage;
 
 // ── server → client ──────────────────────────────────────────────────────────
 
@@ -88,6 +90,8 @@ export type WelcomeMessage = {
   hardcore: boolean;
   dayClock: number;
   tick: number;
+  /** The recipient's own role in this world (from the join ticket) — gates the in-game owner controls. */
+  role: "owner" | "member";
   players: RosterEntry[];
 };
 
@@ -309,6 +313,8 @@ export function readClientMessage(v: unknown): ClientMessage | null {
       return isNum(m.id) && isNum(m.tMs) ? { t: "ping", id: m.id, tMs: m.tMs } : null;
     case "resync":
       return { t: "resync" };
+    case "kick":
+      return isStr(m.targetId) ? { t: "kick", targetId: m.targetId } : null;
     default:
       return null;
   }

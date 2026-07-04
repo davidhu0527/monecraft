@@ -255,6 +255,7 @@ export class Room {
         hardcore: this.engine.state.hardcore,
         dayClock: this.engine.state.dayClock,
         tick: this.tickCount,
+        role: claims.role,
         players: this.roster()
       })
     );
@@ -350,6 +351,13 @@ export class Room {
       case "resync": {
         conn.sink.send(await gzipWorldSync(this.buildWorldSync()));
         conn.shadow = null; // resend the full self-delta next tick
+        return;
+      }
+      case "kick": {
+        // Owner-only, re-checked against the signed ticket role (same gate as the
+        // owner-wide settings). Can't kick yourself; kick() no-ops on a stranger.
+        if (conn.role !== "owner" || message.targetId === playerId) return;
+        this.kick(message.targetId);
         return;
       }
       case "hello":
