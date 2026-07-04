@@ -33,15 +33,19 @@ export default function AccountProfileSelect({ user, onPlay, onSignedOut }: Acco
   const [editName, setEditName] = useState("");
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = () => void listOnlineProfiles().then(setProfiles);
   useEffect(() => refresh(), []);
 
   const signOut = async () => {
     setBusy(true);
+    setError(null);
     try {
       await authClient().signOut();
       onSignedOut();
+    } catch {
+      setError("Couldn't sign out — check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -52,15 +56,25 @@ export default function AccountProfileSelect({ user, onPlay, onSignedOut }: Acco
   if (creating) {
     return (
       <MenuScreen title="New Profile">
+        {error && <p className="account-error">{error}</p>}
         <CreateProfileForm
           onCreate={(name, skinId) => {
+            setError(null);
             void createOnlineProfile({ name, skinId }).then((profile) => {
-              setCreating(false);
-              if (profile) onPlay(profile);
-              else refresh(); // create failed (e.g. hit the cap) — re-sync the list
+              if (profile) {
+                setCreating(false);
+                onPlay(profile);
+              } else {
+                // Keep the form open so the entered name/skin aren't lost on retry.
+                setError("Couldn't create the profile — are you online, and under your profile limit?");
+                refresh();
+              }
             });
           }}
-          onCancel={() => setCreating(false)}
+          onCancel={() => {
+            setError(null);
+            setCreating(false);
+          }}
         />
       </MenuScreen>
     );
@@ -73,6 +87,7 @@ export default function AccountProfileSelect({ user, onPlay, onSignedOut }: Acco
         <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
           Sign out
         </button>
+        {error && <div className="account-error">{error}</div>}
       </div>
       {profiles === null ? (
         <p className="menu-empty">Loading…</p>

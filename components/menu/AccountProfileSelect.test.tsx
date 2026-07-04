@@ -7,7 +7,8 @@ import { MAX_ONLINE_PROFILES } from "@/lib/game/config";
 // client modules for controllable fakes so no network (or DB) exists.
 const fake = {
   profiles: [] as { id: string; name: string; skinId: string | null; createdAt: string }[],
-  signedOut: false
+  signedOut: false,
+  signOutRejects: false
 };
 
 void mock.module("@/lib/online/profilesClient", () => ({
@@ -27,6 +28,7 @@ void mock.module("@/lib/online/profilesClient", () => ({
 void mock.module("@/lib/auth/client", () => ({
   authClient: () => ({
     signOut: async () => {
+      if (fake.signOutRejects) throw new Error("network down");
       fake.signedOut = true;
       return { error: null };
     }
@@ -61,7 +63,7 @@ describe("AccountProfileSelect", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "New Profile" }));
     await userEvent.type(screen.getByLabelText("Profile name"), "Newbie");
-    await userEvent.click(screen.getByRole("button", { name: "Create", exact: true }));
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(onPlay).toHaveBeenCalled());
   });
 
@@ -82,5 +84,18 @@ describe("AccountProfileSelect", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(onSignedOut).toHaveBeenCalled());
     expect(fake.signedOut).toBe(true);
+  });
+
+  test("a failed sign-out surfaces an error and stays signed in", async () => {
+    fake.profiles = [];
+    fake.signOutRejects = true;
+    const onSignedOut = mock();
+    render(<AccountProfileSelect user={user} onPlay={mock()} onSignedOut={onSignedOut} />);
+    await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(screen.getByText(/Couldn't sign out/)).toBeTruthy());
+    expect(onSignedOut).not.toHaveBeenCalled();
+    fake.signOutRejects = false;
   });
 });
