@@ -6,9 +6,9 @@ import {
   serializeEquippedArmor,
   inventorySlotsSnapshot,
   serializeMobs,
-  serializeVehicles,
   serializeContainers,
-  serializeLootedChests
+  serializeLootedChests,
+  serializeStats
 } from "@/lib/game/save";
 import type { SavedPlayer } from "@/lib/game/types";
 import type { PlayerState } from "@/lib/game/engine/state";
@@ -23,10 +23,12 @@ import {
   type ClientMessage,
   type MobPose,
   type PlayerPose,
+  type ProjectilePose,
   type RosterEntry,
   type SelfDelta,
   type ServerMessage,
   type TickMessage,
+  type VehiclePose,
   type WorldSync
 } from "@/lib/net/protocol";
 import type { TicketClaims } from "@/lib/net/tickets";
@@ -73,8 +75,18 @@ type ClientConn = {
     gameMode: string;
     sleeping: boolean;
     effectsKey: string;
+    mountedVehicleId: number | null;
+    advancementsSize: number;
+    statsSig: string;
   } | null;
 };
+
+/**
+ * Stats the client accrues on its own (recordTick runs on the replica), so they
+ * never travel in the SelfDelta — only the event-driven counters the replica
+ * can't derive (kills, blocks mined, crafts) sync.
+ */
+const CLIENT_LOCAL_STATS = new Set(["play_time", "distance_walked"]);
 
 const PERSIST_INTERVAL_TICKS = 20 * 60; // 60s
 const KEYFRAME_INTERVAL_TICKS = 20 * 5; // 5s
@@ -113,6 +125,9 @@ export class Room {
   private tickCount = 0;
   private dirtySinceStore = false;
   private readonly mobShadow = new Map<number, { x: number; y: number; z: number; hp: number }>();
+  private readonly vehicleShadow = new Map<number, { x: number; y: number; z: number; yaw: number; riderId: string | null }>();
+  /** Count of live arrows broadcast last tick — drives one trailing empty `prj` frame so the client prunes the last one. */
+  private lastProjectileCount = 0;
   /** Wall-clock ms when the room became empty (idle-eviction clock), or null while occupied. */
   emptySinceMs: number | null;
   /** p95-ish diagnostics: the slowest tick of the last window. */
@@ -240,6 +255,7 @@ export class Room {
         hardcore: this.engine.state.hardcore,
         dayClock: this.engine.state.dayClock,
         tick: this.tickCount,
+        role: claims.role,
         players: this.roster()
       })
     );
@@ -284,7 +300,10 @@ export class Room {
           conn.lastPoseTick = this.tickCount;
         } else {
           const player = this.engine.state.players.get(playerId);
-          if (player) {
+          // A mounted player's position is server-owned and streamed via the
+          // self-delta; don't fight that with forcePose (the reject there is
+          // "ignore the stream", not "you desynced"). Only correct real desync.
+          if (player && player.mountedVehicleId === null) {
             conn.sink.send(
               encodeServerMessage({
                 t: "forcePose",
@@ -334,6 +353,13 @@ export class Room {
         conn.shadow = null; // resend the full self-delta next tick
         return;
       }
+      case "kick": {
+        // Owner-only, re-checked against the signed ticket role (same gate as the
+        // owner-wide settings). Can't kick yourself; kick() no-ops on a stranger.
+        if (conn.role !== "owner" || message.targetId === playerId) return;
+        this.kick(message.targetId);
+        return;
+      }
       case "hello":
         return; // already admitted; ignore
     }
@@ -374,6 +400,11 @@ export class Room {
     if (events.some((e) => e.type === "blockPlaced" || e.type === "blockBroken" || e.type === "explosion")) this.dirtySinceStore = true;
 
     const mobPoses = this.collectMobPoses(false);
+    const vehiclePoses = this.collectVehiclePoses(false);
+    const projectilePoses = this.collectProjectilePoses();
+    // Send a trailing empty `prj` the tick the last arrow clears so clients prune it.
+    const includeProjectiles = projectilePoses.length > 0 || this.lastProjectileCount > 0;
+    this.lastProjectileCount = projectilePoses.length;
     const day = this.tickCount % DAY_INTERVAL_TICKS === 0 ? this.engine.state.dayClock : undefined;
 
     for (const conn of this.clients.values()) {
@@ -395,6 +426,8 @@ export class Room {
         ev: events,
         pp: shed ? [] : this.collectPlayerPoses(conn.playerId),
         mp: shed ? [] : mobPoses,
+        ...(!shed && vehiclePoses.length > 0 ? { vp: vehiclePoses } : {}),
+        ...(!shed && includeProjectiles ? { prj: projectilePoses } : {}),
         ...(day !== undefined ? { day } : {}),
         ...(this.buildSelfDelta(conn) ?? {})
       };
@@ -455,7 +488,8 @@ export class Room {
       lootedChests: serializeLootedChests(state.lootedWorldgenChests),
       mobs: serializeMobs(state.mobs),
       liveMobs: this.collectMobPoses(true),
-      vehicles: serializeVehicles(state.vehicles),
+      vehicles: this.collectVehiclePoses(true),
+      projectiles: this.collectProjectilePoses(),
       players: this.roster()
     };
   }
@@ -499,11 +533,48 @@ export class Room {
     return out;
   }
 
+  /**
+   * Vehicle poses. `force` (join sync) emits every boat; otherwise only those
+   * whose position/yaw/rider changed since the last broadcast (deadband — a
+   * parked raft costs nothing). Vehicles never despawn, so no absence-pruning.
+   */
+  private collectVehiclePoses(force: boolean): VehiclePose[] {
+    const out: VehiclePose[] = [];
+    for (const vehicle of this.engine.state.vehicles) {
+      const riderId = vehicle.rider;
+      const shadow = this.vehicleShadow.get(vehicle.id);
+      const moved =
+        !shadow ||
+        (vehicle.position.x - shadow.x) ** 2 + (vehicle.position.y - shadow.y) ** 2 + (vehicle.position.z - shadow.z) ** 2 > MOB_DEADBAND_SQ ||
+        vehicle.yaw !== shadow.yaw ||
+        riderId !== shadow.riderId;
+      if (!force && !moved) continue;
+      this.vehicleShadow.set(vehicle.id, { x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw, riderId });
+      out.push({ id: vehicle.id, kind: vehicle.kind, x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw, riderId });
+    }
+    return out;
+  }
+
+  /** Every live arrow, full state each tick (they're few and fast — no deadband; the client snaps and prunes by absence). */
+  private collectProjectilePoses(): ProjectilePose[] {
+    return this.engine.state.projectiles.map((p) => ({
+      id: p.id,
+      x: p.position.x,
+      y: p.position.y,
+      z: p.position.z,
+      vx: p.velocity.x,
+      vy: p.velocity.y,
+      vz: p.velocity.z
+    }));
+  }
+
   private buildSelfDelta(conn: ClientConn): { self: SelfDelta } | null {
     const player = this.engine.state.players.get(conn.playerId);
     if (!player) return null;
     const effectsKey = JSON.stringify(serializeEffects(player.effects));
     const respawnSeconds = Math.ceil(player.respawnTimer);
+    const eventStats = serializeStats(player.stats).filter((s) => !CLIENT_LOCAL_STATS.has(s.id));
+    const statsSig = JSON.stringify(eventStats);
     const previous = conn.shadow;
     const delta: SelfDelta = {};
     if (!previous || previous.inventory !== player.inventory) delta.inventorySlots = inventorySlotsSnapshot(player.inventory);
@@ -518,6 +589,20 @@ export class Room {
     if (!previous || previous.gameMode !== player.gameMode) delta.gameMode = player.gameMode;
     if (!previous || previous.sleeping !== player.sleeping) delta.sleeping = player.sleeping;
     if (!previous || previous.effectsKey !== effectsKey) delta.effects = serializeEffects(player.effects);
+    // Advancements grow-only (send the full set on change); event-driven stats sync on change.
+    if (!previous || previous.advancementsSize !== player.advancements.size) delta.advancements = [...player.advancements];
+    if (!previous || previous.statsSig !== statsSig) delta.stats = eventStats;
+    // Mounted: the server owns the rider's position. Announce the mount/dismount
+    // transition (mountedVehicleId), and carry the authoritative position while
+    // mounted (and on the dismount tick) so the client snaps rather than predicts.
+    const mounted = player.mountedVehicleId !== null;
+    const mountChanged = !previous || previous.mountedVehicleId !== player.mountedVehicleId;
+    if (mountChanged) delta.mountedVehicleId = player.mountedVehicleId;
+    if (mounted || mountChanged) {
+      delta.x = player.position.x;
+      delta.y = player.position.y;
+      delta.z = player.position.z;
+    }
     conn.shadow = {
       inventory: player.inventory,
       equippedArmor: player.equippedArmor,
@@ -530,7 +615,10 @@ export class Room {
       respawnSeconds,
       gameMode: player.gameMode,
       sleeping: player.sleeping,
-      effectsKey
+      effectsKey,
+      mountedVehicleId: player.mountedVehicleId,
+      advancementsSize: player.advancements.size,
+      statsSig
     };
     return Object.keys(delta).length > 0 ? { self: delta } : null;
   }

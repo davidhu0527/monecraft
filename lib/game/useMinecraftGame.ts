@@ -16,6 +16,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
+import { pushSave } from "@/lib/game/cloudSaves";
 import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
@@ -178,6 +179,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
 
   // The session is fixed for the mount (the shell keys the game subtree).
   const onlineRef = useRef(opts.online ?? null);
+  // A cloud-linked single-player world (WorldMeta.cloudId) mirrors its save to
+  // the server on every local save. `cloudConflict` latches once another device
+  // wins a write, so we stop pushing (and warn once) rather than clobber theirs.
+  const cloudIdRef = useRef(opts.world.cloudId ?? null);
+  const cloudConflictRef = useRef(false);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -252,6 +258,24 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     messageClearRef.current = id;
   }, []);
 
+  // Mirror a cloud-linked SP save up after a local write (fire-and-forget so the
+  // fetch survives an unmount). `notify` toasts once on a losing write, so the
+  // player knows another device took over — we then stop pushing to avoid a
+  // last-writer-wins clobber; the next open pulls their save.
+  const syncCloudSave = useCallback(
+    (engine: GameApi, notify: boolean) => {
+      const cloudId = cloudIdRef.current;
+      if (!cloudId || onlineRef.current || cloudConflictRef.current) return;
+      void pushSave(cloudId, engine.serialize()).then((result) => {
+        if (result === "conflict") {
+          cloudConflictRef.current = true;
+          if (notify) flashMessage("This world changed on another device — your changes here won't sync. Reopen to catch up.");
+        }
+      });
+    },
+    [flashMessage]
+  );
+
   useEffect(() => {
     if (!ctx) return;
     const { engine: gameEngine, node } = ctx;
@@ -297,7 +321,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const online = onlineRef.current;
     const saveKey = saveKeyRef.current;
     const autoSave = () => {
-      if (!online) persistGame(gameEngine, saveKey, flashMessage);
+      if (online) return;
+      persistGame(gameEngine, saveKey, flashMessage);
+      syncCloudSave(gameEngine, true);
     };
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
@@ -318,6 +344,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       // exactly like local ones.
       const events = online ? [...gameEngine.consumeEvents(), ...online.drainEvents()] : gameEngine.consumeEvents();
       for (const event of events) {
+        // Advancement unlocks broadcast to the whole room; only surface (toast +
+        // chime) your own — the server tags each with the earning player.
+        if (online && event.type === "advancementUnlocked" && event.playerId && event.playerId !== online.playerId) continue;
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
           // Free the cursor so the death/victory/game-over button is clickable; the
           // pause command ignores those states, so the lock-loss won't open the menu too.
@@ -326,7 +355,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         }
         // Hardcore permadeath is permanent — persist it now so closing the tab right
         // after death still reloads the dead world spectating (not a fresh run).
-        if (event.type === "gameOver" && !online) persistGame(gameEngine, saveKey, () => {});
+        if (event.type === "gameOver" && !online) {
+          persistGame(gameEngine, saveKey, () => {});
+          syncCloudSave(gameEngine, false);
+        }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -392,7 +424,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
       // intentionally re-read or discard the on-disk save.
       if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
-      else if (!online) persistGame(gameEngine, saveKey, () => {});
+      else if (!online) {
+        persistGame(gameEngine, saveKey, () => {});
+        syncCloudSave(gameEngine, false); // flush to cloud on leave/unmount (covers Save & Quit)
+      }
       online?.dispose();
       delete window.__monecraft;
       canvasRef.current = null;
@@ -409,7 +444,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       document.exitPointerLock();
       renderer.dispose();
     };
-  }, [ctx, flashMessage]);
+  }, [ctx, flashMessage, syncCloudSave]);
 
   // Re-locking can legitimately reject (e.g. Chrome's cooldown right after
   // Escape); the player just clicks the canvas to lock again.
@@ -492,7 +527,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
       if (onlineRef.current) flashMessage("The server saves online worlds");
-      else if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
+      else if (engine) {
+        persistGame(engine, saveKeyRef.current, flashMessage);
+        syncCloudSave(engine, true);
+      }
     },
     loadNow: () => {
       if (!readSave(saveKeyRef.current)) {

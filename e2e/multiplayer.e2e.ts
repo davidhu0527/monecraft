@@ -115,6 +115,30 @@ test("two guests share an online world via an invite link", async ({ browser }) 
   await friend.evaluate(() => window.__monecraft!.net!.sendChat("hi back"));
   await expect(host.getByText("hi back")).toBeVisible({ timeout: 10000 });
 
+  // ── the roster lists both players; only the owner (host) gets a Kick control ─
+  for (const page of [host, friend]) {
+    expect(await page.evaluate(() => window.__monecraft!.net!.roster().length)).toBe(2);
+  }
+  await expect(host.getByRole("button", { name: /^Kick / })).toBeVisible(); // owner sees it
+  expect(await friend.getByRole("button", { name: /^Kick / }).count()).toBe(0); // a member does not
+
+  // (Arrow replication — the `prj` channel — is covered by unit tests rather than
+  // here: driving it end-to-end means creative-mode + inventory juggling + firing
+  // into open sky to dodge the first-tick despawn, too fragile for a reliable e2e.
+  // See server/room.test.ts (broadcast) and NetworkSession.test.ts (upsert).)
+
+  // ── the owner kicks the friend, who drops to the disconnect modal (LAST: it
+  // tears down the friend's session). net.kick is exactly what the RosterPanel
+  // Kick button's onClick calls.
+  const friendId = await host.evaluate(() => {
+    const net = window.__monecraft!.net!;
+    return net.roster().find((member) => member.id !== net.playerId)!.id;
+  });
+  await host.evaluate((id) => window.__monecraft!.net!.kick(id), friendId);
+  await expect.poll(() => friend.evaluate(() => window.__monecraft!.net!.status()), { timeout: 15000 }).toBe("closed");
+  await expect(friend.getByRole("alertdialog", { name: "Disconnected" })).toBeVisible({ timeout: 10000 });
+  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.players.size), { timeout: 15000 }).toBe(1);
+
   expect(errors, "no console/page errors during the test").toEqual([]);
   await hostContext.close();
   await friendContext.close();

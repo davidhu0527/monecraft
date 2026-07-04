@@ -6,7 +6,7 @@ import { TICK_SECONDS } from "@/lib/game/engine/tickDriver";
 import { restoreEffects, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { FACTION_BY_KIND } from "@/lib/game/mobs";
-import type { MobKind } from "@/lib/game/types";
+import type { MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
 import { decodeServerFrame, encodeClientMessage, gunzipWorldSync } from "./codec";
 import { createPoseBuffer, INTERPOLATION_DELAY_MS, type PoseBuffer } from "./interpolation";
@@ -19,7 +19,9 @@ import {
   PROTOCOL_VERSION,
   RECONNECT_DELAYS_MS,
   type MobPose,
+  type ProjectilePose,
   type SelfDelta,
+  type VehiclePose,
   type WelcomeMessage,
   type WorldSync
 } from "./protocol";
@@ -72,19 +74,30 @@ const LOCAL_COMMANDS = new Set<Command["type"]>(["toggleInventory", "toggleAdvan
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 
+/** One player as the roster panel shows them. */
+export type RosterMember = { id: PlayerId; name: string };
+
 export type NetworkSession = {
   readonly engine: GameEngine;
   readonly playerId: PlayerId;
+  /** The local player's role in this world (from the join ticket) — gates the owner controls. */
+  readonly role: "owner" | "member";
   /** UI subscriptions (React components mount after connect; unsubscribe on cleanup). */
   subscribeChat(listener: (entry: { from: string; name: string; text: string }) => void): () => void;
   subscribeStatus(listener: (status: NetStatus) => void): () => void;
+  /** Fires whenever a player joins or leaves — the roster panel re-reads roster(). */
+  subscribeRoster(listener: () => void): () => void;
   status(): NetStatus;
   rttMs(): number;
+  /** Everyone currently in the world (including you). */
+  roster(): RosterMember[];
   /** Names for remote player ids (name tags, chat). */
   playerName(id: PlayerId): string;
   dispatch(command: Command): void;
   applyLook(deltaYaw: number, deltaPitch: number): void;
   sendChat(text: string): void;
+  /** Owner-only: eject a player (no-op server-side for a non-owner). */
+  kick(targetId: PlayerId): void;
   /** Debug knob: inject symmetric latency on every send/receive (0 disables). */
   setSimulatedLatency(ms: number): void;
   simulatedLatency(): number;
@@ -110,10 +123,14 @@ export async function connectNetworkSession(
   let ws: WebSocket | null = null;
   const chatListeners = new Set<(entry: { from: string; name: string; text: string }) => void>();
   const statusListeners = new Set<(status: NetStatus) => void>();
+  const rosterListeners = new Set<() => void>();
   const setStatus = (next: NetStatus, detail?: string) => {
     status = next;
     callbacks.onStatus?.(next, detail);
     for (const listener of statusListeners) listener(next);
+  };
+  const notifyRoster = () => {
+    for (const listener of rosterListeners) listener();
   };
 
   const clock = createClockSync();
@@ -210,6 +227,7 @@ export async function connectNetworkSession(
     if (id === playerId || state.players.has(id)) return;
     engine.addPlayer({ id });
     engine.consumeEvents();
+    notifyRoster();
   };
 
   const applyRoster = (roster: WelcomeMessage["players"]) => {
@@ -222,6 +240,7 @@ export async function connectNetworkSession(
       engine.consumeEvents();
       playerBuffers.delete(id);
     }
+    notifyRoster();
   };
 
   for (const entry of welcome.players) upsertRemotePlayer(entry.id, entry.name);
@@ -242,8 +261,58 @@ export async function connectNetworkSession(
     state.mobs = [];
     mobBuffers.clear();
     for (const pose of sync.liveMobs) upsertReplicaMob(pose);
+    // Vehicles and in-flight arrows are replicated in (never simulated on the
+    // replica); the join sync is their keyframe. Both were dropped in v1.
+    state.vehicles = [];
+    for (const pose of sync.vehicles) upsertReplicaVehicle(pose);
+    applyProjectiles(sync.projectiles);
     applyRoster(sync.players);
   };
+
+  function upsertReplicaVehicle(pose: VehiclePose): void {
+    const kind = (pose.kind === "ship" ? "ship" : "raft") as VehicleKind;
+    let vehicle = state.vehicles.find((v) => v.id === pose.id);
+    if (!vehicle) {
+      vehicle = { id: pose.id, kind, position: new THREE.Vector3(pose.x, pose.y, pose.z), yaw: pose.yaw, rider: pose.riderId };
+      state.vehicles.push(vehicle);
+    } else {
+      vehicle.position.set(pose.x, pose.y, pose.z);
+      vehicle.yaw = pose.yaw;
+      vehicle.rider = pose.riderId;
+    }
+  }
+
+  // Arrows snap per frame (they outrun the ~125 ms interpolation delay). Each
+  // tick carries the FULL live set, so absence prunes: an arrow no longer listed
+  // has landed/despawned server-side.
+  function applyProjectiles(poses: ProjectilePose[]): void {
+    const present = new Set(poses.map((p) => p.id));
+    state.projectiles = state.projectiles.filter((p) => present.has(p.id));
+    for (const pose of poses) upsertReplicaProjectile(pose);
+  }
+
+  function upsertReplicaProjectile(pose: ProjectilePose): void {
+    let projectile = state.projectiles.find((p) => p.id === pose.id);
+    if (!projectile) {
+      // Non-simulated on the replica: only position + velocity feed the visual
+      // (which derives orientation from velocity); the rest are inert placeholders.
+      projectile = {
+        id: pose.id,
+        position: new THREE.Vector3(pose.x, pose.y, pose.z),
+        velocity: new THREE.Vector3(pose.vx, pose.vy, pose.vz),
+        yaw: 0,
+        pitch: 0,
+        damage: 0,
+        knockback: 0,
+        fromPlayer: true,
+        ttl: 999
+      };
+      state.projectiles.push(projectile);
+    } else {
+      projectile.position.set(pose.x, pose.y, pose.z);
+      projectile.velocity.set(pose.vx, pose.vy, pose.vz);
+    }
+  }
 
   function upsertReplicaMob(pose: MobPose): MobState {
     let mob = state.mobs.find((m) => m.id === pose.id);
@@ -302,6 +371,19 @@ export async function connectNetworkSession(
       self.effects.clear();
       for (const { id, remaining } of restoreEffects(shim)) self.effects.set(id, remaining);
     }
+    // Progression is server-owned: adopt our advancement set (grow-only) and the
+    // event-driven stat counters. play_time/distance_walked aren't sent — the
+    // replica's recordTick accrues those locally — so a plain set() preserves them.
+    if (delta.advancements) self.advancements = new Set(delta.advancements);
+    if (delta.stats) for (const { id, value } of delta.stats) self.stats.set(id, value);
+    // Mounted: the server owns our position. Adopt the mount state and snap to
+    // the authoritative position (the replica step skips its own motion while
+    // mountedVehicleId is set, so the boat — not prediction — drives the camera).
+    if (delta.mountedVehicleId !== undefined) self.mountedVehicleId = delta.mountedVehicleId;
+    if (delta.x !== undefined && delta.y !== undefined && delta.z !== undefined) {
+      self.position.set(delta.x, delta.y, delta.z);
+      self.velocity.set(0, 0, 0);
+    }
   };
 
   const applyBlocks = (blocks: Array<[number, number]>) => {
@@ -355,6 +437,8 @@ export async function connectNetworkSession(
           upsertReplicaMob(pose);
           mobBuffers.get(pose.id)?.push({ tMs: serverTickTimeMs, x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw });
         }
+        if (message.vp) for (const pose of message.vp) upsertReplicaVehicle(pose);
+        if (message.prj) applyProjectiles(message.prj);
         for (const gameEvent of message.ev) {
           pendingEvents.push(gameEvent as GameEvent);
           callbacks.onEvent?.(gameEvent as GameEvent);
@@ -382,6 +466,7 @@ export async function connectNetworkSession(
         if (message.id !== playerId) engine.removePlayer(message.id);
         playerBuffers.delete(message.id);
         engine.consumeEvents();
+        notifyRoster();
         return;
       }
       case "container": {
@@ -475,6 +560,7 @@ export async function connectNetworkSession(
   const session: NetworkSession = {
     engine,
     playerId,
+    role: welcome.role,
     subscribeChat(listener) {
       chatListeners.add(listener);
       return () => chatListeners.delete(listener);
@@ -482,6 +568,14 @@ export async function connectNetworkSession(
     subscribeStatus(listener) {
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
+    },
+    subscribeRoster(listener) {
+      rosterListeners.add(listener);
+      return () => rosterListeners.delete(listener);
+    },
+    roster: () => [...state.players.keys()].map((id) => ({ id, name: names.get(id) ?? "player" })),
+    kick(targetId) {
+      if (targetId !== playerId) delayedSend(encodeClientMessage({ t: "kick", targetId }));
     },
     drainEvents: () => pendingEvents.splice(0, pendingEvents.length),
     status: () => status,

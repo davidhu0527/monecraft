@@ -668,11 +668,12 @@ the link is only needed once.
 
 **Playing together.** Everyone shares one world: block edits, mobs, chests,
 day and night. You'll see the other players in the world with their names
-overhead. Press **`T`** (or `Enter`) to chat; a ping badge shows your
-connection quality, and losing the connection pops a notice with the option to
-leave. The **server** owns the world — your mining completes when it confirms
-the break (a barely-noticeable beat on a good connection), and your health,
-hunger, and inventory are its word, not the client's.
+overhead, and a player list in the top-right corner. Press **`T`** (or
+`Enter`) to chat; a ping badge shows your connection quality, and losing the
+connection pops a notice with the option to leave. The **server** owns the
+world — your mining completes when it confirms the break (a barely-noticeable
+beat on a good connection), and your health, hunger, and inventory are its
+word, not the client's.
 
 A few things work differently online, and the rest is the same game:
 
@@ -680,5 +681,27 @@ A few things work differently online, and the rest is the same game:
   nobody can stop a shared world. "Save & Quit" becomes **Leave world**.
 - **Sleeping needs everyone.** The night skips only when **all** players are
   in bed (dead and Spectator players excepted) — climb back out to cancel.
+- **Progress is your own.** Advancements, statistics, XP, and kill credit are
+  per-player — you earn your own, whether the kill was a sword, an arrow, or
+  your pet's doing. Your pet follows **you**, not the nearest player.
+- **The world owner can kick.** If you created the world, the player list shows
+  a **Kick** button beside everyone else (free your cursor with `Esc` to click
+  it) — for removing a griefer on the spot. To stop them coming back, also
+  **Revoke links** from the world's menu card.
+- **Boats are shared.** Rafts and ships are boardable online — pile into one
+  together.
 - The world saves on the server automatically; there's nothing to manage.
-- **Rafts and ships can't be boarded** in online worlds yet.
+
+### Cloud saves — your single-player worlds across devices
+
+Signed in, you can make a **single-player** world follow you between browsers
+and machines. On the world's card, **Upload to cloud** copies it to your
+account (the card then reads **☁ Synced**), and from there every save syncs up
+automatically as you play. On another device, your synced worlds appear under
+**Cloud Saves** — **Download** brings one onto that device to play.
+
+It's last-write-wins: if the same world is played on two devices, the most
+recent save wins. Open a synced world and it always catches up to the latest
+first; a world you played offline keeps its newer progress rather than being
+overwritten by an older cloud copy. Local worlds you never upload stay entirely
+offline, exactly as before — cloud saves are opt-in, one world at a time.

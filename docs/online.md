@@ -46,9 +46,26 @@ routes are thin HTTP adapters over it.
 Single-player cloud saves are gzipped `SaveData` blobs (`lib/game/
 cloudSaves.ts` — block diffs compress extremely well) with last-write-wins
 concurrency: each device sends the `updatedAt` stamp it last saw
-(`x-base-updated-at`); a mismatch is **409** and the client pulls the newer
-save before retrying. The transport is built and tested; surfacing it in the
-world list / autosave UX is still to come.
+(`x-base-updated-at`); a mismatch is **409** and the pushing client stops
+syncing and warns (rather than clobber the other device), then adopts the
+newer save on the next open.
+
+**How it flows through the menu** (all opt-in per world):
+
+- **Upload** — a local world's card gets an "Upload to cloud" action once
+  you've gone online: it creates an `sp-cloud` world row, links it via
+  `WorldMeta.cloudId` (a local-manifest field, not part of the save format),
+  and pushes the current save. The card then reads "☁ Synced".
+- **On another device** — your `sp-cloud` saves you haven't downloaded yet
+  appear under **Cloud Saves**; **Download** materializes a local world (linked
+  by `cloudId`) and opens it, pulling the blob in.
+- **Open** — a cloud-linked world reconciles first (`pullCloudSaveIfNewer`):
+  the remote is adopted only when it advanced past this device's sync cursor,
+  so a world you played offline keeps its newer local progress instead of being
+  overwritten by an older cloud copy. Reuses GameShell's "Opening…" gate.
+- **Save** — `useMinecraftGame` mirrors each local autosave/quit up to the
+  cloud when the world is `cloudId`-linked and the player is signed in
+  (fire-and-forget so the fetch survives the unmount).
 
 ## Playing online (client)
 
@@ -60,15 +77,35 @@ as a guest if needed, and accepts the membership). Playing one runs
 `GameShell.playOnline`: ensure a session → `POST /api/worlds/:id/ticket` →
 `connectNetworkSession(gameServerUrl, ticket)` → mount the game on the
 session's replica engine. The connection lifecycle (chat, ping badge,
-disconnect modal, leave) lives in the session + two HUD components; the
-architecture of the replica/routing/interpolation stack is in
+disconnect modal, leave) lives in the session + three HUD components
+(`ChatPanel`, `ConnectionStatus`, `RosterPanel`); the architecture of the
+replica/routing/interpolation stack is in
 [architecture.md](architecture.md#multiplayer-client-libnet).
 
-v1 scope cuts to know about (all documented where they bite): rafts/ships
-can't be boarded online (a mounted pose is server-driven, which would fight
-the client-owned pose stream); in-flight arrows aren't replicated (only
-their hits); advancements/stats don't accrue in server rooms; indirect mob
-kills credit the primary player.
+**Owner controls.** The `welcome` carries the recipient's `role` (from the
+join ticket), exposed as `session.role`. `RosterPanel` lists everyone in the
+world (top-right HUD) and, for the **owner** only, shows a Kick button per
+other player — it sends a `kick` message that the server re-checks against the
+sender's ticket role (a member's kick is dropped), reusing the same in-process
+`Room.kick` as the admin endpoint. It renders above the pause overlay, so the
+owner frees the cursor (Escape) and ejects a griefer without leaving. No
+web→game admin bridge: the protocol path keeps the game server stateless.
+
+Boarding works online (protocol v2): a mounted rider's position is
+server-owned and streamed on the `SelfDelta` (`mountedVehicleId` + `x/y/z`),
+so the replica stops predicting its own motion while mounted rather than
+rubber-banding against the boat. Vehicles and in-flight arrows replicate on
+their own tick channels (`vp`/`prj`), mirroring the mob-pose skeleton.
+
+Progression is per-player: each player earns their own advancements/stats
+(the engine attributes an emitted event to whoever's step/dispatch is running,
+so a co-op room scores every player independently) and gets credit for their
+own kills — melee, arrow, spear, or a pet's bite, tracked on the mob as
+`lastHitByPlayer` so even a delayed sweep death (burn, explosion) credits the
+right player. The `SelfDelta` syncs each client's advancement set and
+event-driven stats (the two continuous display stats — play time, distance —
+accrue client-side). Advancement toasts are tagged with the earning player, so
+you only see your own. Pets follow **their owner**, not the nearest player.
 
 ## Environment & local development
 

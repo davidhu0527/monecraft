@@ -217,6 +217,14 @@ export class GameEngine {
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
   private events: GameEvent[] = [];
+  /**
+   * The player whose per-player step or dispatch is currently running. It scopes
+   * emitted events for progression attribution (`observeProgress`) without
+   * threading an id through every system's emit call — set around `stepPlayer`
+   * and the `dispatch` switch, undefined for shared post-loop systems (mob AI,
+   * projectiles), where attribution is instead explicit (a kill's `creditTo`).
+   */
+  private actingPlayer: PlayerId | undefined = undefined;
   private snapshot: GameSnapshot;
   // Navigation values are rounded, so the ref-equality snapshot diff updates
   // the HUD responsively without forcing a React render for sub-block movement.
@@ -518,8 +526,15 @@ export class GameEngine {
     // that NetworkSession writes in, never simulated here.
     if (this.replica) {
       if (primary && !primary.isDead && state.sleepTimer <= 0) {
-        tickPlayerMotion(state, primary, primary.input, dt, () => {});
+        // While mounted the server owns our position (SelfDelta snaps it every
+        // tick); predicting motion here would rubber-band against that stream.
+        let walked = 0;
+        if (primary.mountedVehicleId === null) walked = tickPlayerMotion(state, primary, primary.input, dt, () => {}).horizontalDistance;
         tickMining(state, primary, primary.input, dt, this.emit, this.rng, { cosmetic: true });
+        // Accumulate the two continuously-ticking display stats locally — they're
+        // excluded from the SelfDelta (which syncs only the event-driven counters
+        // the replica can't derive), so the Statistics tab stays roughly right.
+        recordTick(primary, dt, walked);
       }
       if (state.sleepTimer > 0) state.sleepTimer = Math.max(0, state.sleepTimer - dt);
       tickDayNight(state, dt);
@@ -557,7 +572,15 @@ export class GameEngine {
     }
 
     for (const player of state.players.values()) {
-      this.stepPlayer(player, dt);
+      // Scope this player's step so mining/fishing/jumping/hazard events attribute
+      // their progression to them (see observeProgress / actingPlayer).
+      const priorActor = this.actingPlayer;
+      this.actingPlayer = player.id;
+      try {
+        this.stepPlayer(player, dt);
+      } finally {
+        this.actingPlayer = priorActor;
+      }
     }
 
     tickDayNight(state, dt);
@@ -670,6 +693,18 @@ export class GameEngine {
     }
     const state = this.state;
     const player = mustGetPlayer(state, playerId ?? state.primaryPlayerId);
+    // Scope emitted events (craft/place/eat/enchant…) to the commanding player so
+    // their progression is attributed to them, not the primary.
+    const priorActor = this.actingPlayer;
+    this.actingPlayer = player.id;
+    try {
+      this.dispatchCommand(state, player, command);
+    } finally {
+      this.actingPlayer = priorActor;
+    }
+  }
+
+  private dispatchCommand(state: GameState, player: PlayerState, command: Command): void {
     switch (command.type) {
       case "selectSlot": {
         if (command.index >= 0 && command.index < Math.min(HOTBAR_SLOTS, player.inventory.length)) {
@@ -854,9 +889,12 @@ export class GameEngine {
         if (tryFeedAimedMob(state, player, this.emit)) break;
         if (tryToggleSitPet(state, player, this.emit)) break;
         if (tryTradeAimedVillager(state, player, this.emit)) break;
-        // Vehicles are single-player-only in multiplayer v1: a mounted player's
-        // pose is server-driven, which fights the client-owned pose stream.
-        if (this.authority !== "server" && !this.replica && tryBoardAimedVehicle(state, player)) break;
+        // Boarding runs everywhere the switch runs: single-player, and on the
+        // authoritative server (the right-click arrives as a networked placeBlock
+        // cmd). While mounted the server owns the rider's position and streams it
+        // via the SelfDelta — the replica never dispatches placeBlock locally
+        // (routeDispatch sends it up), so no client-owned pose fights it.
+        if (tryBoardAimedVehicle(state, player)) break;
         if (tryInteractBlock(state, player, this.emit)) break;
         if (this.trySummonBoss(player)) break;
         if (this.tryStartRaid(player)) break;
@@ -1147,29 +1185,34 @@ export class GameEngine {
     return drained;
   }
 
-  private emit = (event: GameEvent): void => {
+  private emit = (event: GameEvent, actorId?: PlayerId): void => {
     this.events.push(event);
     // Observe progress at the one chokepoint every system already emits through —
-    // but guard against recursion: observing an unlock re-enters emit.
-    if (event.type !== "advancementUnlocked") this.observeProgress(event);
+    // but guard against recursion (observing an unlock re-enters emit), and skip
+    // it on a replica: the server owns progression and streams each player's
+    // advancements/stats back via the SelfDelta.
+    if (event.type !== "advancementUnlocked" && !this.replica) this.observeProgress(event, actorId);
   };
 
   /**
-   * Folds a gameplay event into the statistics counters, then unlocks any
-   * advancement whose threshold the new stats just crossed — adding it to the set
-   * (before the emit, so a re-entrant observe is idempotent) and announcing it.
+   * Folds a gameplay event into the acting player's statistics counters, then
+   * unlocks any advancement whose threshold the new stats just crossed — adding
+   * it to that player's set (before the emit, so a re-entrant observe is
+   * idempotent) and announcing it (tagged with the player so a co-op client only
+   * toasts its own).
    *
-   * Progress accrues to the PRIMARY player (SP: the player). On a server the
-   * primary may not exist — per-player attribution of world-event progress is
-   * a known multiplayer refinement; until then a shared world tracks none.
+   * The actor is: an explicit `actorId` (a kill's killer, a death's victim) if
+   * given, else whoever's per-player step or dispatch is currently running
+   * (`actingPlayer`), else the primary (single-player). A server room with no
+   * primary and no attributable actor scores nothing — correct.
    */
-  private observeProgress(event: GameEvent): void {
-    const primary = this.state.players.get(this.state.primaryPlayerId);
-    if (!primary) return;
-    recordEvent(primary, event);
-    for (const id of evaluateAdvancements(primary)) {
-      primary.advancements.add(id);
-      this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title });
+  private observeProgress(event: GameEvent, actorId?: PlayerId): void {
+    const actor = this.state.players.get(actorId ?? this.actingPlayer ?? this.state.primaryPlayerId);
+    if (!actor) return;
+    recordEvent(actor, event);
+    for (const id of evaluateAdvancements(actor)) {
+      actor.advancements.add(id);
+      this.emit({ type: "advancementUnlocked", id, name: ADVANCEMENTS_BY_ID[id].title, playerId: actor.id }, actor.id);
     }
   }
 
@@ -1213,9 +1256,9 @@ export class GameEngine {
       if (this.state.hardcore) return void this.triggerGameOver(player);
       clearEffects(player);
       resetMining(player);
-      this.emit({ type: "died" });
+      this.emit({ type: "died" }, player.id);
     } else if (player.hearts < heartsBefore) {
-      this.emit({ type: "playerHurt" });
+      this.emit({ type: "playerHurt" }, player.id);
     }
   };
 
@@ -1227,9 +1270,9 @@ export class GameEngine {
       if (this.state.hardcore) return void this.triggerGameOver(player);
       clearEffects(player);
       resetMining(player);
-      this.emit({ type: "died" });
+      this.emit({ type: "died" }, player.id);
     } else if (player.hearts < heartsBefore) {
-      this.emit({ type: "playerHurt" });
+      this.emit({ type: "playerHurt" }, player.id);
     }
   };
 
@@ -1254,7 +1297,7 @@ export class GameEngine {
     player.craftingStation = null;
     player.openContainerIndex = null;
     this.state.paused = false;
-    this.emit({ type: "gameOver" });
+    this.emit({ type: "gameOver" }, player.id);
   }
 
   /**
@@ -1297,9 +1340,12 @@ export class GameEngine {
     const state = this.state;
     const mob = state.mobs[index];
     state.mobs.splice(index, 1);
-    // Loot/XP land on the crediting player (the killer where the caller knows
-    // it; the primary otherwise). A playerless server room credits nobody.
-    const receiver = creditTo ?? state.players.get(state.primaryPlayerId) ?? null;
+    // The killer: an explicit creditTo, else the player who last damaged this mob
+    // (melee/arrow/spear/pet-bite, tracked on the mob so even a sweep death — burn,
+    // explosion — credits them), else the primary. Loot, XP, and the kill's
+    // progression all follow them. A playerless room with no killer credits nobody.
+    const killer = creditTo ?? (mob.lastHitByPlayer !== undefined ? state.players.get(mob.lastHitByPlayer) : undefined);
+    const receiver = killer ?? state.players.get(state.primaryPlayerId) ?? null;
     // Babies drop nothing — only grown animals yield loot. `lootingLevel` is the
     // *killing* melee weapon's Looting (forwarded by tryAttackMob); indirect kills
     // (arrows, thrown spears, explosions) pass 0, since Looting is a melee enchant.
@@ -1311,13 +1357,15 @@ export class GameEngine {
       // XP on kill, baby-gated like drops; the boss pays a jackpot.
       if (credit && mob.ageTimer <= 0) awardXp(receiver, xpForMob(mob.kind), this.emit);
     }
-    this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+    // Attribute the death (and its "Monster Hunter"/"Dragon Slayer" progression)
+    // to the killer so each co-op player earns their own kills.
+    this.emit({ type: "mobDied", kind: mob.kind, x: mob.position.x, y: mob.position.y, z: mob.position.z }, receiver?.id);
     // Drops land straight in inventory (no ground item), so announce them.
-    if (drops.length > 0) this.emit({ type: "pickedUp", items: drops });
+    if (drops.length > 0) this.emit({ type: "pickedUp", items: drops }, receiver?.id);
     // Defeating the boss is the win condition — fire the one-shot victory.
     if (mob.kind === "boss") {
       state.victory = true;
-      this.emit({ type: "bossDefeated", x: mob.position.x, y: mob.position.y, z: mob.position.z });
+      this.emit({ type: "bossDefeated", x: mob.position.x, y: mob.position.y, z: mob.position.z }, receiver?.id);
     }
   };
 

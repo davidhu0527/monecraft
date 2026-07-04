@@ -23,6 +23,7 @@ import type { WorldMeta } from "@/lib/game/worlds";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 import ChatPanel from "@/components/game/ChatPanel";
 import ConnectionStatus from "@/components/game/ConnectionStatus";
+import RosterPanel from "@/components/game/RosterPanel";
 import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 type MinecraftGameProps = {
@@ -155,6 +156,7 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
 
       {online && <ChatPanel session={online} locked={locked} />}
       {online && <ConnectionStatus session={online} onLeave={quitToWorlds} />}
+      {online && <RosterPanel session={online} />}
       {saveMessage && !paused ? (
         <div className="hud-toast" role="status">
           {saveMessage}

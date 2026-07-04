@@ -28,12 +28,14 @@ export async function createOnlineWorld(input: {
   gameMode: string;
   difficulty: string;
   hardcore: boolean;
+  /** "mp" (a server-hosted co-op room, the default) or "sp-cloud" (a synced single-player save). */
+  kind?: "mp" | "sp-cloud";
 }): Promise<OnlineWorld | null> {
   try {
     const response = await fetch("/api/worlds", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...input, kind: "mp" })
+      body: JSON.stringify({ ...input, kind: input.kind ?? "mp" })
     });
     if (!response.ok) return null;
     const { world } = (await response.json()) as { world: OnlineWorld };

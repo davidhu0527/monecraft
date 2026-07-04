@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as THREE from "three";
 import { PROTOCOL_VERSION, type ServerMessage, type WorldSync } from "@/lib/net/protocol";
 import { gunzipWorldSync } from "@/lib/net/codec";
+import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
 import type { TicketClaims } from "@/lib/net/tickets";
 import { createMemoryPersistence, parseSaveBlob } from "./persistence";
 import { Room, type ClientSink } from "./room";
@@ -56,7 +58,7 @@ describe("room lifecycle", () => {
     expect(await room.join(claimsFor("alice", "w1", "owner"), a)).toBe(true);
 
     const welcome = a.messagesOf("welcome")[0];
-    expect(welcome).toMatchObject({ protocol: PROTOCOL_VERSION, playerId: "alice", worldId: "w1" });
+    expect(welcome).toMatchObject({ protocol: PROTOCOL_VERSION, playerId: "alice", worldId: "w1", role: "owner" });
     expect(welcome.seed).toBeGreaterThan(0);
 
     const binary = a.frames.find((f) => f.kind === "binary");
@@ -148,6 +150,108 @@ describe("room lifecycle", () => {
     expect(bobChats[0]).toMatchObject({ from: "alice", name: "ALICE" });
   });
 
+  test("the self-delta carries advancements and event-driven stats on change; the continuous display stats stay local", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const roomTick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+    roomTick(); // first tick: full snapshot (baseline the shadow)
+
+    const alice = room.engine.state.players.get("alice")!;
+    alice.advancements.add("take_aim");
+    alice.stats.set("hostiles_killed", 2);
+    roomTick();
+    const t = a.messagesOf("tick").at(-1);
+    expect(t?.self?.advancements).toContain("take_aim");
+    expect(t?.self?.stats?.find((s) => s.id === "hostiles_killed")?.value).toBe(2);
+
+    // play_time accrues client-side (recordTick on the replica), so it is never
+    // synced — bumping it alone produces no stats delta.
+    alice.stats.set("play_time", 999);
+    roomTick();
+    expect(
+      a
+        .messagesOf("tick")
+        .at(-1)
+        ?.self?.stats?.some((s) => s.id === "play_time")
+    ).toBeFalsy();
+  });
+
+  test("vehicle and arrow poses reach other clients; the world-sync carries them; arrows prune, parked boats deadband", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const state = room.engine.state;
+    restoreVehicle(state, "raft", 10, 41, 12, 1.2);
+    const vehicleId = state.vehicles[0].id;
+    // High and moving horizontally so the authoritative step doesn't sink it into
+    // terrain before we can observe the broadcast (arrows are simulated server-side).
+    state.projectiles.push({
+      id: 99,
+      position: new THREE.Vector3(5, 100, 5),
+      velocity: new THREE.Vector3(8, 0, 0),
+      yaw: 0,
+      pitch: 0,
+      damage: 3,
+      knockback: 0,
+      fromPlayer: true,
+      ttl: 5
+    });
+
+    // First tick: the freshly-seeded boat (no shadow yet) and the live arrow
+    // reach the already-connected client.
+    const tickRoom = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+    tickRoom();
+    const t = b.messagesOf("tick").at(-1);
+    expect(t?.vp?.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
+    expect(t?.prj?.some((p) => p.id === 99 && p.vx === 8)).toBe(true);
+
+    // A late joiner's world-sync keyframe carries both (force-emits past the deadband).
+    const c = fakeSink();
+    await room.join(claimsFor("carol", "w1"), c);
+    const sync = await (c.frames.find((f) => f.kind === "binary") as Extract<Frame, { kind: "binary" }>).sync;
+    expect(sync!.vehicles.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
+    expect(sync!.projectiles.some((p) => p.id === 99)).toBe(true);
+
+    // The arrow despawns: exactly one trailing empty `prj` prunes it client-side,
+    // and the unmoved raft is deadbanded out (no `vp`).
+    state.projectiles.length = 0;
+    tickRoom();
+    const t2 = b.messagesOf("tick").at(-1);
+    expect(t2?.prj).toEqual([]);
+    expect(t2?.vp).toBeUndefined();
+    tickRoom();
+    expect(b.messagesOf("tick").at(-1)?.prj).toBeUndefined(); // steady state: no arrows, no frame
+  });
+
+  test("a mounted rider's self-delta carries the server-owned position and suppresses forcePose", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const state = room.engine.state;
+    restoreVehicle(state, "raft", 10, 41, 12, 0);
+    const alice = state.players.get("alice")!;
+    const vehicleId = state.vehicles[0].id;
+    // Seat her directly (the aim flow is covered in the engine suite): what we
+    // assert here is the mount transition surfacing on the wire.
+    alice.mountedVehicleId = vehicleId;
+    state.vehicles[0].rider = "alice";
+
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+    const first = a.messagesOf("tick").at(-1);
+    expect(first?.self?.mountedVehicleId).toBe(vehicleId);
+    expect(first?.self?.x).toBeCloseTo(10, 6); // syncPlayerToVehicle put her on the raft
+
+    // A pose while mounted is ignored (position is server-owned) and must NOT be
+    // answered with forcePose — that reject means "ignore the stream", not "desync".
+    a.frames.length = 0;
+    await room.handleMessage("alice", { t: "pose", seq: 1, x: 999, y: 41, z: 999, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    expect(alice.position.x).toBeCloseTo(10, 6);
+    expect(a.messagesOf("forcePose")).toHaveLength(0);
+  });
+
   test("leave persists the player's slice; rejoin restores it; shutdown stores the merged world", async () => {
     const { room, persistence } = await makeRoom();
     const a = fakeSink();
@@ -224,6 +328,30 @@ describe("ops surface", () => {
     expect(b.frames.some((f) => f.kind === "close" && f.code === 4003)).toBe(true); // CLOSE_KICKED
     expect(a.messagesOf("playerLeft").some((m) => m.id === "bob")).toBe(true);
     expect(room.kick("nobody")).toBe(false);
+  });
+
+  test("a kick MESSAGE is owner-gated: the owner ejects a member, a member's kick is ignored, self-kick is a no-op", async () => {
+    const { room } = await makeRoom();
+    const owner = fakeSink();
+    const member = fakeSink();
+    const target = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), owner);
+    await room.join(claimsFor("bob", "w1", "member"), member);
+    await room.join(claimsFor("carol", "w1", "member"), target);
+    expect((member.messagesOf("welcome")[0] as { role: string }).role).toBe("member");
+
+    // A member trying to kick someone is ignored (the server re-checks the ticket role).
+    await room.handleMessage("bob", { t: "kick", targetId: "carol" });
+    expect(room.playerCount()).toBe(3);
+
+    // The owner can't kick themselves…
+    await room.handleMessage("alice", { t: "kick", targetId: "alice" });
+    expect(room.playerCount()).toBe(3);
+
+    // …but the owner ejects carol with a fatal close.
+    await room.handleMessage("alice", { t: "kick", targetId: "carol" });
+    expect(room.playerCount()).toBe(2);
+    expect(target.frames.some((f) => f.kind === "close" && f.code === 4003)).toBe(true); // CLOSE_KICKED
   });
 
   test("diagnostics report bandwidth once traffic flows", async () => {

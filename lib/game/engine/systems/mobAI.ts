@@ -36,7 +36,7 @@ import { MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { MobFaction } from "@/lib/game/types";
 import { mobDamageMultiplier } from "@/lib/game/difficulties";
 import type { EmitGameEvent, GameState, MobState, PlayerState } from "../state";
-import { nearestPlayerTo, nearestTargetablePlayer } from "../players";
+import { getPlayer, nearestPlayerTo, nearestTargetablePlayer } from "../players";
 import { spawnArrow } from "../projectiles";
 import { explode } from "./explosion";
 import { pushMob } from "./spawnDirector";
@@ -46,6 +46,7 @@ import type { SurfaceYAtFn } from "@/lib/game/spawn";
 const UP = new THREE.Vector3(0, 1, 0);
 const scratchToPlayer = new THREE.Vector3();
 const scratchToPlayer3D = new THREE.Vector3();
+const scratchToOwner = new THREE.Vector3();
 const scratchToHunted = new THREE.Vector3();
 const scratchToHunted3D = new THREE.Vector3();
 const scratchMobEye = new THREE.Vector3();
@@ -343,18 +344,28 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       if (scratchToTarget.lengthSq() > 1e-6) mob.direction.lerp(scratchToTarget.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
     } else if (mob.faction === "ally") {
-      // A pet with no enemy nearby follows its owner: recalled (teleported) when it
-      // strays too far, jogging to catch up otherwise, and milling about up close.
-      if (anchor && distanceToPlayer > PET_TELEPORT_DISTANCE) {
-        const tx = anchor.position.x + (deps.rng() - 0.5) * 2;
-        const tz = anchor.position.z + (deps.rng() - 0.5) * 2;
-        mob.position.set(tx, deps.surfaceYAt(tx, tz) + mob.halfHeight, tz);
-        mob.moveSpeed = mob.speed;
-        continue; // recalled to the owner — skip the rest of this tick
-      }
-      if (distanceToPlayer > PET_FOLLOW_MAX) {
-        if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
-        moveSpeed *= 1.3;
+      // A pet with no enemy nearby follows its OWNER — not just the nearest player,
+      // so in co-op your wolf trails you and not a passing stranger: recalled
+      // (teleported) when it strays too far, jogging to catch up otherwise, and
+      // milling about up close. An offline owner leaves it milling in place.
+      const owner = mob.owner !== undefined ? (getPlayer(state, mob.owner) ?? null) : null;
+      if (owner) {
+        scratchToOwner.copy(owner.position).sub(mob.position).setY(0);
+        const distanceToOwner = scratchToOwner.length();
+        if (distanceToOwner > PET_TELEPORT_DISTANCE) {
+          const tx = owner.position.x + (deps.rng() - 0.5) * 2;
+          const tz = owner.position.z + (deps.rng() - 0.5) * 2;
+          mob.position.set(tx, deps.surfaceYAt(tx, tz) + mob.halfHeight, tz);
+          mob.moveSpeed = mob.speed;
+          continue; // recalled to the owner — skip the rest of this tick
+        }
+        if (distanceToOwner > PET_FOLLOW_MAX) {
+          if (distanceToOwner > 0.001) mob.direction.lerp(scratchToOwner.normalize(), 0.2).normalize();
+          moveSpeed *= 1.3;
+        } else if (mob.turnTimer <= 0) {
+          mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
+          mob.turnTimer = 1.5 + deps.rng() * 4;
+        }
       } else if (mob.turnTimer <= 0) {
         mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
         mob.turnTimer = 1.5 + deps.rng() * 4;
@@ -459,6 +470,8 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       const horiz = Math.hypot(dx, dz);
       if (horiz < MOB_VS_MOB_REACH && Math.abs(dy) < 1.6 && mobVsMobLineOfSight(world, mob, dx, dy, dz)) {
         mobTarget.hp -= mob.attackDamage;
+        // A pet's bite credits its owner when the target dies (via the sweep).
+        if (mob.faction === "ally" && mob.owner !== undefined) mobTarget.lastHitByPlayer = mob.owner;
         if (horiz > 0.001) {
           const push = MOB_VS_MOB_KNOCKBACK / horiz;
           mobTarget.position.x += dx * push;

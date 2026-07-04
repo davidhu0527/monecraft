@@ -148,6 +148,17 @@ describe("tickProjectiles", () => {
     expect(lethalDeps.removed).toEqual([0]);
   });
 
+  test("a player arrow stamps its owner on the mob it hits, for kill credit", () => {
+    const world = new VoxelWorld(32, 32, 32, 1);
+    const mob = makeMob(1, 16, 16, 12, 10); // hp 10, damage 3 → survives, so we test the stamp
+    const state = makeState(world, [mob]);
+    const { deps } = makeDeps();
+    spawnArrow(state, 16, 16, 16, new THREE.Vector3(0, 0, -1), { speed: 34, damage: 3, knockback: 0, fromPlayer: true, owner: "acct-2", ttl: 4 });
+
+    tickUntilGone(state, deps);
+    expect(mob.lastHitByPlayer).toBe("acct-2");
+  });
+
   test("the fromPlayer filter routes hits: player arrows ignore the player, mob arrows ignore mobs", () => {
     // Mob arrow toward the player: damages the player, ignores other mobs.
     const world = new VoxelWorld(32, 32, 32, 1);

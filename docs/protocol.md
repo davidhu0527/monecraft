@@ -1,4 +1,4 @@
-# Wire protocol (v1)
+# Wire protocol (v2)
 
 The client↔game-server protocol, defined in `lib/net/protocol.ts` (single
 source of truth — this page is the narrative). Versioned as a whole via
@@ -39,19 +39,38 @@ the join payload is KBs, not the 37 MB voxel field.
   looked). Validated against a per-type **allow-list**; local-presentation
   commands (pause/debug/camera) never travel. Budget: 60/s.
 - `chat` (≤256 chars, 3/s), `ping`, `resync`.
+- `kick { targetId }` — **owner-only**: eject a player. The server re-checks
+  the sender's ticket `role` (same gate as the owner-wide `setDifficulty`/
+  `setGameMode`), so a forged kick from a member is dropped; self-kick is a
+  no-op. The `welcome` carries the recipient's own `role`, so the client shows
+  the control only to the owner.
 
 **Server → client**
 
-- `tick { n, ev, pp, mp, day?, self? }` @20 Hz — world events since last
-  tick (block edits ride these), other players' poses, deadbanded mob poses
-  (~10 Hz), the day clock every second, and `self`: the private, server-
-  authoritative delta of YOUR state (inventory/hearts/hunger/xp/effects/…),
-  sent only on change.
+- `tick { n, ev, pp, mp, vp?, prj?, day?, self? }` @20 Hz — world events since
+  last tick (block edits ride these), other players' poses, deadbanded mob
+  poses (~10 Hz), **vehicle poses** (`vp`, deadbanded — a parked boat costs
+  nothing; vehicles never despawn so no absence-pruning), **arrow poses**
+  (`prj`, the full live set every tick — arrows are few and fast, so they snap
+  and prune by absence; one trailing empty `prj` clears the last one), the day
+  clock every second, and `self`: the private, server-authoritative delta of
+  YOUR state (inventory/hearts/hunger/xp/effects/…), sent only on change.
 - `mobsKeyframe` every 5s (drift correction), `playerJoined`/`playerLeft`,
   `container` (open-chest updates), `chat`, `pong`, `forcePose`.
 
-Backpressure: past 256 KB buffered, a client's `pp`/`mp` are shed (events
-and `self` still flow); sustained >1 MB is a `4008` kick.
+**Vehicles & mounted riders (v2).** A vehicle's pose (`VehiclePose`: id, kind,
+x/y/z, yaw, riderId) replicates on `vp` and in the join `worldSync` (keyed by
+server id, so per-tick deltas line up). Arrows (`ProjectilePose`: id, x/y/z,
+vx/vy/vz — velocity so the client orients the mesh) replicate on `prj`. A
+**mounted** rider is the one hybrid-model exception: the server owns their
+position (`tickVehicles` drives it from their input intents), so the pose
+stream is rejected without a `forcePose` correction, and the `SelfDelta`
+carries `mountedVehicleId` (on mount/dismount) plus the authoritative `x/y/z`
+(while mounted). The replica adopts that mount state and snaps to the position,
+skipping its own motion integration until it dismounts.
+
+Backpressure: past 256 KB buffered, a client's `pp`/`mp`/`vp`/`prj` are shed
+(events and `self` still flow); sustained >1 MB is a `4008` kick.
 
 ## Reconnect
 

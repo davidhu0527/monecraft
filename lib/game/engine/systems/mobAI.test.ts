@@ -325,7 +325,7 @@ describe("companion pets (allies)", () => {
     const pet = makeMob("wolf", x, 30, z);
     pet.hostile = false;
     pet.faction = "ally";
-    pet.owner = "player";
+    pet.owner = "local"; // the state's sole player (pets now follow their owner, not the nearest player)
     pet.detectRange = PET_FIGHT_RANGE;
     pet.attackDamage = 4;
     return Object.assign(pet, overrides);
@@ -381,6 +381,32 @@ describe("companion pets (allies)", () => {
     tickMobs(state, 0.05, deps);
 
     expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(3); // teleported adjacent
+  });
+
+  test("a pet follows its OWNER, not a nearer stranger", () => {
+    const pet = makePet(40, 40); // owner "local" sits at (24,24) — past FOLLOW_MAX, within TELEPORT
+    const state = makeState([pet]);
+    // A stranger stands right next to the pet; the owner is far away.
+    const stranger = {
+      id: "acct-2",
+      position: new THREE.Vector3(41, 30, 41),
+      velocity: new THREE.Vector3(),
+      yaw: 0,
+      pitch: 0,
+      onGround: true,
+      gameMode: "survival",
+      isDead: false
+    } as unknown as PlayerState;
+    state.players.set("acct-2", stranger);
+    const { deps } = makeDeps();
+
+    const startToOwner = Math.hypot(40 - 24, 40 - 24);
+    for (let i = 0; i < 40; i += 1) tickMobs(state, 0.1, deps);
+
+    // Closed on its owner at (24,24)…
+    expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(startToOwner);
+    // …and moved AWAY from the adjacent stranger (it never trailed them).
+    expect(Math.hypot(pet.position.x - 41, pet.position.z - 41)).toBeGreaterThan(Math.hypot(40 - 41, 40 - 41));
   });
 });
 

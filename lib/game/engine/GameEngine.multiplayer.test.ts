@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { frameInput } from "@/lib/game/engine/testSupport";
-import { LOCAL_PLAYER_ID } from "@/lib/game/engine/state";
+import { LOCAL_PLAYER_ID, type MobState } from "@/lib/game/engine/state";
 import { allEligiblePlayersSleeping, nearestTargetablePlayer } from "@/lib/game/engine/players";
+import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 
 function mulberry32(seed: number): () => number {
@@ -113,6 +114,76 @@ describe("players map", () => {
     engine.dispatch({ type: "selectSlot", index: 3 }, "acct-2");
     expect(second.selectedSlot).toBe(3);
     expect(engine.state.player.selectedSlot).not.toBe(3);
+  });
+});
+
+describe("per-player progression & kill credit", () => {
+  function pushZombie(engine: GameEngine, x: number, z: number, hp = 20): MobState {
+    const zombie: MobState = {
+      id: 555,
+      kind: "zombie",
+      hostile: true,
+      faction: "hostile",
+      targetId: null,
+      retargetTimer: 0,
+      hp,
+      position: new THREE.Vector3(x, engine.state.player.position.y, z),
+      direction: new THREE.Vector3(1, 0, 0),
+      yaw: 0,
+      turnTimer: 0,
+      speed: 2,
+      moveSpeed: 2,
+      detectRange: 20,
+      attackDamage: 2,
+      attackCooldown: 1,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    };
+    engine.state.mobs.push(zombie);
+    return zombie;
+  }
+
+  test("each player earns their OWN advancements — a second player's bow shot is theirs alone", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    const primary = engine.state.player;
+    const second = engine.addPlayer({ id: "acct-2" });
+    second.inventory = [...second.inventory];
+    second.inventory[0] = createSlot("bow", 1);
+    second.inventory[1] = createSlot("arrow", 5);
+    second.selectedSlot = 0;
+
+    // A bow shot dispatched as acct-2 attributes to acct-2 (the acting player).
+    engine.dispatch({ type: "attack" }, "acct-2");
+    expect(second.stats.get("arrows_fired")).toBe(1);
+    expect(second.advancements.has("take_aim")).toBe(true);
+    // The primary earned nothing — no world-wide bleed.
+    expect(primary.stats.get("arrows_fired") ?? 0).toBe(0);
+    expect(primary.advancements.has("take_aim")).toBe(false);
+  });
+
+  test("kill credit follows the last player to hit the mob — the sweep credits them, not the primary", () => {
+    const engine = makeEngine("server");
+    calm(engine); // day → no hostile spawns to muddy the counts
+    engine.state.mobs = [];
+    const primary = engine.state.player;
+    const second = engine.addPlayer({ id: "acct-2" });
+    const zombie = pushZombie(engine, 30, 30, 0); // already downed…
+    zombie.lastHitByPlayer = "acct-2"; // …by the second player
+
+    engine.step(0.05); // the post-loop sweep removes it and credits the killer
+
+    expect(engine.state.mobs.some((m) => m.id === zombie.id)).toBe(false);
+    expect(second.stats.get("hostiles_killed")).toBe(1);
+    expect(second.xp).toBeGreaterThan(0);
+    expect(second.advancements.has("monster_hunter")).toBe(true);
+    // The primary gets no credit for a kill it had no part in.
+    expect(primary.stats.get("hostiles_killed") ?? 0).toBe(0);
+    expect(primary.xp).toBe(0);
+    expect(primary.advancements.has("monster_hunter")).toBe(false);
   });
 });
 
@@ -253,6 +324,24 @@ describe("per-player stepping", () => {
     engine.dispatch({ type: "pause" });
     expect(engine.state.paused).toBe(false);
   });
+
+  test("boarding works under server authority (the v1 mounted-vehicle gate is lifted)", () => {
+    const engine = makeEngine("server");
+    engine.state.mobs = [];
+    const player = engine.state.player;
+    player.position.set(10, 40, 10);
+    player.yaw = 0; // look down -z (lookDirection(0,0) = (0,0,-1))
+    player.pitch = 0;
+    // A raft two blocks ahead along the aim ray, within VEHICLE_BOARD_REACH.
+    restoreVehicle(engine.state, "raft", 10, 41, 8, 0);
+    const vehicleId = engine.state.vehicles[0].id;
+
+    // The right-click arrives as a networked placeBlock cmd (playerId set → runs
+    // the switch, exactly as the authoritative server dispatches it).
+    engine.dispatch({ type: "placeBlock" }, LOCAL_PLAYER_ID);
+    expect(player.mountedVehicleId).toBe(vehicleId);
+    expect(engine.state.vehicles[0].rider).toBe(LOCAL_PLAYER_ID);
+  });
 });
 
 describe("replica boot (bootPlayer: false, with a React shell)", () => {
@@ -276,5 +365,31 @@ describe("replica boot (bootPlayer: false, with a React shell)", () => {
     expect(engine.getSnapshot().inventory).toBeDefined();
     engine.step(0.05);
     expect(engine.getSnapshot().hearts).toBeGreaterThan(0);
+  });
+
+  test("a mounted replica stops predicting its own motion (the server-driven position wins)", () => {
+    const engine = new GameEngine({
+      seed: 1337,
+      rng: mulberry32(42),
+      worldSize: { x: 64, y: 150, z: 64 },
+      authority: "local",
+      replica: true,
+      bootPlayer: false
+    });
+    engine.state.primaryPlayerId = "acct-1";
+    const self = engine.addPlayer({ id: "acct-1" });
+    self.position.set(20, 100, 20); // high up: unmounted, gravity alone moves it
+    self.input = frameInput({ keys: ["KeyW"] });
+
+    const start = self.position.clone();
+    for (let i = 0; i < 20; i += 1) engine.step(0.05);
+    expect(self.position.distanceTo(start)).toBeGreaterThan(0.5); // predicted motion
+
+    // Mounted: the SelfDelta owns the position, so the replica must not integrate
+    // motion — it stays put between server updates even with forward held.
+    self.mountedVehicleId = 7;
+    const mountedStart = self.position.clone();
+    for (let i = 0; i < 20; i += 1) engine.step(0.05);
+    expect(self.position.distanceTo(mountedStart)).toBe(0);
   });
 });
