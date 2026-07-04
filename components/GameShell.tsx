@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MinecraftGame from "@/components/MinecraftGame";
+import AccountProfileSelect from "@/components/menu/AccountProfileSelect";
+import OnlineWorldSelect from "@/components/menu/OnlineWorldSelect";
 import ProfileSelect from "@/components/menu/ProfileSelect";
 import WorldSelect from "@/components/menu/WorldSelect";
-import { ensureSignedIn } from "@/lib/auth/client";
+import { currentUser, ensureSignedIn, onlineUsed, type OnlineUser } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
-import { getProfile, setActiveProfile } from "@/lib/game/profiles";
+import { DEFAULT_SKIN_ID, isSkinId } from "@/lib/game/playerSkins";
+import { getProfile, setActiveProfile, type Profile } from "@/lib/game/profiles";
 import { createWorld, deleteWorld, getWorld, touchWorld, worldSaveKey, type WorldMeta } from "@/lib/game/worlds";
 import { writeSave } from "@/lib/game/save";
 import { pullCloudSaveIfNewer } from "@/lib/game/cloudSaves";
 import { deleteOnlineWorld, requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
+import type { OnlineProfile } from "@/lib/online/profilesClient";
 import { connectNetworkSession, type NetworkSession } from "@/lib/net/NetworkSession";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
@@ -25,8 +29,17 @@ import { installUiTiles } from "@/lib/ui/chromeTiles";
 type Screen =
   | { name: "profile-select" }
   | { name: "world-select"; profileId: string }
+  | { name: "online-worlds"; profile: OnlineProfile }
   | { name: "play"; profileId: string; worldId: string }
-  | { name: "play-online"; profileId: string; world: OnlineWorld; session: NetworkSession };
+  // play-online carries the resolved player identity (a local Profile for a
+  // guest, or one derived from the account profile) plus that account profile
+  // (null for the guest path) so "quit to worlds" returns to the right list.
+  | { name: "play-online"; profile: Profile; world: OnlineWorld; session: NetworkSession; onlineProfile: OnlineProfile | null };
+
+/** A play-usable Profile from a server-side account profile (skin sanitized). */
+function profileFromOnline(profile: OnlineProfile): Profile {
+  return { id: profile.id, name: profile.name, skinId: isSkinId(profile.skinId) ? profile.skinId : DEFAULT_SKIN_ID, createdAt: 0 };
+}
 
 /** Online worlds mount the same game subtree; the meta is a projection of the server row. */
 function onlineWorldMeta(world: OnlineWorld, profileId: string): WorldMeta {
@@ -84,6 +97,12 @@ export default function GameShell() {
   // A join is in flight — guards against a double-click opening (and leaking) a
   // second socket. A ref, not `connecting`, so it's set synchronously.
   const joiningRef = useRef(false);
+  // The signed-in account (a real, non-anonymous one flips the menu into
+  // account mode). Offline-first: never asked until this browser went online.
+  const [onlineUser, setOnlineUser] = useState<OnlineUser | null>(null);
+  const refreshOnlineUser = useCallback(() => {
+    if (onlineUsed()) void currentUser().then(setOnlineUser);
+  }, []);
 
   /**
    * Open a world for play. A cloud-linked one (WorldMeta.cloudId) reconciles
@@ -141,25 +160,27 @@ export default function GameShell() {
     }
   };
 
-  /** Guest-or-account → ticket → socket → replica sync → play. */
-  const playOnline = async (profileId: string, world: OnlineWorld) => {
+  /** Guest-or-account → ticket → socket → replica sync → play. When an account
+   *  profile is given, its id rides the ticket so the roster shows that profile. */
+  const playOnline = async (profile: Profile, world: OnlineWorld, onlineProfile: OnlineProfile | null) => {
     if (joiningRef.current) return; // a join is already in flight
     joiningRef.current = true;
     setConnectError(null);
     setConnecting(world.name);
+    const ticketProfileId = onlineProfile?.id;
     try {
       if (!(await ensureSignedIn())) throw new Error("sign-in failed");
-      const grant = await requestJoinTicket(world.id);
+      const grant = await requestJoinTicket(world.id, ticketProfileId);
       if (!grant) throw new Error("could not get a join ticket (is the game server configured?)");
       // The reconnect ladder mints a fresh short-lived ticket each retry — the
       // 60 s TTL means a stale one is useless a minute after a drop.
       const session = await connectNetworkSession(grant.gameServerUrl, grant.ticket, undefined, {
         reconnect: async () => {
-          const next = await requestJoinTicket(world.id);
+          const next = await requestJoinTicket(world.id, ticketProfileId);
           return next ? { url: next.gameServerUrl, ticket: next.ticket } : null;
         }
       });
-      setScreen({ name: "play-online", profileId, world, session });
+      setScreen({ name: "play-online", profile, world, session, onlineProfile });
     } catch (error) {
       setConnectError(error instanceof Error ? error.message : "connection failed");
     } finally {
@@ -181,6 +202,31 @@ export default function GameShell() {
       setReady(true);
     });
   }, []);
+
+  // Discover an existing account session so a signed-in reload lands in account
+  // mode (offline-first: refreshOnlineUser no-ops until this browser went online).
+  useEffect(() => refreshOnlineUser(), [refreshOnlineUser]);
+
+  // The "Opening…" gate and join-failure dialog, shared by both world lists.
+  const netModals = (
+    <>
+      {connecting && (
+        <div className="net-modal" role="status">
+          <div className="net-modal-box">Opening “{connecting}”…</div>
+        </div>
+      )}
+      {connectError && (
+        <div className="net-modal" role="alertdialog" aria-label="Connection failed">
+          <div className="net-modal-box">
+            <p>Couldn&apos;t join: {connectError}</p>
+            <button type="button" className="mc-button" onClick={() => setConnectError(null)}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   // localStorage is read below; hold the neutral frame until we're client-side.
   if (!ready) return <div className="menu-screen" />;
@@ -211,26 +257,28 @@ export default function GameShell() {
   }
 
   if (screen.name === "play-online") {
-    const profile = getProfile(screen.profileId);
-    if (profile) {
-      return (
-        <MinecraftGame
-          key={`online:${screen.world.id}`}
-          world={onlineWorldMeta(screen.world, profile.id)}
-          profile={profile}
-          online={screen.session}
-          onQuitToWorlds={() => setScreen({ name: "world-select", profileId: profile.id })}
-          onDeleteWorld={() => {
-            // Hardcore game-over: actually delete the shared world on the server
-            // (owner-gated; a member just leaves), then return to the list.
-            screen.session.dispose();
-            void deleteOnlineWorld(screen.world.id);
-            setScreen({ name: "world-select", profileId: profile.id });
-          }}
-          onReloadWorld={() => setScreen({ name: "world-select", profileId: profile.id })}
-        />
-      );
-    }
+    // Quit returns to the account profile's online worlds, or (guest path) the
+    // local world list the join came from.
+    const backToWorlds: Screen = screen.onlineProfile
+      ? { name: "online-worlds", profile: screen.onlineProfile }
+      : { name: "world-select", profileId: screen.profile.id };
+    return (
+      <MinecraftGame
+        key={`online:${screen.world.id}`}
+        world={onlineWorldMeta(screen.world, screen.profile.id)}
+        profile={screen.profile}
+        online={screen.session}
+        onQuitToWorlds={() => setScreen(backToWorlds)}
+        onDeleteWorld={() => {
+          // Hardcore game-over: actually delete the shared world on the server
+          // (owner-gated; a member just leaves), then return to the list.
+          screen.session.dispose();
+          void deleteOnlineWorld(screen.world.id);
+          setScreen(backToWorlds);
+        }}
+        onReloadWorld={() => setScreen(backToWorlds)}
+      />
+    );
   }
 
   if (screen.name === "world-select") {
@@ -241,28 +289,35 @@ export default function GameShell() {
           <WorldSelect
             profile={profile}
             onPlay={(worldId) => void playLocal(profile.id, worldId)}
-            onPlayOnline={(world) => void playOnline(profile.id, world)}
+            onPlayOnline={(world) => void playOnline(profile, world, null)}
             onDownloadCloud={(world) => void downloadCloud(profile.id, world)}
             onBack={() => setScreen({ name: "profile-select" })}
           />
-          {connecting && (
-            <div className="net-modal" role="status">
-              <div className="net-modal-box">Opening “{connecting}”…</div>
-            </div>
-          )}
-          {connectError && (
-            <div className="net-modal" role="alertdialog" aria-label="Connection failed">
-              <div className="net-modal-box">
-                <p>Couldn&apos;t join: {connectError}</p>
-                <button type="button" className="mc-button" onClick={() => setConnectError(null)}>
-                  OK
-                </button>
-              </div>
-            </div>
-          )}
+          {netModals}
         </>
       );
     }
+  }
+
+  if (screen.name === "online-worlds") {
+    return (
+      <>
+        <OnlineWorldSelect
+          profile={screen.profile}
+          onPlay={(world) => void playOnline(profileFromOnline(screen.profile), world, screen.profile)}
+          onBack={() => setScreen({ name: "profile-select" })}
+        />
+        {netModals}
+      </>
+    );
+  }
+
+  // The profile-select screen is auth-aware: a signed-in account browses its
+  // synced online profiles; everyone else gets the local (browser) profiles.
+  if (onlineUser && !onlineUser.isAnonymous) {
+    return (
+      <AccountProfileSelect user={onlineUser} onPlay={(profile) => setScreen({ name: "online-worlds", profile })} onSignedOut={() => setOnlineUser(null)} />
+    );
   }
 
   return (
@@ -271,6 +326,7 @@ export default function GameShell() {
         setActiveProfile(profileId);
         setScreen({ name: "world-select", profileId });
       }}
+      onAuthChange={refreshOnlineUser}
     />
   );
 }

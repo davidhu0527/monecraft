@@ -6,7 +6,8 @@ import userEvent from "@testing-library/user-event";
 // module for a controllable fake so no network (or server) exists.
 const fake = {
   user: null as null | { id: string; name: string; email: string; isAnonymous: boolean },
-  signInAnonymousCalls: 0
+  signInAnonymousCalls: 0,
+  signOutRejects: false
 };
 
 void mock.module("@/lib/auth/client", () => ({
@@ -21,6 +22,7 @@ void mock.module("@/lib/auth/client", () => ({
       }
     },
     signOut: async () => {
+      if (fake.signOutRejects) throw new Error("network down");
       fake.user = null;
       return { error: null };
     }
@@ -55,11 +57,39 @@ describe("AccountPanel", () => {
     expect(screen.getByText("Email")).toBeTruthy();
   });
 
+  test("a guest can sign out and return to the login screen", async () => {
+    fake.user = null;
+    render(<AccountPanel />);
+    await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: "Play online as guest" }));
+    await waitFor(() => expect(screen.getByText("Playing as guest")).toBeTruthy());
+
+    // A guest previously had no way back; sign out returns to the offline/login state.
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+  });
+
   test("a signed-in account shows its name and can sign out", async () => {
     fake.user = { id: "u1", name: "Keeper", email: "k@example.com", isAnonymous: false };
     render(<AccountPanel />);
     await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
+  });
+
+  test("a failed sign-out surfaces an error and keeps you signed in", async () => {
+    fake.user = { id: "u1", name: "Keeper", email: "k@example.com", isAnonymous: false };
+    fake.signOutRejects = true;
+    render(<AccountPanel />);
+    await waitFor(() => expect(screen.getByText("Signed in as Keeper")).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    // The rejection is caught: a visible error, still signed in, and the control is usable again.
+    await waitFor(() => expect(screen.getByText(/Couldn't reach the server/)).toBeTruthy());
+    expect(screen.getByText("Signed in as Keeper")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Sign out" }) as HTMLButtonElement).disabled).toBe(false);
+    fake.signOutRejects = false;
   });
 });

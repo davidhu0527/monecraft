@@ -23,6 +23,13 @@ export const SHIP_HALF_WIDTH = 1.0;
 export const SHIP_HALF_LENGTH = 1.6;
 export const MAX_VEHICLES = 64; // cap on persisted rafts+ships per world — bounds save size (creative placement never consumes)
 
+// Online accounts. An account owns server-side profiles (its cross-device
+// identities); each profile owns online worlds. Both are capped to bound
+// per-account storage on the shared database. Enforced server-side in
+// lib/online/worldsService.ts (the UI just surfaces a friendly "limit reached").
+export const MAX_ONLINE_PROFILES = 5; // profiles one account may create
+export const MAX_WORLDS_PER_PROFILE = 10; // online worlds one profile may own
+
 // Game modes / flight — Creative & Spectator fly with direct vertical control
 // (Space ascends, crouch descends); a double-tap of Space toggles flight.
 export const FLY_SPEED = 11; // blocks/sec vertical while flying

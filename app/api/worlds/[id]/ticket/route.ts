@@ -16,7 +16,10 @@ export async function POST(request: Request, { params }: Params) {
   const secret = process.env.GAME_TICKET_SECRET;
   if (!secret) return NextResponse.json({ error: "server-misconfigured" }, { status: 500 });
   const { id } = await params;
-  const result = await mintTicket(db(), user, id, secret);
+  // The client names which profile is joining, so the ticket (and thus the
+  // roster others see) carries the profile's name + skin, not the account's.
+  const body = (await request.json().catch(() => null)) as { profileId?: string } | null;
+  const result = await mintTicket(db(), user, id, secret, body?.profileId ?? null);
   if (!result.ok) return failureResponse(result.error);
   return NextResponse.json({ ticket: result.ticket, gameServerUrl: process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? null });
 }

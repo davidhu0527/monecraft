@@ -9,7 +9,13 @@ import { authClient, currentUser, ensureSignedIn, markOnlineUsed, onlineUsed, ty
  * (the server re-parents them — see lib/auth/server.ts). Purely additive to
  * the offline game: with no online features touched, no account ever exists.
  */
-export default function AccountPanel() {
+type AccountPanelProps = {
+  /** Notified after any auth mutation (sign in/up/out, guest) so a parent shell
+   *  can react — e.g. flip the menu into account mode. */
+  onAuthChange?: () => void;
+};
+
+export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
   const [user, setUser] = useState<OnlineUser | null>(null);
   const [mode, setMode] = useState<"closed" | "signin" | "signup">("closed");
   const [email, setEmail] = useState("");
@@ -24,7 +30,24 @@ export default function AccountPanel() {
     if (onlineUsed()) void currentUser().then(setUser);
   }, []);
 
-  const refresh = async () => setUser(await currentUser());
+  const refresh = async () => {
+    setUser(await currentUser());
+    onAuthChange?.();
+  };
+  // Mirror submit / "Play online as guest": guard against a failed request (no
+  // unhandled rejection, a visible error) and against concurrent double-clicks.
+  const signOut = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await authClient().signOut();
+      await refresh();
+    } catch {
+      setError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -92,21 +115,22 @@ export default function AccountPanel() {
         <>
           <span className="account-status">{user.isAnonymous ? "Playing as guest" : `Signed in as ${user.name}`}</span>
           {user.isAnonymous ? (
-            <button type="button" className="mc-button" onClick={() => setMode("signup")}>
-              Keep my worlds — create account
-            </button>
+            <>
+              <button type="button" className="mc-button" onClick={() => setMode("signup")} disabled={busy}>
+                Keep my worlds — create account
+              </button>
+              {/* A guest could previously never get back to the login screen; sign
+                  out drops to the "Offline" state where Sign in / register live. */}
+              <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
+                Sign out
+              </button>
+            </>
           ) : (
-            <button
-              type="button"
-              className="mc-button"
-              onClick={async () => {
-                await authClient().signOut();
-                await refresh();
-              }}
-            >
+            <button type="button" className="mc-button" onClick={signOut} disabled={busy}>
               Sign out
             </button>
           )}
+          {error && <div className="account-error">{error}</div>}
         </>
       ) : (
         <>

@@ -8,6 +8,20 @@
       "when": 1783067941158,
       "tag": "0000_online-foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783167539688,
+      "tag": "0001_account-profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783173637551,
+      "tag": "0002_profile-world-indexes",
+      "breakpoints": true
     }
   ]
 }
