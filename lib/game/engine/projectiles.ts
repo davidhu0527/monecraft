@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { GameState, ProjectileState } from "./state";
+import type { GameState, PlayerId, ProjectileState } from "./state";
 
 export type SpawnArrowOptions = {
   speed: number;
@@ -7,6 +7,8 @@ export type SpawnArrowOptions = {
   knockback: number;
   fromPlayer: boolean;
   ttl: number;
+  /** The firing player (for kill credit); omit for mob arrows. */
+  owner?: PlayerId;
 };
 
 // Spawn the arrow a little ahead of the muzzle so the firer never collides with
@@ -35,6 +37,7 @@ export function spawnArrow(state: GameState, originX: number, originY: number, o
     damage: opts.damage,
     knockback: opts.knockback,
     fromPlayer: opts.fromPlayer,
+    owner: opts.owner,
     ttl: opts.ttl
   };
 

@@ -1,7 +1,15 @@
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { Command } from "@/lib/game/engine/commands";
 import { createFixedTicker, TICK_SECONDS, type FixedTicker } from "@/lib/game/engine/tickDriver";
-import { serializeEffects, serializeEquippedArmor, inventorySlotsSnapshot, serializeMobs, serializeContainers, serializeLootedChests } from "@/lib/game/save";
+import {
+  serializeEffects,
+  serializeEquippedArmor,
+  inventorySlotsSnapshot,
+  serializeMobs,
+  serializeContainers,
+  serializeLootedChests,
+  serializeStats
+} from "@/lib/game/save";
 import type { SavedPlayer } from "@/lib/game/types";
 import type { PlayerState } from "@/lib/game/engine/state";
 import { encodeServerMessage, gzipWorldSync } from "@/lib/net/codec";
@@ -68,8 +76,17 @@ type ClientConn = {
     sleeping: boolean;
     effectsKey: string;
     mountedVehicleId: number | null;
+    advancementsSize: number;
+    statsSig: string;
   } | null;
 };
+
+/**
+ * Stats the client accrues on its own (recordTick runs on the replica), so they
+ * never travel in the SelfDelta — only the event-driven counters the replica
+ * can't derive (kills, blocks mined, crafts) sync.
+ */
+const CLIENT_LOCAL_STATS = new Set(["play_time", "distance_walked"]);
 
 const PERSIST_INTERVAL_TICKS = 20 * 60; // 60s
 const KEYFRAME_INTERVAL_TICKS = 20 * 5; // 5s
@@ -548,6 +565,8 @@ export class Room {
     if (!player) return null;
     const effectsKey = JSON.stringify(serializeEffects(player.effects));
     const respawnSeconds = Math.ceil(player.respawnTimer);
+    const eventStats = serializeStats(player.stats).filter((s) => !CLIENT_LOCAL_STATS.has(s.id));
+    const statsSig = JSON.stringify(eventStats);
     const previous = conn.shadow;
     const delta: SelfDelta = {};
     if (!previous || previous.inventory !== player.inventory) delta.inventorySlots = inventorySlotsSnapshot(player.inventory);
@@ -562,6 +581,9 @@ export class Room {
     if (!previous || previous.gameMode !== player.gameMode) delta.gameMode = player.gameMode;
     if (!previous || previous.sleeping !== player.sleeping) delta.sleeping = player.sleeping;
     if (!previous || previous.effectsKey !== effectsKey) delta.effects = serializeEffects(player.effects);
+    // Advancements grow-only (send the full set on change); event-driven stats sync on change.
+    if (!previous || previous.advancementsSize !== player.advancements.size) delta.advancements = [...player.advancements];
+    if (!previous || previous.statsSig !== statsSig) delta.stats = eventStats;
     // Mounted: the server owns the rider's position. Announce the mount/dismount
     // transition (mountedVehicleId), and carry the authoritative position while
     // mounted (and on the dismount tick) so the client snaps rather than predicts.
@@ -586,7 +608,9 @@ export class Room {
       gameMode: player.gameMode,
       sleeping: player.sleeping,
       effectsKey,
-      mountedVehicleId: player.mountedVehicleId
+      mountedVehicleId: player.mountedVehicleId,
+      advancementsSize: player.advancements.size,
+      statsSig
     };
     return Object.keys(delta).length > 0 ? { self: delta } : null;
   }

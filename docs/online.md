@@ -70,9 +70,15 @@ so the replica stops predicting its own motion while mounted rather than
 rubber-banding against the boat. Vehicles and in-flight arrows replicate on
 their own tick channels (`vp`/`prj`), mirroring the mob-pose skeleton.
 
-Remaining v1 scope cuts (closed in later MP v2 phases): advancements/stats
-don't yet accrue in server rooms, and indirect mob kills credit the primary
-player.
+Progression is per-player: each player earns their own advancements/stats
+(the engine attributes an emitted event to whoever's step/dispatch is running,
+so a co-op room scores every player independently) and gets credit for their
+own kills — melee, arrow, spear, or a pet's bite, tracked on the mob as
+`lastHitByPlayer` so even a delayed sweep death (burn, explosion) credits the
+right player. The `SelfDelta` syncs each client's advancement set and
+event-driven stats (the two continuous display stats — play time, distance —
+accrue client-side). Advancement toasts are tagged with the earning player, so
+you only see your own. Pets follow **their owner**, not the nearest player.
 
 ## Environment & local development
 

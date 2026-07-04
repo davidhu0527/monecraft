@@ -86,6 +86,7 @@ export function tryAttackMob(
   if (bestIndex < 0) return null;
   const mob = state.mobs[bestIndex];
   mob.hp -= damage;
+  mob.lastHitByPlayer = player.id; // kill credit (incl. a later burn/sweep death)
 
   scratchKnock.copy(mob.position).sub(position).setY(0);
   if (scratchKnock.lengthSq() > 0.0001) {
@@ -125,6 +126,7 @@ export function tryFireBow(state: GameState, player: PlayerState, emit: EmitGame
     damage: BOW_ARROW_DAMAGE + powerBonus(slot),
     knockback: BOW_KNOCKBACK + punchKnockback(slot),
     fromPlayer: true,
+    owner: player.id, // kill credit follows the shooter
     ttl: ARROW_TTL
   });
 

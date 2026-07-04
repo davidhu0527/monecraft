@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { frameInput } from "@/lib/game/engine/testSupport";
-import { LOCAL_PLAYER_ID } from "@/lib/game/engine/state";
+import { LOCAL_PLAYER_ID, type MobState } from "@/lib/game/engine/state";
 import { allEligiblePlayersSleeping, nearestTargetablePlayer } from "@/lib/game/engine/players";
 import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
@@ -114,6 +114,76 @@ describe("players map", () => {
     engine.dispatch({ type: "selectSlot", index: 3 }, "acct-2");
     expect(second.selectedSlot).toBe(3);
     expect(engine.state.player.selectedSlot).not.toBe(3);
+  });
+});
+
+describe("per-player progression & kill credit", () => {
+  function pushZombie(engine: GameEngine, x: number, z: number, hp = 20): MobState {
+    const zombie: MobState = {
+      id: 555,
+      kind: "zombie",
+      hostile: true,
+      faction: "hostile",
+      targetId: null,
+      retargetTimer: 0,
+      hp,
+      position: new THREE.Vector3(x, engine.state.player.position.y, z),
+      direction: new THREE.Vector3(1, 0, 0),
+      yaw: 0,
+      turnTimer: 0,
+      speed: 2,
+      moveSpeed: 2,
+      detectRange: 20,
+      attackDamage: 2,
+      attackCooldown: 1,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    };
+    engine.state.mobs.push(zombie);
+    return zombie;
+  }
+
+  test("each player earns their OWN advancements — a second player's bow shot is theirs alone", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    const primary = engine.state.player;
+    const second = engine.addPlayer({ id: "acct-2" });
+    second.inventory = [...second.inventory];
+    second.inventory[0] = createSlot("bow", 1);
+    second.inventory[1] = createSlot("arrow", 5);
+    second.selectedSlot = 0;
+
+    // A bow shot dispatched as acct-2 attributes to acct-2 (the acting player).
+    engine.dispatch({ type: "attack" }, "acct-2");
+    expect(second.stats.get("arrows_fired")).toBe(1);
+    expect(second.advancements.has("take_aim")).toBe(true);
+    // The primary earned nothing — no world-wide bleed.
+    expect(primary.stats.get("arrows_fired") ?? 0).toBe(0);
+    expect(primary.advancements.has("take_aim")).toBe(false);
+  });
+
+  test("kill credit follows the last player to hit the mob — the sweep credits them, not the primary", () => {
+    const engine = makeEngine("server");
+    calm(engine); // day → no hostile spawns to muddy the counts
+    engine.state.mobs = [];
+    const primary = engine.state.player;
+    const second = engine.addPlayer({ id: "acct-2" });
+    const zombie = pushZombie(engine, 30, 30, 0); // already downed…
+    zombie.lastHitByPlayer = "acct-2"; // …by the second player
+
+    engine.step(0.05); // the post-loop sweep removes it and credits the killer
+
+    expect(engine.state.mobs.some((m) => m.id === zombie.id)).toBe(false);
+    expect(second.stats.get("hostiles_killed")).toBe(1);
+    expect(second.xp).toBeGreaterThan(0);
+    expect(second.advancements.has("monster_hunter")).toBe(true);
+    // The primary gets no credit for a kill it had no part in.
+    expect(primary.stats.get("hostiles_killed") ?? 0).toBe(0);
+    expect(primary.xp).toBe(0);
+    expect(primary.advancements.has("monster_hunter")).toBe(false);
   });
 });
 

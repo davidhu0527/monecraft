@@ -113,6 +113,13 @@ export type MobState = {
   targetId: number | null;
   /** Session-only: seconds until the next enemy-mob rescan (throttle). Never serialized. */
   retargetTimer: number;
+  /**
+   * Session-only: the player whose action last damaged this mob (melee/arrow/spear,
+   * or a pet's bite → its owner). Kill credit (loot/XP/advancements) resolves to
+   * this player when the mob dies — including via the post-loop sweep, where the
+   * direct killer is otherwise lost. Never serialized.
+   */
+  lastHitByPlayer?: PlayerId;
   hp: number;
   /** Body center (ground + halfHeight), like the old group.position without bob. */
   position: THREE.Vector3;
@@ -153,6 +160,8 @@ export type ProjectileState = {
   damage: number;
   knockback: number;
   fromPlayer: boolean;
+  /** The player who fired it (bow), for kill credit; undefined for mob arrows. */
+  owner?: PlayerId;
   /** Seconds remaining before the arrow despawns mid-air. */
   ttl: number;
 };
@@ -170,6 +179,8 @@ export type ThrownSpearState = {
   velocity: THREE.Vector3;
   damage: number;
   age: number;
+  /** The player who threw it, for kill credit. */
+  owner?: PlayerId;
   /** Seconds embedded in terrain, or null while still flying. */
   stuckTimer: number | null;
 };
@@ -562,7 +573,7 @@ export type GameEvent =
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "crafted"; recipeId: string }
-  | { type: "advancementUnlocked"; id: string; name: string }
+  | { type: "advancementUnlocked"; id: string; name: string; playerId?: PlayerId }
   | { type: "mobFed"; kind: MobKind }
   | { type: "mobBred"; kind: MobKind }
   | { type: "mobTamed"; kind: MobKind; x: number; y: number; z: number }

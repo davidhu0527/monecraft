@@ -1,7 +1,7 @@
 import type { Command } from "@/lib/game/engine/commands";
 import type { GameEvent } from "@/lib/game/engine/state";
 import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
-import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer } from "@/lib/game/types";
+import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedStat } from "@/lib/game/types";
 
 /**
  * The client↔game-server wire protocol. Versioned as a whole: a client built
@@ -145,6 +145,10 @@ export type SelfDelta = {
   respawnSeconds?: number;
   gameMode?: string;
   sleeping?: boolean;
+  /** The recipient's unlocked advancement ids (full set, sent when it grows). */
+  advancements?: string[];
+  /** Event-driven stat counters that changed (the two continuous display stats — play_time/distance_walked — accrue client-side). */
+  stats?: SavedStat[];
   /**
    * Which vehicle the recipient is riding (id), or null when they dismount.
    * Present only on the tick the mount state changes. While it is non-null the

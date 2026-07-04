@@ -150,6 +150,33 @@ describe("room lifecycle", () => {
     expect(bobChats[0]).toMatchObject({ from: "alice", name: "ALICE" });
   });
 
+  test("the self-delta carries advancements and event-driven stats on change; the continuous display stats stay local", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const roomTick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+    roomTick(); // first tick: full snapshot (baseline the shadow)
+
+    const alice = room.engine.state.players.get("alice")!;
+    alice.advancements.add("take_aim");
+    alice.stats.set("hostiles_killed", 2);
+    roomTick();
+    const t = a.messagesOf("tick").at(-1);
+    expect(t?.self?.advancements).toContain("take_aim");
+    expect(t?.self?.stats?.find((s) => s.id === "hostiles_killed")?.value).toBe(2);
+
+    // play_time accrues client-side (recordTick on the replica), so it is never
+    // synced — bumping it alone produces no stats delta.
+    alice.stats.set("play_time", 999);
+    roomTick();
+    expect(
+      a
+        .messagesOf("tick")
+        .at(-1)
+        ?.self?.stats?.some((s) => s.id === "play_time")
+    ).toBeFalsy();
+  });
+
   test("vehicle and arrow poses reach other clients; the world-sync carries them; arrows prune, parked boats deadband", async () => {
     const { room } = await makeRoom();
     const a = fakeSink();

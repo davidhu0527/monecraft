@@ -112,6 +112,7 @@ export function tickProjectiles(state: GameState, dt: number, deps: ProjectileTi
         if (p.fromPlayer) {
           const mob = state.mobs[hitMobIndex];
           mob.hp -= p.damage;
+          if (p.owner !== undefined) mob.lastHitByPlayer = p.owner; // kill credit follows the shooter
           knock.set(segDir.x, 0, segDir.z);
           if (knock.lengthSq() > 1e-6) {
             knock.normalize();

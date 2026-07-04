@@ -160,6 +160,17 @@ describe("connectNetworkSession", () => {
     session.dispose();
   });
 
+  test("applies advancement and stat deltas onto the local player", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    instances[0].emit(tick({ advancements: ["take_aim", "monster_hunter"], stats: [{ id: "hostiles_killed", value: 3 }] }));
+    expect([...session.engine.state.player.advancements].sort()).toEqual(["monster_hunter", "take_aim"]);
+    expect(session.engine.state.player.stats.get("hostiles_killed")).toBe(3);
+    session.dispose();
+  });
+
   test("restores vehicles and arrows from the world-sync keyframe", async () => {
     const { make, instances } = socketFactory();
     const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });

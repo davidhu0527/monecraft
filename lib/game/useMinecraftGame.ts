@@ -318,6 +318,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       // exactly like local ones.
       const events = online ? [...gameEngine.consumeEvents(), ...online.drainEvents()] : gameEngine.consumeEvents();
       for (const event of events) {
+        // Advancement unlocks broadcast to the whole room; only surface (toast +
+        // chime) your own — the server tags each with the earning player.
+        if (online && event.type === "advancementUnlocked" && event.playerId && event.playerId !== online.playerId) continue;
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
           // Free the cursor so the death/victory/game-over button is clickable; the
           // pause command ignores those states, so the lock-loss won't open the menu too.

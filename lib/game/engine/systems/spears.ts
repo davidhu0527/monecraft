@@ -32,6 +32,7 @@ export function tryThrowSelectedSpear(state: GameState, player: PlayerState, emi
     velocity: scratchDirection.clone().multiplyScalar(SPEAR_THROW_SPEED),
     damage: slot.throwDamage,
     age: 0,
+    owner: player.id, // kill credit follows the thrower
     stuckTimer: null
   });
   state.nextThrownSpearId += 1;
@@ -83,6 +84,8 @@ export function tickThrownSpears(state: GameState, dt: number, removeMobAt: (ind
       const mob = state.mobs[hitIndex];
       const kind = mob.kind;
       mob.hp -= spear.damage;
+      if (spear.owner !== undefined) mob.lastHitByPlayer = spear.owner; // kill credit
+
       scratchDirection.copy(spear.velocity).setY(0);
       if (scratchDirection.lengthSq() > 0.0001) {
         scratchDirection.normalize();

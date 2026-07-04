@@ -154,4 +154,13 @@ describe("tryAttackMob knockback", () => {
     tryAttackMob(state, state, 5, (_index, looting = 0) => (received = looting), 5, 0, 3);
     expect(received).toBe(3); // Looting from the held weapon, not live selected-slot state at death
   });
+
+  test("a melee hit stamps the attacker on the mob for kill credit", () => {
+    const state = makeState(inventory([["diamond_sword", 1]]));
+    (state as { id: string }).id = "hero";
+    const mob = mobInFront(); // hp 100 — survives, so we test the stamp, not the kill
+    state.mobs = [mob];
+    tryAttackMob(state, state, 5, () => {}, 5, 0);
+    expect(mob.lastHitByPlayer).toBe("hero");
+  });
 });

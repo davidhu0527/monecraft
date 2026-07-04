@@ -354,6 +354,11 @@ export async function connectNetworkSession(
       self.effects.clear();
       for (const { id, remaining } of restoreEffects(shim)) self.effects.set(id, remaining);
     }
+    // Progression is server-owned: adopt our advancement set (grow-only) and the
+    // event-driven stat counters. play_time/distance_walked aren't sent — the
+    // replica's recordTick accrues those locally — so a plain set() preserves them.
+    if (delta.advancements) self.advancements = new Set(delta.advancements);
+    if (delta.stats) for (const { id, value } of delta.stats) self.stats.set(id, value);
     // Mounted: the server owns our position. Adopt the mount state and snap to
     // the authoritative position (the replica step skips its own motion while
     // mountedVehicleId is set, so the boat — not prediction — drives the camera).
