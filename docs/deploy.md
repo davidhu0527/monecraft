@@ -83,7 +83,8 @@ fly secrets set \
 fly deploy --config server/fly.toml --dockerfile server/Dockerfile
 ```
 
-`server/fly.toml` already pins the important bits: one region (`nrt`), **always
+`server/fly.toml` already pins the important bits: a single region (set
+`primary_region` to one near your players), **always
 on** (`min_machines_running = 1`, `auto_stop_machines = "off"` — a room must keep
 ticking while players are in it), a `/health` check, `PERSISTENCE = "postgres"`,
 `MAX_ROOMS = 6`, and a 2 GB VM (rooms are ~74 MB each). SIGTERM on a redeploy
