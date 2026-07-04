@@ -2,7 +2,12 @@
 
 ## Schema
 
-`SaveData` (version 16) in `lib/game/types.ts`:
+`SaveData` (version 17) in `lib/game/types.ts`. Since v17 the per-player
+fields below (inventory, equipped armor, selected slot, position,
+hearts/hunger, effects, xp, stats, advancements, spawn point, game mode,
+gameOver) live inside `players: SavedPlayer[]` — a single `"local"` entry in
+single-player — while the world-level fields stay top-level (see the v17
+entry under Version history). The field-by-field contracts are unchanged:
 
 - world `seed`
 - `worldType` (optional) — the generation preset (`"default"` | `"flat"` | `"amplified"` | `"islands"`); absent ⇒ `"default"`. Like `seed`, it is fixed for the world's life and the world must always regenerate with it, since the block-diffs were recorded against that terrain
