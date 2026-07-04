@@ -83,9 +83,12 @@ test("two guests share an online world via an invite link", async ({ browser }) 
   await friend.getByRole("link", { name: "Open the game" }).click();
 
   // First run in this fresh context: create the friend's local profile; the
-  // invited world is already waiting in the Online Worlds section.
+  // invited world is already waiting in the Online Worlds section. The friend
+  // is already a guest (the invite link signed them in), so the first-run screen
+  // also shows the account panel — `exact` avoids matching its
+  // "Keep my worlds — create account" button.
   await friend.getByLabel("Profile name").fill("Friend");
-  await friend.getByRole("button", { name: "Create" }).click();
+  await friend.getByRole("button", { name: "Create", exact: true }).click();
   await friend.getByTestId(`online-world-${worldId}`).click();
   await waitForOnlineGame(friend);
 

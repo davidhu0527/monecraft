@@ -27,6 +27,10 @@ export default function ProfileSelect({ onPlay }: ProfileSelectProps) {
   if (creating || firstRun) {
     return (
       <MenuScreen title={firstRun ? "Create Your Profile" : "New Profile"}>
+        {/* First run has no profile list to host the account controls, so surface
+            them here too — otherwise sign in / register is unreachable until a
+            local profile exists. (The list view renders its own panel below.) */}
+        {firstRun && <AccountPanel />}
         <CreateProfileForm
           onCreate={(name, skinId) => {
             const profile = createProfile(name, skinId);

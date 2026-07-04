@@ -35,6 +35,10 @@ Postgres.
   the real better-auth flow on real SQL (PGlite), including the
   duplicate-membership collision case.
 - Sessions are better-auth cookies; the game server never sees them.
+- The Account panel renders on the profile-select screen **and on the
+  first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
+  sign in / register is reachable before any local profile exists; a guest can
+  **Sign out** back to the offline/login state.
 
 ## Worlds, invites, cloud saves
 

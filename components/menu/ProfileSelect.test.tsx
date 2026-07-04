@@ -26,6 +26,9 @@ describe("ProfileSelect", () => {
     expect(screen.getByText("Create Your Profile")).toBeTruthy();
     expect(screen.getByLabelText("Profile name")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    // Login / register must be reachable on first run, not hidden behind first
+    // creating a local profile.
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
   });
 
   test("first-run create enters the new profile", async () => {

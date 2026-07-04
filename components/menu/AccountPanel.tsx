@@ -25,6 +25,10 @@ export default function AccountPanel() {
   }, []);
 
   const refresh = async () => setUser(await currentUser());
+  const signOut = async () => {
+    await authClient().signOut();
+    await refresh();
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -92,18 +96,18 @@ export default function AccountPanel() {
         <>
           <span className="account-status">{user.isAnonymous ? "Playing as guest" : `Signed in as ${user.name}`}</span>
           {user.isAnonymous ? (
-            <button type="button" className="mc-button" onClick={() => setMode("signup")}>
-              Keep my worlds — create account
-            </button>
+            <>
+              <button type="button" className="mc-button" onClick={() => setMode("signup")}>
+                Keep my worlds — create account
+              </button>
+              {/* A guest could previously never get back to the login screen; sign
+                  out drops to the "Offline" state where Sign in / register live. */}
+              <button type="button" className="mc-button" onClick={signOut}>
+                Sign out
+              </button>
+            </>
           ) : (
-            <button
-              type="button"
-              className="mc-button"
-              onClick={async () => {
-                await authClient().signOut();
-                await refresh();
-              }}
-            >
+            <button type="button" className="mc-button" onClick={signOut}>
               Sign out
             </button>
           )}
