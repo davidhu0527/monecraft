@@ -1,20 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { closeTestDb, createTestDb, type TestDb } from "@/db/testDb";
 import { schema } from "@/db";
+import { MAX_ONLINE_PROFILES, MAX_WORLDS_PER_PROFILE } from "@/lib/game/config";
 import { verifyTicket } from "@/lib/net/tickets";
 import {
   acceptInvite,
   createInvite,
+  createProfile,
   createWorld,
+  deleteProfile,
   deleteWorld,
   getSaveBlob,
   getWorld,
+  listProfiles,
   listWorlds,
   mintTicket,
   putSaveBlob,
   renameWorld,
   resolveInvite,
-  revokeInvites
+  revokeInvites,
+  updateProfile
 } from "./worldsService";
 
 let db: TestDb;
@@ -155,6 +160,82 @@ describe("save blobs (LWW)", () => {
     const id = await makeWorld("alice", "sp-cloud");
     expect((await getSaveBlob(asDb(), "mallory", id)).ok).toBe(false);
     expect((await putSaveBlob(asDb(), "mallory", id, blob("x"), 17, null)).ok).toBe(false);
+  });
+});
+
+describe("account profiles", () => {
+  const acct = (id: string, isAnonymous = false) => ({ id, isAnonymous });
+
+  test("create, list (oldest first), and rename/reskin — all owner-scoped", async () => {
+    const a = await createProfile(asDb(), acct("alice"), { name: "Steve", skinId: "default" });
+    const b = await createProfile(asDb(), acct("alice"), { name: "Alex", skinId: "alex" });
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok) throw new Error("create failed");
+
+    expect((await listProfiles(asDb(), "alice")).map((p) => p.name)).toEqual(["Steve", "Alex"]);
+
+    expect(await updateProfile(asDb(), "alice", a.profile.id, { name: "Renamed", skinId: "robot" })).toMatchObject({ ok: true });
+    // Not your profile → not-found (owner-scoped, so ids can't be probed).
+    expect(await updateProfile(asDb(), "bob", a.profile.id, { name: "Hijack" })).toMatchObject({ ok: false, error: "not-found" });
+    expect((await listProfiles(asDb(), "alice")).find((p) => p.id === a.profile.id)).toMatchObject({ name: "Renamed", skinId: "robot" });
+  });
+
+  test("guests can't create a profile (online identities are account-only)", async () => {
+    await db.insert(schema.user).values({ id: "guest", name: "Guest", email: "guest@example.com", isAnonymous: true });
+    expect(await createProfile(asDb(), acct("guest", true), { name: "Nope" })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await listProfiles(asDb(), "guest")).toEqual([]);
+  });
+
+  test("an account is capped at MAX_ONLINE_PROFILES; blank/over-long names are rejected", async () => {
+    for (let i = 0; i < MAX_ONLINE_PROFILES; i += 1) {
+      expect((await createProfile(asDb(), acct("alice"), { name: `P${i}` })).ok).toBe(true);
+    }
+    expect(await createProfile(asDb(), acct("alice"), { name: "one too many" })).toMatchObject({ ok: false, error: "conflict" });
+    expect(await createProfile(asDb(), acct("bob"), { name: "   " })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createProfile(asDb(), acct("bob"), { name: "x".repeat(25) })).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  test("deleting a profile cascades its online worlds; delete is owner-scoped", async () => {
+    const p = await createProfile(asDb(), acct("alice"), { name: "Steve" });
+    if (!p.ok) throw new Error("create failed");
+    const world = await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id });
+    if (!world.ok) throw new Error("world failed");
+    expect(world.world.profileId).toBe(p.profile.id);
+
+    expect(await deleteProfile(asDb(), "bob", p.profile.id)).toMatchObject({ ok: false, error: "not-found" });
+    expect(await deleteProfile(asDb(), "alice", p.profile.id)).toMatchObject({ ok: true });
+    expect(await listWorlds(asDb(), "alice")).toEqual([]); // world + its membership cascaded away
+  });
+
+  test("createWorld enforces profile ownership and the per-profile world cap", async () => {
+    const p = await createProfile(asDb(), acct("alice"), { name: "Steve" });
+    if (!p.ok) throw new Error("create failed");
+    // A profile that isn't yours can't own your world.
+    expect(await createWorld(asDb(), "bob", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id })).toMatchObject({ ok: false, error: "forbidden" });
+
+    for (let i = 0; i < MAX_WORLDS_PER_PROFILE; i += 1) {
+      expect((await createWorld(asDb(), "alice", { name: `W${i}`, kind: "mp", seed: i, profileId: p.profile.id })).ok).toBe(true);
+    }
+    expect(await createWorld(asDb(), "alice", { name: "over", kind: "mp", seed: 99, profileId: p.profile.id })).toMatchObject({ ok: false, error: "conflict" });
+  });
+
+  test("a join ticket carries the chosen profile's name + skin, not the account's; a foreign profile is refused", async () => {
+    const p = await createProfile(asDb(), acct("alice"), { name: "Steve", skinId: "robot" });
+    if (!p.ok) throw new Error("create failed");
+    const world = await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id });
+    if (!world.ok) throw new Error("world failed");
+
+    const minted = await mintTicket(asDb(), { id: "alice", name: "Account Name", skinId: "default" }, world.world.id, "secret-1", p.profile.id);
+    expect(minted.ok).toBe(true);
+    if (minted.ok) {
+      expect(await verifyTicket(minted.ticket, "secret-1")).toMatchObject({ sub: "alice", name: "Steve", skinId: "robot" });
+    }
+
+    // bob joins the world but can't mint against alice's profile.
+    const invite = await createInvite(asDb(), "alice", world.world.id);
+    if (!invite.ok) throw new Error("invite failed");
+    await acceptInvite(asDb(), "bob", invite.token);
+    expect(await mintTicket(asDb(), { id: "bob", name: "Bob" }, world.world.id, "secret-1", p.profile.id)).toMatchObject({ ok: false, error: "forbidden" });
   });
 });
 

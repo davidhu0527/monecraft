@@ -1,7 +1,7 @@
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
-import { WORLDGEN_VERSION } from "@/lib/game/config";
+import { MAX_ONLINE_PROFILES, MAX_WORLDS_PER_PROFILE, WORLDGEN_VERSION } from "@/lib/game/config";
 import { PROTOCOL_VERSION } from "@/lib/net/protocol";
 import { signTicket } from "@/lib/net/tickets";
 
@@ -26,6 +26,8 @@ export type WorldSummary = {
   hardcore: boolean;
   worldgenVersion: number;
   role: "owner" | "member";
+  /** The owner's profile this world belongs to (null for legacy/unclaimed rows). */
+  profileId: string | null;
   updatedAt: string;
 };
 
@@ -44,8 +46,81 @@ function toSummary(world: typeof schema.worlds.$inferSelect, role: "owner" | "me
     hardcore: world.hardcore,
     worldgenVersion: world.worldgenVersion,
     role,
+    profileId: world.profileId ?? null,
     updatedAt: world.updatedAt.toISOString()
   };
+}
+
+// ── account profiles ─────────────────────────────────────────────────────────
+
+export type ProfileSummary = { id: string; name: string; skinId: string | null; createdAt: string };
+
+const MAX_PROFILE_NAME = 24;
+
+function toProfileSummary(profile: typeof schema.profiles.$inferSelect): ProfileSummary {
+  return { id: profile.id, name: profile.name, skinId: profile.skinId ?? null, createdAt: profile.createdAt.toISOString() };
+}
+
+/** Every profile an account owns, oldest first (stable menu order). */
+export async function listProfiles(db: Db, ownerId: string): Promise<ProfileSummary[]> {
+  const rows = await db.select().from(schema.profiles).where(eq(schema.profiles.ownerId, ownerId));
+  return rows.map(toProfileSummary).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/**
+ * Creates an account profile. Guests can't (online identities are account-only,
+ * see [[Local Player]]); the account is capped at MAX_ONLINE_PROFILES — a 6th
+ * request is a `conflict` the UI reports as "limit reached".
+ */
+export async function createProfile(
+  db: Db,
+  owner: { id: string; isAnonymous: boolean },
+  input: { name: string; skinId?: string | null }
+): Promise<{ ok: true; profile: ProfileSummary } | Failure> {
+  if (owner.isAnonymous) return fail("forbidden");
+  const name = input.name?.trim();
+  if (!name || name.length > MAX_PROFILE_NAME) return fail("invalid");
+  const existing = await db.select({ id: schema.profiles.id }).from(schema.profiles).where(eq(schema.profiles.ownerId, owner.id));
+  if (existing.length >= MAX_ONLINE_PROFILES) return fail("conflict");
+  const [profile] = await db
+    .insert(schema.profiles)
+    .values({ id: crypto.randomUUID(), ownerId: owner.id, name, skinId: input.skinId ?? null })
+    .returning();
+  return { ok: true, profile: toProfileSummary(profile) };
+}
+
+/** Rename and/or reskin a profile (owner-scoped). */
+export async function updateProfile(
+  db: Db,
+  ownerId: string,
+  profileId: string,
+  patch: { name?: string; skinId?: string | null }
+): Promise<{ ok: true } | Failure> {
+  const set: { name?: string; skinId?: string | null } = {};
+  if (patch.name !== undefined) {
+    const trimmed = patch.name.trim();
+    if (!trimmed || trimmed.length > MAX_PROFILE_NAME) return fail("invalid");
+    set.name = trimmed;
+  }
+  if (patch.skinId !== undefined) set.skinId = patch.skinId;
+  if (Object.keys(set).length === 0) return fail("invalid");
+  const updated = await db
+    .update(schema.profiles)
+    .set(set)
+    .where(and(eq(schema.profiles.id, profileId), eq(schema.profiles.ownerId, ownerId)))
+    .returning({ id: schema.profiles.id });
+  if (updated.length === 0) return fail("not-found");
+  return { ok: true };
+}
+
+/** Deletes a profile and (via FK cascade) all the online worlds it owned. */
+export async function deleteProfile(db: Db, ownerId: string, profileId: string): Promise<{ ok: true } | Failure> {
+  const deleted = await db
+    .delete(schema.profiles)
+    .where(and(eq(schema.profiles.id, profileId), eq(schema.profiles.ownerId, ownerId)))
+    .returning({ id: schema.profiles.id });
+  if (deleted.length === 0) return fail("not-found");
+  return { ok: true };
 }
 
 /** The caller's membership row for a world, or null. */
@@ -77,6 +152,8 @@ export type CreateWorldInput = {
   gameMode?: string;
   difficulty?: string;
   hardcore?: boolean;
+  /** The owner's profile that owns this world; enforces the per-profile world cap. */
+  profileId?: string;
 };
 
 export async function createWorld(db: Db, userId: string, input: CreateWorldInput): Promise<{ ok: true; world: WorldSummary } | Failure> {
@@ -84,12 +161,25 @@ export async function createWorld(db: Db, userId: string, input: CreateWorldInpu
   if (!name || name.length > 64) return fail("invalid");
   if (input.kind !== "sp-cloud" && input.kind !== "mp") return fail("invalid");
   if (!Number.isFinite(input.seed)) return fail("invalid");
+  let profileId: string | null = null;
+  if (input.profileId) {
+    // The profile must be the caller's, and it can't already be at its world cap.
+    const [profile] = await db
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(and(eq(schema.profiles.id, input.profileId), eq(schema.profiles.ownerId, userId)));
+    if (!profile) return fail("forbidden");
+    const owned = await db.select({ id: schema.worlds.id }).from(schema.worlds).where(eq(schema.worlds.profileId, input.profileId));
+    if (owned.length >= MAX_WORLDS_PER_PROFILE) return fail("conflict");
+    profileId = input.profileId;
+  }
   const id = crypto.randomUUID();
   const [world] = await db
     .insert(schema.worlds)
     .values({
       id,
       ownerId: userId,
+      profileId,
       kind: input.kind,
       name,
       seed: Math.floor(input.seed),
@@ -232,21 +322,36 @@ export async function acceptInvite(db: Db, userId: string, token: string): Promi
   return { ok: true, worldId: resolved.worldId };
 }
 
-/** Mints the 60s join ticket the game server trusts. Membership required; mp worlds only. */
+/**
+ * Mints the 60s join ticket the game server trusts. Membership required; mp
+ * worlds only. When a `profileId` is given (and belongs to the caller) the
+ * ticket carries that profile's name + skin, so others see the profile identity
+ * — not the account. `sub` stays the account id (roster/kick key at the account
+ * level; per-profile save-slice keying is a separate decision).
+ */
 export async function mintTicket(
   db: Db,
   user: { id: string; name: string; skinId?: string | null },
   worldId: string,
-  secret: string
+  secret: string,
+  profileId?: string | null
 ): Promise<{ ok: true; ticket: string } | Failure> {
   const member = await membership(db, user.id, worldId);
   if (!member) return fail("not-found");
   const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
   if (!world) return fail("not-found");
   if (world.kind !== "mp") return fail("invalid");
-  const ticket = await signTicket(
-    { sub: user.id, wid: worldId, name: user.name, skinId: user.skinId ?? null, role: member.role, pv: PROTOCOL_VERSION },
-    secret
-  );
+  let name = user.name;
+  let skinId = user.skinId ?? null;
+  if (profileId) {
+    const [profile] = await db
+      .select()
+      .from(schema.profiles)
+      .where(and(eq(schema.profiles.id, profileId), eq(schema.profiles.ownerId, user.id)));
+    if (!profile) return fail("forbidden");
+    name = profile.name;
+    skinId = profile.skinId ?? null;
+  }
+  const ticket = await signTicket({ sub: user.id, wid: worldId, name, skinId, role: member.role, pv: PROTOCOL_VERSION }, secret);
   return { ok: true, ticket };
 }
