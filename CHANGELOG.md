@@ -15,6 +15,7 @@ All notable changes to this project are documented in this file.
 ### Changed
 
 - **Online play is accounts-only — the anonymous guest layer is retired**: hosting, joining by invite, and cloud sync now all start with a one-time email/password registration; logged-out **Local Players** keep unlimited browser-local profiles and worlds with **zero** server calls. Opening an invite link (`/join/<token>`) still previews the world's name first, then asks you to sign in or register right on the page before accepting. Worlds you join by invite now appear in the account world list under **every** profile with a **Joined** tag (memberships are account-level) — previously they were only reachable through the retired guest world list. The account home gains a **"Play locally"** door into your local worlds (where cloud-save **Upload/Download** lives, now gated on being signed in) with a **"Back to account"** return — local worlds stay hidden-but-preserved while signed in, never deleted, never auto-uploaded.
+- **Menu labels say which store a profile lives in**: the browser-local list is titled **Local Profiles** ("Stored in this browser — no account needed"), the account home **Online Profiles** ("Synced to your account — available wherever you sign in"), and a local profile's world list **Local Worlds** — the two profile kinds used to render identically, with nothing saying whether a profile was local or synced.
 
 ### Removed
 

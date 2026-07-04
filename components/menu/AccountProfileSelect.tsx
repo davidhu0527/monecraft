@@ -84,7 +84,8 @@ export default function AccountProfileSelect({ user, onPlay, onPlayLocally, onSi
   }
 
   return (
-    <MenuScreen title="Your Profiles">
+    <MenuScreen title="Online Profiles">
+      <p className="menu-note">Synced to your account — available wherever you sign in.</p>
       <div className="account-panel">
         <span className="account-status">Signed in as {user.name}</span>
         <button type="button" className="mc-button" onClick={signOut} disabled={busy}>

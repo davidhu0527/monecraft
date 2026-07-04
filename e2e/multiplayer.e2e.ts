@@ -41,7 +41,7 @@ async function signUp(page: Page, name: string, email: string): Promise<void> {
 /** From the account home, creates an online profile and enters its world list. */
 async function createOnlineProfile(page: Page, name: string): Promise<void> {
   // Sign-up → session probe → account home spans two network hops.
-  await expect(page.getByText("Your Profiles")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Online Profiles")).toBeVisible({ timeout: 15000 });
   await page.getByTestId("new-online-profile").click();
   await page.getByLabel("Profile name").fill(name);
   // exact: "Create account" (panel) and "Create World" share the substring.
