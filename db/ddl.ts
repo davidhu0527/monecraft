@@ -49,9 +49,17 @@ export const SCHEMA_DDL = `
       created_at timestamp NOT NULL DEFAULT now(),
       updated_at timestamp NOT NULL DEFAULT now()
     );
+    CREATE TABLE profiles (
+      id text PRIMARY KEY,
+      owner_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      skin_id text,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
     CREATE TABLE worlds (
       id text PRIMARY KEY,
       owner_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      profile_id text REFERENCES profiles(id) ON DELETE CASCADE,
       kind text NOT NULL,
       name text NOT NULL,
       seed integer NOT NULL,

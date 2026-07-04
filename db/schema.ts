@@ -77,6 +77,23 @@ export const verification = pgTable("verification", {
 // ── game tables ──────────────────────────────────────────────────────────────
 
 /**
+ * A player profile owned by an account: the cross-device identity (name +
+ * skin) that owns online worlds. Local Players keep their profiles in the
+ * browser (lib/game/profiles.ts); these are the server-side ones an account
+ * syncs. Capped per account (config MAX_ONLINE_PROFILES).
+ */
+export const profiles = pgTable("profiles", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** Skin palette id (mirrors the local Profile's skinId). */
+  skinId: text("skin_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow()
+});
+
+/**
  * One world. `kind` separates a cloud-synced single-player world (the blob is
  * the client's latest upload) from a multiplayer world (the blob is the game
  * server's authoritative persistence). One save blob either way: gzipped
@@ -87,6 +104,11 @@ export const worlds = pgTable("worlds", {
   ownerId: text("owner_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  /**
+   * Which of the owner's profiles owns this world. Nullable: pre-profile rows
+   * (and the account's default profile backfill) leave it null until claimed.
+   */
+  profileId: text("profile_id").references(() => profiles.id, { onDelete: "cascade" }),
   kind: text("kind", { enum: ["sp-cloud", "mp"] }).notNull(),
   name: text("name").notNull(),
   seed: integer("seed").notNull(),
