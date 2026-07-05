@@ -47,7 +47,9 @@ Postgres.
 - Sessions are better-auth cookies; the game server never sees them.
 - The Account panel renders on the profile-select screen **and on the
   first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
-  sign in / register is reachable before any local profile exists.
+  sign in / register is reachable before any local profile exists. Logged out
+  it offers **Sign in** and **Create account** side by side (the form also has
+  an in-form toggle between the two modes).
 
 ## Worlds, invites, cloud saves
 
@@ -111,7 +113,10 @@ other player — it sends a `kick` message that the server re-checks against the
 sender's ticket role (a member's kick is dropped), reusing the same in-process
 `Room.kick` as the admin endpoint. It renders above the pause overlay, so the
 owner frees the cursor (Escape) and ejects a griefer without leaving. No
-web→game admin bridge: the protocol path keeps the game server stateless.
+web→game admin bridge: the protocol path keeps the game server independent of
+the web app (its only trust input is the signed ticket) — though the server
+itself is stateful: live rooms exist only in its process memory (see
+[Game server operations](#game-server-operations)).
 
 Boarding works online (protocol v2): a mounted rider's position is
 server-owned and streamed on the `SelfDelta` (`mountedVehicleId` + `x/y/z`),
@@ -181,6 +186,17 @@ on the drift-corrected 20 Hz ticker. Rooms load from Postgres on first join,
 persist every 60 s (when dirty), on last-leave, and on SIGTERM (deploys
 drain, ≤60 s loss crash-safe); five idle minutes evicts a room from memory.
 See [protocol.md](protocol.md) for the wire format.
+
+**Single instance, by design.** Rooms live in the process's memory
+(`server/roomRegistry.ts`) with no cross-instance coordination — Postgres holds
+world _saves_, not live rooms. Run **exactly one** game-server instance:
+behind a load balancer, a second instance loads its own independent copy of a
+world on first join, silently splitting that world's players across copies
+(each connects fine and sees "Players (1)"). On Fly that means
+`fly scale count 1` — `fly launch` defaults to a two-machine HA pair, and
+`min_machines_running = 1` is a floor, not a cap (see
+[deploy.md](deploy.md#step-2--game-server-flyio)). Scaling _up_ means a bigger
+machine or real room affinity (route by world id), not replicas.
 
 All admin endpoints require `Authorization: Bearer $ADMIN_TOKEN` (absent
 `ADMIN_TOKEN` = always 403):

@@ -124,6 +124,9 @@ export default function AccountPanel({ onAuthChange }: AccountPanelProps) {
           <button type="button" className="mc-button" onClick={() => setMode("signin")}>
             Sign in
           </button>
+          <button type="button" className="mc-button" onClick={() => setMode("signup")}>
+            Create account
+          </button>
           {error && <div className="account-error">{error}</div>}
         </>
       )}

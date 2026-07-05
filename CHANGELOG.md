@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Online co-op — players in the same world couldn't see each other on prod** (each showed "Players (1)"): the deploy runbook now pins the Fly game server to a **single machine** (`fly scale count 1`) and documents the invariant. `fly launch` had provisioned the default two-machine HA pair; rooms live in one process's memory with no cross-instance coordination, so each machine hosted its own independent copy of the same world and the edge load-balancer split the players between them. Docs-only — no code change; the ops fix is one command on the live app.
+- **Account menu — Create account is now a visible button**: the logged-out account panel (welcome/first-run screen, Local Profiles screen, and invite landing page) now shows **Create account** next to **Sign in**. Registration used to be hidden behind Sign in → "I need an account", so a new user saw no way to create an account; the in-form toggle between the two modes remains.
+
 ## [0.14.0] - 2026-07-05
 
 ### Added

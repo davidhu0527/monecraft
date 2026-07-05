@@ -29,6 +29,7 @@ describe("ProfileSelect", () => {
     // Login / register must be reachable on first run, not hidden behind first
     // creating a local profile.
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
   });
 
   test("Back to account renders only for the Play-locally door and fires", async () => {
