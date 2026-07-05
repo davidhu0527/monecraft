@@ -471,9 +471,18 @@ None affect single-player, and none are save-sensitive.
   keyframe / drift correction), mob delta frames at **10 Hz** (half tick rate)
   with `MOB_DEADBAND_SQ` (`0.05²` — smaller = more mob updates, more bandwidth),
   `DAY_INTERVAL_TICKS` (`20` = 1 s day-clock sync), `POSE_CHECKPOINT_TICKS`
-  (`20` = 1 s replay-log pose anchors). `INTERPOLATION_DELAY_MS` (`125`,
-  `lib/net/interpolation.ts`) is how far in the past remote entities render —
-  larger absorbs more jitter at the cost of visible lag.
+  (`20` = 1 s replay-log pose anchors).
+- **Interpolation delay (adaptive)** — how far in the past remote entities
+  render, sized from measured tick-arrival jitter (`lib/net/interpolation.ts`):
+  `INTERPOLATION_DELAY_MIN_MS` (`125`, the clean-link floor),
+  `INTERPOLATION_DELAY_MAX_MS` (`450`), `INTERPOLATION_JITTER_MULT` (`2` ×
+  the p90 arrival deviation), `DELAY_SLEW_MS_PER_SEC` (`60` — how fast the
+  delay may drift, so remote timelines never visibly warp). Larger delays
+  absorb more jitter at the cost of visible lag.
+- **Clock sync** (`lib/net/clock.ts`) — `OFFSET_WINDOW_SIZE` (`16` pongs
+  considered for the NTP-style min-RTT offset pick), `OFFSET_SLEW_MS_PER_SEC`
+  (`40`), `OFFSET_SNAP_MS` (`250` — bigger errors snap: first fix, reconnect).
+  The client pings at `PING_INTERVAL_MS` (`1000`, `NetworkSession.ts`).
 - **Wire size** — replicated poses quantize before serialization (`qPos` 2
   decimals, `qAng` 3 — `lib/net/codec.ts`; margins sit well inside every
   movement clamp and deadband) and the server offers **permessage-deflate**

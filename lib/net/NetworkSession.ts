@@ -9,7 +9,7 @@ import { FACTION_BY_KIND } from "@/lib/game/mobs";
 import type { MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
 import { decodeServerFrame, encodeClientMessage, gunzipWorldSync, qAng, qPos } from "./codec";
-import { createPoseBuffer, INTERPOLATION_DELAY_MS, type PoseBuffer } from "./interpolation";
+import { createDelayController, createPoseBuffer, type PoseBuffer } from "./interpolation";
 import {
   CLOSE_BAD_TICKET,
   CLOSE_KICKED,
@@ -73,6 +73,9 @@ const FATAL_CLOSES = new Set<number>([CLOSE_BAD_TICKET, CLOSE_PROTOCOL_MISMATCH,
 const LOCAL_COMMANDS = new Set<Command["type"]>(["toggleInventory", "toggleAdvancements", "toggleDebug", "toggleCameraView", "pause", "resume"]);
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
+
+/** Ping cadence — 1 Hz keeps the clock's min-RTT window (~16 samples) fresh at ~40 B/s. */
+const PING_INTERVAL_MS = 1000;
 
 /** One player as the roster panel shows them. */
 export type RosterMember = { id: PlayerId; name: string };
@@ -156,6 +159,7 @@ export async function connectNetworkSession(
   };
 
   const clock = createClockSync();
+  const delayCtl = createDelayController();
   const pendingEvents: GameEvent[] = [];
   const playerBuffers = new Map<string, PoseBuffer>();
   const mobBuffers = new Map<number, PoseBuffer>();
@@ -298,6 +302,8 @@ export async function connectNetworkSession(
   if (myRoster) self.position.set(myRoster.x, myRoster.y, myRoster.z);
 
   const applyWorldSync = (sync: WorldSync) => {
+    // A (re)sync follows a gap that is not jitter — don't let it poison the window.
+    delayCtl.reset();
     state.blockChanges.applySavedChanges(sync.changes);
     state.worldMeshDirty = true;
     state.dayClock = sync.dayClock;
@@ -474,6 +480,7 @@ export async function connectNetworkSession(
     if (!message) return;
     switch (message.t) {
       case "tick": {
+        delayCtl.onTickArrival(performance.now(), message.n);
         serverTickTimeMs = message.n * TICK_SECONDS * 1000;
         if (message.blocks) applyBlocks(message.blocks);
         if (message.day !== undefined) state.dayClock = message.day;
@@ -657,8 +664,8 @@ export async function connectNetworkSession(
 
     netStats: () => ({
       rttMs: clock.rttMs(),
-      jitterMs: 0, // adaptive-interpolation work fills this in
-      interpDelayMs: INTERPOLATION_DELAY_MS,
+      jitterMs: delayCtl.jitterMs(),
+      interpDelayMs: delayCtl.currentDelayMs(),
       inKBps: traffic.inKBps,
       outKBps: traffic.outKBps,
       pendingPredictions: 0 // prediction-ledger work fills this in
@@ -686,12 +693,13 @@ export async function connectNetworkSession(
           })
         );
       }
-      if (open && nowMs - lastPingMs >= 2000) {
+      if (open && nowMs - lastPingMs >= PING_INTERVAL_MS) {
         lastPingMs = nowMs;
         delayedSend(encodeClientMessage({ t: "ping", id: seq, tMs: nowMs }));
       }
-      // Interpolation: remote entities render ~125ms in the past.
-      const renderTime = (clock.ready() ? clock.estimatedServerTimeMs(nowMs) : serverTickTimeMs) - INTERPOLATION_DELAY_MS;
+      // Interpolation: remote entities render in the past, far enough to
+      // absorb the measured arrival jitter (adaptive, slewed — no warping).
+      const renderTime = (clock.ready() ? clock.estimatedServerTimeMs(nowMs) : serverTickTimeMs) - delayCtl.effectiveDelayMs(nowMs);
       for (const [id, buffer] of playerBuffers) {
         const player = state.players.get(id);
         const pose = buffer.sample(renderTime);
