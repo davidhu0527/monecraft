@@ -9,7 +9,7 @@ import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createAccumulator } from "@/lib/game/engine/tickDriver";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
 import { createTouchInputController, type TouchControlsApi } from "@/lib/game/input/touchInputController";
-import { DEFAULT_TOUCH_SETTINGS, readTouchSettings, resolveTouchEnabled, type TouchSettings } from "@/lib/game/input/touchSettings";
+import { DEFAULT_TOUCH_SETTINGS, readTouchSettings, resolveTouchEnabled, writeTouchSettings, type TouchSettings } from "@/lib/game/input/touchSettings";
 import * as inv from "@/lib/game/inventory";
 import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 import { type Profile, setProfileSkin } from "@/lib/game/profiles";
@@ -176,6 +176,45 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     queueMicrotask(() => setTouchSettings(stored));
   }, []);
 
+  /**
+   * Hot-swaps the live input controller when the resolved touch mode flips —
+   * no renderer teardown: the rAF loop and event drain read through inputRef.
+   * Drops back to the "tap/double-click to play" gate (setLocked false via
+   * release), which is also the honest UX for an input-method change.
+   */
+  const swapController = useCallback(() => {
+    const renderer = rendererRef.current;
+    const audio = audioRef.current;
+    const engine = ctx?.engine;
+    const current = inputRef.current;
+    if (!renderer || !audio || !engine || !current) return;
+    const enabled = resolveTouchEnabled(touchSettingsRef.current.mode);
+    if (enabled === "controls" in current) return; // already the right kind
+    current.release();
+    current.dispose();
+    const onLockChange = (isLocked: boolean) => {
+      if (isLocked) audio.unlock();
+      setLocked(isLocked);
+    };
+    const touchInput = enabled ? createTouchInputController({ engine, onLockChange }) : null;
+    const next: InputController =
+      touchInput ?? createInputController({ canvas: renderer.domElement, engine, onResize: () => renderer.handleResize(), onLockChange });
+    inputRef.current = next;
+    setTouchControls(touchInput?.controls ?? null);
+    if (window.__monecraft) window.__monecraft.input = next;
+  }, [ctx]);
+
+  const updateTouchSettings = useCallback(
+    (partial: Partial<TouchSettings>) => {
+      const next = { ...touchSettingsRef.current, ...partial };
+      touchSettingsRef.current = next;
+      setTouchSettings(next);
+      writeTouchSettings(next);
+      swapController();
+    },
+    [swapController]
+  );
+
   const updateAudioSettings = useCallback((partial: Partial<AudioSettings>) => {
     const next = { ...audioSettingsRef.current, ...partial };
     audioSettingsRef.current = next;
@@ -329,13 +368,12 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     // Everything below must reach the controller through the ref, never the
     // `input` closure — after a hot swap the closure points at a disposed one.
     const liveInput = () => inputRef.current ?? input;
-    // The desktop controller owns the resize listener; the touch controller is
-    // DOM-free, so the shell covers resize + rotation for it.
-    const onViewportChange = touchEnabled ? () => renderer.handleResize() : null;
-    if (onViewportChange) {
-      window.addEventListener("resize", onViewportChange);
-      window.addEventListener("orientationchange", onViewportChange);
-    }
+    // The touch controller is DOM-free, so the shell covers resize + rotation.
+    // Registered unconditionally (a redundant handleResize is idempotent on
+    // desktop) so a mid-game controller hot-swap never orphans the listeners.
+    const onViewportChange = () => renderer.handleResize();
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("orientationchange", onViewportChange);
 
     // Autoplay policy: the AudioContext may only start inside a user gesture.
     // pointerdown matters on touch: touch-action none can suppress the
@@ -468,10 +506,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       document.removeEventListener("mousedown", unlockAudio);
       document.removeEventListener("keydown", unlockAudio);
       document.removeEventListener("pointerdown", unlockAudio);
-      if (onViewportChange) {
-        window.removeEventListener("resize", onViewportChange);
-        window.removeEventListener("orientationchange", onViewportChange);
-      }
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("orientationchange", onViewportChange);
       audioRef.current = null;
       audio.dispose();
       liveInput().release();
@@ -530,6 +566,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     },
     toggleCameraView: () => engine?.dispatch({ type: "toggleCameraView" }),
     clearControlKeys: () => inputRef.current?.clearKeys(),
+    touchMode: touchSettings.mode,
+    updateTouchSettings,
+    unstuckNow: () => engine?.dispatch({ type: "unstuck" }),
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
     armorPoints: snapshot.armorPoints,

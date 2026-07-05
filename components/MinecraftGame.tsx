@@ -115,7 +115,10 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
     pauseNow,
     toggleInventory,
     toggleCameraView,
-    clearControlKeys
+    clearControlKeys,
+    touchMode,
+    updateTouchSettings,
+    unstuckNow
   } = useMinecraftGame({ world, profile, online, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
@@ -268,6 +271,13 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
           hardcore={hardcore}
           skinId={skinId}
           onSkinChange={updateSkin}
+          touchMode={touchMode}
+          onTouchModeChange={(mode) => updateTouchSettings({ mode })}
+          touchActive={touchControls !== null}
+          onUnstuck={() => {
+            unstuckNow();
+            resumeNow();
+          }}
           onBack={resumeNow}
           onSave={saveNow}
           onLoad={loadNow}
