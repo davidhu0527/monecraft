@@ -3,7 +3,7 @@
 .hud-bottom {
   position: absolute;
   left: 50%;
-  bottom: 6px;
+  bottom: calc(6px + var(--safe-b, 0px));
   transform: translateX(-50%);
   z-index: 4;
   display: grid;
@@ -320,6 +320,7 @@
   outline: 2px solid rgba(0, 0, 0, 0.8);
   padding: 12px;
   max-height: 92vh;
+  max-height: 92dvh;
   overflow-y: auto;
 }
 
@@ -899,9 +900,11 @@
   opacity: 1;
 }
 
-@media (max-width: 720px) {
+/* Small screens by EITHER axis: a landscape phone (e.g. 812x375) is narrow
+   where it counts — vertically — and a width-only query never fired there. */
+@media (max-width: 720px), (max-height: 480px) {
   .hud-bottom {
-    bottom: 4px;
+    bottom: calc(4px + var(--safe-b, 0px));
   }
 
   .hotbar-slot {
@@ -938,8 +941,8 @@
 
 .minimap {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: calc(12px + var(--safe-t, 0px));
+  right: calc(12px + var(--safe-r, 0px));
   z-index: 4;
   pointer-events: none;
   user-select: none;
@@ -955,9 +958,27 @@
   background: rgba(10, 10, 10, 0.4);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 480px) {
   .minimap-canvas {
     width: 96px !important;
     height: 96px !important;
+  }
+}
+
+/* Short landscape (phones): the vertical budget is ~350px after browser
+   chrome — tighten panel padding and inner scroll areas further. */
+@media (max-height: 480px) {
+  .inventory-panel {
+    padding: 8px;
+    max-height: 96dvh;
+  }
+
+  .recipe-list {
+    max-height: 120px;
+  }
+
+  .pause-menu {
+    gap: 5px;
+    padding: 4px 0;
   }
 }

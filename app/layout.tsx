@@ -13,7 +13,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2a2d3a"
+  themeColor: "#2a2d3a",
+  width: "device-width",
+  initialScale: 1,
+  // A game surface: pinch/double-tap zoom would fight the touch controls
+  // (iOS also needs the touch-action CSS in base.css — it ignores this alone).
+  userScalable: false,
+  // Extend under notches; safe-area-inset vars pad the HUD back out.
+  viewportFit: "cover",
+  // The soft keyboard (chat, anvil rename) resizes the layout instead of
+  // covering the input.
+  interactiveWidget: "resizes-content"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
