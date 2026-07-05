@@ -154,20 +154,11 @@ test("two accounts share an online world via an invite link", async ({ browser }
 
   // ── prediction under latency: a lagged client's own break is local-first ──
   // 400±100 ms simulated one-way (~800 ms RTT): the friend digs, the block
-  // must vanish from the friend's OWN world via the prediction ledger (a rAF
-  // watcher catches the pending entry — polling from outside could miss the
-  // confirm window), and the edit must still reach the host through the
-  // lagged link. Wire-format details are unit-tested; this is the journey.
+  // must vanish from the friend's OWN world via the prediction ledger, and the
+  // edit must still reach the host through the lagged link. Wire-format
+  // details are unit-tested; this is the journey.
   await friend.evaluate(() => {
     window.__monecraft!.net!.setSimulatedLatency(400, 100);
-    (window as unknown as { __sawPrediction: boolean }).__sawPrediction = false;
-    const watch = () => {
-      if ((window.__monecraft?.net?.netStats().pendingPredictions ?? 0) > 0) {
-        (window as unknown as { __sawPrediction: boolean }).__sawPrediction = true;
-      }
-      requestAnimationFrame(watch);
-    };
-    requestAnimationFrame(watch);
   });
   const friendEdits = await friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length);
   await acquirePointerLock(friend);
@@ -176,14 +167,40 @@ test("two accounts share an online world via an invite link", async ({ browser }
     window.__monecraft!.engine.state.player.pitch = -Math.PI / 2 + 0.02;
   });
   await friend.mouse.down();
-  await expect
-    .poll(() => friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 30000 })
-    .toBeGreaterThan(friendEdits);
+  // Poll at a fixed 100 ms cadence until the break commits locally; every
+  // sample also latches whether the ledger held a pending entry. The pending
+  // window is ~700–1800 ms wide (the confirm needs a full simulated round
+  // trip), so the latch cannot miss it. Two rejected designs flaked here on
+  // 2026-07-05: an in-page rAF watcher (headless Chromium throttles rAF on
+  // occluded pages — the friend page sits behind the host's) and a one-shot
+  // ledger read after a default-interval poll (the poll's 1 s backoff can
+  // outwait the confirm).
+  const samples: string[] = [];
+  let last: { broke: boolean; pendingSeen: boolean } = { broke: false, pendingSeen: false };
+  for (let i = 0; i < 300; i += 1) {
+    last = await friend.evaluate((before) => {
+      const w = window as unknown as { __sawPending?: boolean };
+      if ((window.__monecraft?.net?.netStats().pendingPredictions ?? 0) > 0) w.__sawPending = true;
+      const st = window.__monecraft!.engine.state as unknown as {
+        dayClock: number;
+        player: { mining?: { targetKey: string; progress: number }; position: { y: number }; pitch: number };
+      };
+      return {
+        broke: window.__monecraft!.engine.state.blockChanges.changes().length > before,
+        pendingSeen: w.__sawPending === true,
+        pending: window.__monecraft!.net!.netStats().pendingPredictions,
+        edits: window.__monecraft!.engine.state.blockChanges.changes().length,
+        mine: `${st.player.mining?.targetKey ?? "?"}@${(st.player.mining?.progress ?? 0).toFixed(2)}`,
+        y: st.player.position.y.toFixed(2)
+      };
+    }, friendEdits);
+    samples.push(`${i * 100}ms ${JSON.stringify(last)}`);
+    if (last.broke && last.pendingSeen) break;
+    await friend.waitForTimeout(100);
+  }
+  if (!(last.broke && last.pendingSeen)) console.log("LAGGED-BREAK SAMPLES:\n" + samples.join("\n"));
+  expect(last, "the lagged break commits locally through the prediction ledger").toMatchObject({ broke: true, pendingSeen: true });
   await friend.mouse.up();
-  expect(
-    await friend.evaluate(() => (window as unknown as { __sawPrediction: boolean }).__sawPrediction),
-    "the lagged break went through the prediction ledger"
-  ).toBe(true);
   await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 30000 }).toBeGreaterThan(friendEdits);
   await friend.evaluate(() => window.__monecraft!.net!.setSimulatedLatency(0));
 
