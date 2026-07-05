@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Zero-config local dev**: `bun run dev` with no `DATABASE_URL` now falls back to an ephemeral in-memory PGlite database (with a one-time console notice) instead of 500-ing on the first online request — the full accounts/cloud-saves stack works out of the box in dev, resetting on restart. Production still requires a real `DATABASE_URL`.
+
 ### Fixed
 
 - **Online co-op — players in the same world couldn't see each other on prod** (each showed "Players (1)"): the deploy runbook now pins the Fly game server to a **single machine** (`fly scale count 1`) and documents the invariant. `fly launch` had provisioned the default two-machine HA pair; rooms live in one process's memory with no cross-instance coordination, so each machine hosted its own independent copy of the same world and the edge load-balancer split the players between them. Docs-only — no code change; the ops fix is one command on the live app.

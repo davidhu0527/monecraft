@@ -154,10 +154,14 @@ world in the first, and paste its invite link into the second.
 
 **No Docker at all**: `DATABASE_URL=pglite://memory` runs the web app on an
 ephemeral in-process Postgres (`db/index.ts` applies the schema from
-`db/ddl.ts` at boot; data lives as long as the process). Pair it with the
-game server's `PERSISTENCE=memory` and the whole online stack is two
-commands with zero services — exactly how the Playwright multiplayer suite
-boots it (`playwright.config.ts`).
+`db/ddl.ts` at boot; data lives as long as the process). Outside production
+an **unset** `DATABASE_URL` falls back to exactly that (with a one-time
+console notice), so a bare `bun run dev` boots the whole web/auth/cloud-save
+stack with zero env config — better-auth accepts its built-in dev secret, so
+`BETTER_AUTH_*` may stay unset too. Pair it with the game server's
+`PERSISTENCE=memory` and the whole online stack is two commands with zero
+services — exactly how the Playwright multiplayer suite boots it
+(`playwright.config.ts`).
 
 Schema lives in `db/schema.ts` (drizzle); migrations are generated with
 `bunx drizzle-kit generate` and committed under `db/migrations/`. The PGlite
