@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import WelcomeScreen from "@/components/menu/WelcomeScreen";
 
@@ -29,5 +29,25 @@ describe("WelcomeScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "Play locally" }));
     expect(onPlayLocally).toHaveBeenCalled();
+  });
+
+  test("shows the offline hint only while offline, with Sign in still enabled", () => {
+    const setOnLine = (value: boolean) => Object.defineProperty(window.navigator, "onLine", { value, configurable: true });
+    render(<WelcomeScreen onSignIn={mock()} onPlayLocally={mock()} />);
+    expect(screen.queryByTestId("welcome-offline-note")).toBeNull();
+
+    setOnLine(false);
+    act(() => {
+      window.dispatchEvent(new Event("offline"));
+    });
+    expect(screen.getByText("Offline — local play only.")).toBeTruthy();
+    // Sign in stays a live door: AccountForm's failure copy is the real guard.
+    expect((screen.getByRole("button", { name: "Sign in" }) as HTMLButtonElement).disabled).toBe(false);
+
+    setOnLine(true);
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(screen.queryByTestId("welcome-offline-note")).toBeNull();
   });
 });
