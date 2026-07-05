@@ -498,8 +498,10 @@ surfaces a friendly "limit reached"); they don't affect single-player.
   A profile is a cross-device identity (name + skin) that owns online worlds.
   Raising it grows the profile list and the
   worlds an account can accumulate (`MAX_ONLINE_PROFILES × MAX_WORLDS_PER_PROFILE`).
-- **`MAX_WORLDS_PER_PROFILE`** (`10`) — online worlds one profile may own. The
-  11th create is refused server-side. Bounds save-blob storage per profile.
+- **`MAX_WORLDS_PER_PROFILE`** (`10`) — worlds one profile may own, counting
+  online (mp) and synced singleplayer (sp-cloud) worlds together. The 11th
+  create of either kind is refused server-side. Bounds save-blob storage per
+  profile.
 
 ## Save- and worldgen-sensitive tunables
 

@@ -31,6 +31,9 @@ type Screen =
   | { name: "world-select"; profileId: string }
   | { name: "online-worlds"; profile: OnlineProfile }
   | { name: "play"; profileId: string; worldId: string }
+  // An account profile's singleplayer (sp-cloud) world: full local engine, no
+  // game server — the save syncs to the account as a cloud blob.
+  | { name: "play-cloud"; profile: OnlineProfile; world: OnlineWorld }
   // play-online carries the play-usable identity derived from the account
   // profile, plus that profile itself so "quit to worlds" returns to its list.
   | { name: "play-online"; profile: Profile; world: OnlineWorld; session: NetworkSession; onlineProfile: OnlineProfile };
@@ -38,6 +41,15 @@ type Screen =
 /** A play-usable Profile from a server-side account profile (skin sanitized). */
 function profileFromOnline(profile: OnlineProfile): Profile {
   return { id: profile.id, name: profile.name, skinId: isSkinId(profile.skinId) ? profile.skinId : DEFAULT_SKIN_ID, createdAt: 0 };
+}
+
+/**
+ * An account singleplayer world's meta: the `cloud:` id keys this device's
+ * localStorage save cache, and `cloudId` makes the game hook's autosave sync
+ * push every save up to the account blob.
+ */
+function cloudWorldMeta(world: OnlineWorld, profileId: string): WorldMeta {
+  return { ...onlineWorldMeta(world, profileId), id: `cloud:${world.id}`, cloudId: world.id };
 }
 
 /** Online worlds mount the same game subtree; the meta is a projection of the server row. */
@@ -143,6 +155,29 @@ export default function GameShell() {
     } finally {
       joiningRef.current = false;
     }
+  };
+
+  /**
+   * Open an account singleplayer world: reconcile this device's save cache
+   * with the cloud blob (adopt the remote only when it advanced past our
+   * cursor), then boot the full local engine — no game server involved.
+   * Unlike local worlds there is no manifest entry and no session-resume
+   * pointer; a reload lands back on the menu (like play-online).
+   */
+  const playCloud = async (profile: OnlineProfile, world: OnlineWorld) => {
+    if (joiningRef.current) return;
+    joiningRef.current = true;
+    setConnecting(world.name);
+    try {
+      const decision = await pullCloudSaveIfNewer(world.id);
+      if (decision.adopt) writeSave(worldSaveKey(`cloud:${world.id}`), decision.save);
+    } catch {
+      // Offline or a bad blob → play this device's cache (or a fresh world).
+    } finally {
+      setConnecting(null);
+      joiningRef.current = false;
+    }
+    setScreen({ name: "play-cloud", profile, world });
   };
 
   /** Materialize a cloud save as a local world (linked by cloudId), then open it — the pull-on-open fills it in. */
@@ -269,6 +304,34 @@ export default function GameShell() {
     }
   }
 
+  if (screen.name === "play-cloud") {
+    const backToWorlds: Screen = { name: "online-worlds", profile: screen.profile };
+    return (
+      <MinecraftGame
+        key={`cloud:${screen.world.id}:${reloadNonce}`}
+        world={cloudWorldMeta(screen.world, screen.profile.id)}
+        profile={profileFromOnline(screen.profile)}
+        onQuitToWorlds={() => setScreen(backToWorlds)}
+        onDeleteWorld={() => {
+          // Hardcore game-over: delete the cloud world (row + blob), then this
+          // device's save cache — only after the server confirmed, so a failed
+          // delete (offline) leaves a still-playable world in the list rather
+          // than a hollow one that re-downloads its own game-over.
+          void deleteOnlineWorld(screen.world.id).then((deleted) => {
+            if (!deleted) return;
+            try {
+              localStorage.removeItem(worldSaveKey(`cloud:${screen.world.id}`));
+            } catch {
+              // Cache cleanup only — never fatal.
+            }
+          });
+          setScreen(backToWorlds);
+        }}
+        onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+      />
+    );
+  }
+
   if (screen.name === "play-online") {
     // Quit returns to the account profile's online worlds.
     const backToWorlds: Screen = { name: "online-worlds", profile: screen.onlineProfile };
@@ -314,7 +377,8 @@ export default function GameShell() {
       <>
         <OnlineWorldSelect
           profile={screen.profile}
-          onPlay={(world) => void playOnline(profileFromOnline(screen.profile), world, screen.profile)}
+          onPlayOnline={(world) => void playOnline(profileFromOnline(screen.profile), world, screen.profile)}
+          onPlayCloud={(world) => void playCloud(screen.profile, world)}
           onBack={() => setScreen({ name: "profile-select" })}
         />
         {netModals}

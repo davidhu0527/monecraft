@@ -211,6 +211,30 @@ describe("account profiles", () => {
     expect(await createWorld(asDb(), "alice", { name: "over", kind: "mp", seed: 99, profileId: p.profile.id })).toMatchObject({ ok: false, error: "conflict" });
   });
 
+  test("singleplayer (sp-cloud) worlds attach to a profile and share its cap with mp", async () => {
+    const p = await createProfile(asDb(), "alice", { name: "Steve" });
+    if (!p.ok) throw new Error("create failed");
+    // A profile-owned singleplayer world is a first-class row…
+    const sp = await createWorld(asDb(), "alice", { name: "Solo", kind: "sp-cloud", seed: 1, profileId: p.profile.id });
+    expect(sp.ok).toBe(true);
+    if (sp.ok) expect(sp.world).toMatchObject({ kind: "sp-cloud", profileId: p.profile.id });
+
+    // …and the quota is kind-blind: mixed kinds fill the same cap, and the
+    // cap refuses BOTH kinds once full.
+    for (let i = 1; i < MAX_WORLDS_PER_PROFILE; i += 1) {
+      const kind: "sp-cloud" | "mp" = i % 2 === 0 ? "sp-cloud" : "mp";
+      expect((await createWorld(asDb(), "alice", { name: `W${i}`, kind, seed: i, profileId: p.profile.id })).ok).toBe(true);
+    }
+    expect(await createWorld(asDb(), "alice", { name: "over-sp", kind: "sp-cloud", seed: 99, profileId: p.profile.id })).toMatchObject({
+      ok: false,
+      error: "conflict"
+    });
+    expect(await createWorld(asDb(), "alice", { name: "over-mp", kind: "mp", seed: 100, profileId: p.profile.id })).toMatchObject({
+      ok: false,
+      error: "conflict"
+    });
+  });
+
   test("a join ticket carries the chosen profile's name + skin, not the account's; a foreign profile is refused", async () => {
     const p = await createProfile(asDb(), "alice", { name: "Steve", skinId: "robot" });
     if (!p.ok) throw new Error("create failed");
