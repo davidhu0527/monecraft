@@ -143,7 +143,12 @@ async function installShell() {
   } catch {
     // Installed while offline: the first online navigation fills the caches.
   }
-  await precacheExtras();
+  try {
+    await precacheExtras();
+  } catch {
+    // Best-effort like every other cache write: a storage failure here must
+    // not reject waitUntil and abort the whole installation.
+  }
 }
 
 /** Network-first navigation; the cached shell is the offline fallback. */

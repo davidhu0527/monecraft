@@ -23,7 +23,7 @@ export default function WelcomeScreen({ onSignIn, onPlayLocally }: WelcomeScreen
       {/* Sign in stays enabled offline — AccountForm's failure copy is the
           real guard; this just points at the door that works. */}
       {!online && (
-        <p className="menu-note" data-testid="welcome-offline-note">
+        <p className="menu-note" data-testid="welcome-offline-note" aria-live="polite">
           Offline — local play only.
         </p>
       )}
