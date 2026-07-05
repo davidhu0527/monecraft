@@ -14,15 +14,19 @@ the [README](../README.md#controls).
 
 The game opens to a menu rather than dropping you straight into a world:
 
-1. **Pick a profile.** A profile is a player — a name and an appearance (skin). On a
+1. **Choose how to play.** The game opens with two doors: **Sign in** (online
+   worlds and cloud saves — needs a free account, see
+   [Playing online](#playing-online)) or **Play locally** (everything below —
+   stored in this browser, no account).
+2. **Pick a profile.** A profile is a player — a name and an appearance (skin). On a
    shared browser everyone can have their own. Create one with **New Profile**, choose
    a skin, and you're in; rename or delete profiles from the same screen.
-2. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
+3. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
    you name it, choose a **world type** (Default, Superflat, Amplified, or Islands —
    see [the reference](reference.md#world-types)), and optionally enter a **seed** —
    type a number or a word to get the same world every time, or leave it blank for a
    random one. Worlds you've played show most-recent first; rename or delete them here too.
-3. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
+4. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
    Quit to Worlds** takes you back to the list, and reloading the page resumes the
    world you were in.
 
@@ -649,11 +653,13 @@ private co-op with people you invite, not public matchmaking. Everything offline
 stays exactly as it is: local worlds never need an account or a connection.
 
 **Getting an identity.** Online play needs an **account** — a one-time
-email/password registration from the **Account** panel on the profile screen
-(or right on an invite page). Signed in, the menu becomes your account home:
-up to five **online profiles** (name + skin) that follow you across devices,
-each owning its online worlds. Your local worlds stay put — press **Play
-locally** to visit them (and their cloud-save controls) without signing out.
+email/password registration: choose **Sign in** on the welcome screen and use
+**"I need an account"** on the sign-in form (or register right on an invite
+page). Signed in, the menu becomes your account home: up to five **online
+profiles** (name + skin) that follow you across devices, each owning its
+online worlds. Your local worlds stay put — the **"Local worlds on this
+browser"** link at the bottom of the account home visits them (and their
+cloud-save controls) without signing out.
 
 **Hosting.** Pick an online profile to see its worlds. **New Online World**
 uses the same form as a local world (name, seed, world type, mode,

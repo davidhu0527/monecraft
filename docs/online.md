@@ -28,6 +28,14 @@ Postgres.
   no anonymous-guest layer: an invite link, cloud sync, or hosting all start
   with sign-in/register. Logged-out **Local Players** keep any number of
   browser-local profiles and worlds and make **zero** server calls.
+- **The logged-out root is a welcome gate**
+  (`components/menu/WelcomeScreen.tsx`): exactly two doors — **Sign in**
+  (opens the dedicated `AuthScreen`, whose email/password form registers via
+  its "I need an account" toggle; the form itself is the shared
+  `AccountForm`) and **Play locally** (the browser-local `ProfileSelect`,
+  with no account UI on it and a Back to the gate). The gate shows on every
+  logged-out launch; a signed-in reload skips it — the shell holds a neutral
+  frame until the session probe answers, then lands on the account home.
 - When signed in, the menu opens into an **account home**
   (`components/menu/AccountProfileSelect.tsx`) listing that account's
   server-side profiles (create/rename/delete, capped at `MAX_ONLINE_PROFILES`,
@@ -41,15 +49,15 @@ Postgres.
   so do singleplayer saves uploaded from the local menus (`profileId` null —
   account-level).
 - Local worlds are **hidden but preserved** while signed in — never deleted,
-  never auto-uploaded. The account home's **"Play locally"** button opens the
-  local menus without signing out (that's also where cloud-save sync lives);
-  "Back to account" returns. Signing out lands on the local flow directly.
+  never auto-uploaded. The account home's quiet **"Local worlds on this
+  browser"** footer link opens the local menus without signing out (that's
+  also where cloud-save sync lives); "Back to account" returns. Signing out
+  lands on the welcome gate.
 - Sessions are better-auth cookies; the game server never sees them.
-- The Account panel renders on the profile-select screen **and on the
-  first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
-  sign in / register is reachable before any local profile exists. Logged out
-  it offers **Sign in** and **Create account** side by side (the form also has
-  an in-form toggle between the two modes).
+- The compact Account panel (`components/menu/AccountPanel.tsx` — logged out
+  it offers **Sign in** and **Create account** side by side, expanding into
+  the shared `AccountForm`) now serves **only** the `/join/<token>` invite
+  landing page; the main menu routes through the welcome gate instead.
 
 ## Worlds, invites, cloud saves
 

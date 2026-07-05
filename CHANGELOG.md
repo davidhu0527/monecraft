@@ -8,10 +8,14 @@ All notable changes to this project are documented in this file.
 
 - **Zero-config local dev**: `bun run dev` with no `DATABASE_URL` now falls back to an ephemeral in-memory PGlite database (with a one-time console notice) instead of 500-ing on the first online request — the full accounts/cloud-saves stack works out of the box in dev, resetting on restart. Production still requires a real `DATABASE_URL`.
 
+### Changed
+
+- **The menu now opens on a welcome gate**: logged out, the first screen is an explicit choice — **Sign in** (online worlds, synced profiles, cloud saves; opens a dedicated sign-in screen whose "I need an account" toggle registers) or **Play locally** (browser profiles and worlds, no account) — replacing the local-profile screen with an account panel embedded under it, which read as "create a local profile to play" and misled new users about where accounts fit. Sign-in/register is a standalone screen with no local-profile UI beside it; the local menus gain a Back to the gate; signing out lands on the gate. A signed-in reload skips the gate entirely (no flash) straight to the account home, and resuming a world mid-tab is untouched. On the account home, the prominent **Play locally** button becomes a quiet **"Local worlds on this browser"** footer link — signed-in play lives in the online profiles, while local worlds (and their cloud-save Upload/Download) stay one click away.
+
 ### Fixed
 
 - **Online co-op — players in the same world couldn't see each other on prod** (each showed "Players (1)"): the deploy runbook now pins the Fly game server to a **single machine** (`fly scale count 1`) and documents the invariant. `fly launch` had provisioned the default two-machine HA pair; rooms live in one process's memory with no cross-instance coordination, so each machine hosted its own independent copy of the same world and the edge load-balancer split the players between them. Docs-only — no code change; the ops fix is one command on the live app.
-- **Account menu — Create account is now a visible button**: the logged-out account panel (welcome/first-run screen, Local Profiles screen, and invite landing page) now shows **Create account** next to **Sign in**. Registration used to be hidden behind Sign in → "I need an account", so a new user saw no way to create an account; the in-form toggle between the two modes remains.
+- **Invite page — Create account is now a visible button**: the logged-out account panel on the `/join/<token>` landing page shows **Create account** next to **Sign in** instead of hiding registration behind Sign in → "I need an account". (In the main menu this fix is superseded by the welcome gate above, which routes sign-in/register through the dedicated screen.)
 
 ## [0.14.0] - 2026-07-05
 

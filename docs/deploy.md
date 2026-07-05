@@ -146,7 +146,7 @@ Set all five in Vercel before the first deploy, then double-check them.
 1. `curl https://<fly-app>.fly.dev/health` → `{"ok":true,…}`.
 2. Open the deployed web app. It should look and play exactly like single-player
    (offline-first: no account, no network until you go online).
-3. Click **Sign in** (profile screen → Account panel), register an account, and
+3. Click **Sign in** on the welcome screen, register an account ("I need an account"), and
    confirm it reads "Signed in as …" and opens the account home — that proves
    Vercel ↔ Neon ↔ better-auth work.
 4. Create an online profile, a **New Online World**, then **Copy invite**. Open
