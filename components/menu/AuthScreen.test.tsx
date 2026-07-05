@@ -22,6 +22,7 @@ void mock.module("@/lib/auth/client", () => ({
     },
     signIn: {
       email: async ({ email }: { email: string }) => {
+        if (email.startsWith("fail")) return { error: { message: "Invalid email or password" } };
         fake.user = { id: "u-known", name: email.split("@")[0], email };
         return { error: null };
       }
@@ -83,6 +84,22 @@ describe("AuthScreen", () => {
 
     expect(onAuthChange).toHaveBeenCalled();
     expect(fakeUserName()).toBe("keeper");
+  });
+
+  test("a failed sign-in's error clears when switching modes", async () => {
+    const user = userEvent.setup();
+    fake.user = null;
+    render(<AuthScreen onAuthChange={mock()} onBack={mock()} />);
+
+    await user.type(screen.getByLabelText("Email"), "fail@example.com");
+    await user.type(screen.getByLabelText("Password"), "hunter2hunter2");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(screen.getByText("Invalid email or password")).toBeTruthy();
+
+    // The message was about sign-in; carrying it into the sign-up form would
+    // read as a sign-up failure that never happened.
+    await user.click(screen.getByRole("button", { name: "I need an account" }));
+    expect(screen.queryByText("Invalid email or password")).toBeNull();
   });
 
   test("registering through the toggle notifies the shell too", async () => {

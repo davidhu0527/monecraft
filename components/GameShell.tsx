@@ -84,6 +84,9 @@ function onlineWorldMeta(world: OnlineWorld, profileId: string): WorldMeta {
  */
 const SESSION_KEY = "monecraft_active_session";
 
+/** How long the welcome gate may wait on the session probe before showing. */
+const AUTH_PROBE_TIMEOUT_MS = 4000;
+
 function readSessionPointer(): { profileId: string; worldId: string } | null {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
@@ -133,13 +136,21 @@ export default function GameShell() {
       queueMicrotask(() => setAuthProbed(true));
       return;
     }
+    // A hung probe (stalled fetch, dead proxy) must not strand the gate on the
+    // neutral frame: reveal it at the deadline and treat the visitor as logged
+    // out — a probe that settles later still flips into account mode.
+    const deadline = setTimeout(() => setAuthProbed(true), AUTH_PROBE_TIMEOUT_MS);
     void currentUser().then(
       (user) => {
+        clearTimeout(deadline);
         setOnlineUser(user);
         if (!user) setBrowsingLocal(false); // signed out: the door has no "back"
         setAuthProbed(true);
       },
-      () => setAuthProbed(true) // probe failed (offline): treat as logged out
+      () => {
+        clearTimeout(deadline);
+        setAuthProbed(true); // probe failed (offline): treat as logged out
+      }
     );
   }, []);
 

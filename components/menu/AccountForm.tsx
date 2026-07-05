@@ -73,11 +73,20 @@ export default function AccountForm({ initialMode, onSuccess, onCancel }: Accoun
         <button type="submit" className="mc-button" disabled={busy}>
           {mode === "signup" ? "Create account" : "Sign in"}
         </button>
-        <button type="button" className="mc-button" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>
+        <button
+          type="button"
+          className="mc-button"
+          disabled={busy}
+          onClick={() => {
+            // A mode switch invalidates whatever the previous mode reported.
+            setError(null);
+            setMode(mode === "signup" ? "signin" : "signup");
+          }}
+        >
           {mode === "signup" ? "I have an account" : "I need an account"}
         </button>
         {onCancel && (
-          <button type="button" className="mc-button" onClick={onCancel}>
+          <button type="button" className="mc-button" disabled={busy} onClick={onCancel}>
             Cancel
           </button>
         )}
