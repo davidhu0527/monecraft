@@ -166,6 +166,24 @@ describe("per-player progression & kill credit", () => {
     expect(primary.advancements.has("take_aim")).toBe(false);
   });
 
+  test("a rewind resolver on dispatch hits a mob that live-stands out of reach (lag compensation)", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    engine.state.mobs = [];
+    const second = engine.addPlayer({ id: "acct-2" });
+    second.yaw = 0;
+    second.pitch = 0;
+    // Live zombie 30 blocks away — an unassisted attack can't touch it.
+    const zombie = pushZombie(engine, second.position.x + 30, second.position.z + 30);
+    engine.dispatch({ type: "attack" }, "acct-2");
+    expect(zombie.hp).toBe(20);
+
+    // The room's resolver says acct-2 SAW it two blocks ahead (yaw 0 → -Z).
+    engine.dispatch({ type: "attack" }, "acct-2", { mobPosOf: () => ({ x: second.position.x, y: second.position.y + 1.6, z: second.position.z - 2 }) });
+    expect(zombie.hp).toBeLessThan(20);
+    expect(zombie.lastHitByPlayer).toBe("acct-2");
+  });
+
   test("kill credit follows the last player to hit the mob — the sweep credits them, not the primary", () => {
     const engine = makeEngine("server");
     calm(engine); // day → no hostile spawns to muddy the counts

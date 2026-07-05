@@ -164,3 +164,43 @@ describe("tryAttackMob knockback", () => {
     expect(mob.lastHitByPlayer).toBe("hero");
   });
 });
+
+describe("tryAttackMob lag compensation (posOf resolver)", () => {
+  test("selection uses the resolver's position; damage and knockback act on the live mob", () => {
+    const state = makeState(inventory([["diamond_sword", 1]]));
+    const mob = mobInFront();
+    // Live position: 20 blocks BEHIND the player (+Z) — a guaranteed live miss.
+    mob.position.set(0, 64 + EYE_HEIGHT, 20);
+    state.mobs = [mob];
+
+    // Without a resolver the attack whiffs.
+    expect(tryAttackMob(state, state, 5, () => {}, 5, 0)).toBeNull();
+    expect(mob.hp).toBe(100);
+
+    // A resolver reporting where the attacker SAW it (in front, in cone) hits.
+    const sawIt = () => ({ x: 0, y: 64 + EYE_HEIGHT, z: -2 });
+    expect(tryAttackMob(state, state, 5, () => {}, 5, 0, 0, sawIt)).toBe("zombie");
+    expect(mob.hp).toBe(95);
+    // Knockback direction comes from the LIVE position (behind → shoved further +Z),
+    // not from the historical spot the selection used.
+    expect(mob.position.z).toBeCloseTo(20 + MELEE_KNOCKBACK_IMPULSE, 5);
+  });
+
+  test("a resolver returning live positions behaves exactly like no resolver", () => {
+    const state = makeState(inventory([["diamond_sword", 1]]));
+    state.mobs = [mobInFront()];
+    expect(
+      tryAttackMob(
+        state,
+        state,
+        5,
+        () => {},
+        5,
+        0,
+        0,
+        (m) => m.position
+      )
+    ).toBe("zombie");
+    expect(state.mobs[0].hp).toBe(95);
+  });
+});
