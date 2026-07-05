@@ -112,6 +112,12 @@ export const FIST_DAMAGE = 6;
 export const ATTACK_REACH = 4.5;
 export const ATTACK_AIM_DOT = 0.89; // how precisely the camera must face a mob
 export const MELEE_KNOCKBACK_IMPULSE = 0.75; // base horizontal shove on a melee hit (Knockback enchant adds to it)
+// How far back (ms) the game server may rewind melee target selection toward a
+// high-ping attacker's stamped view of the world: covers the max interpolation
+// delay (450) plus a generous half-RTT budget. Server-only; single-player never
+// rewinds. Raising it forgives more lag but widens the ghost-hit window
+// (a mob visibly gone can still be struck by a laggy player).
+export const MELEE_REWIND_MAX_MS = 900;
 export const SPEAR_MELEE_REACH = 7;
 export const SPEAR_THROW_SPEED = 32;
 export const SPEAR_THROW_GRAVITY = 6;
