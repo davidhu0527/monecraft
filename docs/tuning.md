@@ -479,6 +479,13 @@ None affect single-player, and none are save-sensitive.
   the p90 arrival deviation), `DELAY_SLEW_MS_PER_SEC` (`60` — how fast the
   delay may drift, so remote timelines never visibly warp). Larger delays
   absorb more jitter at the cost of visible lag.
+- **Prediction** (`lib/net/prediction.ts`) — optimistic block edits revert if
+  the server's journal neither confirms nor overrides within
+  `max(2×RTT+200 ms, PREDICTION_TIMEOUT_MIN_MS)` capped at
+  `PREDICTION_TIMEOUT_MAX_MS` (`1000`/`5000`); own-echo suppression outlives
+  the entry by `ECHO_SUPPRESS_EXTRA_MS` (`3000`) because the echo rides the
+  confirming tick. Raising the floor hides slow-server rejects longer;
+  lowering it flickers honest placements on RTT spikes.
 - **Clock sync** (`lib/net/clock.ts`) — `OFFSET_WINDOW_SIZE` (`16` pongs
   considered for the NTP-style min-RTT offset pick), `OFFSET_SLEW_MS_PER_SEC`
   (`40`), `OFFSET_SNAP_MS` (`250` — bigger errors snap: first fix, reconnect).

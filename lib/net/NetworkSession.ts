@@ -1,13 +1,16 @@
 import * as THREE from "three";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { Command } from "@/lib/game/engine/commands";
-import { createIdleInput, type GameEvent, type MobState, type PlayerId } from "@/lib/game/engine/state";
+import { createIdleInput, type AttributedGameEvent, type GameEvent, type MobState, type PlayerId } from "@/lib/game/engine/state";
 import { TICK_SECONDS } from "@/lib/game/engine/tickDriver";
+import { adjustSlotCount } from "@/lib/game/inventory";
+import { BlockId } from "@/lib/world";
 import { restoreEffects, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { FACTION_BY_KIND } from "@/lib/game/mobs";
 import type { MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
+import { createPredictionLedger, type PredictionRefund } from "./prediction";
 import { decodeServerFrame, encodeClientMessage, gunzipWorldSync, qAng, qPos } from "./codec";
 import { createDelayController, createPoseBuffer, type PoseBuffer } from "./interpolation";
 import {
@@ -160,6 +163,7 @@ export async function connectNetworkSession(
 
   const clock = createClockSync();
   const delayCtl = createDelayController();
+  const ledger = createPredictionLedger();
   const pendingEvents: GameEvent[] = [];
   const playerBuffers = new Map<string, PoseBuffer>();
   const mobBuffers = new Map<number, PoseBuffer>();
@@ -273,14 +277,32 @@ export async function connectNetworkSession(
       return;
     }
     if (command.type === "selectSlot") engine.dispatch(command, playerId); // optimistic
+    // Optimistic placement: apply locally when the replica is sure the click
+    // is a pure block place, and remember it for journal reconciliation. The
+    // cmd travels REGARDLESS — the server stays authoritative either way —
+    // but never predict what can't currently be sent (a phantom un-sent edit
+    // would only ever revert).
+    if (command.type === "placeBlock" && status === "online" && ws?.readyState === WebSocket.OPEN) {
+      const predicted = engine.predictPlaceBlock();
+      if (predicted) ledger.add("place", predicted.edits, predicted.refund, performance.now(), clock.rttMs());
+    }
     sendCmd(command);
+  };
+
+  // Roster changes emit join/leave into the replica's event queue; those are
+  // presented via the server's own tick `ev` instead, so drop them — but ONLY
+  // them: a predicted blockPlaced emitted in the same frame must survive to
+  // the shell's drain (its sound/particles are the whole point).
+  const dropRosterEchoes = () => {
+    const kept = engine.consumeEvents().filter((e) => e.type !== "playerJoined" && e.type !== "playerLeft");
+    pendingEvents.push(...kept);
   };
 
   const upsertRemotePlayer = (id: string, name: string) => {
     names.set(id, name);
     if (id === playerId || state.players.has(id)) return;
     engine.addPlayer({ id });
-    engine.consumeEvents();
+    dropRosterEchoes();
     notifyRoster();
   };
 
@@ -291,7 +313,7 @@ export async function connectNetworkSession(
     for (const id of [...state.players.keys()]) {
       if (id === playerId || present.has(id)) continue;
       engine.removePlayer(id);
-      engine.consumeEvents();
+      dropRosterEchoes();
       playerBuffers.delete(id);
     }
     notifyRoster();
@@ -304,6 +326,9 @@ export async function connectNetworkSession(
   const applyWorldSync = (sync: WorldSync) => {
     // A (re)sync follows a gap that is not jitter — don't let it poison the window.
     delayCtl.reset();
+    // The sync is a full keyframe: nothing pending survives it (and the block
+    // diff it carries is truth, not an echo to suppress).
+    ledger.clear();
     state.blockChanges.applySavedChanges(sync.changes);
     state.worldMeshDirty = true;
     state.dayClock = sync.dayClock;
@@ -442,15 +467,31 @@ export async function connectNetworkSession(
     }
   };
 
-  const applyBlocks = (blocks: Array<[number, number]>) => {
+  const cellOf = (idx: number) => {
     const layer = state.world.sizeX * state.world.sizeZ;
+    const y = Math.floor(idx / layer);
+    const rem = idx - y * layer;
+    const z = Math.floor(rem / state.world.sizeX);
+    const x = rem - z * state.world.sizeX;
+    return { x, y, z };
+  };
+
+  /** Hand a rejected place's stack back; a full inventory drops it silently (the next full delta reconciles). */
+  const refundToInventory = (refund: PredictionRefund) => {
+    const updated = adjustSlotCount(self.inventory, refund.itemId, refund.count, self.selectedSlot);
+    if (updated) self.inventory = updated;
+  };
+
+  const applyBlocks = (blocks: Array<[number, number]>) => {
     for (const [idx, block] of blocks) {
-      const y = Math.floor(idx / layer);
-      const rem = idx - y * layer;
-      const z = Math.floor(rem / state.world.sizeX);
-      const x = rem - z * state.world.sizeX;
-      state.blockChanges.set(x, y, z, block as never); // relights locally too
+      // The journal is the authority: it confirms matching predictions (skip
+      // the redundant rewrite) and overrides losing ones (refund now — an
+      // inventorySlots delta in the same tick wins over this anyway).
+      for (const refund of ledger.onJournal(idx, block).refunds) refundToInventory(refund);
+      const { x, y, z } = cellOf(idx);
+      if (state.world.get(x, y, z) !== block) state.blockChanges.set(x, y, z, block as never); // relights locally too
     }
+    state.blockChanges.drainEditsDetailed(); // server writes must never register as predictions
     if (blocks.length > 0) state.worldMeshDirty = true;
   };
 
@@ -500,9 +541,22 @@ export async function connectNetworkSession(
         }
         if (message.vp) for (const pose of message.vp) upsertReplicaVehicle(pose);
         if (message.prj) applyProjectiles(message.prj);
+        const evNow = performance.now();
         for (const gameEvent of message.ev) {
-          pendingEvents.push(gameEvent as GameEvent);
-          callbacks.onEvent?.(gameEvent as GameEvent);
+          const ev = gameEvent as AttributedGameEvent;
+          // Own block-edit echoes at predicted cells were already presented
+          // at click time — swallowing the echo prevents the doubled sound/
+          // particles. Other players' edits (and own non-predicted ones)
+          // flow through untouched.
+          if (
+            (ev.type === "blockPlaced" || ev.type === "blockBroken") &&
+            ev.playerId === playerId &&
+            ledger.shouldSuppress(state.world.index(ev.x, ev.y, ev.z), evNow)
+          ) {
+            continue;
+          }
+          pendingEvents.push(ev);
+          callbacks.onEvent?.(ev);
         }
         return;
       }
@@ -526,7 +580,7 @@ export async function connectNetworkSession(
       case "playerLeft": {
         if (message.id !== playerId) engine.removePlayer(message.id);
         playerBuffers.delete(message.id);
-        engine.consumeEvents();
+        dropRosterEchoes();
         notifyRoster();
         return;
       }
@@ -668,11 +722,27 @@ export async function connectNetworkSession(
       interpDelayMs: delayCtl.currentDelayMs(),
       inKBps: traffic.inKBps,
       outKBps: traffic.outKBps,
-      pendingPredictions: 0 // prediction-ledger work fills this in
+      pendingPredictions: ledger.size()
     }),
 
     afterFrame(nowMs) {
       rollTrafficWindow(nowMs);
+      // Expired predictions: the server neither confirmed nor overrode in
+      // time (a rejected place, a lost cmd). Revert newest-first through the
+      // same chokepoint that applied them — relighting rides along — and hand
+      // the stack back. The echo-suppress window deliberately outlives this:
+      // a late confirm re-applies via the journal without a doubled sound.
+      for (const prediction of ledger.expire(performance.now())) {
+        for (const edit of [...prediction.edits].reverse()) {
+          if (edit.confirmed) continue;
+          const { x, y, z } = cellOf(edit.idx);
+          if (edit.block === BlockId.Chest) state.containers.delete(edit.idx); // a predicted chest brought a fresh container
+          state.blockChanges.set(x, y, z, edit.prev as never);
+        }
+        if (prediction.refund) refundToInventory(prediction.refund);
+        state.blockChanges.drainEditsDetailed(); // reverts aren't predictions either
+        state.worldMeshDirty = true;
+      }
       const open = ws?.readyState === WebSocket.OPEN;
       // Pose stream at tick rate.
       if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {

@@ -116,7 +116,11 @@ exhausted the client shows the disconnect modal.
 
 The server is authoritative for the world: every gameplay command executes
 in ITS engine; clients cannot invent items or edits. The one client-owned
-thing is each avatar's own movement (clamped, never trusted blindly). The
+thing is each avatar's own movement (clamped, never trusted blindly).
+Client-side prediction doesn't change this: a predicted block edit is a
+local _presentation_ of the cmd that already traveled — the server's block
+journal confirms, overrides, or (by timeout) the client reverts. Nothing a
+client predicts changes what the server accepts. The
 claimed eye pose on `cmd` is the hybrid model's soft spot — acceptable for
 invite-only co-op, and the envelope already carries what stricter server-side
 rewind validation would need.
