@@ -28,6 +28,11 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
 
   e2e:
+    # Browser e2e takes several times longer than verify, so it gates merges
+    # to main (the push event), not every PR iteration — PRs still run the
+    # full verify job, and renderer/input/shell work runs e2e locally per
+    # AGENTS.md before landing.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

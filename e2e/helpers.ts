@@ -42,7 +42,9 @@ export const test = base.extend<{ gamePage: Page }>({
     }, WORLDGEN_VERSION);
 
     await page.goto("/");
-    // Enter the world through the menu (first load only; reloads auto-resume the tab's world).
+    // Enter the world through the menus (first load only; reloads auto-resume
+    // the tab's world, skipping the welcome gate entirely).
+    await page.getByRole("button", { name: "Play locally" }).click();
     await page.getByTestId("profile-e2e-profile").click();
     await page.getByTestId("world-e2e-world").click();
     await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

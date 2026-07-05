@@ -28,7 +28,7 @@ async function waitForOnlineGame(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__monecraft!.renderer.renderedTriangles() > 0, undefined, { timeout: 30000 });
 }
 
-/** Registers a fresh account through the account panel's sign-up form. */
+/** Registers a fresh account: welcome gate's "Sign in" → auth screen → sign-up. */
 async function signUp(page: Page, name: string, email: string): Promise<void> {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("button", { name: "I need an account" }).click();
@@ -44,7 +44,7 @@ async function createOnlineProfile(page: Page, name: string): Promise<void> {
   await expect(page.getByText("Online Profiles")).toBeVisible({ timeout: 15000 });
   await page.getByTestId("new-online-profile").click();
   await page.getByLabel("Profile name").fill(name);
-  // exact: "Create account" (panel) and "Create World" share the substring.
+  // exact: "Create account" (form) and "Create World" share the substring.
   await page.getByRole("button", { name: "Create", exact: true }).click();
 }
 
@@ -63,8 +63,9 @@ test("two accounts share an online world via an invite link", async ({ browser }
   watchErrors(host, errors);
   await host.goto("/");
 
-  // The first-run screen surfaces the account panel, so registration needs no
-  // local profile at all — a pure account never touches the local menus.
+  // The welcome gate's "Sign in" leads straight to the auth screen, so
+  // registration needs no local profile — a pure account never touches the
+  // local menus.
   await signUp(host, "Hosta", `host-${runTag}@example.com`);
   await createOnlineProfile(host, "Hosta");
 

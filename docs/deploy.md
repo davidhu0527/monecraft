@@ -98,7 +98,9 @@ copies of the room — everyone connects "successfully" and everyone is alone
 _count_, which is runtime state, hence the explicit scale step), **always
 on** (`min_machines_running = 1`, `auto_stop_machines = "off"` — a room must keep
 ticking while players are in it), a `/health` check, `PERSISTENCE = "postgres"`,
-`MAX_ROOMS = 6`, and a 2 GB VM (rooms are ~74 MB each). SIGTERM on a redeploy
+`MAX_ROOMS = 3`, and a 512 MB VM — rooms are ~74 MB each, so memory and
+`MAX_ROOMS` scale **together** (6 rooms needs ~1 GB; resize with
+`fly scale memory`, then raise the env). SIGTERM on a redeploy
 drains every room to Postgres first, so a deploy loses at most the last 60 s
 (the dirty-persist interval), crash-safe.
 
@@ -146,7 +148,7 @@ Set all five in Vercel before the first deploy, then double-check them.
 1. `curl https://<fly-app>.fly.dev/health` → `{"ok":true,…}`.
 2. Open the deployed web app. It should look and play exactly like single-player
    (offline-first: no account, no network until you go online).
-3. Click **Sign in** (profile screen → Account panel), register an account, and
+3. Click **Sign in** on the welcome screen, register an account ("I need an account"), and
    confirm it reads "Signed in as …" and opens the account home — that proves
    Vercel ↔ Neon ↔ better-auth work.
 4. Create an online profile, a **New Online World**, then **Copy invite**. Open
