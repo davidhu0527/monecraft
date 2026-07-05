@@ -4,7 +4,12 @@
 #
 
 app = 'monecraft-server'
-primary_region = 'ord'
+# San Jose: the transpacific compromise for a mixed NA/Asia player group —
+# NA stays ~60-100 ms while Asia drops from 700+ ms (Chicago) to route-
+# dependent 200-400 ms. After a region deploy, verify `fly machine list`
+# still shows EXACTLY ONE machine (see docs/deploy.md — two split-brains
+# every room) and that no machine lingers in the old region.
+primary_region = 'sjc'
 
 [build]
   dockerfile = 'Dockerfile'

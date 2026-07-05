@@ -1,15 +1,18 @@
 import * as THREE from "three";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { Command } from "@/lib/game/engine/commands";
-import { createIdleInput, type GameEvent, type MobState, type PlayerId } from "@/lib/game/engine/state";
+import { createIdleInput, type AttributedGameEvent, type GameEvent, type MobState, type PlayerId } from "@/lib/game/engine/state";
 import { TICK_SECONDS } from "@/lib/game/engine/tickDriver";
+import { adjustSlotCount } from "@/lib/game/inventory";
+import { BlockId } from "@/lib/world";
 import { restoreEffects, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { FACTION_BY_KIND } from "@/lib/game/mobs";
 import type { MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
-import { decodeServerFrame, encodeClientMessage, gunzipWorldSync } from "./codec";
-import { createPoseBuffer, INTERPOLATION_DELAY_MS, type PoseBuffer } from "./interpolation";
+import { createPredictionLedger, type PredictionRefund } from "./prediction";
+import { decodeServerFrame, encodeClientMessage, gunzipWorldSync, qAng, qPos } from "./codec";
+import { createDelayController, createPoseBuffer, type PoseBuffer } from "./interpolation";
 import {
   CLOSE_BAD_TICKET,
   CLOSE_KICKED,
@@ -74,8 +77,24 @@ const LOCAL_COMMANDS = new Set<Command["type"]>(["toggleInventory", "toggleAdvan
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 
+/** Ping cadence — 1 Hz keeps the clock's min-RTT window (~16 samples) fresh at ~40 B/s. */
+const PING_INTERVAL_MS = 1000;
+
 /** One player as the roster panel shows them. */
 export type RosterMember = { id: PlayerId; name: string };
+
+/** Live connection stats for the F3 overlay (poll, don't subscribe). */
+export type NetStats = {
+  rttMs: number;
+  /** Tick inter-arrival jitter (p90 deviation from the 50 ms nominal). */
+  jitterMs: number;
+  /** How far in the past remote entities currently render. */
+  interpDelayMs: number;
+  inKBps: number;
+  outKBps: number;
+  /** Optimistic block edits awaiting server confirmation. */
+  pendingPredictions: number;
+};
 
 export type NetworkSession = {
   readonly engine: GameEngine;
@@ -98,9 +117,16 @@ export type NetworkSession = {
   sendChat(text: string): void;
   /** Owner-only: eject a player (no-op server-side for a non-owner). */
   kick(targetId: PlayerId): void;
-  /** Debug knob: inject symmetric latency on every send/receive (0 disables). */
-  setSimulatedLatency(ms: number): void;
+  /**
+   * Debug knob: inject symmetric latency on every send/receive (0 disables).
+   * `jitterMs` randomizes each message's delay by ±jitter (FIFO preserved —
+   * TCP never reorders); omitting it resets jitter to 0.
+   */
+  setSimulatedLatency(ms: number, jitterMs?: number): void;
   simulatedLatency(): number;
+  simulatedJitter(): number;
+  /** Connection stats snapshot for the debug overlay. */
+  netStats(): NetStats;
   /** Server events since the last drain — feed the shell's existing event handler. */
   drainEvents(): GameEvent[];
   /** Call once per rAF after engine.step: flushes the pose stream and samples interpolation. */
@@ -116,7 +142,9 @@ export async function connectNetworkSession(
 ): Promise<NetworkSession> {
   const makeSocket = options.makeSocket ?? ((u: string) => new WebSocket(u));
   const envLatency = Number.parseInt(process.env.NEXT_PUBLIC_NET_SIM_LATENCY_MS ?? "", 10);
+  const envJitter = Number.parseInt(process.env.NEXT_PUBLIC_NET_SIM_JITTER_MS ?? "", 10);
   let simulatedLatencyMs = options.simulatedLatencyMs ?? (Number.isFinite(envLatency) ? envLatency : 0);
+  let simulatedJitterMs = Number.isFinite(envJitter) ? Math.max(0, envJitter) : 0;
 
   let status: NetStatus = "connecting";
   let disposed = false;
@@ -134,25 +162,55 @@ export async function connectNetworkSession(
   };
 
   const clock = createClockSync();
+  const delayCtl = createDelayController();
+  const ledger = createPredictionLedger();
   const pendingEvents: GameEvent[] = [];
   const playerBuffers = new Map<string, PoseBuffer>();
   const mobBuffers = new Map<number, PoseBuffer>();
   const names = new Map<string, string>();
   let serverTickTimeMs = 0;
 
+  // Client-side traffic counters for the F3 overlay (2 s rolling window).
+  // Inbound counts post-decompression frame sizes — an approximation when
+  // permessage-deflate is negotiated, but the right number for "what does the
+  // client have to process".
+  const traffic = { inBytes: 0, outBytes: 0, windowStartMs: 0, inKBps: 0, outKBps: 0 };
+  const rollTrafficWindow = (nowMs: number) => {
+    if (traffic.windowStartMs === 0) traffic.windowStartMs = nowMs;
+    const elapsed = nowMs - traffic.windowStartMs;
+    if (elapsed < 2000) return;
+    traffic.inKBps = traffic.inBytes / 1024 / (elapsed / 1000);
+    traffic.outKBps = traffic.outBytes / 1024 / (elapsed / 1000);
+    traffic.inBytes = 0;
+    traffic.outBytes = 0;
+    traffic.windowStartMs = nowMs;
+  };
+
   // Latency simulation wraps both directions symmetrically so `ms` reads as a
   // one-way delay (round-trip ≈ 2×ms), matching how a player would set it.
+  // Jitter randomizes each message's delay (Math.random is fine here: net
+  // tooling, never seed-determined bytes) but delivery stays FIFO — TCP never
+  // reorders, and the seq/journal handling downstream assumes order — so each
+  // direction keeps a monotonic delivery cursor.
+  let lastSendDeliveryMs = 0;
+  let lastRecvDeliveryMs = 0;
+  const simDelayMs = () => Math.max(0, simulatedLatencyMs + (simulatedJitterMs > 0 ? (Math.random() * 2 - 1) * simulatedJitterMs : 0));
+
   const delayedSend = (data: string) => {
     const socket = ws;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    if (simulatedLatencyMs > 0) {
+    traffic.outBytes += data.length;
+    if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
+      const now = performance.now();
+      const deliverAt = Math.max(now + simDelayMs(), lastSendDeliveryMs);
+      lastSendDeliveryMs = deliverAt;
       setTimeout(() => {
         try {
           if (socket.readyState === WebSocket.OPEN) socket.send(data);
         } catch {
           /* socket closed under us */
         }
-      }, simulatedLatencyMs);
+      }, deliverAt - now);
       return;
     }
     socket.send(data);
@@ -219,14 +277,35 @@ export async function connectNetworkSession(
       return;
     }
     if (command.type === "selectSlot") engine.dispatch(command, playerId); // optimistic
+    // Optimistic placement: apply locally when the replica is sure the click
+    // is a pure block place, and remember it for journal reconciliation. The
+    // cmd travels REGARDLESS — the server stays authoritative either way —
+    // but never predict what can't currently be sent (a phantom un-sent edit
+    // would only ever revert).
+    if (command.type === "placeBlock" && status === "online" && ws?.readyState === WebSocket.OPEN) {
+      const predicted = engine.predictPlaceBlock();
+      if (predicted) ledger.add("place", predicted.edits, predicted.refund, performance.now(), clock.rttMs());
+    }
+    // Swing feedback is pure cosmetics — present it at click time and swallow
+    // the attributed echo (hit results, damage, knockback stay server-owned).
+    if (command.type === "attack" && status === "online") pendingEvents.push({ type: "attackSwung" });
     sendCmd(command);
+  };
+
+  // Roster changes emit join/leave into the replica's event queue; those are
+  // presented via the server's own tick `ev` instead, so drop them — but ONLY
+  // them: a predicted blockPlaced emitted in the same frame must survive to
+  // the shell's drain (its sound/particles are the whole point).
+  const dropRosterEchoes = () => {
+    const kept = engine.consumeEvents().filter((e) => e.type !== "playerJoined" && e.type !== "playerLeft");
+    pendingEvents.push(...kept);
   };
 
   const upsertRemotePlayer = (id: string, name: string) => {
     names.set(id, name);
     if (id === playerId || state.players.has(id)) return;
     engine.addPlayer({ id });
-    engine.consumeEvents();
+    dropRosterEchoes();
     notifyRoster();
   };
 
@@ -237,7 +316,7 @@ export async function connectNetworkSession(
     for (const id of [...state.players.keys()]) {
       if (id === playerId || present.has(id)) continue;
       engine.removePlayer(id);
-      engine.consumeEvents();
+      dropRosterEchoes();
       playerBuffers.delete(id);
     }
     notifyRoster();
@@ -248,6 +327,11 @@ export async function connectNetworkSession(
   if (myRoster) self.position.set(myRoster.x, myRoster.y, myRoster.z);
 
   const applyWorldSync = (sync: WorldSync) => {
+    // A (re)sync follows a gap that is not jitter — don't let it poison the window.
+    delayCtl.reset();
+    // The sync is a full keyframe: nothing pending survives it (and the block
+    // diff it carries is truth, not an echo to suppress).
+    ledger.clear();
     state.blockChanges.applySavedChanges(sync.changes);
     state.worldMeshDirty = true;
     state.dayClock = sync.dayClock;
@@ -386,22 +470,54 @@ export async function connectNetworkSession(
     }
   };
 
-  const applyBlocks = (blocks: Array<[number, number]>) => {
+  const cellOf = (idx: number) => {
     const layer = state.world.sizeX * state.world.sizeZ;
+    const y = Math.floor(idx / layer);
+    const rem = idx - y * layer;
+    const z = Math.floor(rem / state.world.sizeX);
+    const x = rem - z * state.world.sizeX;
+    return { x, y, z };
+  };
+
+  /** Hand a rejected place's stack back; a full inventory drops it silently (the next full delta reconciles). */
+  const refundToInventory = (refund: PredictionRefund) => {
+    const updated = adjustSlotCount(self.inventory, refund.itemId, refund.count, self.selectedSlot);
+    if (updated) self.inventory = updated;
+  };
+
+  /** Undo one predicted cell through the relight chokepoint (a predicted chest also brought a fresh container). */
+  const revertPredictedEdit = (edit: { idx: number; block: number; prev: number }) => {
+    const { x, y, z } = cellOf(edit.idx);
+    if (edit.block === BlockId.Chest) state.containers.delete(edit.idx);
+    state.blockChanges.set(x, y, z, edit.prev as never);
+  };
+
+  const applyBlocks = (blocks: Array<[number, number]>) => {
     for (const [idx, block] of blocks) {
-      const y = Math.floor(idx / layer);
-      const rem = idx - y * layer;
-      const z = Math.floor(rem / state.world.sizeX);
-      const x = rem - z * state.world.sizeX;
-      state.blockChanges.set(x, y, z, block as never); // relights locally too
+      // The journal is the authority: it confirms matching predictions (skip
+      // the redundant rewrite) and overrides losing ones — refund now (an
+      // inventorySlots delta in the same tick wins over this anyway) and
+      // revert the dropped prediction's unconfirmed sibling cells (a door's
+      // other half): the server's placement may have failed entirely, and a
+      // same-batch server write to a reverted cell still lands afterward.
+      const { refunds, reverts } = ledger.onJournal(idx, block);
+      for (const refund of refunds) refundToInventory(refund);
+      for (const edit of reverts) revertPredictedEdit(edit);
+      const { x, y, z } = cellOf(idx);
+      if (state.world.get(x, y, z) !== block) state.blockChanges.set(x, y, z, block as never); // relights locally too
     }
+    state.blockChanges.drainEditsDetailed(); // server writes must never register as predictions
     if (blocks.length > 0) state.worldMeshDirty = true;
   };
 
   // ── inbound frame processing (latency-shifted) ──────────────────────────────
   const onServerFrame = (data: unknown) => {
-    if (simulatedLatencyMs > 0) {
-      setTimeout(() => void processServerFrame(data), simulatedLatencyMs);
+    traffic.inBytes += typeof data === "string" ? data.length : ((data as ArrayBuffer).byteLength ?? 0);
+    if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
+      const now = performance.now();
+      const deliverAt = Math.max(now + simDelayMs(), lastRecvDeliveryMs);
+      lastRecvDeliveryMs = deliverAt;
+      setTimeout(() => void processServerFrame(data), deliverAt - now);
       return;
     }
     void processServerFrame(data);
@@ -420,6 +536,7 @@ export async function connectNetworkSession(
     if (!message) return;
     switch (message.t) {
       case "tick": {
+        delayCtl.onTickArrival(performance.now(), message.n);
         serverTickTimeMs = message.n * TICK_SECONDS * 1000;
         if (message.blocks) applyBlocks(message.blocks);
         if (message.day !== undefined) state.dayClock = message.day;
@@ -439,9 +556,24 @@ export async function connectNetworkSession(
         }
         if (message.vp) for (const pose of message.vp) upsertReplicaVehicle(pose);
         if (message.prj) applyProjectiles(message.prj);
+        const evNow = performance.now();
         for (const gameEvent of message.ev) {
-          pendingEvents.push(gameEvent as GameEvent);
-          callbacks.onEvent?.(gameEvent as GameEvent);
+          const ev = gameEvent as AttributedGameEvent;
+          // Own block-edit echoes at predicted cells were already presented
+          // at click time — swallowing the echo prevents the doubled sound/
+          // particles. Other players' edits (and own non-predicted ones)
+          // flow through untouched.
+          if (
+            (ev.type === "blockPlaced" || ev.type === "blockBroken") &&
+            ev.playerId === playerId &&
+            ledger.shouldSuppress(state.world.index(ev.x, ev.y, ev.z), evNow)
+          ) {
+            continue;
+          }
+          // Own swing echoes: the synthetic swing already played at click time.
+          if (ev.type === "attackSwung" && ev.playerId === playerId) continue;
+          pendingEvents.push(ev);
+          callbacks.onEvent?.(ev);
         }
         return;
       }
@@ -465,7 +597,7 @@ export async function connectNetworkSession(
       case "playerLeft": {
         if (message.id !== playerId) engine.removePlayer(message.id);
         playerBuffers.delete(message.id);
-        engine.consumeEvents();
+        dropRosterEchoes();
         notifyRoster();
         return;
       }
@@ -552,7 +684,7 @@ export async function connectNetworkSession(
         t: "cmd",
         seq,
         cmd: command,
-        pose: { x: self.position.x, y: self.position.y, z: self.position.z, yaw: self.yaw, pitch: self.pitch }
+        pose: { x: qPos(self.position.x), y: qPos(self.position.y), z: qPos(self.position.z), yaw: qAng(self.yaw), pitch: qAng(self.pitch) }
       })
     );
   };
@@ -594,13 +726,57 @@ export async function connectNetworkSession(
       if (text.trim()) delayedSend(encodeClientMessage({ t: "chat", text: text.slice(0, 256) }));
     },
 
-    setSimulatedLatency(ms) {
+    setSimulatedLatency(ms, jitterMs) {
       simulatedLatencyMs = Math.max(0, Math.floor(ms));
+      simulatedJitterMs = Math.max(0, Math.floor(jitterMs ?? 0));
     },
     simulatedLatency: () => simulatedLatencyMs,
+    simulatedJitter: () => simulatedJitterMs,
+
+    netStats: () => ({
+      rttMs: clock.rttMs(),
+      jitterMs: delayCtl.jitterMs(),
+      interpDelayMs: delayCtl.currentDelayMs(),
+      inKBps: traffic.inKBps,
+      outKBps: traffic.outKBps,
+      pendingPredictions: ledger.size()
+    }),
 
     afterFrame(nowMs) {
-      const open = ws?.readyState === WebSocket.OPEN;
+      rollTrafficWindow(nowMs);
+      const socketOpen = ws?.readyState === WebSocket.OPEN;
+      // Predictive-mining capture: any journal entries at this point are
+      // breaks the replica step just committed (placement and server writes
+      // drain inline where they happen). While disconnected the server can't
+      // hear the mineHeld stream, so an offline break would ghost forever —
+      // undo it on the spot instead of ledgering it.
+      const mined = state.blockChanges.drainEditsDetailed().filter((e) => e.block !== e.prev);
+      if (mined.length > 0) {
+        if (socketOpen && status === "online") {
+          ledger.add("break", mined, null, performance.now(), clock.rttMs());
+        } else {
+          for (const edit of [...mined].reverse()) {
+            const { x, y, z } = cellOf(edit.idx);
+            state.blockChanges.set(x, y, z, edit.prev as never);
+          }
+          state.blockChanges.drainEditsDetailed();
+          state.worldMeshDirty = true;
+        }
+      }
+      // Expired predictions: the server neither confirmed nor overrode in
+      // time (a rejected place, a lost cmd). Revert newest-first through the
+      // same chokepoint that applied them — relighting rides along — and hand
+      // the stack back. The echo-suppress window deliberately outlives this:
+      // a late confirm re-applies via the journal without a doubled sound.
+      for (const prediction of ledger.expire(performance.now())) {
+        for (const edit of [...prediction.edits].reverse()) {
+          if (!edit.confirmed) revertPredictedEdit(edit);
+        }
+        if (prediction.refund) refundToInventory(prediction.refund);
+        state.blockChanges.drainEditsDetailed(); // reverts aren't predictions either
+        state.worldMeshDirty = true;
+      }
+      const open = socketOpen;
       // Pose stream at tick rate.
       if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
         lastPoseSentMs = nowMs;
@@ -609,23 +785,24 @@ export async function connectNetworkSession(
           encodeClientMessage({
             t: "pose",
             seq,
-            x: self.position.x,
-            y: self.position.y,
-            z: self.position.z,
-            yaw: self.yaw,
-            pitch: self.pitch,
+            x: qPos(self.position.x),
+            y: qPos(self.position.y),
+            z: qPos(self.position.z),
+            yaw: qAng(self.yaw),
+            pitch: qAng(self.pitch),
             onGround: self.onGround,
             move: self.input.move,
             mineHeld: self.input.mineHeld
           })
         );
       }
-      if (open && nowMs - lastPingMs >= 2000) {
+      if (open && nowMs - lastPingMs >= PING_INTERVAL_MS) {
         lastPingMs = nowMs;
         delayedSend(encodeClientMessage({ t: "ping", id: seq, tMs: nowMs }));
       }
-      // Interpolation: remote entities render ~125ms in the past.
-      const renderTime = (clock.ready() ? clock.estimatedServerTimeMs(nowMs) : serverTickTimeMs) - INTERPOLATION_DELAY_MS;
+      // Interpolation: remote entities render in the past, far enough to
+      // absorb the measured arrival jitter (adaptive, slewed — no warping).
+      const renderTime = (clock.ready() ? clock.estimatedServerTimeMs(nowMs) : serverTickTimeMs) - delayCtl.effectiveDelayMs(nowMs);
       for (const [id, buffer] of playerBuffers) {
         const player = state.players.get(id);
         const pose = buffer.sample(renderTime);

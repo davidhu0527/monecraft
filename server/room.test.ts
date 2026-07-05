@@ -102,6 +102,31 @@ describe("room lifecycle", () => {
     // …and bob's tick carries alice's pose, not his own.
     expect(tickB?.pp.some((p) => p.id === "alice")).toBe(true);
     expect(tickB?.pp.some((p) => p.id === "bob")).toBe(false);
+    // Wire poses are quantized (re-quantizing is a no-op).
+    for (const p of tickB!.pp) {
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.yaw).toBe(Math.round(p.yaw * 1000) / 1000);
+    }
+  });
+
+  test("tick events carry the acting player's id (echo dedup relies on it)", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const alice = room.engine.state.players.get("alice")!;
+
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    const swungAtB = b
+      .messagesOf("tick")
+      .at(-1)
+      ?.ev.find((e) => e.type === "attackSwung");
+    expect(swungAtB).toBeDefined();
+    expect(swungAtB?.playerId).toBe("alice");
   });
 
   test("a speed-hacked pose is refused and answered with forcePose; an honest one sticks", async () => {
@@ -207,6 +232,16 @@ describe("room lifecycle", () => {
     const t = b.messagesOf("tick").at(-1);
     expect(t?.vp?.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
     expect(t?.prj?.some((p) => p.id === 99 && p.vx === 8)).toBe(true);
+    // Wire quantization holds on every pose channel (re-quantizing is a no-op).
+    for (const v of t!.vp!) {
+      expect(v.x).toBe(Math.round(v.x * 100) / 100);
+      expect(v.yaw).toBe(Math.round(v.yaw * 1000) / 1000);
+    }
+    for (const p of t!.prj!) {
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.vx).toBe(Math.round(p.vx * 100) / 100);
+    }
+    for (const m of t?.mp ?? []) expect(m.x).toBe(Math.round(m.x * 100) / 100);
 
     // A late joiner's world-sync keyframe carries both (force-emits past the deadband).
     const c = fakeSink();

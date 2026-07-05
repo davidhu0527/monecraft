@@ -118,9 +118,9 @@ test("two accounts share an online world via an invite link", async ({ browser }
   }
 
   // ── a block edit crosses the wire ─────────────────────────────────────────
-  // The host digs straight down. The replica's own mining is cosmetic (it
-  // never completes a break locally), so a journal entry appearing on BOTH
-  // clients proves the server decided the break and broadcast it.
+  // The host digs straight down. The host's own journal entry may be its
+  // PREDICTED break (replica mining commits locally now), so the proof that
+  // the server decided and broadcast it is the FRIEND's journal changing.
   await acquirePointerLock(host);
   await host.waitForTimeout(1000); // settle (slow CI renderers need the margin)
   await host.evaluate(() => {
@@ -151,6 +151,41 @@ test("two accounts share an online world via an invite link", async ({ browser }
   // here: driving it end-to-end means creative-mode + inventory juggling + firing
   // into open sky to dodge the first-tick despawn, too fragile for a reliable e2e.
   // See server/room.test.ts (broadcast) and NetworkSession.test.ts (upsert).)
+
+  // ── prediction under latency: a lagged client's own break is local-first ──
+  // 400±100 ms simulated one-way (~800 ms RTT): the friend digs, the block
+  // must vanish from the friend's OWN world via the prediction ledger (a rAF
+  // watcher catches the pending entry — polling from outside could miss the
+  // confirm window), and the edit must still reach the host through the
+  // lagged link. Wire-format details are unit-tested; this is the journey.
+  await friend.evaluate(() => {
+    window.__monecraft!.net!.setSimulatedLatency(400, 100);
+    (window as unknown as { __sawPrediction: boolean }).__sawPrediction = false;
+    const watch = () => {
+      if ((window.__monecraft?.net?.netStats().pendingPredictions ?? 0) > 0) {
+        (window as unknown as { __sawPrediction: boolean }).__sawPrediction = true;
+      }
+      requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+  });
+  const friendEdits = await friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length);
+  await acquirePointerLock(friend);
+  await friend.waitForTimeout(1000); // settle (slow CI renderers need the margin — same as the host break)
+  await friend.evaluate(() => {
+    window.__monecraft!.engine.state.player.pitch = -Math.PI / 2 + 0.02;
+  });
+  await friend.mouse.down();
+  await expect
+    .poll(() => friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 30000 })
+    .toBeGreaterThan(friendEdits);
+  await friend.mouse.up();
+  expect(
+    await friend.evaluate(() => (window as unknown as { __sawPrediction: boolean }).__sawPrediction),
+    "the lagged break went through the prediction ledger"
+  ).toBe(true);
+  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 30000 }).toBeGreaterThan(friendEdits);
+  await friend.evaluate(() => window.__monecraft!.net!.setSimulatedLatency(0));
 
   // ── the owner kicks the friend, who drops to the disconnect modal (LAST: it
   // tears down the friend's session). net.kick is exactly what the RosterPanel

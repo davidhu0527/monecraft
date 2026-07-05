@@ -243,8 +243,9 @@ tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
 - **"How did this happen?"** Pull `/rooms/:id/log`, then `bun scripts/replay.ts`
   to replay the command stream against a fresh engine and diff the outcome.
 - **Latency feels bad.** From a browser console, `window.__monecraft.net`
-  `.setSimulatedLatency(ms)` injects delay to reproduce; set
-  `NEXT_PUBLIC_NET_SIM_LATENCY_MS` to bake it into a dev build.
+  `.setSimulatedLatency(ms, jitterMs?)` injects delay (± jitter) to reproduce;
+  set `NEXT_PUBLIC_NET_SIM_LATENCY_MS` / `NEXT_PUBLIC_NET_SIM_JITTER_MS` to
+  bake it into a dev build. The F3 overlay shows live net stats.
 - **Capacity.** Run `loadSim` at the target player count and watch
   `slowestTickMs`/`kbOutPerSec` in `/rooms`; keep p95 well under 50 ms and set
   `MAX_ROOMS` so peak memory (~74 MB/room) fits the machine. Net constants

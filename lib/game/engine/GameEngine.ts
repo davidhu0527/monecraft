@@ -8,6 +8,7 @@ import {
   collidesAt,
   computeFullLight,
   generateWorld,
+  voxelRaycast,
   VoxelWorld,
   WORLD_SIZE_X,
   WORLD_SIZE_Y,
@@ -22,6 +23,7 @@ import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
+  EYE_HEIGHT,
   FLY_SPEED,
   GRAVITY,
   JUMP_VELOCITY,
@@ -30,6 +32,7 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  MINE_REACH,
   PET_FIGHT_RANGE,
   PET_TAMED_HP,
   POISON_DURATION,
@@ -91,13 +94,13 @@ import {
   serializeStats,
   serializeVehicles
 } from "@/lib/game/save";
-import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
+import { canEditBlocks, canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
 import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import type { InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/types";
-import { createBlockChangeTracker } from "./blockChanges";
+import { createBlockChangeTracker, type DetailedEdit } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import {
   createIdleInput,
@@ -106,6 +109,7 @@ import {
   LOCAL_PLAYER_ID,
   nextCameraMode,
   type FrameInput,
+  type AttributedGameEvent,
   type GameEvent,
   type GameSnapshot,
   type GameState,
@@ -116,14 +120,22 @@ import { allEligiblePlayersSleeping, installPlayerAliases, mustGetPlayer, neares
 import { daylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
-import { tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
+import { lookDirection, tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickStarvation, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, jumpBoostBonus, speedMultiplier, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
 import { applyEnchant, canEnchant, featherFallingReduction, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
+import {
+  INTERACTIVE_BLOCKS,
+  tryFeedAimedMob,
+  tryInteractBlock,
+  tryTameAimedMob,
+  tryToggleSitPet,
+  tryTradeAimedVillager,
+  tryUseHeldItem
+} from "./systems/interact";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
@@ -216,7 +228,7 @@ export class GameEngine {
   private readonly worldType: WorldType;
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
-  private events: GameEvent[] = [];
+  private events: AttributedGameEvent[] = [];
   /**
    * The player whose per-player step or dispatch is currently running. It scopes
    * emitted events for progression attribution (`observeProgress`) without
@@ -530,7 +542,11 @@ export class GameEngine {
         // tick); predicting motion here would rubber-band against that stream.
         let walked = 0;
         if (primary.mountedVehicleId === null) walked = tickPlayerMotion(state, primary, primary.input, dt, () => {}).horizontalDistance;
-        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { cosmetic: true });
+        // Predictive mining: the break commits locally the moment the crack
+        // completes (chests excepted). NetworkSession captures the written
+        // cells from the detailed journal each frame and reconciles them
+        // against the server's own break via the prediction ledger.
+        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { authority: "predict" });
         // Accumulate the two continuously-ticking display stats locally — they're
         // excluded from the SelfDelta (which syncs only the event-driven counters
         // the replica can't derive), so the Statistics tab stays roughly right.
@@ -1177,8 +1193,58 @@ export class GameEngine {
 
   getSnapshot = (): GameSnapshot => this.snapshot;
 
+  /**
+   * Replica-only: locally applies a right-click IFF it would fall through the
+   * whole placeBlock precedence chain to pure block placement, so the block
+   * appears at click time instead of a round-trip later. Conservative gates —
+   * any branch the server might take instead (spear/feed/sit/trade/board/
+   * interact/use-item, all either held-item- or aim-target-driven) bails to
+   * null, which is simply the status quo: the cmd still travels and the world
+   * updates when the journal echoes back. Returns the cells written (with
+   * pre-values, for the prediction ledger's revert) and what to refund if the
+   * server rejects the place; null means "predicted nothing".
+   */
+  predictPlaceBlock(): { edits: DetailedEdit[]; refund: { itemId: string; count: number } | null } | null {
+    if (!this.replica) return null;
+    const state = this.state;
+    const player = state.players.get(state.primaryPlayerId);
+    if (!player) return null;
+    if (player.isDead || player.inventoryOpen || state.sleepTimer > 0 || !canInteract(player.gameMode) || !canEditBlocks(player.gameMode)) return null;
+    // Only a plain placeable block in hand: every item-driven branch of the
+    // right-click chain (spear, boat, hoe, seeds, food, rod, totem, horn) is
+    // excluded by kind alone.
+    const slot = player.inventory[player.selectedSlot];
+    if (!slot || !slot.id || slot.kind !== "block" || slot.count <= 0 || slot.blockId === undefined || slot.blockId === BlockId.Bedrock) return null;
+
+    const origin = new THREE.Vector3(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
+    const direction = lookDirection(player.yaw, player.pitch, new THREE.Vector3());
+    const hit = voxelRaycast(state.world, origin, direction, MINE_REACH);
+    if (!hit) return null;
+    if (INTERACTIVE_BLOCKS[state.world.get(hit.hit.x, hit.hit.y, hit.hit.z) as BlockId] !== undefined) return null;
+    // Any mob or vehicle near the aim ray could consume the click server-side
+    // (sit, trade, feed, board) — a false "don't predict" costs nothing.
+    const toEntity = new THREE.Vector3();
+    const nearRay = (p: THREE.Vector3, radius: number): boolean => {
+      toEntity.copy(p).sub(origin);
+      const along = toEntity.dot(direction);
+      if (along < -radius || along > MINE_REACH + radius) return false;
+      return toEntity.lengthSq() - Math.max(0, along) ** 2 < radius * radius;
+    };
+    for (const mob of state.mobs) if (nearRay(mob.position, 2)) return null;
+    for (const vehicle of state.vehicles) if (nearRay(vehicle.position, 3)) return null;
+
+    // Run the REAL placement (same validation, stack take, emit — the emit is
+    // the instant local sound/particles) and capture exactly what it wrote.
+    state.blockChanges.drainEditsDetailed(); // defensive flush — predictions must not adopt stale writes
+    const inventoryBefore = player.inventory;
+    placeSelectedBlock(state, player, this.emit);
+    const edits = state.blockChanges.drainEditsDetailed().filter((e) => e.block !== e.prev);
+    if (edits.length === 0) return null;
+    return { edits, refund: player.inventory !== inventoryBefore ? { itemId: slot.id, count: 1 } : null };
+  }
+
   /** Drains queued one-shot gameplay events for the shell (death screen, audio). */
-  consumeEvents(): GameEvent[] {
+  consumeEvents(): AttributedGameEvent[] {
     if (this.events.length === 0) return this.events;
     const drained = this.events;
     this.events = [];
@@ -1186,7 +1252,14 @@ export class GameEngine {
   }
 
   private emit = (event: GameEvent, actorId?: PlayerId): void => {
-    this.events.push(event);
+    // Server rooms stamp the acting player onto every event that has one
+    // (explicit ids — advancements, join/leave — win; shared-system events
+    // like mob AI or TNT stay unattributed). Wire-compatible: the tick's `ev`
+    // already carries an optional playerId. A predicting client relies on the
+    // stamp to tell its own echoes from other players' actions; a local
+    // engine leaves events untouched.
+    const actor = (event as AttributedGameEvent).playerId ?? actorId ?? this.actingPlayer;
+    this.events.push(this.authority === "server" && actor !== undefined ? { ...event, playerId: actor } : event);
     // Observe progress at the one chokepoint every system already emits through —
     // but guard against recursion (observing an unlock re-enters emit), and skip
     // it on a replica: the server owns progression and streams each player's

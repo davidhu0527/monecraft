@@ -585,4 +585,12 @@ export type GameEvent =
   | { type: "raidFailed" }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
 
+/**
+ * A GameEvent stamped with the acting player where one exists. Server rooms
+ * attribute every emit (wire-compatible — the tick's `ev` already carries an
+ * optional playerId) so a predicting client can tell its own echoes from
+ * other players' actions; a local engine leaves events unstamped.
+ */
+export type AttributedGameEvent = GameEvent & { playerId?: PlayerId };
+
 export type EmitGameEvent = (event: GameEvent) => void;

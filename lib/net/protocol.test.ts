@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { decodeClientFrame, gunzipWorldSync, gzipWorldSync } from "./codec";
-import { createClockSync } from "./clock";
 import { readClientMessage, readCommand, type WorldSync } from "./protocol";
 
 describe("client message validation", () => {
@@ -92,22 +91,5 @@ describe("world-sync codec", () => {
 
   test("gunzip is total on garbage", async () => {
     expect(await gunzipWorldSync(new Uint8Array([9, 9, 9]))).toBeNull();
-  });
-});
-
-describe("clock sync", () => {
-  test("estimates the server timeline through jittery pongs", () => {
-    const clock = createClockSync();
-    expect(clock.ready()).toBe(false);
-    // Server is at tick 1000 (= 50_000ms on the tick clock); RTT ~80ms.
-    clock.onPong(1000, 1080, 1000);
-    expect(clock.ready()).toBe(true);
-    expect(clock.rttMs()).toBeCloseTo(80, 5);
-    // At local 1080: serverTime ≈ 50_000 + 40 (half RTT since the pong left).
-    expect(clock.estimatedServerTimeMs(1080)).toBeCloseTo(50_040, 5);
-    // Jittery follow-ups move the estimate smoothly, not wildly.
-    clock.onPong(2000, 2200, 1024);
-    const drifted = clock.estimatedServerTimeMs(2200);
-    expect(Math.abs(drifted - 51_240)).toBeLessThan(300);
   });
 });

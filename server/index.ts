@@ -79,6 +79,10 @@ const server = Bun.serve<SocketData>({
     return new Response("not found", { status: 404 });
   },
   websocket: {
+    // Tick frames are ~1–4 KB of highly repetitive JSON keys — deflate gets
+    // 3–5× and browsers negotiate it automatically. Dedicated 16 KB windows:
+    // ≤24 sockets (8 players × MAX_ROOMS) costs ~1 MB, trivial on the VM.
+    perMessageDeflate: { compress: "16KB", decompress: true },
     open(ws) {
       ws.data.helloTimer = setTimeout(() => ws.close(CLOSE_BAD_TICKET, "no hello"), HELLO_DEADLINE_MS);
     },

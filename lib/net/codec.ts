@@ -8,6 +8,16 @@ import { readClientMessage, type ClientMessage, type ServerMessage, type WorldSy
  * CompressionStream/DecompressionStream in the browser.
  */
 
+/**
+ * Wire-size quantizers for replicated poses. Raw doubles serialize at up to
+ * 17 chars ("256.04500000000002"); rounding before JSON.stringify keeps the
+ * envelope shape identical while cutting pose payloads roughly in half.
+ * Precision margins: 1 cm ≪ every movement clamp and deadband in play.
+ */
+export const qPos = (v: number): number => Math.round(v * 100) / 100;
+/** 3-decimal angle quantizer (~0.06° — invisible at render scale). Velocities take qPos: they only orient meshes. */
+export const qAng = (v: number): number => Math.round(v * 1000) / 1000;
+
 export function encodeServerMessage(message: ServerMessage): string {
   return JSON.stringify(message);
 }

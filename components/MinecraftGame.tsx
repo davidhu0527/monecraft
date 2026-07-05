@@ -144,7 +144,9 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
       <div ref={attachMount} className="game-canvas-wrap" />
       <div className="vignette" aria-hidden="true" />
 
-      {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
+      {debugOpen ? (
+        <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} net={online ?? null} />
+      ) : null}
 
       {showClickHint ? <div className="click-hint">Double-click to play</div> : null}
 

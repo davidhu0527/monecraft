@@ -471,9 +471,34 @@ None affect single-player, and none are save-sensitive.
   keyframe / drift correction), mob delta frames at **10 Hz** (half tick rate)
   with `MOB_DEADBAND_SQ` (`0.05²` — smaller = more mob updates, more bandwidth),
   `DAY_INTERVAL_TICKS` (`20` = 1 s day-clock sync), `POSE_CHECKPOINT_TICKS`
-  (`20` = 1 s replay-log pose anchors). `INTERPOLATION_DELAY_MS` (`125`,
-  `lib/net/interpolation.ts`) is how far in the past remote entities render —
-  larger absorbs more jitter at the cost of visible lag.
+  (`20` = 1 s replay-log pose anchors).
+- **Interpolation delay (adaptive)** — how far in the past remote entities
+  render, sized from measured tick-arrival jitter (`lib/net/interpolation.ts`):
+  `INTERPOLATION_DELAY_MIN_MS` (`125`, the clean-link floor),
+  `INTERPOLATION_DELAY_MAX_MS` (`450`), `INTERPOLATION_JITTER_MULT` (`2` ×
+  the p90 arrival deviation), `DELAY_SLEW_MS_PER_SEC` (`60` — how fast the
+  delay may drift, so remote timelines never visibly warp). Larger delays
+  absorb more jitter at the cost of visible lag.
+- **Prediction** (`lib/net/prediction.ts`) — optimistic block edits revert if
+  the server's journal neither confirms nor overrides within
+  `max(2×RTT+200 ms, PREDICTION_TIMEOUT_MIN_MS)` capped at
+  `PREDICTION_TIMEOUT_MAX_MS` (`1000`/`5000`); own-echo suppression outlives
+  the entry by `ECHO_SUPPRESS_EXTRA_MS` (`3000`) because the echo rides the
+  confirming tick. Raising the floor hides slow-server rejects longer;
+  lowering it flickers honest placements on RTT spikes. Breaking predicts
+  too (`tickMining` `authority: "predict"` — chests excepted); drops/XP
+  stay server-owned, so pickup feedback is delta-bound (~RTT).
+- **Clock sync** (`lib/net/clock.ts`) — `OFFSET_WINDOW_SIZE` (`16` pongs
+  considered for the NTP-style min-RTT offset pick), `OFFSET_SLEW_MS_PER_SEC`
+  (`40`), `OFFSET_SNAP_MS` (`250` — bigger errors snap: first fix, reconnect).
+  The client pings at `PING_INTERVAL_MS` (`1000`, `NetworkSession.ts`).
+- **Wire size** — replicated poses quantize before serialization (`qPos` 2
+  decimals for positions/velocities, `qAng` 3 for angles — `lib/net/codec.ts`;
+  margins sit well inside every movement clamp and deadband) and the server offers **permessage-deflate**
+  (`server/index.ts`, dedicated 16 KB windows — ~1 MB across a full house).
+  Caveat: `/rooms`' `kbOutPerSec` counts pre-compression bytes, so it shows
+  the quantization win only; verify deflate via DevTools
+  (`Sec-WebSocket-Extensions` on the 101 response) or Fly egress metrics.
 - **Backpressure** — `BACKPRESSURE_SOFT_BYTES` (256 KB → shed `pp`/`mp`),
   `BACKPRESSURE_KICK_BYTES` (1 MB) + `BACKPRESSURE_KICK_STRIKES` (~5 s sustained
   → `4008` kick).
@@ -484,9 +509,11 @@ None affect single-player, and none are save-sensitive.
   `tickets.ts`).
 - **Replay log** — `COMMAND_LOG_SIZE` (env, default `4096`) bounds each room's
   in-memory command ring dumped by `/rooms/:id/log`.
-- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` (env, default `0`) seeds
-  the client's artificial one-way delay; `window.__monecraft.net.setSimulatedLatency(ms)`
-  overrides it live.
+- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` / `NEXT_PUBLIC_NET_SIM_JITTER_MS`
+  (env, default `0`) seed the client's artificial one-way delay and per-message
+  jitter; `window.__monecraft.net.setSimulatedLatency(ms, jitterMs?)` overrides
+  both live (delivery stays FIFO, like TCP). The F3 overlay shows the live
+  RTT/jitter/interp-delay and in/out KB/s while online.
 
 ## Online accounts
 
