@@ -2,6 +2,7 @@ import "./base.css";
 import "./hud.css";
 import "./ui.css";
 import "./menu.css";
+import "./touch.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";

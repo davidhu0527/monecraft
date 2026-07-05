@@ -8,6 +8,8 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createAccumulator } from "@/lib/game/engine/tickDriver";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
+import { createTouchInputController, type TouchControlsApi } from "@/lib/game/input/touchInputController";
+import { DEFAULT_TOUCH_SETTINGS, readTouchSettings, resolveTouchEnabled, type TouchSettings } from "@/lib/game/input/touchSettings";
 import * as inv from "@/lib/game/inventory";
 import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 import { type Profile, setProfileSkin } from "@/lib/game/profiles";
@@ -132,6 +134,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // and event drain always act on the current one, which lets a touch/desktop
   // controller swap happen without tearing down the whole renderer effect.
   const inputRef = useRef<InputController | null>(null);
+  const [touchSettings, setTouchSettings] = useState<TouchSettings>(DEFAULT_TOUCH_SETTINGS);
+  const touchSettingsRef = useRef(touchSettings);
+  /** Non-null exactly while a touch controller drives play (the overlay's api). */
+  const [touchControls, setTouchControls] = useState<TouchControlsApi | null>(null);
   const minimapNodeRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<AudioDirector | null>(null);
   // The rAF effect must not re-run on volume tweaks — it reads through a ref.
@@ -160,6 +166,14 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     audioSettingsRef.current = stored;
     audioRef.current?.setSettings(stored);
     queueMicrotask(() => setAudioSettings(stored));
+  }, []);
+
+  // Same deal as audio: a global preference read after mount, through a ref so
+  // the renderer effect (which builds the controller) needs no dependency.
+  useEffect(() => {
+    const stored = readTouchSettings();
+    touchSettingsRef.current = stored;
+    queueMicrotask(() => setTouchSettings(stored));
   }, []);
 
   const updateAudioSettings = useCallback((partial: Partial<AudioSettings>) => {
@@ -300,26 +314,36 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const audio = createAudioDirector();
     audio.setSettings(audioSettingsRef.current);
     audioRef.current = audio;
-    const input = createInputController({
-      canvas: renderer.domElement,
-      engine: gameEngine,
-      onResize: () => renderer.handleResize(),
-      onLockChange: (isLocked) => {
-        // Pointer-lock acquisition is itself a user gesture — a safe unlock
-        // point, and it re-resumes a context suspended by the browser.
-        if (isLocked) audio.unlock();
-        setLocked(isLocked);
-      }
-    });
+    const onLockChange = (isLocked: boolean) => {
+      // Engaging play is itself a user gesture (pointer-lock click / tap) — a
+      // safe unlock point, and it re-resumes a context the browser suspended.
+      if (isLocked) audio.unlock();
+      setLocked(isLocked);
+    };
+    const touchEnabled = resolveTouchEnabled(touchSettingsRef.current.mode);
+    const touchInput = touchEnabled ? createTouchInputController({ engine: gameEngine, onLockChange }) : null;
+    const input: InputController =
+      touchInput ?? createInputController({ canvas: renderer.domElement, engine: gameEngine, onResize: () => renderer.handleResize(), onLockChange });
     inputRef.current = input;
+    queueMicrotask(() => setTouchControls(touchInput?.controls ?? null));
     // Everything below must reach the controller through the ref, never the
     // `input` closure — after a hot swap the closure points at a disposed one.
     const liveInput = () => inputRef.current ?? input;
+    // The desktop controller owns the resize listener; the touch controller is
+    // DOM-free, so the shell covers resize + rotation for it.
+    const onViewportChange = touchEnabled ? () => renderer.handleResize() : null;
+    if (onViewportChange) {
+      window.addEventListener("resize", onViewportChange);
+      window.addEventListener("orientationchange", onViewportChange);
+    }
 
     // Autoplay policy: the AudioContext may only start inside a user gesture.
+    // pointerdown matters on touch: touch-action none can suppress the
+    // synthetic mousedown the desktop path relies on.
     const unlockAudio = () => audio.unlock();
     document.addEventListener("mousedown", unlockAudio);
     document.addEventListener("keydown", unlockAudio);
+    document.addEventListener("pointerdown", unlockAudio);
 
     // The save key is fixed for the mount's life (the shell keys this hook by
     // world id), so capture it once — also keeps it out of the cleanup's ref read.
@@ -443,11 +467,17 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       window.removeEventListener("beforeunload", autoSave);
       document.removeEventListener("mousedown", unlockAudio);
       document.removeEventListener("keydown", unlockAudio);
+      document.removeEventListener("pointerdown", unlockAudio);
+      if (onViewportChange) {
+        window.removeEventListener("resize", onViewportChange);
+        window.removeEventListener("orientationchange", onViewportChange);
+      }
       audioRef.current = null;
       audio.dispose();
       liveInput().release();
       liveInput().dispose();
       inputRef.current = null;
+      setTouchControls(null);
       renderer.dispose();
     };
   }, [ctx, flashMessage, syncCloudSave]);
@@ -481,6 +511,25 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     // play never churns the snapshot with stat values the HUD doesn't show.
     advancementState: () => snapshot.api?.advancementState() ?? { stats: [], unlocked: [] },
     toggleAdvancements: () => engine?.dispatch({ type: "toggleAdvancements" }),
+    // Touch play: non-null exactly while the touch controller drives input.
+    touchControls,
+    engageControls,
+    isFlying: snapshot.isFlying,
+    pauseNow: () => {
+      // Order matters: release() alone must not auto-pause (that chain is
+      // desktop pointer-lock-loss behavior), so the explicit dispatch follows.
+      inputRef.current?.release();
+      engine?.dispatch({ type: "pause" });
+    },
+    toggleInventory: () => {
+      // Mirrors KeyI's DOM-side behavior: drop held intents and leave gameplay
+      // capture before the panel opens (both are idempotent no-ops on close).
+      inputRef.current?.clearKeys();
+      inputRef.current?.release();
+      engine?.dispatch({ type: "toggleInventory" });
+    },
+    toggleCameraView: () => engine?.dispatch({ type: "toggleCameraView" }),
+    clearControlKeys: () => inputRef.current?.clearKeys(),
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
     armorPoints: snapshot.armorPoints,
