@@ -106,6 +106,7 @@ import {
   LOCAL_PLAYER_ID,
   nextCameraMode,
   type FrameInput,
+  type AttributedGameEvent,
   type GameEvent,
   type GameSnapshot,
   type GameState,
@@ -216,7 +217,7 @@ export class GameEngine {
   private readonly worldType: WorldType;
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
-  private events: GameEvent[] = [];
+  private events: AttributedGameEvent[] = [];
   /**
    * The player whose per-player step or dispatch is currently running. It scopes
    * emitted events for progression attribution (`observeProgress`) without
@@ -1178,7 +1179,7 @@ export class GameEngine {
   getSnapshot = (): GameSnapshot => this.snapshot;
 
   /** Drains queued one-shot gameplay events for the shell (death screen, audio). */
-  consumeEvents(): GameEvent[] {
+  consumeEvents(): AttributedGameEvent[] {
     if (this.events.length === 0) return this.events;
     const drained = this.events;
     this.events = [];
@@ -1186,7 +1187,14 @@ export class GameEngine {
   }
 
   private emit = (event: GameEvent, actorId?: PlayerId): void => {
-    this.events.push(event);
+    // Server rooms stamp the acting player onto every event that has one
+    // (explicit ids — advancements, join/leave — win; shared-system events
+    // like mob AI or TNT stay unattributed). Wire-compatible: the tick's `ev`
+    // already carries an optional playerId. A predicting client relies on the
+    // stamp to tell its own echoes from other players' actions; a local
+    // engine leaves events untouched.
+    const actor = (event as AttributedGameEvent).playerId ?? actorId ?? this.actingPlayer;
+    this.events.push(this.authority === "server" && actor !== undefined ? { ...event, playerId: actor } : event);
     // Observe progress at the one chokepoint every system already emits through —
     // but guard against recursion (observing an unlock re-enters emit), and skip
     // it on a replica: the server owns progression and streams each player's

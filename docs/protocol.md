@@ -60,7 +60,9 @@ the join payload is KBs, not the 37 MB voxel field.
 **Server → client**
 
 - `tick { n, ev, pp, mp, vp?, prj?, day?, self? }` @20 Hz — world events since
-  last tick (block edits ride these), other players' poses, deadbanded mob
+  last tick (block edits ride these; each event is stamped with the acting
+  `playerId` where one exists — clients use the stamp to tell their own
+  echoes from other players' actions), other players' poses, deadbanded mob
   poses (~10 Hz), **vehicle poses** (`vp`, deadbanded — a parked boat costs
   nothing; vehicles never despawn so no absence-pruning), **arrow poses**
   (`prj`, the full live set every tick — arrows are few and fast, so they snap

@@ -393,3 +393,38 @@ describe("replica boot (bootPlayer: false, with a React shell)", () => {
     expect(self.position.distanceTo(mountedStart)).toBe(0);
   });
 });
+
+describe("event attribution", () => {
+  test("a server engine stamps the acting player on dispatch events", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    engine.addPlayer({ id: "acct-2" });
+    engine.consumeEvents();
+    engine.dispatch({ type: "attack" }, "acct-2");
+    const swung = engine.consumeEvents().find((e) => e.type === "attackSwung");
+    expect(swung).toBeDefined();
+    expect(swung?.playerId).toBe("acct-2");
+  });
+
+  test("explicit event playerIds win over the acting player", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    const second = engine.addPlayer({ id: "acct-2" });
+    engine.consumeEvents();
+    // A bow-kill advancement unlock is tagged with its earner even if another
+    // player's step happens to be running — the ?? chain keeps explicit ids.
+    second.stats.set("mobs_killed_bow", 0);
+    engine.dispatch({ type: "attack" }, "acct-2");
+    const events = engine.consumeEvents();
+    for (const e of events) if (e.type === "advancementUnlocked") expect(e.playerId).toBe("acct-2");
+  });
+
+  test("a local engine leaves events unstamped", () => {
+    const engine = makeEngine("local");
+    calm(engine);
+    engine.dispatch({ type: "attack" });
+    const swung = engine.consumeEvents().find((e) => e.type === "attackSwung");
+    expect(swung).toBeDefined();
+    expect(swung?.playerId).toBeUndefined();
+  });
+});

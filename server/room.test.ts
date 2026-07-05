@@ -109,6 +109,26 @@ describe("room lifecycle", () => {
     }
   });
 
+  test("tick events carry the acting player's id (echo dedup relies on it)", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const alice = room.engine.state.players.get("alice")!;
+
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    const swungAtB = b
+      .messagesOf("tick")
+      .at(-1)
+      ?.ev.find((e) => e.type === "attackSwung");
+    expect(swungAtB).toBeDefined();
+    expect(swungAtB?.playerId).toBe("alice");
+  });
+
   test("a speed-hacked pose is refused and answered with forcePose; an honest one sticks", async () => {
     const { room } = await makeRoom();
     const a = fakeSink();
