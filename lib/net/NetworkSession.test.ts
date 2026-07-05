@@ -289,6 +289,44 @@ describe("connectNetworkSession", () => {
     session.dispose();
   });
 
+  test("jittered simulated latency never reorders sends (FIFO cursor)", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    // Jitter larger than the base delay: naive per-message timers would swap
+    // neighbors constantly; the monotonic delivery cursor must not.
+    session.setSimulatedLatency(10, 30);
+    expect(session.simulatedJitter()).toBe(30);
+    const before = instances[0].sent.length;
+    for (let i = 0; i < 20; i += 1) session.sendChat(`m${i}`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const chats = instances[0].sent
+      .slice(before)
+      .map((s) => JSON.parse(s) as { t: string; text?: string })
+      .filter((m) => m.t === "chat")
+      .map((m) => m.text);
+    expect(chats).toEqual(Array.from({ length: 20 }, (_, i) => `m${i}`));
+    session.dispose();
+  });
+
+  test("netStats reports traffic over the rolling window", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.sendChat("count me");
+    instances[0].emit(tick());
+    // Two afterFrames: one opens the window, the second (past 2 s) rolls it.
+    session.afterFrame(1000);
+    session.afterFrame(4000);
+    const stats = session.netStats();
+    expect(stats.outKBps).toBeGreaterThan(0);
+    expect(stats.inKBps).toBeGreaterThan(0);
+    session.dispose();
+  });
+
   test("a non-fatal drop runs the reconnect ladder and resumes the same replica", async () => {
     const { make, instances } = socketFactory();
     let ticketsMinted = 0;

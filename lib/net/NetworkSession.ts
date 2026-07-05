@@ -77,6 +77,19 @@ const HANDSHAKE_TIMEOUT_MS = 15000;
 /** One player as the roster panel shows them. */
 export type RosterMember = { id: PlayerId; name: string };
 
+/** Live connection stats for the F3 overlay (poll, don't subscribe). */
+export type NetStats = {
+  rttMs: number;
+  /** Tick inter-arrival jitter (p90 deviation from the 50 ms nominal). */
+  jitterMs: number;
+  /** How far in the past remote entities currently render. */
+  interpDelayMs: number;
+  inKBps: number;
+  outKBps: number;
+  /** Optimistic block edits awaiting server confirmation. */
+  pendingPredictions: number;
+};
+
 export type NetworkSession = {
   readonly engine: GameEngine;
   readonly playerId: PlayerId;
@@ -98,9 +111,16 @@ export type NetworkSession = {
   sendChat(text: string): void;
   /** Owner-only: eject a player (no-op server-side for a non-owner). */
   kick(targetId: PlayerId): void;
-  /** Debug knob: inject symmetric latency on every send/receive (0 disables). */
-  setSimulatedLatency(ms: number): void;
+  /**
+   * Debug knob: inject symmetric latency on every send/receive (0 disables).
+   * `jitterMs` randomizes each message's delay by ±jitter (FIFO preserved —
+   * TCP never reorders); omitting it resets jitter to 0.
+   */
+  setSimulatedLatency(ms: number, jitterMs?: number): void;
   simulatedLatency(): number;
+  simulatedJitter(): number;
+  /** Connection stats snapshot for the debug overlay. */
+  netStats(): NetStats;
   /** Server events since the last drain — feed the shell's existing event handler. */
   drainEvents(): GameEvent[];
   /** Call once per rAF after engine.step: flushes the pose stream and samples interpolation. */
@@ -116,7 +136,9 @@ export async function connectNetworkSession(
 ): Promise<NetworkSession> {
   const makeSocket = options.makeSocket ?? ((u: string) => new WebSocket(u));
   const envLatency = Number.parseInt(process.env.NEXT_PUBLIC_NET_SIM_LATENCY_MS ?? "", 10);
+  const envJitter = Number.parseInt(process.env.NEXT_PUBLIC_NET_SIM_JITTER_MS ?? "", 10);
   let simulatedLatencyMs = options.simulatedLatencyMs ?? (Number.isFinite(envLatency) ? envLatency : 0);
+  let simulatedJitterMs = Number.isFinite(envJitter) ? Math.max(0, envJitter) : 0;
 
   let status: NetStatus = "connecting";
   let disposed = false;
@@ -140,19 +162,47 @@ export async function connectNetworkSession(
   const names = new Map<string, string>();
   let serverTickTimeMs = 0;
 
+  // Client-side traffic counters for the F3 overlay (2 s rolling window).
+  // Inbound counts post-decompression frame sizes — an approximation when
+  // permessage-deflate is negotiated, but the right number for "what does the
+  // client have to process".
+  const traffic = { inBytes: 0, outBytes: 0, windowStartMs: 0, inKBps: 0, outKBps: 0 };
+  const rollTrafficWindow = (nowMs: number) => {
+    if (traffic.windowStartMs === 0) traffic.windowStartMs = nowMs;
+    const elapsed = nowMs - traffic.windowStartMs;
+    if (elapsed < 2000) return;
+    traffic.inKBps = traffic.inBytes / 1024 / (elapsed / 1000);
+    traffic.outKBps = traffic.outBytes / 1024 / (elapsed / 1000);
+    traffic.inBytes = 0;
+    traffic.outBytes = 0;
+    traffic.windowStartMs = nowMs;
+  };
+
   // Latency simulation wraps both directions symmetrically so `ms` reads as a
   // one-way delay (round-trip ≈ 2×ms), matching how a player would set it.
+  // Jitter randomizes each message's delay (Math.random is fine here: net
+  // tooling, never seed-determined bytes) but delivery stays FIFO — TCP never
+  // reorders, and the seq/journal handling downstream assumes order — so each
+  // direction keeps a monotonic delivery cursor.
+  let lastSendDeliveryMs = 0;
+  let lastRecvDeliveryMs = 0;
+  const simDelayMs = () => Math.max(0, simulatedLatencyMs + (simulatedJitterMs > 0 ? (Math.random() * 2 - 1) * simulatedJitterMs : 0));
+
   const delayedSend = (data: string) => {
     const socket = ws;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    if (simulatedLatencyMs > 0) {
+    traffic.outBytes += data.length;
+    if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
+      const now = performance.now();
+      const deliverAt = Math.max(now + simDelayMs(), lastSendDeliveryMs);
+      lastSendDeliveryMs = deliverAt;
       setTimeout(() => {
         try {
           if (socket.readyState === WebSocket.OPEN) socket.send(data);
         } catch {
           /* socket closed under us */
         }
-      }, simulatedLatencyMs);
+      }, deliverAt - now);
       return;
     }
     socket.send(data);
@@ -400,8 +450,12 @@ export async function connectNetworkSession(
 
   // ── inbound frame processing (latency-shifted) ──────────────────────────────
   const onServerFrame = (data: unknown) => {
-    if (simulatedLatencyMs > 0) {
-      setTimeout(() => void processServerFrame(data), simulatedLatencyMs);
+    traffic.inBytes += typeof data === "string" ? data.length : ((data as ArrayBuffer).byteLength ?? 0);
+    if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
+      const now = performance.now();
+      const deliverAt = Math.max(now + simDelayMs(), lastRecvDeliveryMs);
+      lastRecvDeliveryMs = deliverAt;
+      setTimeout(() => void processServerFrame(data), deliverAt - now);
       return;
     }
     void processServerFrame(data);
@@ -594,12 +648,24 @@ export async function connectNetworkSession(
       if (text.trim()) delayedSend(encodeClientMessage({ t: "chat", text: text.slice(0, 256) }));
     },
 
-    setSimulatedLatency(ms) {
+    setSimulatedLatency(ms, jitterMs) {
       simulatedLatencyMs = Math.max(0, Math.floor(ms));
+      simulatedJitterMs = Math.max(0, Math.floor(jitterMs ?? 0));
     },
     simulatedLatency: () => simulatedLatencyMs,
+    simulatedJitter: () => simulatedJitterMs,
+
+    netStats: () => ({
+      rttMs: clock.rttMs(),
+      jitterMs: 0, // adaptive-interpolation work fills this in
+      interpDelayMs: INTERPOLATION_DELAY_MS,
+      inKBps: traffic.inKBps,
+      outKBps: traffic.outKBps,
+      pendingPredictions: 0 // prediction-ledger work fills this in
+    }),
 
     afterFrame(nowMs) {
+      rollTrafficWindow(nowMs);
       const open = ws?.readyState === WebSocket.OPEN;
       // Pose stream at tick rate.
       if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {

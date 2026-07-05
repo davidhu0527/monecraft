@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - **Zero-config local dev**: `bun run dev` with no `DATABASE_URL` now falls back to an ephemeral in-memory PGlite database (with a one-time console notice) instead of 500-ing on the first online request — the full accounts/cloud-saves stack works out of the box in dev, resetting on restart. Production still requires a real `DATABASE_URL`.
+- **Net debug tooling — jittered latency simulation + F3 connection stats**: `window.__monecraft.net.setSimulatedLatency(ms, jitterMs)` now takes an optional per-message jitter (delivery stays FIFO, like real TCP), seedable via `NEXT_PUBLIC_NET_SIM_JITTER_MS`, and the F3 overlay gains two lines while online — RTT/jitter/interpolation delay and in/out KB/s — so high-latency play can be reproduced and observed locally instead of across an ocean.
 
 ### Changed
 

@@ -491,9 +491,11 @@ None affect single-player, and none are save-sensitive.
   `tickets.ts`).
 - **Replay log** — `COMMAND_LOG_SIZE` (env, default `4096`) bounds each room's
   in-memory command ring dumped by `/rooms/:id/log`.
-- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` (env, default `0`) seeds
-  the client's artificial one-way delay; `window.__monecraft.net.setSimulatedLatency(ms)`
-  overrides it live.
+- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` / `NEXT_PUBLIC_NET_SIM_JITTER_MS`
+  (env, default `0`) seed the client's artificial one-way delay and per-message
+  jitter; `window.__monecraft.net.setSimulatedLatency(ms, jitterMs?)` overrides
+  both live (delivery stays FIFO, like TCP). The F3 overlay shows the live
+  RTT/jitter/interp-delay and in/out KB/s while online.
 
 ## Online accounts
 
