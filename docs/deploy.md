@@ -81,10 +81,21 @@ fly secrets set \
   ADMIN_TOKEN='…admin token…' \
   --config server/fly.toml
 fly deploy --config server/fly.toml --dockerfile server/Dockerfile
+fly scale count 1 --config server/fly.toml
 ```
 
-`server/fly.toml` already pins the important bits: a single region (set
-`primary_region` to one near your players), **always
+The `fly scale count 1` is **not optional**: `fly launch` provisions a
+two-machine HA pair by default, but rooms live in one process's memory
+(`server/roomRegistry.ts` — no cross-instance coordination), so the app must run
+**exactly one machine**. With two, Fly's edge load-balances each WebSocket
+independently and players in the same world get split across two independent
+copies of the room — everyone connects "successfully" and everyone is alone
+(see [Troubleshooting](#troubleshooting)). Confirm with
+`fly machine list --config server/fly.toml` → exactly one machine.
+
+`server/fly.toml` already pins the rest of the important bits: a single region
+(set `primary_region` to one near your players — it can't pin the machine
+_count_, which is runtime state, hence the explicit scale step), **always
 on** (`min_machines_running = 1`, `auto_stop_machines = "off"` — a room must keep
 ticking while players are in it), a `/health` check, `PERSISTENCE = "postgres"`,
 `MAX_ROOMS = 6`, and a 2 GB VM (rooms are ~74 MB each). SIGTERM on a redeploy
@@ -169,14 +180,15 @@ game-server URL — see below.
 
 ## Troubleshooting
 
-| Symptom                         | Cause                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------------- |
-| Join fails, close code **4000** | `GAME_TICKET_SECRET` differs between Vercel and Fly — the #1 issue.                |
-| "could not get a join ticket"   | `NEXT_PUBLIC_GAME_SERVER_URL` unset, or the world isn't a `mp` world.              |
-| Connects then instantly drops   | Wrong scheme — must be **`wss://`** (not `ws://`) against an https Fly app.        |
-| 500s on any `/api/worlds*`      | `DATABASE_URL` wrong, or the migration wasn't applied (Step 1).                    |
-| Sign-in hangs                   | `BETTER_AUTH_URL` doesn't match the actual origin, or `BETTER_AUTH_SECRET` unset.  |
-| Game server won't boot          | Missing `GAME_TICKET_SECRET` (it exits on start) or an unreachable `DATABASE_URL`. |
+| Symptom                                                                   | Cause                                                                                                                                                                                         |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Join fails, close code **4000**                                           | `GAME_TICKET_SECRET` differs between Vercel and Fly — the #1 issue.                                                                                                                           |
+| "could not get a join ticket"                                             | `NEXT_PUBLIC_GAME_SERVER_URL` unset, or the world isn't a `mp` world.                                                                                                                         |
+| Connects then instantly drops                                             | Wrong scheme — must be **`wss://`** (not `ws://`) against an https Fly app.                                                                                                                   |
+| 500s on any `/api/worlds*`                                                | `DATABASE_URL` wrong, or the migration wasn't applied (Step 1).                                                                                                                               |
+| Sign-in hangs                                                             | `BETTER_AUTH_URL` doesn't match the actual origin, or `BETTER_AUTH_SECRET` unset.                                                                                                             |
+| Game server won't boot                                                    | Missing `GAME_TICKET_SECRET` (it exits on start) or an unreachable `DATABASE_URL`.                                                                                                            |
+| Players in the same world can't see each other — each shows "Players (1)" | More than one Fly machine (rooms are per-process; each machine hosts its own copy). Check `fly machine list --config server/fly.toml`; fix with `fly scale count 1 --config server/fly.toml`. |
 
 Admin diagnostics on the game server (all behind `Authorization: Bearer $ADMIN_TOKEN`):
 `GET /rooms` (players, tick p95, bandwidth), `GET /rooms/:id/log` (replay dump).
@@ -187,8 +199,10 @@ See the [ops runbook](online.md#runbook) for using them.
 The game server is a plain Docker container that speaks HTTP `/health` and reads
 env vars, so it's portable — **Railway**, **Render**, **Fly**, or any VPS that
 runs a long-lived container with WebSocket ingress works. Swap `server/fly.toml`
-for that platform's config; keep the container always-on (a room must keep ticking)
-and give it the same `DATABASE_URL` + `GAME_TICKET_SECRET`. Cloudflare Durable
+for that platform's config; keep the container always-on (a room must keep ticking),
+run **exactly one instance** (rooms are in-process — replicas or autoscaling split
+players in the same world into separate room copies), and give it the same
+`DATABASE_URL` + `GAME_TICKET_SECRET`. Cloudflare Durable
 Objects were ruled out (128 MB memory cap vs ~74 MB rooms, workerd runtime).
 
 For local development of the full stack (no cloud, no Docker), see
