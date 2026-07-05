@@ -29,6 +29,7 @@
   /* The menu can grow taller than the viewport (mode + skin + controls
      sections); scroll inside it so the top buttons never clip off-screen. */
   max-height: 100vh;
+  max-height: 100dvh;
   overflow-y: auto;
   padding: 6px 0;
 }

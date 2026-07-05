@@ -42,7 +42,8 @@ The day-night cycle is short — **four minutes per full day** — so the first 
 comes fast. A good opening:
 
 1. **Look around.** Double-click the game to lock the mouse (the starting gesture
-   doesn't mine). Move with `W A S D`, look with the mouse.
+   doesn't mine). Move with `W A S D`, look with the mouse. On a touch device,
+   tap to play instead — move with the left joystick and drag the world to look.
 2. **Gear up from your kit.** Open the inventory with **`I`**. You already have
    cobble and wood, so craft a **stone pickaxe** (2 cobble + 1 wood) and a **stone
    sword** (2 cobble + 1 wood) — both upgrades over your starting wood pickaxe and
@@ -57,25 +58,37 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                                                          |
-| `Space`            | Jump                                                                                                          |
-| `C`                | Crouch (slower, careful movement)                                                                             |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                            |
-| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying                   |
-| Mouse              | Look around (double-click the game first to lock the pointer)                                                 |
-| Left-click (hold)  | Break the targeted block / attack a mob                                                                       |
-| Right-click or `E` | Place/interact, or throw a selected spear                                                                     |
-| `1`–`9`            | Select a hotbar slot                                                                                          |
-| `I`                | Open / close inventory & crafting                                                                             |
-| `L`                | Open / close advancements & statistics                                                                        |
-| `F`                | Eat the selected food, or drink a selected potion                                                             |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
-| `T` or `Enter`     | Chat (online worlds only) — `Esc` closes without sending                                                      |
-| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
-| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins), Controls tabs |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                           |
+| Key / input        | Action                                                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                                                                 |
+| `Space`            | Jump                                                                                                                 |
+| `C`                | Crouch (slower, careful movement)                                                                                    |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                                   |
+| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying                          |
+| Mouse              | Look around (double-click the game first to lock the pointer)                                                        |
+| Left-click (hold)  | Break the targeted block / attack a mob                                                                              |
+| Right-click or `E` | Place/interact, or throw a selected spear                                                                            |
+| `1`–`9`            | Select a hotbar slot                                                                                                 |
+| `I`                | Open / close inventory & crafting                                                                                    |
+| `L`                | Open / close advancements & statistics                                                                               |
+| `F`                | Eat the selected food, or drink a selected potion                                                                    |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front                                                  |
+| `T` or `Enter`     | Chat (online worlds only) — `Esc` closes without sending                                                             |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                                |
+| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins, touch), Controls tabs |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                                  |
+
+**Touch** (tablets & landscape phones; auto-detected, with an Auto/On/Off
+override in Pause → Options): tap to play, move on the left joystick
+(re-engage it quickly and push forward to sprint), drag the world to look,
+**tap** to attack, **press and hold** to mine. Buttons cover Jump (double-tap
+toggles flight in Creative; they read Rise/Descend while flying), Sneak (a
+toggle), Place/interact/throw, and Eat (appears while holding food). Tap
+hotbar slots to select; **long-press** any slot or recipe entry for the
+details desktop shows on hover (durability, missing ingredients). The top bar
+has pause, inventory, and camera buttons, and the pause menu's Game tab gains
+an Emergency Unstuck button. Chat and the debug overlay are desktop-only for
+now.
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.

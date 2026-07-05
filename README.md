@@ -16,7 +16,7 @@ bun run dev
 
 Then open `http://localhost:3000`.
 
-Monecraft is also an installable **PWA**: in a Chromium browser, the address-bar install button turns it into a desktop app, and after the first visit **single-player works fully offline** (online features — accounts, cloud saves, co-op — still need a connection). Not a mobile game: it needs a mouse and pointer lock.
+Monecraft is also an installable **PWA**: in a Chromium browser, the address-bar install button turns it into a desktop app, and after the first visit **single-player works fully offline** (online features — accounts, cloud saves, co-op — still need a connection). It plays with **mouse + keyboard or touch**: tablets and landscape phones get on-screen controls automatically (a virtual joystick, drag-to-look, and action buttons — see Touch controls below). Chat and the debug overlay remain desktop-only for now.
 
 The game opens with a choice: **Sign in** for online play (co-op worlds, cloud saves — a free account), or **Play locally** with browser profiles and no account. Locally, pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — a **game mode**, a **difficulty** (Peaceful · Easy · Normal · Hard), an optional **Hardcore** toggle (permadeath, locked to Survival + Hard), and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
 
@@ -33,6 +33,14 @@ The game opens with a choice: **Sign in** for online play (co-op worlds, cloud s
 - `V`: Camera view (first-person → third-person rear → third-person front)
 - `T` or `Enter`: Chat (online worlds)
 - `Esc`: Pause menu — three tabs: **Game** (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** and **Difficulty** switchers), **Options** (sound/music volume, Appearance skins), and **Controls** · `F3`: Debug overlay
+
+**Touch controls** (tablets & landscape phones — enabled automatically, or force via Pause → Options → Touch Controls):
+
+- Left joystick: move (re-engage it quickly and push forward to sprint)
+- Drag anywhere on the world: look · Tap: attack · Press and hold: mine
+- Buttons: Jump (double-tap toggles flight in Creative), Sneak (toggle), Place/interact, Eat (appears when holding food)
+- Tap a hotbar slot to select it; long-press any slot or recipe for its details
+- Top bar: pause, inventory, camera view
 
 New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more.
 

@@ -49,6 +49,8 @@ type InventoryPanelProps = {
   onGrindstoneStrip: () => void;
   /** Pulls a full stack of an item from the Creative palette into the inventory. */
   onGiveItem: (itemId: string) => void;
+  /** Renders an X close button when given (touch has no KeyI/Escape; helps desktop too). */
+  onClose?: () => void;
 };
 
 const STATION_LABELS: Record<NonNullable<Recipe["station"]>, string> = {
@@ -111,7 +113,8 @@ export default function InventoryPanel({
   onAnvilRepair,
   onAnvilRename,
   onGrindstoneStrip,
-  onGiveItem
+  onGiveItem,
+  onClose
 }: InventoryPanelProps) {
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const { tooltip, bind } = useItemTooltip();
@@ -204,6 +207,11 @@ export default function InventoryPanel({
 
   return (
     <div className="inventory-panel">
+      {onClose ? (
+        <button type="button" className="inventory-close" aria-label="Close inventory" onClick={onClose}>
+          ✕
+        </button>
+      ) : null}
       <div className="inventory-columns">
         <div className="inventory-main">
           {container ? (
