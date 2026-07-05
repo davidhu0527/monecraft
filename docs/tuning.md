@@ -24,6 +24,23 @@ above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what bu
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
 changing them affects which gaps the player fits through.
 
+## Touch feel
+
+`TOUCH_LOOK_SENSITIVITY`, `TOUCH_TAP_MAX_MS`, `TOUCH_TAP_SLOP_PX`,
+`TOUCH_HOLD_MINE_MS`, `TOUCH_JOYSTICK_RADIUS_PX`, `TOUCH_JOYSTICK_DEADZONE`,
+`TOUCH_SPRINT_DOUBLE_TAP_MS`, `TOUCH_LONGPRESS_TOOLTIP_MS`.
+
+Read by `lib/game/input/touchInputController.ts` (and the tooltip constant by
+`components/game/ItemTooltip.tsx`). These are deliberately config-side so
+on-device tuning is a one-line change with no system edits — they shipped as
+educated guesses pending the real-device pass. `TOUCH_LOOK_SENSITIVITY` (0.0042,
+~2× the mouse) trades thumb travel against precision. `TOUCH_TAP_SLOP_PX` (12)
+is the tap/drag boundary: raise it and camera nudges start counting as attacks;
+lower it and honest taps on a bumpy bus become drags. `TOUCH_HOLD_MINE_MS`
+deliberately equals `TOUCH_TAP_MAX_MS` (220) so there is no ambiguous gap where
+a lift is neither tap nor mine. `TOUCH_JOYSTICK_DEADZONE` (0.18) absorbs resting
+thumb tremor; too high and small corrections stop registering.
+
 ## Water vehicles
 
 `VEHICLE_BOARD_REACH`, `VEHICLE_TURN_RATE`, `VEHICLE_DISMOUNT_RADIUS`,

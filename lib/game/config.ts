@@ -35,6 +35,18 @@ export const MAX_WORLDS_PER_PROFILE = 10; // online worlds one profile may own
 export const FLY_SPEED = 11; // blocks/sec vertical while flying
 export const FLY_DOUBLE_TAP_WINDOW_SECONDS = 0.3; // max gap between Space taps to toggle flight
 
+// Touch controls (read by lib/game/input/touchInputController.ts). The feel
+// constants are deliberately config-side so on-device tuning is a one-line
+// change with no system edits — see docs/tuning.md "Touch feel".
+export const TOUCH_LOOK_SENSITIVITY = 0.0042; // radians per CSS px of look-drag (~2x mouse: thumb travel is short)
+export const TOUCH_TAP_MAX_MS = 220; // lift before this (within slop) = tap -> single attack
+export const TOUCH_TAP_SLOP_PX = 12; // drift beyond this = look drag, never a tap or a mine
+export const TOUCH_HOLD_MINE_MS = 220; // press held this long within slop -> mineHeld (equals TAP_MAX: no ambiguity gap)
+export const TOUCH_JOYSTICK_RADIUS_PX = 64; // knob travel radius (CSS px)
+export const TOUCH_JOYSTICK_DEADZONE = 0.18; // fraction of the radius before movement registers
+export const TOUCH_SPRINT_DOUBLE_TAP_MS = 300; // joystick re-engage gap that latches sprint (mirrors the fly double-tap)
+export const TOUCH_LONGPRESS_TOOLTIP_MS = 450; // long-press duration that shows item tooltips on touch
+
 // Player stats — Minecraft ranges: 20 HP shown as 10 hearts, 20 hunger as 10 drumsticks.
 export const MAX_HEARTS = 20;
 export const MAX_HUNGER = 20;
