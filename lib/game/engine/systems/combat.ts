@@ -15,7 +15,7 @@ import {
 import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
 import { powerBonus, punchKnockback } from "@/lib/game/enchantments";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
-import type { EmitGameEvent, GameState } from "../state";
+import type { EmitGameEvent, GameState, PlayerState } from "../state";
 import { spawnArrow } from "../projectiles";
 import { lookDirection } from "./playerMotion";
 
@@ -24,14 +24,14 @@ const scratchOrigin = new THREE.Vector3();
 const scratchToMob = new THREE.Vector3();
 const scratchKnock = new THREE.Vector3();
 
-export function weaponDamage(state: GameState): number {
-  const slot = state.inventory[state.selectedSlot];
+export function weaponDamage(player: PlayerState): number {
+  const slot = player.inventory[player.selectedSlot];
   if (slot?.kind === "weapon" && slot.count > 0) return slot.attack ?? 8;
   return FIST_DAMAGE;
 }
 
-export function weaponReach(state: GameState): number {
-  const slot = state.inventory[state.selectedSlot];
+export function weaponReach(player: PlayerState): number {
+  const slot = player.inventory[player.selectedSlot];
   if (slot?.kind === "weapon" && slot.count > 0) return slot.meleeReach ?? ATTACK_REACH;
   return ATTACK_REACH;
 }
@@ -41,10 +41,10 @@ export function weaponReach(state: GameState): number {
  * -1. Shared by attacking and by feeding animals (Phase 5) so both use the same
  * "what am I pointing at" rule.
  */
-export function findAimedMobIndex(state: GameState, reach = ATTACK_REACH): number {
-  const { position } = state.player;
+export function findAimedMobIndex(state: GameState, player: PlayerState, reach = ATTACK_REACH): number {
+  const { position } = player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
-  lookDirection(state.player.yaw, state.player.pitch, scratchForward);
+  lookDirection(player.yaw, player.pitch, scratchForward);
 
   let bestIndex = -1;
   let bestDist = Number.POSITIVE_INFINITY;
@@ -74,17 +74,19 @@ export function findAimedMobIndex(state: GameState, reach = ATTACK_REACH): numbe
  */
 export function tryAttackMob(
   state: GameState,
+  player: PlayerState,
   damage: number,
   onMobKilled: (index: number, lootingLevel?: number) => void,
   reach = ATTACK_REACH,
   knockback = 0,
   lootingLevel = 0
 ): MobKind | null {
-  const { position } = state.player;
-  const bestIndex = findAimedMobIndex(state, reach);
+  const { position } = player;
+  const bestIndex = findAimedMobIndex(state, player, reach);
   if (bestIndex < 0) return null;
   const mob = state.mobs[bestIndex];
   mob.hp -= damage;
+  mob.lastHitByPlayer = player.id; // kill credit (incl. a later burn/sweep death)
 
   scratchKnock.copy(mob.position).sub(position).setY(0);
   if (scratchKnock.lengthSq() > 0.0001) {
@@ -109,13 +111,13 @@ export function isBow(slot: InventorySlot | undefined): boolean {
  * false (no shot) when the bow is on cooldown or the player has no arrows — the
  * caller has already confirmed a bow is held via isBow, so a bow never melees.
  */
-export function tryFireBow(state: GameState, emit: EmitGameEvent, rng?: () => number): boolean {
-  const slot = state.inventory[state.selectedSlot];
+export function tryFireBow(state: GameState, player: PlayerState, emit: EmitGameEvent, rng?: () => number): boolean {
+  const slot = player.inventory[player.selectedSlot];
   if (!isBow(slot)) return false;
-  if (state.timers.bowCooldownTimer > 0) return false;
-  if ((countsById(state.inventory).get("arrow") ?? 0) < 1) return false;
+  if (player.timers.bowCooldownTimer > 0) return false;
+  if ((countsById(player.inventory).get("arrow") ?? 0) < 1) return false;
 
-  const { position, yaw, pitch } = state.player;
+  const { position, yaw, pitch } = player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
   lookDirection(yaw, pitch, scratchForward);
   // Power and Punch are bow-only enchants, read off the held bow at the one fire seam.
@@ -124,12 +126,13 @@ export function tryFireBow(state: GameState, emit: EmitGameEvent, rng?: () => nu
     damage: BOW_ARROW_DAMAGE + powerBonus(slot),
     knockback: BOW_KNOCKBACK + punchKnockback(slot),
     fromPlayer: true,
+    owner: player.id, // kill credit follows the shooter
     ttl: ARROW_TTL
   });
 
-  state.inventory = adjustSlotCount(state.inventory, "arrow", -1) ?? state.inventory;
-  state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, BOW_DURABILITY_PER_SHOT, rng) ?? state.inventory;
-  state.timers.bowCooldownTimer = BOW_COOLDOWN_SECONDS;
+  player.inventory = adjustSlotCount(player.inventory, "arrow", -1) ?? player.inventory;
+  player.inventory = consumeToolDurability(player.inventory, player.selectedSlot, BOW_DURABILITY_PER_SHOT, rng) ?? player.inventory;
+  player.timers.bowCooldownTimer = BOW_COOLDOWN_SECONDS;
   emit({ type: "bowFired" });
   return true;
 }

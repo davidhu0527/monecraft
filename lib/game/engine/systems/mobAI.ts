@@ -1,7 +1,9 @@
 import * as THREE from "three";
-import { collidesAt, voxelRaycast } from "@/lib/world";
+import { BlockId, collidesAt, voxelRaycast } from "@/lib/world";
 import {
   ARROW_TTL,
+  FISH_FLEE_RANGE,
+  FISH_SUFFOCATION_HP_PER_SECOND,
   BOSS_ARROW_DAMAGE,
   BOSS_ARROW_SPEED,
   BOSS_MELEE_DAMAGE,
@@ -32,9 +34,9 @@ import {
 } from "@/lib/game/config";
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { MobFaction } from "@/lib/game/types";
-import { mobsThreaten } from "@/lib/game/gameModes";
 import { mobDamageMultiplier } from "@/lib/game/difficulties";
-import type { EmitGameEvent, GameState, MobState } from "../state";
+import type { EmitGameEvent, GameState, MobState, PlayerState } from "../state";
+import { getPlayer, nearestPlayerTo, nearestTargetablePlayer } from "../players";
 import { spawnArrow } from "../projectiles";
 import { explode } from "./explosion";
 import { pushMob } from "./spawnDirector";
@@ -44,6 +46,9 @@ import type { SurfaceYAtFn } from "@/lib/game/spawn";
 const UP = new THREE.Vector3(0, 1, 0);
 const scratchToPlayer = new THREE.Vector3();
 const scratchToPlayer3D = new THREE.Vector3();
+const scratchToOwner = new THREE.Vector3();
+const scratchToHunted = new THREE.Vector3();
+const scratchToHunted3D = new THREE.Vector3();
 const scratchMobEye = new THREE.Vector3();
 const scratchPlayerAim = new THREE.Vector3();
 const scratchRay = new THREE.Vector3();
@@ -147,8 +152,7 @@ function mobVsMobLineOfSight(world: GameState["world"], mob: MobState, dx: numbe
  * moving target by a fraction of the arrow's travel time. The arrow is not
  * player-owned, so it only ever hits the player (never the firer or other mobs).
  */
-function fireMobArrow(state: GameState, mob: MobState, damage: number, speed: number, emit: EmitGameEvent): void {
-  const { player } = state;
+function fireMobArrow(state: GameState, player: PlayerState, mob: MobState, damage: number, speed: number, emit: EmitGameEvent): void {
   const eyeY = mob.position.y + mob.halfHeight * 0.7;
   const dist = Math.hypot(player.position.x - mob.position.x, player.position.z - mob.position.z);
   const lead = (dist / speed) * SKELETON_LEAD_FACTOR;
@@ -168,8 +172,7 @@ function fireMobArrow(state: GameState, mob: MobState, damage: number, speed: nu
 }
 
 /** The boss looses a 3-arrow horizontal spread aimed at the player's chest. */
-function fireBossSpread(state: GameState, mob: MobState, dmgScale: number, emit: EmitGameEvent): void {
-  const { player } = state;
+function fireBossSpread(state: GameState, player: PlayerState, mob: MobState, dmgScale: number, emit: EmitGameEvent): void {
   const eyeY = mob.position.y + mob.halfHeight * 0.7;
   const baseX = player.position.x - mob.position.x;
   const baseY = player.position.y + 0.9 - eyeY;
@@ -218,20 +221,64 @@ function tickBossSummon(state: GameState, mob: MobState, dt: number, deps: MobTi
 
 export type MobTickDeps = {
   surfaceYAt: SurfaceYAtFn;
-  applyDamage: (amount: number) => void;
+  /** Armor-mitigated combat damage to a specific player (mobs hit whoever they hunt). */
+  damagePlayer: (player: PlayerState, amount: number) => void;
   /** Removes the mob (post-loop sweep). `credit` (default true) gates loot + XP to the player. */
   removeMobAt: (index: number, lootingLevel?: number, credit?: boolean) => void;
   rng: () => number;
   emit: EmitGameEvent;
 };
 
+/**
+ * An aquatic mob's whole tick — it swims in 3D and bypasses every land
+ * assumption in the main loop (the surfaceYAt ground clamp, border bounce, and
+ * the collidesAt foot test): each move is instead gated on the destination cell
+ * being water, so a fish can never swim into land, air, or out of bounds. It
+ * flees the player in 3D within FISH_FLEE_RANGE, wanders with a gentle pitch
+ * otherwise, and out of water it lies beached, suffocating until it dies (or a
+ * knockback returns it to water).
+ */
+function tickAquaticMob(state: GameState, mob: MobState, dt: number, deps: MobTickDeps): void {
+  const { world } = state;
+
+  const inWater = world.get(Math.floor(mob.position.x), Math.floor(mob.position.y), Math.floor(mob.position.z)) === BlockId.Water;
+  if (!inWater) {
+    mob.moveSpeed = 0;
+    mob.position.y = deps.surfaceYAt(mob.position.x, mob.position.z) + mob.halfHeight * 0.5;
+    mob.hp -= FISH_SUFFOCATION_HP_PER_SECOND * dt;
+    return;
+  }
+
+  const anchor = nearestPlayerTo(state, mob.position.x, mob.position.z);
+  if (anchor) scratchToPlayer3D.copy(anchor.position).sub(mob.position);
+  const distanceToPlayer = anchor ? scratchToPlayer3D.length() : Infinity;
+  let moveSpeed = mob.speed;
+  if (distanceToPlayer < FISH_FLEE_RANGE) {
+    if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer3D.normalize().multiplyScalar(-1), 0.25).normalize();
+    moveSpeed *= 1.6;
+  } else if (mob.turnTimer <= 0) {
+    const angle = deps.rng() * Math.PI * 2;
+    const pitch = (deps.rng() - 0.5) * 0.7;
+    mob.direction.set(Math.cos(angle) * Math.cos(pitch), Math.sin(pitch), Math.sin(angle) * Math.cos(pitch)).normalize();
+    mob.turnTimer = 1.5 + deps.rng() * 3;
+  }
+  mob.moveSpeed = moveSpeed;
+
+  const nx = mob.position.x + mob.direction.x * moveSpeed * dt;
+  const ny = mob.position.y + mob.direction.y * moveSpeed * dt;
+  const nz = mob.position.z + mob.direction.z * moveSpeed * dt;
+  const inBounds = nx >= 2 && nz >= 2 && nx <= world.sizeX - 2 && nz <= world.sizeZ - 2 && ny >= 1 && ny <= world.sizeY - 2;
+  if (inBounds && world.get(Math.floor(nx), Math.floor(ny), Math.floor(nz)) === BlockId.Water) {
+    mob.position.set(nx, ny, nz);
+  } else {
+    mob.direction.multiplyScalar(-1);
+    mob.turnTimer = 1;
+  }
+  mob.yaw = Math.atan2(mob.direction.x, mob.direction.z);
+}
+
 export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void {
-  const { world, daylight, mobs, isDead } = state;
-  const playerPosition = state.player.position;
-  const playerVelocity = state.player.velocity;
-  // Creative/Spectator players aren't a threat target — hostiles ignore them
-  // entirely (no aggro, attacks, fuses, or summons), so they just wander.
-  const threatened = mobsThreaten(state.gameMode);
+  const { world, daylight, mobs } = state;
   // Difficulty scales every hit a mob lands (melee + arrows): Easy 0.5×, Hard 1.5×.
   // Applied here at the strike, never by mutating the per-mob templates.
   const dmgScale = mobDamageMultiplier(state.difficulty);
@@ -244,13 +291,32 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     mob.attackTimer -= dt;
     mob.turnTimer -= dt;
     mob.retargetTimer -= dt;
-    const activeHostile = threatened && mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
 
-    scratchToPlayer.copy(playerPosition).sub(mob.position).setY(0);
-    const distanceToPlayer = scratchToPlayer.length();
-    scratchToPlayer3D.copy(playerPosition).sub(mob.position);
-    const attackDistance = scratchToPlayer3D.length();
-    const verticalGap = Math.abs(scratchToPlayer3D.y);
+    // Aquatic mobs swim on their own dedicated tick — before any land logic
+    // (ground clamp, wander, flee) can leak in.
+    if (MOB_TEMPLATES[mob.kind].aquatic === true) {
+      tickAquaticMob(state, mob, dt, deps);
+      continue;
+    }
+
+    // The nearest player (any mode) anchors proximity behavior — flee, pet
+    // follow/recall. The nearest TARGETABLE player is who hostiles hunt:
+    // Creative/Spectator players aren't a threat target (mobsThreaten), so
+    // hostiles ignore them entirely (no aggro, attacks, fuses, or summons).
+    // Single-player: both are the one player — exactly the old reads.
+    const anchor = nearestPlayerTo(state, mob.position.x, mob.position.z);
+    const hunted = nearestTargetablePlayer(state, mob.position.x, mob.position.z);
+    const activeHostile = hunted !== null && mob.hostile && (mob.kind !== "spider" || daylight < SPIDER_AGGRO_BELOW_DAYLIGHT);
+
+    if (anchor) scratchToPlayer.copy(anchor.position).sub(mob.position).setY(0);
+    const distanceToPlayer = anchor ? scratchToPlayer.length() : Infinity;
+    if (hunted) {
+      scratchToHunted.copy(hunted.position).sub(mob.position).setY(0);
+      scratchToHunted3D.copy(hunted.position).sub(mob.position);
+    }
+    const distanceToHunted = hunted ? scratchToHunted.length() : Infinity;
+    const attackDistance = hunted ? scratchToHunted3D.length() : Infinity;
+    const verticalGap = hunted ? Math.abs(scratchToHunted3D.y) : Infinity;
     let moveSpeed = mob.speed;
     const isBoss = mob.kind === "boss";
     const isRanged = MOB_TEMPLATES[mob.kind].ranged === true;
@@ -260,36 +326,46 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     // (a hostile after a villager, a pet after a hostile). Creepers stay
     // player-focused — they detonate rather than bite. A sitting pet does nothing.
     const sitting = mob.sitting === true;
-    const playerAggro = activeHostile && distanceToPlayer < mob.detectRange;
+    const playerAggro = activeHostile && distanceToHunted < mob.detectRange;
     const mobTarget = !sitting && !playerAggro && mob.kind !== "creeper" ? selectMobTarget(state, mob) : null;
 
     if (sitting) {
       moveSpeed = 0; // a told-to-stay pet holds its ground
     } else if (playerAggro) {
-      if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
+      if (distanceToHunted > 0.001) mob.direction.lerp(scratchToHunted.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
       // Skeletons kite (back off / hold in a standoff band); the boss bears down.
       if (isRanged && !isBoss) {
-        if (distanceToPlayer < SKELETON_STANDOFF_MIN) moveSign = -1;
-        else if (distanceToPlayer <= SKELETON_STANDOFF_MAX) moveSign = 0;
+        if (distanceToHunted < SKELETON_STANDOFF_MIN) moveSign = -1;
+        else if (distanceToHunted <= SKELETON_STANDOFF_MAX) moveSign = 0;
       }
     } else if (mobTarget) {
       scratchToTarget.copy(mobTarget.position).sub(mob.position).setY(0);
       if (scratchToTarget.lengthSq() > 1e-6) mob.direction.lerp(scratchToTarget.normalize(), 0.2).normalize();
       moveSpeed *= 1.15;
     } else if (mob.faction === "ally") {
-      // A pet with no enemy nearby follows its owner: recalled (teleported) when it
-      // strays too far, jogging to catch up otherwise, and milling about up close.
-      if (distanceToPlayer > PET_TELEPORT_DISTANCE) {
-        const tx = playerPosition.x + (deps.rng() - 0.5) * 2;
-        const tz = playerPosition.z + (deps.rng() - 0.5) * 2;
-        mob.position.set(tx, deps.surfaceYAt(tx, tz) + mob.halfHeight, tz);
-        mob.moveSpeed = mob.speed;
-        continue; // recalled to the owner — skip the rest of this tick
-      }
-      if (distanceToPlayer > PET_FOLLOW_MAX) {
-        if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer.normalize(), 0.2).normalize();
-        moveSpeed *= 1.3;
+      // A pet with no enemy nearby follows its OWNER — not just the nearest player,
+      // so in co-op your wolf trails you and not a passing stranger: recalled
+      // (teleported) when it strays too far, jogging to catch up otherwise, and
+      // milling about up close. An offline owner leaves it milling in place.
+      const owner = mob.owner !== undefined ? (getPlayer(state, mob.owner) ?? null) : null;
+      if (owner) {
+        scratchToOwner.copy(owner.position).sub(mob.position).setY(0);
+        const distanceToOwner = scratchToOwner.length();
+        if (distanceToOwner > PET_TELEPORT_DISTANCE) {
+          const tx = owner.position.x + (deps.rng() - 0.5) * 2;
+          const tz = owner.position.z + (deps.rng() - 0.5) * 2;
+          mob.position.set(tx, deps.surfaceYAt(tx, tz) + mob.halfHeight, tz);
+          mob.moveSpeed = mob.speed;
+          continue; // recalled to the owner — skip the rest of this tick
+        }
+        if (distanceToOwner > PET_FOLLOW_MAX) {
+          if (distanceToOwner > 0.001) mob.direction.lerp(scratchToOwner.normalize(), 0.2).normalize();
+          moveSpeed *= 1.3;
+        } else if (mob.turnTimer <= 0) {
+          mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
+          mob.turnTimer = 1.5 + deps.rng() * 4;
+        }
       } else if (mob.turnTimer <= 0) {
         mob.direction.applyAxisAngle(UP, (deps.rng() - 0.5) * Math.PI).normalize();
         mob.turnTimer = 1.5 + deps.rng() * 4;
@@ -349,9 +425,9 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     const creeperFuseReady = mob.kind === "creeper" && activeHostile && attackDistance < CREEPER_FUSE_RANGE;
 
     let hasLineOfSight = true;
-    if (meleeReady || fireReady || creeperFuseReady) {
+    if (hunted && (meleeReady || fireReady || creeperFuseReady)) {
       scratchMobEye.set(mob.position.x, mob.position.y + mob.halfHeight * 0.35, mob.position.z);
-      scratchPlayerAim.set(playerPosition.x, playerPosition.y + 0.9, playerPosition.z);
+      scratchPlayerAim.set(hunted.position.x, hunted.position.y + 0.9, hunted.position.z);
       scratchRay.copy(scratchPlayerAim).sub(scratchMobEye);
       if (scratchRay.lengthSq() > 1e-6) {
         const hit = voxelRaycast(world, scratchMobEye, scratchRay.normalize(), attackDistance + 0.5);
@@ -361,22 +437,22 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
 
     // !isDead: mobs keep ticking through the respawn countdown, but attacking a
     // corpse should neither sound nor re-arm the attack cooldown.
-    if (!isDead && (meleeReady || fireReady) && hasLineOfSight && mob.attackTimer <= 0) {
+    if (hunted && !hunted.isDead && (meleeReady || fireReady) && hasLineOfSight && mob.attackTimer <= 0) {
       // The boss bites when adjacent, otherwise looses a spread; skeletons only
       // ever shoot; melee mobs only ever bite. Creepers never bite — they detonate.
       const doMelee = meleeReady && (!isRanged || isBoss) && mob.kind !== "creeper";
       if (doMelee) {
         deps.emit({ type: "mobAttacked", kind: mob.kind });
-        deps.applyDamage((isBoss ? BOSS_MELEE_DAMAGE : mob.attackDamage) * dmgScale);
-        if (distanceToPlayer > 0.001) {
-          scratchToPlayer.normalize().multiplyScalar(isBoss ? 6 : 4.2);
-          playerVelocity.x += scratchToPlayer.x;
-          playerVelocity.z += scratchToPlayer.z;
-          playerVelocity.y = Math.max(playerVelocity.y, isBoss ? 4.5 : 3.4);
+        deps.damagePlayer(hunted, (isBoss ? BOSS_MELEE_DAMAGE : mob.attackDamage) * dmgScale);
+        if (distanceToHunted > 0.001) {
+          scratchToHunted.normalize().multiplyScalar(isBoss ? 6 : 4.2);
+          hunted.velocity.x += scratchToHunted.x;
+          hunted.velocity.z += scratchToHunted.z;
+          hunted.velocity.y = Math.max(hunted.velocity.y, isBoss ? 4.5 : 3.4);
         }
       } else if (fireReady) {
-        if (isBoss) fireBossSpread(state, mob, dmgScale, deps.emit);
-        else fireMobArrow(state, mob, SKELETON_ARROW_DAMAGE * dmgScale, SKELETON_ARROW_SPEED, deps.emit);
+        if (isBoss) fireBossSpread(state, hunted, mob, dmgScale, deps.emit);
+        else fireMobArrow(state, hunted, mob, SKELETON_ARROW_DAMAGE * dmgScale, SKELETON_ARROW_SPEED, deps.emit);
       }
       mob.attackTimer = mob.attackCooldown;
     }
@@ -394,6 +470,8 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
       const horiz = Math.hypot(dx, dz);
       if (horiz < MOB_VS_MOB_REACH && Math.abs(dy) < 1.6 && mobVsMobLineOfSight(world, mob, dx, dy, dz)) {
         mobTarget.hp -= mob.attackDamage;
+        // A pet's bite credits its owner when the target dies (via the sweep).
+        if (mob.faction === "ally" && mob.owner !== undefined) mobTarget.lastHitByPlayer = mob.owner;
         if (horiz > 0.001) {
           const push = MOB_VS_MOB_KNOCKBACK / horiz;
           mobTarget.position.x += dx * push;
@@ -405,7 +483,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     }
 
     // The boss conjures minions while it is engaged with the player.
-    if (!isDead && isBoss && activeHostile && distanceToPlayer < mob.detectRange) {
+    if (hunted && !hunted.isDead && isBoss && activeHostile && distanceToHunted < mob.detectRange) {
       tickBossSummon(state, mob, dt, deps);
     }
 
@@ -413,9 +491,9 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
     // terrain and hurting the player and nearby mobs. Walk out of range while it
     // is primed and the fuse aborts. It dies in its own blast (dropping gunpowder
     // via the post-loop sweep); killing it before the fuse runs out cancels it.
-    if (!isDead && mob.kind === "creeper") {
+    if ((!hunted || !hunted.isDead) && mob.kind === "creeper") {
       if ((mob.fuseTimer ?? 0) > 0) {
-        if (!activeHostile || distanceToPlayer > CREEPER_ABORT_RANGE) {
+        if (!activeHostile || distanceToHunted > CREEPER_ABORT_RANGE) {
           mob.fuseTimer = 0;
         } else {
           mob.fuseTimer = (mob.fuseTimer ?? 0) - dt;

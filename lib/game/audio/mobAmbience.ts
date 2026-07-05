@@ -12,6 +12,9 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   pig: [5, 13],
   wolf: [5, 12],
   cat: [6, 14],
+  // Fish are nearly silent — sparse bubble blips when close.
+  cod: [9, 18],
+  salmon: [9, 18],
   zombie: [4, 9],
   skeleton: [5, 11],
   spider: [4, 10],

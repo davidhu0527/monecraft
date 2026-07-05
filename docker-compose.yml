@@ -1,0 +1,17 @@
+# Local development database. `docker compose up -d`, then apply the schema
+# once with `bunx drizzle-kit migrate`. Tests never need this (they run
+# PGlite in-memory); it exists for `bun run dev` + the game server.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: monecraft
+      POSTGRES_PASSWORD: monecraft
+      POSTGRES_DB: monecraft
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

@@ -12,6 +12,7 @@ import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
+import TreasureCompass from "@/components/game/TreasureCompass";
 import VictoryScreen from "@/components/game/VictoryScreen";
 import XpBar from "@/components/game/XpBar";
 import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, ENCHANT_COST_LEVELS } from "@/lib/game/config";
@@ -20,17 +21,23 @@ import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { takesDamage, usesInventory } from "@/lib/game/gameModes";
 import type { WorldMeta } from "@/lib/game/worlds";
 import { installUiTiles } from "@/lib/ui/chromeTiles";
+import ChatPanel from "@/components/game/ChatPanel";
+import ConnectionStatus from "@/components/game/ConnectionStatus";
+import RosterPanel from "@/components/game/RosterPanel";
+import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 type MinecraftGameProps = {
   world: WorldMeta;
   profile: Profile;
+  /** A connected multiplayer session — this world lives on the server. */
+  online?: NetworkSession;
   onQuitToWorlds: () => void;
   /** Hardcore Game Over: erase the dead world and return to the world list. */
   onDeleteWorld: () => void;
   onReloadWorld: () => void;
 };
 
-export default function MinecraftGame({ world, profile, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
+export default function MinecraftGame({ world, profile, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -66,6 +73,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     activeVillagerProfession,
     container,
     boss,
+    treasure,
     victory,
     activeEffects,
     xpLevel,
@@ -100,7 +108,7 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
     loadNow,
     resetNow,
     quitToWorlds
-  } = useMinecraftGame({ world, profile, onQuitToWorlds, onReloadWorld });
+  } = useMinecraftGame({ world, profile, online, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
     installUiTiles();
@@ -142,8 +150,13 @@ export default function MinecraftGame({ world, profile, onQuitToWorlds, onDelete
 
       <BossHealthBar boss={boss} />
 
+      <TreasureCompass treasure={treasure} />
+
       <ActiveEffects effects={activeEffects} />
 
+      {online && <ChatPanel session={online} locked={locked} />}
+      {online && <ConnectionStatus session={online} onLeave={quitToWorlds} />}
+      {online && <RosterPanel session={online} />}
       {saveMessage && !paused ? (
         <div className="hud-toast" role="status">
           {saveMessage}

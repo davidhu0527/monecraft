@@ -1,21 +1,22 @@
 import type { GameEngine } from "@/lib/game/engine/GameEngine";
-import type { FrameInput } from "@/lib/game/engine/state";
+import type { FrameInput, MoveIntents } from "@/lib/game/engine/state";
 import { FLY_DOUBLE_TAP_WINDOW_SECONDS } from "@/lib/game/config";
 
 const MOUSE_SENSITIVITY = 0.0021;
 
-type MutableInput = {
-  keys: Set<string>;
-  capsActive: boolean;
-  leftMouseHeld: boolean;
-  pointerLocked: boolean;
-};
-
 export type InputController = {
-  /** Live continuous-input view, passed to engine.step every frame. */
+  /** Live continuous-input view (abstract intents), passed to engine.step every frame. */
   readonly input: FrameInput;
+  /** Whether gameplay pointer capture is held (drives the pause-on-unlock UX). */
+  readonly pointerLocked: boolean;
   /** Drops held keys and the mouse button (on death/respawn). */
   clearKeys(): void;
+  /**
+   * Test hook: pretend pointer lock is held. Headless Chromium cannot acquire
+   * real pointer lock, so the E2E fallback forces the flag to exercise the
+   * keys/mouse → engine wiring — see e2e/helpers.ts.
+   */
+  forcePointerLock(locked: boolean): void;
   dispose(): void;
 };
 
@@ -28,18 +29,34 @@ type CreateInputControllerArgs = {
 };
 
 /**
- * Owns every DOM listener. Continuous input (keys, mouse button, pointer
- * lock) is exposed as a FrameInput the engine reads each step; discrete
- * actions become engine commands; mouse-look goes through engine.applyLook.
+ * Owns every DOM listener and the DOM→intent mapping: raw key codes, CapsLock,
+ * and pointer lock stay in here; the engine sees only the abstract FrameInput
+ * (a future keybinding screen changes this file alone). Discrete actions
+ * become engine commands; mouse-look goes through engine.applyLook.
  */
 export function createInputController(args: CreateInputControllerArgs): InputController {
   const { canvas, engine, onResize, onLockChange } = args;
 
-  const input: MutableInput = {
-    keys: new Set<string>(),
-    capsActive: false,
-    leftMouseHeld: false,
-    pointerLocked: false
+  // Raw DOM-side state, reduced to intents after every change.
+  const pressed = new Set<string>();
+  let capsActive = false;
+  let leftMouseHeld = false;
+  let pointerLocked = false;
+
+  const move: MoveIntents = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, crouch: false };
+  const input: FrameInput = { move, mineHeld: false };
+
+  const syncIntents = () => {
+    move.forward = pressed.has("KeyW");
+    move.back = pressed.has("KeyS");
+    move.left = pressed.has("KeyA");
+    move.right = pressed.has("KeyD");
+    move.jump = pressed.has("Space");
+    move.crouch = pressed.has("KeyC");
+    move.sprint = capsActive;
+    // Mining requires gameplay pointer capture; fold the gate in here so the
+    // engine needs no notion of the cursor.
+    input.mineHeld = leftMouseHeld && pointerLocked;
   };
 
   const uiBlocked = () => engine.state.inventoryOpen || engine.state.advancementsOpen || engine.state.isDead || engine.state.paused;
@@ -48,7 +65,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
   let lastSpaceTapAt = -Infinity;
 
   const onMouseMove = (evt: MouseEvent) => {
-    if (!input.pointerLocked) return;
+    if (!pointerLocked) return;
     engine.applyLook(-evt.movementX * MOUSE_SENSITIVITY, -evt.movementY * MOUSE_SENSITIVITY);
   };
 
@@ -59,7 +76,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       if (engine.state.paused) engine.dispatch({ type: "resume" });
       else if (engine.state.inventoryOpen) engine.dispatch({ type: "toggleInventory" });
       else if (engine.state.advancementsOpen) engine.dispatch({ type: "toggleAdvancements" });
-      else if (!input.pointerLocked) engine.dispatch({ type: "pause" });
+      else if (!pointerLocked) engine.dispatch({ type: "pause" });
       return;
     }
 
@@ -85,15 +102,17 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
 
     if (evt.code === "KeyI") {
       engine.dispatch({ type: "toggleInventory" });
-      input.keys.clear();
-      if (input.pointerLocked) document.exitPointerLock();
+      pressed.clear();
+      syncIntents();
+      if (pointerLocked) document.exitPointerLock();
       return;
     }
 
     if (evt.code === "KeyL") {
       engine.dispatch({ type: "toggleAdvancements" });
-      input.keys.clear();
-      if (input.pointerLocked) document.exitPointerLock();
+      pressed.clear();
+      syncIntents();
+      if (pointerLocked) document.exitPointerLock();
       return;
     }
 
@@ -130,29 +149,32 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       }
     }
 
-    input.keys.add(evt.code);
-    input.capsActive = evt.getModifierState("CapsLock");
+    pressed.add(evt.code);
+    capsActive = evt.getModifierState("CapsLock");
+    syncIntents();
     if (evt.code === "Space") evt.preventDefault();
   };
 
   const onKeyUp = (evt: KeyboardEvent) => {
-    input.keys.delete(evt.code);
-    input.capsActive = evt.getModifierState("CapsLock");
+    pressed.delete(evt.code);
+    capsActive = evt.getModifierState("CapsLock");
+    syncIntents();
   };
 
   const onMouseDown = (evt: MouseEvent) => {
     if (uiBlocked()) return;
-    if (!input.pointerLocked) return;
+    if (!pointerLocked) return;
 
     if (evt.button === 0) {
-      input.leftMouseHeld = true;
+      leftMouseHeld = true;
+      syncIntents();
       engine.dispatch({ type: "attack" });
     }
     if (evt.button === 2) engine.dispatch({ type: "placeBlock" });
   };
 
   const onDoubleClick = () => {
-    if (uiBlocked() || input.pointerLocked) return;
+    if (uiBlocked() || pointerLocked) return;
     // Starting play is deliberate: a single click remains inert, while the
     // double-click gesture acquires pointer lock without also mining.
     // The request can legitimately reject (recent Esc, unfocused document,
@@ -162,19 +184,21 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
 
   const onMouseUp = (evt: MouseEvent) => {
     if (evt.button !== 0) return;
-    input.leftMouseHeld = false;
+    leftMouseHeld = false;
+    syncIntents();
   };
 
   const onContextMenu = (evt: MouseEvent) => evt.preventDefault();
 
   const onPointerLockChange = () => {
-    input.pointerLocked = document.pointerLockElement === canvas;
-    onLockChange(input.pointerLocked);
+    pointerLocked = document.pointerLockElement === canvas;
+    syncIntents();
+    onLockChange(pointerLocked);
     // Losing the lock during plain gameplay means the player pressed Escape
     // (or the browser took it away) — open the pause menu. The inventory and
     // death paths set their state flags before the lock change fires, and the
     // pause command itself ignores those states as a second guard.
-    if (!input.pointerLocked) engine.dispatch({ type: "pause" });
+    if (!pointerLocked) engine.dispatch({ type: "pause" });
   };
 
   window.addEventListener("resize", onResize);
@@ -190,9 +214,22 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
   return {
     input,
 
+    get pointerLocked() {
+      return pointerLocked;
+    },
+
     clearKeys() {
-      input.keys.clear();
-      input.leftMouseHeld = false;
+      pressed.clear();
+      leftMouseHeld = false;
+      syncIntents();
+    },
+
+    forcePointerLock(locked: boolean) {
+      // Deliberately no onLockChange: the React shell keeps believing the
+      // cursor is free (as it truly is), matching the pre-hook behavior of
+      // poking the raw flag. Only the engine-facing gates are faked.
+      pointerLocked = locked;
+      syncIntents();
     },
 
     dispose() {

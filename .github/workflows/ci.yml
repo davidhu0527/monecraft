@@ -1,7 +1,8 @@
-# Bun is pinned (not "latest") because the worldgen characterization tests hash
-# Math.sin-based noise output, and Math.sin results are engine-defined. Bumping
-# the version may legitimately require re-baselining those hashes — see
-# docs/testing.md before touching either.
+# Bun is pinned (not "latest") for reproducibility. Since worldgen v11 the pin
+# is no longer load-bearing for the worldgen hash tests — seed-determined noise
+# is bit-portable across JS engines (lib/world/noise.ts, proven by
+# e2e/determinism.e2e.ts) — so a Bun bump should NOT shift those digests; if it
+# ever does, that's a portability bug, not a re-baseline. See docs/testing.md.
 name: CI
 
 on:

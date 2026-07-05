@@ -90,7 +90,7 @@ export async function acquirePointerLock(page: Page): Promise<void> {
     await page.waitForFunction(() => document.pointerLockElement !== null, undefined, { timeout: 2000 });
   } catch {
     await page.evaluate(() => {
-      window.__monecraft!.input.input.pointerLocked = true;
+      window.__monecraft!.input.forcePointerLock(true);
     });
   }
 }

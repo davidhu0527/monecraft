@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { BlockId } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import {
+  AQUATIC_CAP,
+  AQUATIC_SPAWN_INTERVAL_SECONDS,
   BOSS_SUMMON_INTERVAL_SECONDS,
   HOSTILE_CAP,
   HOSTILE_SPAWN_BELOW_DAYLIGHT,
@@ -15,9 +17,10 @@ import {
 import { FACTION_BY_KIND, MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { PROFESSIONS } from "@/lib/game/trades";
 import { hostileCapScale, hostileSpawnIntervalScale, hostilesSpawn } from "@/lib/game/difficulties";
-import { randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
+import { randomLandPointNear, randomWaterPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import type { MobKind } from "@/lib/game/types";
-import type { EmitGameEvent, GameState, MobState } from "../state";
+import type { EmitGameEvent, GameState, MobState, PlayerState } from "../state";
+import { nearestPlayerTo } from "../players";
 
 export type SpawnGroupArgs = {
   kind: MobKind;
@@ -79,13 +82,30 @@ export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () =>
 }
 
 /**
+ * Spawns fish submerged in open water near the center. Each fish needs a water
+ * column at least 2 deep; a dry world (Superflat) or an inland center simply
+ * yields fewer or zero fish — the sampler fails closed, never onto land.
+ * pushMob expects ground-level feet, so the swim point converts to feet-y.
+ */
+export function spawnAquaticGroup(state: GameState, kind: MobKind, count: number, centerX: number, centerZ: number, radius: number, rng: () => number): void {
+  for (let i = 0; i < count; i += 1) {
+    const pos = randomWaterPointNear(state.world, centerX, centerZ, radius, rng);
+    if (!pos) return;
+    pushMob(state, kind, false, pos.x, pos.y - mobHalfHeight(kind), pos.z, rng);
+  }
+}
+
+/**
  * The day-one population around the player's spawn point. Passives scatter
  * over a wider ring than hostiles so the spawn area doesn't feel like a
  * petting zoo; hostiles stay closer (the dawn-aggro behavior tests document).
  */
 export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
-  const centerX = state.player.position.x;
-  const centerZ = state.player.position.z;
+  // Day-one population centers on the booting player; a playerless world (a
+  // fresh server room before the first join) seeds around the map center.
+  const anchor = nearestPlayerTo(state, state.world.sizeX / 2, state.world.sizeZ / 2);
+  const centerX = anchor ? anchor.position.x : state.world.sizeX / 2;
+  const centerZ = anchor ? anchor.position.z : state.world.sizeZ / 2;
   const passiveRadius = RENDER_RADIUS * 1.2;
   const hostileRadius = RENDER_RADIUS * 0.7;
   const groups: Array<[MobKind, boolean, number, number]> = [
@@ -115,6 +135,32 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
     // game point-blank; passives may roam right up to the spawn area.
     spawnMobGroup(state, { kind, hostile, count, centerX, centerZ, radius, minRadius: hostile ? HOSTILE_SPAWN_MIN_RADIUS : 0 }, rng, surfaceYAt);
   }
+  // Fish school in whatever water lies near spawn; a landlocked spawn gets none
+  // (the aquatic director repopulates oceans the player sails to later).
+  spawnAquaticGroup(state, "cod", 6, centerX, centerZ, passiveRadius, rng);
+  spawnAquaticGroup(state, "salmon", 4, centerX, centerZ, passiveRadius, rng);
+}
+
+/**
+ * Trickles fish in around the player so any ocean feels stocked, not just the
+ * spawn-time one. Every interval it tops the population up toward AQUATIC_CAP,
+ * one small school at a time; without nearby deep water the sampler fails
+ * closed and the tick is a no-op (Superflat never spawns a fish).
+ */
+export function tickAquaticSpawnDirector(state: GameState, dt: number, rng: () => number): void {
+  state.timers.aquaticSpawnTimer += dt;
+  if (state.timers.aquaticSpawnTimer < AQUATIC_SPAWN_INTERVAL_SECONDS) return;
+  state.timers.aquaticSpawnTimer = 0;
+
+  let aquatic = 0;
+  for (const mob of state.mobs) if (MOB_TEMPLATES[mob.kind].aquatic) aquatic += 1;
+  if (aquatic >= AQUATIC_CAP) return;
+
+  const kind: MobKind = rng() < 0.6 ? "cod" : "salmon";
+  const count = Math.min(AQUATIC_CAP - aquatic, 1 + (rng() > 0.6 ? 1 : 0));
+  const center = spawnCenterPlayer(state, rng);
+  if (!center) return;
+  spawnAquaticGroup(state, kind, count, center.position.x, center.position.z, RENDER_RADIUS * 0.85, rng);
 }
 
 /**
@@ -146,6 +192,28 @@ export function assignVillagerProfessions(state: GameState): void {
   }
 }
 
+/**
+ * The player a spawn wave centers on. One player: that player, with no rng
+ * consumed — the single-player stream stays byte-identical to the old code.
+ * Several players: a uniformly random one per wave, so spawns spread across
+ * the party instead of piling onto whoever is primary. None: null (idle room).
+ */
+function spawnCenterPlayer(state: GameState, rng: () => number): PlayerState | null {
+  if (state.players.size === 0) return null;
+  if (state.players.size === 1) return state.players.values().next().value ?? null;
+  const all = [...state.players.values()];
+  return all[Math.min(all.length - 1, Math.floor(rng() * all.length))];
+}
+
+/**
+ * Scales a global mob cap with the party size: 1–2 players keep the SP cap,
+ * and each further pair adds another cap's worth — so 8 players don't starve
+ * for mobs, but also don't each drag in a full private horde.
+ */
+function partyCapScale(state: GameState): number {
+  return Math.max(1, Math.ceil(state.players.size / 2));
+}
+
 /** Trickles hostile mobs in around the player at night, up to the cap. Difficulty scales the cadence and cap; Peaceful spawns none. */
 export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
   if (!hostilesSpawn(state.difficulty)) return;
@@ -154,10 +222,12 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
   if (state.daylight >= HOSTILE_SPAWN_BELOW_DAYLIGHT || state.timers.hostileSpawnTimer < interval) return;
   state.timers.hostileSpawnTimer = 0;
 
-  const cap = Math.round(HOSTILE_CAP * hostileCapScale(state.difficulty));
+  const cap = Math.round(HOSTILE_CAP * hostileCapScale(state.difficulty)) * partyCapScale(state);
   const livingHostiles = state.mobs.filter((mob) => mob.hostile).length;
   if (livingHostiles >= cap) return;
 
+  const center = spawnCenterPlayer(state, rng);
+  if (!center) return;
   const spawnKinds: Array<"zombie" | "skeleton" | "spider" | "creeper"> = ["zombie", "skeleton", "spider", "creeper"];
   const kind = spawnKinds[Math.floor(rng() * spawnKinds.length)];
   // A wave is 1–2 mobs, but never more than the slots left under the cap — so a
@@ -168,8 +238,8 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
       kind,
       hostile: true,
       count: Math.min(cap - livingHostiles, 1 + (rng() > 0.7 ? 1 : 0)),
-      centerX: state.player.position.x,
-      centerZ: state.player.position.z,
+      centerX: center.position.x,
+      centerZ: center.position.z,
       radius: Math.max(26, RENDER_RADIUS * 0.85),
       minRadius: HOSTILE_SPAWN_MIN_RADIUS
     },
@@ -199,7 +269,7 @@ export function tickSpawnerDirector(state: GameState, dt: number, rng: () => num
   const countHostiles = () => state.mobs.reduce((acc, mob) => acc + (mob.hostile ? 1 : 0), 0);
   if (countHostiles() >= cap) return;
 
-  const { player, world } = state;
+  const { world } = state;
   const layer = world.sizeX * world.sizeZ;
   for (const idx of state.dungeonSpawnerIndices) {
     const sy = Math.floor(idx / layer);
@@ -207,7 +277,15 @@ export function tickSpawnerDirector(state: GameState, dt: number, rng: () => num
     const sz = Math.floor(rem / world.sizeX);
     const sx = rem - sz * world.sizeX;
     if (world.get(sx, sy, sz) !== BlockId.Spawner) continue; // mined out → inert
-    if (Math.hypot(player.position.x - (sx + 0.5), player.position.y - (sy + 0.5), player.position.z - (sz + 0.5)) > SPAWNER_ACTIVATION_RADIUS) continue;
+    // Any player inside the activation radius arms the spawner.
+    let activated = false;
+    for (const player of state.players.values()) {
+      if (Math.hypot(player.position.x - (sx + 0.5), player.position.y - (sy + 0.5), player.position.z - (sz + 0.5)) <= SPAWNER_ACTIVATION_RADIUS) {
+        activated = true;
+        break;
+      }
+    }
+    if (!activated) continue;
     if (countHostiles() >= cap) break;
 
     const nearby = state.mobs.reduce(

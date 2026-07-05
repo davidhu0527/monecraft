@@ -6,6 +6,7 @@ import { readAudioSettings, writeAudioSettings } from "@/lib/game/audio/settings
 import { AUTOSAVE_INTERVAL_MS, HOTBAR_SLOTS, MAX_HUNGER, MAX_HEARTS, MAX_OXYGEN } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
+import { createAccumulator } from "@/lib/game/engine/tickDriver";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
 import * as inv from "@/lib/game/inventory";
 import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
@@ -15,10 +16,12 @@ import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { readSave, writeSave } from "@/lib/game/save";
+import { pushSave } from "@/lib/game/cloudSaves";
 import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
 import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
+import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 /**
  * Thin React shell around the headless GameEngine and the GameRenderer.
@@ -61,6 +64,7 @@ const PRE_MOUNT_SNAPSHOT: GameSnapshot = {
   activeVillagerProfession: null,
   container: null,
   boss: null,
+  treasure: null,
   victory: false,
   activeEffects: [],
   xpLevel: 0,
@@ -75,7 +79,7 @@ type GameContext = { engine: GameEngine; node: HTMLDivElement };
 // inspect the live simulation (single-player client game — nothing to protect).
 declare global {
   interface Window {
-    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController; audio: AudioDirector };
+    __monecraft?: { engine: GameEngine; renderer: GameRenderer; input: InputController; audio: AudioDirector; net?: NetworkSession };
   }
 }
 
@@ -96,6 +100,13 @@ function persistGame(api: GameApi, saveKey: string, onMessage: (text: string) =>
 export type UseMinecraftGameOptions = {
   world: WorldMeta;
   profile: Profile;
+  /**
+   * A connected multiplayer session: its replica engine is mounted instead of
+   * constructing one, dispatch routes through it (GameEngine.routeDispatch),
+   * localStorage persistence is skipped (the server owns the world), and its
+   * pose stream flushes each frame. Absent = classic offline single-player.
+   */
+  online?: NetworkSession;
   /** Leave this world and return to the world list (the shell unmounts us). */
   onQuitToWorlds: () => void;
   /** Re-read this world from disk by forcing a fresh mount (used by Load/Reset). */
@@ -166,6 +177,14 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     [opts.profile.id]
   );
 
+  // The session is fixed for the mount (the shell keys the game subtree).
+  const onlineRef = useRef(opts.online ?? null);
+  // A cloud-linked single-player world (WorldMeta.cloudId) mirrors its save to
+  // the server on every local save. `cloudConflict` latches once another device
+  // wins a write, so we stop pushing (and warn once) rather than clobber theirs.
+  const cloudIdRef = useRef(opts.world.cloudId ?? null);
+  const cloudConflictRef = useRef(false);
+
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
   const attachMount = useCallback((node: HTMLDivElement | null) => {
@@ -173,17 +192,20 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setCtx(null);
       return;
     }
-    // A saved blob carries its own seed + type + mode + difficulty (engine prefers
-    // them); a fresh world (no blob yet) boots from the world's stored values.
+    // Online: the session already holds the synced replica engine. Offline: a
+    // saved blob carries its own seed + type + mode + difficulty (engine
+    // prefers them); a fresh world boots from the world's stored values.
     setCtx({
-      engine: new GameEngine({
-        save: readSave(saveKeyRef.current),
-        seed: worldSeedRef.current,
-        worldType: worldTypeRef.current,
-        gameMode: worldModeRef.current,
-        difficulty: worldDifficultyRef.current,
-        hardcore: worldHardcoreRef.current
-      }),
+      engine:
+        onlineRef.current?.engine ??
+        new GameEngine({
+          save: readSave(saveKeyRef.current),
+          seed: worldSeedRef.current,
+          worldType: worldTypeRef.current,
+          gameMode: worldModeRef.current,
+          difficulty: worldDifficultyRef.current,
+          hardcore: worldHardcoreRef.current
+        }),
       node
     });
   }, []);
@@ -236,6 +258,24 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     messageClearRef.current = id;
   }, []);
 
+  // Mirror a cloud-linked SP save up after a local write (fire-and-forget so the
+  // fetch survives an unmount). `notify` toasts once on a losing write, so the
+  // player knows another device took over — we then stop pushing to avoid a
+  // last-writer-wins clobber; the next open pulls their save.
+  const syncCloudSave = useCallback(
+    (engine: GameApi, notify: boolean) => {
+      const cloudId = cloudIdRef.current;
+      if (!cloudId || onlineRef.current || cloudConflictRef.current) return;
+      void pushSave(cloudId, engine.serialize()).then((result) => {
+        if (result === "conflict") {
+          cloudConflictRef.current = true;
+          if (notify) flashMessage("This world changed on another device — your changes here won't sync. Reopen to catch up.");
+        }
+      });
+    },
+    [flashMessage]
+  );
+
   useEffect(() => {
     if (!ctx) return;
     const { engine: gameEngine, node } = ctx;
@@ -252,6 +292,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     rendererRef.current = renderer;
     // Before the first rAF, so no frame can ever show the default palette.
     renderer.setPlayerSkin(getSkinPreset(skinIdRef.current).palette);
+    const onlineForNames = onlineRef.current;
+    if (onlineForNames) renderer.remotePlayerInfo = (id) => ({ name: onlineForNames.playerName(id), skinId: null });
 
     const audio = createAudioDirector();
     audio.setSettings(audioSettingsRef.current);
@@ -275,38 +317,36 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
 
     // The save key is fixed for the mount's life (the shell keys this hook by
     // world id), so capture it once — also keeps it out of the cleanup's ref read.
+    // Online worlds never touch localStorage: the SERVER persists them.
+    const online = onlineRef.current;
     const saveKey = saveKeyRef.current;
-    const autoSave = () => persistGame(gameEngine, saveKey, flashMessage);
+    const autoSave = () => {
+      if (online) return;
+      persistGame(gameEngine, saveKey, flashMessage);
+      syncCloudSave(gameEngine, true);
+    };
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
-    window.__monecraft = { engine: gameEngine, renderer, input, audio };
+    window.__monecraft = { engine: gameEngine, renderer, input, audio, net: online ?? undefined };
 
     let minimap: MinimapRenderer | null = null;
-    let last = performance.now();
     let animationFrame = 0;
-    // Catch-up stepping: a slow frame (software GL, busy machine) can take far
-    // longer than one 50ms step, and a single clamped step would run the
-    // simulation in slow motion. Bounded substeps keep sim time tracking wall
-    // time; the cap bounds work per frame and quietly drops time beyond it
-    // (e.g. after a background-tab stall).
-    const MAX_STEP_SECONDS = 0.05;
-    const MAX_SUBSTEPS = 5;
-    let pendingSeconds = 0;
+    // Catch-up stepping (createAccumulator): bounded substeps keep sim time
+    // tracking wall time on slow frames — see lib/game/engine/tickDriver.ts.
+    const accumulator = createAccumulator({ startMs: performance.now() });
     const clock = () => {
       const now = performance.now();
-      pendingSeconds = Math.min(pendingSeconds + (now - last) / 1000, MAX_STEP_SECONDS * MAX_SUBSTEPS);
-      last = now;
+      const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, input.input));
 
-      let frameSeconds = 0;
-      while (pendingSeconds > 0) {
-        const dt = Math.min(pendingSeconds, MAX_STEP_SECONDS);
-        gameEngine.step(dt, input.input);
-        pendingSeconds -= dt;
-        frameSeconds += dt;
-      }
-
-      for (const event of gameEngine.consumeEvents()) {
+      // Online: replicated server events (mob deaths, other players' block
+      // edits, …) join the local drain so toasts/audio/particles treat them
+      // exactly like local ones.
+      const events = online ? [...gameEngine.consumeEvents(), ...online.drainEvents()] : gameEngine.consumeEvents();
+      for (const event of events) {
+        // Advancement unlocks broadcast to the whole room; only surface (toast +
+        // chime) your own — the server tags each with the earning player.
+        if (online && event.type === "advancementUnlocked" && event.playerId && event.playerId !== online.playerId) continue;
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
           // Free the cursor so the death/victory/game-over button is clickable; the
           // pause command ignores those states, so the lock-loss won't open the menu too.
@@ -315,7 +355,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         }
         // Hardcore permadeath is permanent — persist it now so closing the tab right
         // after death still reloads the dead world spectating (not a fresh run).
-        if (event.type === "gameOver") persistGame(gameEngine, saveKey, () => {});
+        if (event.type === "gameOver" && !online) {
+          persistGame(gameEngine, saveKey, () => {});
+          syncCloudSave(gameEngine, false);
+        }
         if (event.type === "respawned") input.clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -363,6 +406,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         audio.handleEvent(event);
       }
 
+      online?.afterFrame(now);
       if (!minimap && minimapNodeRef.current) minimap = createMinimapRenderer(minimapNodeRef.current);
       // The minimap must read worldMeshDirty before renderer.sync clears it.
       minimap?.sync(gameEngine.state, now);
@@ -380,7 +424,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
       // intentionally re-read or discard the on-disk save.
       if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
-      else persistGame(gameEngine, saveKey, () => {});
+      else if (!online) {
+        persistGame(gameEngine, saveKey, () => {});
+        syncCloudSave(gameEngine, false); // flush to cloud on leave/unmount (covers Save & Quit)
+      }
+      online?.dispose();
       delete window.__monecraft;
       canvasRef.current = null;
       rendererRef.current = null;
@@ -396,7 +444,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       document.exitPointerLock();
       renderer.dispose();
     };
-  }, [ctx, flashMessage]);
+  }, [ctx, flashMessage, syncCloudSave]);
 
   // Re-locking can legitimately reject (e.g. Chrome's cooldown right after
   // Escape); the player just clicks the canvas to lock again.
@@ -410,6 +458,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     attachMinimap,
     locked,
     rendererError,
+    online: opts.online ?? null,
     gameMode: snapshot.gameMode,
     difficulty: snapshot.difficulty,
     hardcore: snapshot.hardcore,
@@ -442,6 +491,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     activeVillagerProfession: snapshot.activeVillagerProfession,
     container: snapshot.container,
     boss: snapshot.boss,
+    treasure: snapshot.treasure,
     victory: snapshot.victory,
     activeEffects: snapshot.activeEffects,
     xpLevel: snapshot.xpLevel,
@@ -476,7 +526,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
     dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
-      if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
+      if (onlineRef.current) flashMessage("The server saves online worlds");
+      else if (engine) {
+        persistGame(engine, saveKeyRef.current, flashMessage);
+        syncCloudSave(engine, true);
+      }
     },
     loadNow: () => {
       if (!readSave(saveKeyRef.current)) {
@@ -504,7 +558,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     quitToWorlds: () => {
       // The autosave interval is cleared on unmount and beforeunload won't fire
       // on an in-app navigation, so persist synchronously before leaving.
-      if (engine) persistGame(engine, saveKeyRef.current, flashMessage);
+      // Online: the unmount cleanup disposes the session; the server persists.
+      if (engine && !onlineRef.current) persistGame(engine, saveKeyRef.current, flashMessage);
       opts.onQuitToWorlds();
     }
   };

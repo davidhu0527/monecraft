@@ -500,3 +500,161 @@
   color: var(--mc-text-light);
   font-weight: 700;
 }
+
+/* ── Multiplayer HUD: chat + connection status ───────────────────────────── */
+.chat-panel {
+  position: absolute;
+  left: 12px;
+  bottom: 96px;
+  width: min(420px, 60vw);
+  z-index: 30;
+  pointer-events: none;
+  font-size: 13px;
+}
+
+.chat-panel.open {
+  pointer-events: auto;
+}
+
+.chat-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-line {
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 8px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+.chat-name {
+  color: #ffe082;
+}
+
+.chat-name::after {
+  content: ":";
+}
+
+.chat-input-row {
+  margin-top: 4px;
+}
+
+.chat-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font: inherit;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.net-status {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.45);
+  color: #b9f6ca;
+  padding: 2px 8px;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* Reconnecting: amber, gently pulsing so a stalled retry still reads as "working". */
+.net-status-warn {
+  color: #ffd54f;
+  animation: net-status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes net-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Player list under the ping badge. z-index above the pause overlay (9) so the
+   owner can free the cursor and click Kick without leaving the world. */
+.roster-panel {
+  position: absolute;
+  top: 34px;
+  right: 12px;
+  z-index: 30;
+  min-width: 132px;
+  max-width: 220px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 12px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+  pointer-events: auto;
+}
+
+.roster-title {
+  color: #ffe082;
+  padding: 3px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+}
+
+.roster-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-kick {
+  flex: none;
+  background: rgba(183, 28, 28, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.roster-kick:hover {
+  background: rgba(211, 47, 47, 0.95);
+}
+
+.net-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.net-modal-box {
+  background: var(--mc-tile-panel, #2a2a2a);
+  border: 3px solid rgba(0, 0, 0, 0.6);
+  padding: 24px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

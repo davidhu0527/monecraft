@@ -14,7 +14,7 @@ import {
 } from "@/lib/game/config";
 import { BlockId } from "@/lib/world";
 import { createEmptyArmorEquipment } from "@/lib/game/items";
-import { createTimers, type GameEvent, type GameState } from "@/lib/game/engine/state";
+import { createTimers, type GameEvent, type GameState, type PlayerState } from "@/lib/game/engine/state";
 import {
   addEffect,
   clearEffects,
@@ -32,9 +32,13 @@ import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage } fr
 import { tickLavaExposure, tickOxygen } from "@/lib/game/engine/systems/playerStats";
 import type { EffectId } from "@/lib/game/types";
 
-function makeState(overrides: Partial<GameState> = {}): GameState {
-  return {
-    player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+function makeState(overrides: Partial<GameState> = {}): GameState & PlayerState {
+  const state = {
+    position: new THREE.Vector3(0, 64, 0),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true,
     gameMode: "survival",
     hearts: MAX_HEARTS,
     hunger: 20,
@@ -43,7 +47,10 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     effects: new Map<EffectId, number>(),
     timers: createTimers(),
     ...overrides
-  } as unknown as GameState;
+  } as unknown as GameState & PlayerState;
+  // The flat fixture IS its own player (the old single-player shape).
+  (state as { player: unknown }).player = state;
+  return state;
 }
 
 /** A world stub whose every cell is `block` — enough for the lava/oxygen gates. */
@@ -185,21 +192,21 @@ describe("environmental gates", () => {
   test("fire resistance negates lava burn", () => {
     const state = makeState({ world: uniformWorld(BlockId.Lava) });
     let damage = 0;
-    tickLavaExposure(state, 0.5, (a) => (damage += a), true);
+    tickLavaExposure(state, state, 0.5, (a) => (damage += a), true);
     expect(damage).toBe(0);
-    tickLavaExposure(state, 0.5, (a) => (damage += a), false);
+    tickLavaExposure(state, state, 0.5, (a) => (damage += a), false);
     expect(damage).toBeGreaterThan(0);
   });
 
   test("water breathing keeps the lungs full and immune to drowning", () => {
     const state = makeState({ world: uniformWorld(BlockId.Water), oxygen: 0 });
     let damage = 0;
-    tickOxygen(state, 1, (a) => (damage += a), true);
+    tickOxygen(state, state, 1, (a) => (damage += a), true);
     expect(damage).toBe(0);
     expect(state.oxygen).toBe(MAX_OXYGEN);
     // Without the effect, an empty meter underwater drowns.
     state.oxygen = 0;
-    tickOxygen(state, 1, (a) => (damage += a), false);
+    tickOxygen(state, state, 1, (a) => (damage += a), false);
     expect(damage).toBeGreaterThan(0);
   });
 });

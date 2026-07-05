@@ -28,14 +28,17 @@ changing them affects which gaps the player fits through.
 
 `VEHICLE_BOARD_REACH`, `VEHICLE_TURN_RATE`, `VEHICLE_DISMOUNT_RADIUS`,
 `RAFT_SPEED`, `RAFT_HALF_WIDTH`, `RAFT_HALF_LENGTH`, `SHIP_SPEED`,
-`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`.
+`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`, `MAX_VEHICLES`.
 
 Read by `systems/vehicles.ts`. Rafts are intentionally compact and slow; ships
 are larger and faster. The half-width/half-length values are both gameplay
 footprints and water-support checks, so raising them makes a vehicle feel larger
 but also requires more open water to place and move. `VEHICLE_TURN_RATE` controls
 steering responsiveness while mounted, and `VEHICLE_DISMOUNT_RADIUS` is the search
-radius for a safe crouch dismount beside the vehicle.
+radius for a safe crouch dismount beside the vehicle. `MAX_VEHICLES` (64) caps how
+many placed rafts/ships a world can hold — placement is refused (with a denial
+cue) at the cap, which bounds save size since creative placement never consumes
+the item.
 
 ## Game modes — flight
 
@@ -400,6 +403,24 @@ how many catches a rod lands before breaking — only a successful reel wears it
 The catch odds live in the weighted `FISHING_LOOT` table in `lib/game/fishingLoot.ts`,
 not here.
 
+## Fish & the ocean
+
+`FISH_FLEE_RANGE`, `FISH_SUFFOCATION_HP_PER_SECOND`, `AQUATIC_CAP`,
+`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`.
+
+Read by the aquatic branch in `systems/mobAI.ts` and the aquatic spawn director
+in `systems/spawnDirector.ts`. `FISH_FLEE_RANGE` (5) is the 3D radius inside
+which a cod/salmon bolts away from the player — raise it for skittish fish that
+are hard to melee, lower it to make hand-fishing viable.
+`FISH_SUFFOCATION_HP_PER_SECOND` (2) drains a beached fish; at cod's 3 HP that's
+~1.5 s to die on land. `AQUATIC_CAP` (24) bounds the live fish population and
+`AQUATIC_SPAWN_INTERVAL_SECONDS` (8) is the director's top-up cadence — together
+they set how quickly a sailed-to ocean fills with fish (the sampler fails closed
+without nearby deep water, so these cost nothing on dry worlds).
+`KELP_GROWTH_CHANCE` (0.2) is the per-sampled-tick odds a kelp stalk grows one
+block (the same sampler as crops — see Farming above); height and surface
+clearance are worldgen invariants in `GEN.oceanFlora`, not tunables here.
+
 ## Beds & sleep
 
 `SLEEP_ALLOWED_BELOW_DAYLIGHT`, `SLEEP_HOSTILE_RADIUS`, `SLEEP_FADE_SECONDS`,
@@ -431,16 +452,67 @@ of this radius around the player, so larger values draw more terrain at higher c
 frequent rebuilds, fresher view). `STUCK_RESET_SECONDS` is how long an overlap is
 tolerated before the auto-unstuck teleport fires.
 
+## Multiplayer networking
+
+Server-side constants live in `server/room.ts` and `lib/net/protocol.ts` (not
+`config.ts` — they shape the wire and the room budget, not gameplay balance).
+None affect single-player, and none are save-sensitive.
+
+- **`ROOM_CAPACITY`** (`8`, protocol.ts) — max players per world. The v1 co-op
+  scale the whole design assumes; raising it grows the per-tick pose/self fan-out
+  quadratically, so re-measure with `loadSim` before nudging it.
+- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~74 MB
+  each). Joins beyond it are refused at the door, not thrashed. Tune from
+  `/rooms` p95 tick + peak memory.
+- **Tick rate** — `TICK_SECONDS` (`0.05` = 20 Hz, `tickDriver.ts`) is the room
+  sim + pose-stream cadence. The whole latency budget hangs off it; not a
+  casual dial.
+- **Replication cadence** — `KEYFRAME_INTERVAL_TICKS` (`100` = 5 s, full mob
+  keyframe / drift correction), mob delta frames at **10 Hz** (half tick rate)
+  with `MOB_DEADBAND_SQ` (`0.05²` — smaller = more mob updates, more bandwidth),
+  `DAY_INTERVAL_TICKS` (`20` = 1 s day-clock sync), `POSE_CHECKPOINT_TICKS`
+  (`20` = 1 s replay-log pose anchors). `INTERPOLATION_DELAY_MS` (`125`,
+  `lib/net/interpolation.ts`) is how far in the past remote entities render —
+  larger absorbs more jitter at the cost of visible lag.
+- **Backpressure** — `BACKPRESSURE_SOFT_BYTES` (256 KB → shed `pp`/`mp`),
+  `BACKPRESSURE_KICK_BYTES` (1 MB) + `BACKPRESSURE_KICK_STRIKES` (~5 s sustained
+  → `4008` kick).
+- **Persistence** — `PERSIST_INTERVAL_TICKS` (`1200` = 60 s dirty-persist; also
+  the crash-loss bound), idle-evict at 5 min (`roomRegistry.ts`).
+- **Reconnect** — `RECONNECT_DELAYS_MS` (`[1,2,4,8,8] s`, protocol.ts) is the
+  client back-off ladder; the join ticket TTL is `TICKET_TTL_SECONDS` (`60`,
+  `tickets.ts`).
+- **Replay log** — `COMMAND_LOG_SIZE` (env, default `4096`) bounds each room's
+  in-memory command ring dumped by `/rooms/:id/log`.
+- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` (env, default `0`) seeds
+  the client's artificial one-way delay; `window.__monecraft.net.setSimulatedLatency(ms)`
+  overrides it live.
+
+## Online accounts
+
+Server-side quotas that bound per-account storage on the shared database. Live
+in `config.ts` and are enforced in `lib/online/worldsService.ts` (the UI only
+surfaces a friendly "limit reached"); they don't affect single-player.
+
+- **`MAX_ONLINE_PROFILES`** (`5`) — profiles one signed-in account may create.
+  A profile is a cross-device identity (name + skin) that owns online worlds.
+  Raising it grows the profile list and the
+  worlds an account can accumulate (`MAX_ONLINE_PROFILES × MAX_WORLDS_PER_PROFILE`).
+- **`MAX_WORLDS_PER_PROFILE`** (`10`) — worlds one profile may own, counting
+  online (mp) and synced singleplayer (sp-cloud) worlds together. The 11th
+  create of either kind is refused server-side. Bounds save-blob storage per
+  profile.
+
 ## Save- and worldgen-sensitive tunables
 
 Change these only with care:
 
-- **`WORLDGEN_VERSION`** (`8`) is the worldgen baseline each world records at
+- **`WORLDGEN_VERSION`** (`10`) is the worldgen baseline each world records at
   creation. When a deliberate terrain change invalidates old block-diffs, bump this:
   every world whose recorded version differs discards its stale diffs and reboots from
   its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
   This replaced the old whole-store `SAVE_KEY` bump, which reset _every_ world at once.
-  It's versioned independently of the save **schema** (currently v5); don't bump it to
+  It's versioned independently of the save **schema** (currently v16); don't bump it to
   express a schema change — add a migration instead.
 - **`SAVE_KEY`** (`"minecraft_save_v7"`) is now **legacy**: each world has its own
   `minecraft_world_save_<id>` key, and `SAVE_KEY` is read only once by the one-time
@@ -456,8 +528,12 @@ Change these only with care:
   [testing.md](testing.md). This includes **`GEN.dungeonCount`** (28, how many
   dungeon rooms are attempted), **`GEN.coalConfig`** (coal vein attempts/depth/size —
   coal is placed on its own PRNG in `placeCoal`, so retuning it shifts only coal,
-  not the rest of the terrain), and the dungeon loot tables / tier odds in
-  `lib/game/dungeonLoot.ts` (loot is pure logic, not a worldgen byte contract, but
+  not the rest of the terrain), **`GEN.oceanFlora`** (kelp/coral density, stalk
+  height cap, and the surface-clearance invariant), **`GEN.shipwreckCount`** (45
+  attempts) and **`GEN.buriedTreasureCount`** (90 attempts) — each on its own
+  decoupled PRNG, so retuning one shifts only that pass — and the worldgen-chest
+  loot tables / tier odds in `lib/game/dungeonLoot.ts` / `shipwreckLoot.ts` /
+  `buriedTreasureLoot.ts` (loot is pure logic, not a worldgen byte contract, but
   changing the _placement_ count or geometry is).
 - **World types** (Default / Superflat / Amplified / Islands) are terrain-config
   variations of `GEN` in **`terrainConfigFor`** (`generation.ts`) — they change

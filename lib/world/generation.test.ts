@@ -6,12 +6,15 @@ import {
   buildGeometryLayersRegion,
   buildGeometryRegion,
   collectDungeonSites,
+  collectShipwreckSites,
+  collectTreasureSites,
   collectVillageSites,
   computeFullLight,
   generateWorld,
   type WorldType
 } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
+import { WORLDGEN_BASELINES } from "@/lib/world/generationBaselines";
 
 /**
  * Worldgen determinism characterization tests.
@@ -22,9 +25,10 @@ import { GEN } from "@/lib/world/generation";
  *
  * If a test here fails after a refactor, THE REFACTOR BROKE SAVE COMPATIBILITY —
  * fix the code, never the hash. Re-baselining is only legitimate for a deliberate,
- * CHANGELOG-flagged worldgen change, or for a Bun/JSC engine bump (the noise
- * functions use Math.sin, whose exact results are engine-defined; CI pins the Bun
- * version for this reason — see docs/testing.md).
+ * CHANGELOG-flagged worldgen change (WORLDGEN_VERSION bump). Since worldgen v11
+ * all seed-determined noise is bit-portable (lib/world/noise.ts), so these
+ * digests hold on every JS engine — e2e/determinism.e2e.ts re-proves that in
+ * Chromium against the same constants (see docs/testing.md).
  */
 
 function hashBytes(bytes: Uint8Array): string {
@@ -60,10 +64,15 @@ function fullWorld(): VoxelWorld {
 }
 
 describe("worldgen determinism", () => {
+  // Worldgen v11 (bit-portable noise, lib/world/noise.ts) re-baselined every
+  // digest: same formulas on portable trig, plus an integer hash2D — terrain
+  // structure is unchanged (the probes below passed the re-baseline untouched)
+  // but exact bytes shift. Digests live in generationBaselines.ts so the
+  // Chromium determinism e2e can assert against the same constants.
   test.each([
-    [1337, "b68e443c2baf43ddb0d522e595a2c66dc5b23f5fc06c25ebae2af07812525f25"],
-    [1, "9af01515475054435df4789163f088c3362f594789629f6c326bed53576961f8"],
-    [999999937, "a17c2e5610b7eb9dbfd6c5952d15e81b968b07e9a22adb9667b6fe5249004852"]
+    [1337, WORLDGEN_BASELINES.small128[1337]],
+    [1, WORLDGEN_BASELINES.small128[1]],
+    [999999937, WORLDGEN_BASELINES.small128[999999937]]
   ])("128x150x128 world for seed %d is byte-identical", (seed, expected) => {
     expect(hashBytes(makeWorld(128, 150, 128, seed).blocks)).toBe(expected);
   });
@@ -71,7 +80,7 @@ describe("worldgen determinism", () => {
   test(
     "full-size 512x150x512 world for seed 1337 is byte-identical (the real save-compat surface)",
     () => {
-      expect(hashBytes(fullWorld().blocks)).toBe("48bf16c8019ef76bb9b034942f88542a88785538d29c09bf6100f8a30d0831f2");
+      expect(hashBytes(fullWorld().blocks)).toBe(WORLDGEN_BASELINES.full512Seed1337);
     },
     { timeout: 60000 }
   );
@@ -126,9 +135,9 @@ describe("world types", () => {
   // refactor can't silently corrupt worlds created with it. Re-baseline only on
   // a deliberate, CHANGELOG-flagged change to that type (same policy as default).
   test.each([
-    ["flat", "28e1e3ea69e01b02b8452f27bf88acc8a7b81edcfe24a4293363553379d072d3"],
-    ["amplified", "87ff8cb4f73247a6e62bfc7c8638c86cfa7cfe8a5d90185d6773d390067540a0"],
-    ["islands", "e9937c0d947a0952130c79c46c26fc37c9492c7d164e2dc61a626ea9d7d8a662"]
+    ["flat", WORLDGEN_BASELINES.typed.flat],
+    ["amplified", WORLDGEN_BASELINES.typed.amplified],
+    ["islands", WORLDGEN_BASELINES.typed.islands]
   ] as Array<[WorldType, string]>)("128x150x128 %s world for seed 1337 is byte-identical", (worldType, expected) => {
     expect(hashBytes(makeTypedWorld(128, 150, 128, 1337, worldType).blocks)).toBe(expected);
   });
@@ -321,6 +330,75 @@ describe("world content balance", () => {
   );
 });
 
+describe("ocean flora", () => {
+  test(
+    "kelp and coral grow on the sandy ocean floor, capped below the surface clearance band",
+    () => {
+      const world = fullWorld();
+      const seaLevel = GEN.seaLevel;
+      const clearance = GEN.oceanFlora.kelpSurfaceClearance;
+
+      let kelp = 0;
+      let coral = 0;
+      for (let x = 0; x < world.sizeX; x += 1) {
+        for (let z = 0; z < world.sizeZ; z += 1) {
+          for (let y = 0; y < world.sizeY; y += 1) {
+            const block = world.get(x, y, z);
+            if (block === BlockId.Kelp) {
+              kelp += 1;
+              // Every kelp cell keeps the clearance band: its top can reach at
+              // most seaLevel - clearance, so boats and casts stay clear.
+              expect(y).toBeLessThanOrEqual(seaLevel - clearance);
+              // A stalk stands on sand or on more kelp, never floats.
+              const below = world.get(x, y - 1, z);
+              expect(below === BlockId.Kelp || below === BlockId.Sand).toBe(true);
+              // Water (or more stalk) above — kelp never breaches into air.
+              const above = world.get(x, y + 1, z);
+              expect(above === BlockId.Kelp || above === BlockId.Water).toBe(true);
+            } else if (block === BlockId.CoralPink || block === BlockId.CoralBlue) {
+              coral += 1;
+              expect(world.get(x, y - 1, z)).toBe(BlockId.Sand);
+              expect(world.get(x, y + 1, z)).toBe(BlockId.Water);
+            }
+          }
+        }
+      }
+      expect(kelp).toBeGreaterThan(100); // the ocean floor is actually planted
+      expect(coral).toBeGreaterThan(10); // both reef blocks appear
+    },
+    { timeout: 60000 }
+  );
+});
+
+describe("buried treasure", () => {
+  test(
+    "chests bury two blocks under sand in the beach band, at every derived site",
+    () => {
+      const world = fullWorld();
+      const { sites } = collectTreasureSites(world);
+      expect(sites.length).toBeGreaterThan(0); // seed 1337 yields buried hoards
+
+      // The derive is deterministic — a second pass produces identical sites.
+      expect(collectTreasureSites(world)).toEqual({ sites });
+
+      for (const site of sites) {
+        // A chest actually sits at each derived site (build/derive lockstep),
+        // buried under the sand cap the write pass placed.
+        expect(world.get(site.x, site.y, site.z)).toBe(BlockId.Chest);
+        expect(world.index(site.x, site.y, site.z)).toBe(site.index);
+        expect(world.get(site.x, site.y + 1, site.z)).toBe(BlockId.Sand);
+        expect(world.get(site.x, site.y + 2, site.z)).toBe(BlockId.Sand);
+        // Shoreline: the chest hides just under the surface near sea level,
+        // never in open ocean.
+        expect(world.getBiome(site.x, site.z)).not.toBe(BiomeId.Ocean);
+        expect(site.y).toBeGreaterThanOrEqual(GEN.seaLevel - GEN.beachDepthBelowSea - 2);
+        expect(site.y).toBeLessThanOrEqual(GEN.seaLevel + GEN.beachMaxAboveSea - 2);
+      }
+    },
+    { timeout: 60000 }
+  );
+});
+
 describe("dungeons", () => {
   test(
     "dungeons generate underground with chests, spawners, and mossy cobble, clear of spawn",
@@ -330,7 +408,9 @@ describe("dungeons", () => {
       expect(sites.chestIndices.length).toBeGreaterThan(0);
       expect(sites.spawnerIndices.length).toBeGreaterThan(0);
 
-      const chestSet = new Set(sites.chestIndices);
+      const dungeonChests = new Set(sites.chestIndices);
+      const wreckChests = new Set(collectShipwreckSites(world).chestIndices);
+      const buriedChests = new Set(collectTreasureSites(world).sites.map((site) => site.index));
       const spawnerSet = new Set(sites.spawnerIndices);
       const cx = world.sizeX / 2;
       const cz = world.sizeZ / 2;
@@ -344,10 +424,12 @@ describe("dungeons", () => {
             const block = world.get(x, y, z);
             if (block === BlockId.Chest) {
               chests += 1;
-              // Every generated chest must be a known dungeon site — this is what
-              // gates lazy loot fill, so a mismatch would mean re-rollable loot.
-              expect(chestSet.has(world.index(x, y, z))).toBe(true);
-              // No dungeon loot in the immediate spawn area.
+              // Every generated chest must be a known dungeon, shipwreck, or
+              // buried-treasure site — this is what gates lazy loot fill, so a
+              // mismatch would mean re-rollable (or never-filled) loot.
+              const idx = world.index(x, y, z);
+              expect(dungeonChests.has(idx) || wreckChests.has(idx) || buriedChests.has(idx)).toBe(true);
+              // No worldgen loot in the immediate spawn area.
               expect(Math.hypot(x - cx, z - cz)).toBeGreaterThanOrEqual(30);
             } else if (block === BlockId.Spawner) {
               spawners += 1;
@@ -361,6 +443,36 @@ describe("dungeons", () => {
       expect(chests).toBeGreaterThan(0);
       expect(spawners).toBeGreaterThan(0);
       expect(mossy).toBeGreaterThan(0);
+    },
+    { timeout: 60000 }
+  );
+});
+
+describe("shipwrecks", () => {
+  test(
+    "wrecks sink fully below the sea with chests at every derived site",
+    () => {
+      const world = fullWorld();
+      const sites = collectShipwreckSites(world);
+      expect(sites.chestIndices.length).toBeGreaterThan(0); // seed 1337 yields wrecks
+
+      // The derive is deterministic — a second pass produces identical indices.
+      expect(collectShipwreckSites(world)).toEqual(sites);
+
+      const layer = world.sizeX * world.sizeZ;
+      for (const idx of sites.chestIndices) {
+        // A chest block actually stands at each derived site (build/derive lockstep).
+        expect(world.blocks[idx]).toBe(BlockId.Chest);
+        const y = Math.floor(idx / layer);
+        const rem = idx - y * layer;
+        const z = Math.floor(rem / world.sizeX);
+        const x = rem - z * world.sizeX;
+        // Fully submerged: the chest sits in ocean below sea level with water above
+        // the hull (the mast cap keeps the whole wreck under the surface).
+        expect(world.getBiome(x, z)).toBe(BiomeId.Ocean);
+        expect(y).toBeLessThan(GEN.seaLevel);
+        expect(world.get(x, GEN.seaLevel, z)).toBe(BlockId.Water);
+      }
     },
     { timeout: 60000 }
   );
@@ -404,8 +516,8 @@ describe("meshing", () => {
       const world = makeWorld(128, 150, 128, 1337);
       const geometry = buildGeometryRegion(world, 0, 127, 0, 127);
       const positions = geometry.getAttribute("position");
-      expect(positions.count).toBe(1319472);
-      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("b63ca724cc91653c76a01c45980f56cf3bfd2987ab61bc6e0f4fe2de6b7e529b");
+      expect(positions.count).toBe(1319712);
+      expect(hashBytes(new Uint8Array((positions.array as Float32Array).buffer))).toBe("c3b761dcf72419627068b090c78bc0357eeb06eacee35c1af77809356b70aefb");
     },
     { timeout: 60000 }
   );

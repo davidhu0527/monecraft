@@ -49,6 +49,16 @@
   padding: 18px 8px;
 }
 
+/* One-line hint under a screen title (which store these profiles live in). */
+.menu-note {
+  text-align: center;
+  color: var(--mc-text-light);
+  font-size: 12px;
+  opacity: 0.7;
+  text-shadow: var(--mc-text-shadow);
+  margin: -4px 0 10px;
+}
+
 .menu-list {
   display: flex;
   flex-direction: column;
@@ -116,6 +126,14 @@
   padding: 4px 8px;
   font-size: 11px;
   outline-width: 1px;
+}
+
+.menu-cloud-badge {
+  font-size: 11px;
+  color: #b9f6ca;
+  text-align: center;
+  padding: 4px 8px;
+  white-space: nowrap;
 }
 
 .menu-primary {
@@ -273,4 +291,52 @@
   flex: 1;
   padding: 5px 8px;
   font-size: 12px;
+}
+
+/* ── Account panel (online identity in the menu) ─────────────────────────── */
+.account-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  background: var(--mc-tile-panel, rgba(0, 0, 0, 0.25));
+  border: 2px solid rgba(0, 0, 0, 0.4);
+}
+
+.account-status {
+  flex: 1;
+  min-width: 120px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.account-error {
+  color: #ff8a80;
+  font-size: 12px;
+}
+
+/* ── Online worlds section + join page ───────────────────────────────────── */
+.menu-online {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 2px solid rgba(0, 0, 0, 0.35);
+}
+
+.menu-online-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.join-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.join-page .net-modal-box {
+  max-width: 420px;
 }

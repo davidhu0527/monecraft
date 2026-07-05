@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import * as THREE from "three";
 import { BlockId, collidesAt } from "@/lib/world";
 import {
@@ -38,11 +39,12 @@ import { xpLevel } from "@/lib/game/engine/systems/xp";
 import { CONTAINER_SLOT_BASE } from "@/lib/game/engine/commands";
 import { SPAWNER_INTERVAL_SECONDS, SPAWNER_LOCAL_CAP } from "@/lib/game/config";
 import { PET_FIGHT_RANGE, PET_TAMED_HP } from "@/lib/game/config";
+import { MAX_VEHICLES } from "@/lib/game/config";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
-import { fillDungeonChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
+import { fillWorldgenChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
-import type { FrameInput } from "@/lib/game/engine/state";
+import type { FrameInput, GameEvent } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
 /**
@@ -64,14 +66,7 @@ function makeEngine(save: ReturnType<GameEngine["serialize"]> | null = null): Ga
   return new GameEngine({ save, seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
 }
 
-function input(overrides: Partial<{ keys: string[]; capsActive: boolean; leftMouseHeld: boolean; pointerLocked: boolean }> = {}): FrameInput {
-  return {
-    keys: new Set(overrides.keys ?? []),
-    capsActive: overrides.capsActive ?? false,
-    leftMouseHeld: overrides.leftMouseHeld ?? false,
-    pointerLocked: overrides.pointerLocked ?? false
-  };
-}
+const input = frameInput;
 
 function run(engine: GameEngine, seconds: number, frame: FrameInput = input()): void {
   const dt = 1 / 60;
@@ -123,11 +118,11 @@ describe("boot", () => {
     const { state } = engine;
     expect(collidesAt(state.world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)).toBe(false);
     expect(state.player.position.y).toBeGreaterThan(2);
-    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper
-    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4);
+    // sheep/chicken/horse/cow/pig + wolf/cat + 3 fallback villagers (64³ has no village) + zombie/skeleton/spider/creeper + cod/salmon
+    expect(state.mobs.length).toBe(6 + 5 + 3 + 4 + 4 + 4 + 3 + 3 + 8 + 6 + 6 + 4 + 6 + 4);
     expect(countsById(state.inventory).get("wood")).toBe(64);
     expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
-    expect(engine.getSnapshot().passiveCount).toBe(32);
+    expect(engine.getSnapshot().passiveCount).toBe(42); // land passives + villagers + 10 fish
     expect(engine.getSnapshot().hostileCount).toBe(24);
   });
 
@@ -135,7 +130,7 @@ describe("boot", () => {
     // A single bad byte in localStorage shouldn't load a NaN world — and NaN would
     // slip past the `position.y < 2` unstuck net, since NaN comparisons are false.
     const save = makeEngine().serialize();
-    const engine = makeEngine({ ...save, player: { x: Number.NaN, y: Number.NaN, z: Number.NaN } });
+    const engine = makeEngine({ ...save, players: [{ ...save.players[0], position: { x: Number.NaN, y: Number.NaN, z: Number.NaN } }] });
     const { position } = engine.state.player;
     expect(Number.isFinite(position.x)).toBe(true);
     expect(Number.isFinite(position.y)).toBe(true);
@@ -217,7 +212,7 @@ describe("movement and stats", () => {
     // pre-seed the budget and sprint the last stretch.
     engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 10;
     // Space held: the player hops over one-block terrain rises while sprinting.
-    run(engine, 4, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    run(engine, 4, input({ keys: ["KeyW", "Space"], sprint: true }));
     expect(engine.state.hunger).toBeLessThan(MAX_HUNGER);
   });
 
@@ -227,7 +222,7 @@ describe("movement and stats", () => {
     run(engine, 1);
     engine.state.hunger = SPRINT_MIN_HUNGER;
     engine.state.timers.sprintDistanceBudget = SPRINT_BLOCKS_PER_HUNGER - 1;
-    run(engine, 2, input({ keys: ["KeyW", "Space"], capsActive: true }));
+    run(engine, 2, input({ keys: ["KeyW", "Space"], sprint: true }));
     // No sprint drain fired: movement counted as walking instead.
     expect(engine.state.hunger).toBe(SPRINT_MIN_HUNGER);
     expect(engine.state.timers.sprintDistanceBudget).toBe(SPRINT_BLOCKS_PER_HUNGER - 1);
@@ -276,7 +271,7 @@ describe("movement and stats", () => {
     const engine = makeEngine();
     calmDaytime(engine);
     run(engine, 1); // settle on the ground
-    addEffect(engine.state, "jump_boost", 60);
+    addEffect(engine.state.player, "jump_boost", 60);
     engine.step(1 / 60, input({ keys: ["Space"] }));
     expect(engine.state.player.velocity.y).toBeCloseTo(JUMP_VELOCITY + EFFECT_JUMP_BOOST_VELOCITY, 5);
   });
@@ -417,7 +412,7 @@ describe("mining", () => {
     state.player.position.z = pz + 0.5;
     state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
     const before = countsById(state.inventory);
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.get(px, py, pz)).toBe(BlockId.Air);
     const after = countsById(state.inventory);
@@ -443,8 +438,8 @@ describe("mining", () => {
       state.player.position.z = pz + 0.5;
       state.player.pitch = -Math.PI / 2 + 0.02; // look straight down
       state.inventory[state.selectedSlot] = createSlot("wood_pickaxe", 1);
-      if (haste) addEffect(state, "haste", 60);
-      run(engine, 0.5, input({ leftMouseHeld: true, pointerLocked: true }));
+      if (haste) addEffect(state.player, "haste", 60);
+      run(engine, 0.5, input({ mineHeld: true }));
       return state.mining.progress;
     };
     const plain = progressAfter(false);
@@ -458,8 +453,39 @@ describe("mining", () => {
     calmDaytime(engine);
     run(engine, 1);
     engine.state.player.pitch = -Math.PI / 2 + 0.02;
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: false }));
+    run(engine, 4, input({ mineHeld: false }));
     expect(engine.state.blockChanges.changes().length).toBe(0);
+  });
+
+  test("breaking a submerged kelp cell breaks the stalk above it and refills with water", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 1);
+    const { state } = engine;
+    const ex = Math.floor(state.player.position.x);
+    const ez = Math.floor(state.player.position.z);
+    state.player.position.x = ex + 0.5;
+    state.player.position.z = ez + 0.5;
+    state.player.yaw = 0; // looking -Z
+    state.player.pitch = 0;
+    const ey = Math.floor(state.player.position.y + EYE_HEIGHT);
+    // A clear lane at eye height into a 3-tall kelp stalk topped with water; the
+    // ray hits the stalk's MIDDLE cell (ey), so the cascade must take ey+1 too.
+    state.blockChanges.set(ex, ey, ez - 1, BlockId.Air);
+    state.blockChanges.set(ex, ey - 1, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey + 1, ez - 2, BlockId.Kelp);
+    state.blockChanges.set(ex, ey + 2, ez - 2, BlockId.Water);
+
+    const before = countsById(state.inventory).get("kelp") ?? 0;
+    run(engine, 4, input({ mineHeld: true }));
+
+    // The hit cell and everything above it turned to water (no air pocket)...
+    expect(state.world.get(ex, ey, ez - 2)).toBe(BlockId.Water);
+    expect(state.world.get(ex, ey + 1, ez - 2)).toBe(BlockId.Water);
+    // ...the stalk base below the hit survives, and both cells dropped kelp.
+    expect(state.world.get(ex, ey - 1, ez - 2)).toBe(BlockId.Kelp);
+    expect(countsById(state.inventory).get("kelp")).toBe(before + 2);
   });
 });
 
@@ -587,7 +613,7 @@ describe("chests", () => {
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
     expect(state.containers.has(idx)).toBe(false);
@@ -604,7 +630,7 @@ describe("chests", () => {
     state.containers.set(idx, slots);
     engine.consumeEvents();
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
     expect(state.containers.has(idx)).toBe(false);
@@ -623,7 +649,7 @@ describe("chests", () => {
     state.inventory = Array.from({ length: state.inventory.length }, () => createSlot("stone", 99));
     engine.consumeEvents();
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
     const events = engine.consumeEvents();
 
     expect(state.world.blocks[idx]).toBe(BlockId.Chest); // not broken
@@ -657,8 +683,8 @@ describe("chests", () => {
     const idx = engine.state.world.index(22, 40, 22);
     engine.state.dungeonChestIndices.add(idx);
 
-    fillDungeonChestIfUnlooted(engine.state, idx);
-    expect(engine.state.lootedDungeonChests.has(idx)).toBe(true);
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
 
     // Emptying it and re-accessing must not re-roll: the looted set is the gate.
@@ -666,7 +692,7 @@ describe("chests", () => {
       idx,
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
-    fillDungeonChestIfUnlooted(engine.state, idx);
+    fillWorldgenChestIfUnlooted(engine.state, idx);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
 
@@ -676,7 +702,7 @@ describe("chests", () => {
     engine.state.blockChanges.set(20, 40, 20, BlockId.Chest);
     engine.state.dungeonChestIndices.add(idx);
 
-    fillDungeonChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
+    fillWorldgenChestIfUnlooted(engine.state, idx); // first open → loot + marked looted
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(true);
     // Player loots everything; the now-empty container drops out of the save.
     engine.state.containers.set(
@@ -689,9 +715,9 @@ describe("chests", () => {
     // would normally be among them, so simulate that — the point under test is
     // that the *persisted looted set*, not the chest's emptiness, blocks re-roll.
     restored.state.dungeonChestIndices.add(idx);
-    expect(restored.state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(restored.state.lootedWorldgenChests.has(idx)).toBe(true);
 
-    fillDungeonChestIfUnlooted(restored.state, idx);
+    fillWorldgenChestIfUnlooted(restored.state, idx);
     const after = restored.state.containers.get(idx) ?? [];
     expect(after.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
@@ -705,12 +731,79 @@ describe("chests", () => {
     state.inventory = Array.from({ length: state.inventory.length }, () => createEmptySlot()); // room to receive
     engine.consumeEvents();
 
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
 
     expect(state.world.blocks[idx]).toBe(BlockId.Air);
-    expect(state.lootedDungeonChests.has(idx)).toBe(true);
+    expect(state.lootedWorldgenChests.has(idx)).toBe(true);
     expect(countsById(state.inventory).get("chest")).toBe(1); // the chest item itself
     expect(countsById(state.inventory).get("bone") ?? 0).toBeGreaterThan(0); // bone always drops
+  });
+
+  test("the treasure-map compass targets the nearest unlooted buried chest and retargets after digging", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    state.mobs = [];
+    // Two hand-injected buried sites (the 64³ test world derives none — all
+    // candidates fall inside the spawn-clearance radius, like dungeons).
+    const near = { x: Math.floor(state.player.position.x) + 10, y: 20, z: Math.floor(state.player.position.z), index: 0 };
+    near.index = state.world.index(near.x, near.y, near.z);
+    const far = { x: near.x + 20, y: 20, z: near.z, index: 0 };
+    far.index = state.world.index(far.x, far.y, far.z);
+    state.treasureSites = [far, near];
+    state.buriedTreasureChestIndices.add(near.index).add(far.index);
+
+    // No map held → no compass. (getSnapshot returns the cached snapshot, so
+    // step once to rebuild it against the injected sites.)
+    engine.step(0.01, input());
+    expect(engine.getSnapshot().treasure).toBeNull();
+
+    // Holding the map targets the NEAREST unlooted site.
+    state.inventory[state.selectedSlot] = createSlot("treasure_map", 1);
+    engine.step(0.01, input());
+    const first = engine.getSnapshot().treasure;
+    expect(first).not.toBeNull();
+    expect(Math.abs(first!.distanceBlocks - 10)).toBeLessThanOrEqual(1);
+
+    // Digging up the near chest (first fill) emits the unearthed event and
+    // retargets the compass to the remaining site.
+    const events: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(state, near.index, (e) => events.push(e));
+    expect(events.some((e) => e.type === "treasureUnearthed")).toBe(true);
+    engine.step(0.01, input());
+    const second = engine.getSnapshot().treasure;
+    expect(Math.abs(second!.distanceBlocks - 30)).toBeLessThanOrEqual(1);
+
+    // Both looted → the compass goes dark.
+    fillWorldgenChestIfUnlooted(state, far.index);
+    engine.step(0.01, input());
+    expect(engine.getSnapshot().treasure).toBeNull();
+  });
+
+  test("a shipwreck chest fills from the shipwreck table, once, from its own seed family", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(24, 40, 24);
+    engine.state.shipwreckChestIndices.add(idx);
+
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
+    const slots = engine.state.containers.get(idx)!;
+    // Planks are the shipwreck table's guaranteed salvage (bone is the dungeon one).
+    expect(slots.some((slot) => slot.id === "planks" && slot.count > 0)).toBe(true);
+
+    // The same index registered as a dungeon chest instead rolls different loot —
+    // the family picks both the table and the seed constant.
+    const other = makeEngine();
+    other.state.dungeonChestIndices.add(idx);
+    fillWorldgenChestIfUnlooted(other.state, idx);
+    expect(other.state.containers.get(idx)!.some((slot) => slot.id === "bone" && slot.count > 0)).toBe(true);
+
+    // Re-access after emptying never re-rolls (the shared looted set gates it).
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    fillWorldgenChestIfUnlooted(engine.state, idx);
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
 });
 
@@ -848,7 +941,7 @@ describe("doors", () => {
     const engine = makeEngine();
     const door = setAimedDoor(engine);
     const before = countsById(engine.state.inventory).get("door") ?? 0;
-    run(engine, 5, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 5, input({ mineHeld: true }));
     expect(engine.state.world.get(door.x, door.y, door.z)).toBe(BlockId.Air);
     expect(engine.state.world.get(door.x, door.y + 1, door.z)).toBe(BlockId.Air);
     expect(countsById(engine.state.inventory).get("door")).toBe(before + 1);
@@ -1104,7 +1197,7 @@ describe("gameplay events", () => {
     state.player.position.z = pz + 0.5;
     state.player.pitch = -Math.PI / 2 + 0.02;
     engine.consumeEvents();
-    run(engine, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 4, input({ mineHeld: true }));
     const events = engine.consumeEvents();
     expect(events.some((event) => event.type === "blockBroken" && event.blockId === targetBlock)).toBe(true);
   });
@@ -1488,8 +1581,8 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(16);
-    expect(save.gameMode).toBe("survival");
+    expect(save.version).toBe(17);
+    expect(save.players[0].gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
     const restored = makeEngine(save);
@@ -1566,6 +1659,51 @@ describe("persistence", () => {
     expect(restored.state.vehicles).toHaveLength(1);
     expect(restored.state.vehicles[0].kind).toBe("ship");
     expect(restored.state.vehicles[0].position.z).toBeCloseTo(ship.position.z, 4);
+  });
+
+  test("placement is refused once the vehicle cap is reached", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    makeWaterPatch(engine);
+    engine.state.player.position.set(20.5, 11, 24.5);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = -0.55;
+    engine.state.inventory[engine.state.selectedSlot] = createSlot("raft", 2);
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.vehicles).toHaveLength(1);
+
+    // Saturate the world to the cap (reusing the one real vehicle instance is fine — the
+    // guard only reads length), then try to place the second raft.
+    const placed = engine.state.vehicles[0];
+    while (engine.state.vehicles.length < MAX_VEHICLES) engine.state.vehicles.push(placed);
+    const heldBefore = engine.state.inventory[engine.state.selectedSlot].count;
+    engine.dispatch({ type: "placeBlock" });
+
+    expect(engine.state.vehicles).toHaveLength(MAX_VEHICLES);
+    expect(engine.state.inventory[engine.state.selectedSlot].count).toBe(heldBefore); // not consumed
+  });
+
+  test("a saved boat survives reload even after the water beneath it is removed", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    makeWaterPatch(engine);
+    engine.state.player.position.set(20.5, 11, 24.5);
+    engine.state.player.yaw = 0;
+    engine.state.player.pitch = -0.55;
+    engine.state.inventory[engine.state.selectedSlot] = createSlot("raft", 1);
+    engine.dispatch({ type: "placeBlock" });
+    expect(engine.state.vehicles).toHaveLength(1);
+
+    // Drain the lake: the water that supported the raft is now air. An earlier version
+    // re-checked water support at load and silently deleted the persisted raft (and its
+    // crafting cost); it must now survive the reload and simply sit beached.
+    for (let z = 15; z <= 25; z += 1) {
+      for (let x = 15; x <= 25; x += 1) engine.state.blockChanges.set(x, 10, z, BlockId.Air);
+    }
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.vehicles).toHaveLength(1);
+    expect(restored.state.vehicles[0].kind).toBe("raft");
   });
 
   test("active status effects round-trip through serialize and restore", () => {
@@ -1815,7 +1953,7 @@ describe("farming", () => {
     calmDaytime(engine);
     const crop = harvestUnderfoot(engine, BlockId.WheatStage3);
     const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
-    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 2, input({ mineHeld: true }));
     expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
     expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore + 1);
     expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBeGreaterThanOrEqual(1);
@@ -1827,7 +1965,7 @@ describe("farming", () => {
     const crop = harvestUnderfoot(engine, BlockId.WheatStage1);
     const wheatBefore = countsById(engine.state.inventory).get("wheat") ?? 0;
     const seedsBefore = countsById(engine.state.inventory).get("seeds") ?? 0;
-    run(engine, 2, input({ leftMouseHeld: true, pointerLocked: true }));
+    run(engine, 2, input({ mineHeld: true }));
     expect(engine.state.world.get(crop.x, crop.y, crop.z)).toBe(BlockId.Air);
     expect(countsById(engine.state.inventory).get("wheat") ?? 0).toBe(wheatBefore);
     expect(countsById(engine.state.inventory).get("seeds") ?? 0).toBe(seedsBefore + 1);
@@ -2707,7 +2845,7 @@ describe("drinking potions", () => {
 });
 
 describe("armor equipping (dedicated slots)", () => {
-  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const die = (engine: GameEngine) => (engine as unknown as { damageCombat: (p: unknown, amount: number) => void }).damageCombat(engine.state.player, 100);
 
   test("equipping moves the piece out of the hotbar, freeing the slot", () => {
     const engine = makeEngine();
@@ -2757,7 +2895,7 @@ describe("armor equipping (dedicated slots)", () => {
 });
 
 describe("statistics (save v13)", () => {
-  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const die = (engine: GameEngine) => (engine as unknown as { damageCombat: (p: unknown, amount: number) => void }).damageCombat(engine.state.player, 100);
 
   test("crafting bumps items_crafted and the per-recipe counter at the emit chokepoint", () => {
     const engine = makeEngine();
@@ -2794,7 +2932,7 @@ describe("statistics (save v13)", () => {
 });
 
 describe("advancements (save v13)", () => {
-  const die = (engine: GameEngine) => (engine as unknown as { applyDamage: (amount: number) => void }).applyDamage(100);
+  const die = (engine: GameEngine) => (engine as unknown as { damageCombat: (p: unknown, amount: number) => void }).damageCombat(engine.state.player, 100);
   const removeMobAt = (engine: GameEngine, index: number) => (engine as unknown as { removeMobAt: (i: number, looting?: number) => void }).removeMobAt(index);
 
   function pushHostile(engine: GameEngine, kind: MobKind): void {
@@ -2862,7 +3000,7 @@ describe("advancements (save v13)", () => {
   test("a corrupt/unknown advancement id is dropped on load (registry-filtered)", () => {
     const engine = makeEngine();
     const save = engine.serialize();
-    save.advancements = ["getting_wood", "totally_bogus"];
+    save.players[0].advancements = ["getting_wood", "totally_bogus"];
     const restored = makeEngine(save);
     expect(restored.state.advancements.has("getting_wood")).toBe(true); // real id kept
     expect(restored.state.advancements.has("totally_bogus")).toBe(false); // bogus id dropped

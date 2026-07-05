@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import * as THREE from "three";
 import { BlockId, voxelRaycast } from "@/lib/world";
 import { EYE_HEIGHT, MINE_REACH } from "@/lib/game/config";
@@ -8,7 +9,6 @@ import { lookDirection } from "@/lib/game/engine/systems/playerMotion";
 import { applyDamageWithArmor } from "@/lib/game/engine/systems/playerLife";
 import { pushMob } from "@/lib/game/engine/systems/spawnDirector";
 import type { GameMode } from "@/lib/game/gameModes";
-import type { FrameInput } from "@/lib/game/engine/state";
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -24,20 +24,13 @@ function makeEngine(gameMode: GameMode): GameEngine {
   return new GameEngine({ seed: 1337, gameMode, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
 }
 
-function input(overrides: Partial<{ keys: string[]; leftMouseHeld: boolean; pointerLocked: boolean }> = {}): FrameInput {
-  return {
-    keys: new Set(overrides.keys ?? []),
-    capsActive: false,
-    leftMouseHeld: overrides.leftMouseHeld ?? false,
-    pointerLocked: overrides.pointerLocked ?? false
-  };
-}
+const input = frameInput;
 
 describe("adventure", () => {
   test("takes damage like survival (not invulnerable)", () => {
     const e = makeEngine("adventure");
     const before = e.state.hearts;
-    applyDamageWithArmor(e.state, 4);
+    applyDamageWithArmor(e.state.player, 4);
     expect(e.state.hearts).toBe(before - 4);
   });
 
@@ -57,7 +50,7 @@ describe("adventure", () => {
     const hit = voxelRaycast(e.state.world, origin, lookDirection(p.yaw, p.pitch, new THREE.Vector3()), MINE_REACH);
     expect(hit).not.toBeNull();
     const { x, y, z } = hit!.hit;
-    for (let i = 0; i < 60; i += 1) e.step(1 / 60, input({ leftMouseHeld: true, pointerLocked: true }));
+    for (let i = 0; i < 60; i += 1) e.step(1 / 60, input({ mineHeld: true }));
     expect(e.state.world.get(x, y, z)).not.toBe(BlockId.Air); // terrain untouched
   });
 
@@ -102,7 +95,7 @@ describe("adventure", () => {
     pushMob(e.state, "zombie", true, p.x + 1, p.y, p.z, mulberry32(7));
     let attacked = false;
     for (let i = 0; i < 120; i += 1) {
-      e.step(1 / 60, input({ pointerLocked: true }));
+      e.step(1 / 60, input());
       if (e.consumeEvents().some((event) => event.type === "mobAttacked")) attacked = true;
     }
     expect(attacked).toBe(true);

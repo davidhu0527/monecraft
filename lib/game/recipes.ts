@@ -193,6 +193,28 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "cooked_fish", count: 1 },
     station: "furnace"
   },
+  // Kelp is abundant on the ocean floor, so one fuel dries a whole bundle —
+  // a cheap light snack rather than a meal.
+  {
+    id: "dry_kelp",
+    label: "3 Kelp + Coal -> 3 Dried Kelp",
+    cost: [
+      { slotId: "kelp", count: 3 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "dried_kelp", count: 3 },
+    station: "furnace"
+  },
+  {
+    id: "dry_kelp_charcoal",
+    label: "3 Kelp + Charcoal -> 3 Dried Kelp",
+    cost: [
+      { slotId: "kelp", count: 3 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "dried_kelp", count: 3 },
+    station: "furnace"
+  },
   { id: "glass", label: "4 Sand -> 2 Glass", cost: [{ slotId: "sand", count: 4 }], result: { slotId: "glass", count: 2 } },
   { id: "empty_bottle", label: "3 Glass -> 3 Glass Bottle", cost: [{ slotId: "glass", count: 3 }], result: { slotId: "empty_bottle", count: 3 } },
   // Brewing: a glass bottle plus one reagent becomes a potion at a brewing stand.
@@ -636,10 +658,21 @@ export const RECIPES: Recipe[] = [...CRAFTING_RECIPES, ...TRADES];
  * own group (a furnace smelts, a villager trades); everything else is grouped by
  * the kind of item it produces.
  */
-export type RecipeCategory = "Tools" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Brewing" | "Trades";
+export type RecipeCategory = "Tools" | "Vehicles" | "Weapons" | "Armor" | "Building" | "Food" | "Materials" | "Smelting" | "Brewing" | "Trades";
 
 /** Fixed display order; `groupRecipes` emits sections in this sequence. */
-export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = ["Tools", "Weapons", "Armor", "Building", "Food", "Materials", "Smelting", "Brewing", "Trades"];
+export const RECIPE_CATEGORY_ORDER: RecipeCategory[] = [
+  "Tools",
+  "Vehicles",
+  "Weapons",
+  "Armor",
+  "Building",
+  "Food",
+  "Materials",
+  "Smelting",
+  "Brewing",
+  "Trades"
+];
 
 const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   tool: "Tools",
@@ -648,7 +681,7 @@ const KIND_TO_CATEGORY: Record<ItemKind, RecipeCategory> = {
   block: "Building",
   food: "Food",
   material: "Materials",
-  vehicle: "Tools"
+  vehicle: "Vehicles"
 };
 
 /**

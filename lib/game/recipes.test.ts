@@ -32,6 +32,8 @@ describe("recipe categories", () => {
   test("recipeCategory assigns each recipe to the right section", () => {
     expect(recipeCategory(recipe("stone_pickaxe"))).toBe("Tools");
     expect(recipeCategory(recipe("diamond_sword"))).toBe("Weapons");
+    expect(recipeCategory(recipe("raft"))).toBe("Vehicles");
+    expect(recipeCategory(recipe("ship"))).toBe("Vehicles");
     expect(recipeCategory(recipe("helmet"))).toBe("Armor");
     expect(recipeCategory(recipe("door"))).toBe("Building");
     expect(recipeCategory(recipe("bread"))).toBe("Food");
@@ -214,11 +216,11 @@ describe("fishing recipes", () => {
 });
 
 describe("vehicle recipes", () => {
-  test("rafts and ships craft from wood materials in the Tools section", () => {
+  test("rafts and ships craft from wood materials in the Vehicles section", () => {
     const raft = recipe("raft");
     const ship = recipe("ship");
-    expect(recipeCategory(raft)).toBe("Tools");
-    expect(recipeCategory(ship)).toBe("Tools");
+    expect(recipeCategory(raft)).toBe("Vehicles");
+    expect(recipeCategory(ship)).toBe("Vehicles");
     expect(
       canCraft(
         inventory([

@@ -21,6 +21,14 @@ export const RAFT_HALF_LENGTH = 0.8;
 export const SHIP_SPEED = 5.4;
 export const SHIP_HALF_WIDTH = 1.0;
 export const SHIP_HALF_LENGTH = 1.6;
+export const MAX_VEHICLES = 64; // cap on persisted rafts+ships per world — bounds save size (creative placement never consumes)
+
+// Online accounts. An account owns server-side profiles (its cross-device
+// identities); each profile owns online worlds. Both are capped to bound
+// per-account storage on the shared database. Enforced server-side in
+// lib/online/worldsService.ts (the UI just surfaces a friendly "limit reached").
+export const MAX_ONLINE_PROFILES = 5; // profiles one account may create
+export const MAX_WORLDS_PER_PROFILE = 10; // online worlds one profile may own
 
 // Game modes / flight — Creative & Spectator fly with direct vertical control
 // (Space ascends, crouch descends); a double-tap of Space toggles flight.
@@ -265,11 +273,26 @@ export const GRASS_SEED_DROP_CHANCE = 0.2;
 export const SAPLING_GROWTH_CHANCE = 0.12;
 export const LEAVES_SAPLING_DROP_CHANCE = 0.08;
 export const GRASS_SPREAD_CHANCE = 0.18;
+// Kelp regrowth: the per-sampled-tick odds a kelp stalk's top grows one block
+// up into the water above. Height and surface clearance reuse the worldgen
+// invariants in GEN.oceanFlora (generation.ts) so grown and generated stalks
+// obey the same caps.
+export const KELP_GROWTH_CHANCE = 0.2;
 // Bone meal: how many units one bone grinds into, and how many crop stages a
 // single application advances (a random 1..BONE_MEAL_CROP_STAGES_MAX, like
 // Minecraft); on a sapling it grows the tree instantly.
 export const BONE_MEAL_PER_BONE = 3;
 export const BONE_MEAL_CROP_STAGES_MAX = 2;
+
+// Fish mobs (cod/salmon). Passive swimmers confined to water (the aquatic
+// branch in mobAI): they flee the player in 3D within FISH_FLEE_RANGE and
+// suffocate out of water at FISH_SUFFOCATION_HP_PER_SECOND. The aquatic spawn
+// director trickles schools in around the player (up to AQUATIC_CAP within
+// range) so sailed-to oceans are populated, not just the spawn area.
+export const FISH_FLEE_RANGE = 5;
+export const FISH_SUFFOCATION_HP_PER_SECOND = 2;
+export const AQUATIC_CAP = 24;
+export const AQUATIC_SPAWN_INTERVAL_SECONDS = 8;
 
 // Fishing. Cast a bobber at water within FISHING_REACH; after a random wait in
 // [BITE_MIN, BITE_MAX] the bobber dips for FISHING_BITE_WINDOW_SECONDS — reel in
@@ -327,13 +350,17 @@ export const SAVE_KEY = "minecraft_save_v7";
 // The deterministic world-generation baseline. Bumped whenever worldgen
 // changes, so old block-diffs (which index against generated terrain) can't be
 // applied to a different baseline: v6 added dungeons; v7 added deep-cave lava
-// lakes; v8 added shallow coal ore; v9 added generated villages. Each world
+// lakes; v8 added shallow coal ore; v9 added generated villages; v10 added
+// ocean flora (kelp/coral) and the aquatic-update structures; v11 moved all
+// seed-determined noise to bit-portable implementations (lib/world/noise.ts),
+// so the same seed now generates identical bytes on every JS engine — the
+// prerequisite for a multiplayer server sharing worlds with browsers. Each world
 // records the WORLDGEN_VERSION it was generated under; a world whose recorded
 // version differs from this constant has its block-diffs discarded and is
 // rebooted from its stored seed (lib/game/worlds.ts). The save *schema* (SaveData)
 // is independent of this — lighting is a derived cache and lava is worldgen, so
 // neither is persisted, and additive schema bumps don't touch it.
-export const WORLDGEN_VERSION = 9;
+export const WORLDGEN_VERSION = 11;
 
 // Rendering
 export const RENDER_RADIUS = 90;

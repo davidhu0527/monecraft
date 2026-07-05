@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { HEALTH_REGEN_INTERVAL_SECONDS, MAX_HEARTS, MAX_OXYGEN, STARVATION_INTERVAL_SECONDS } from "@/lib/game/config";
-import { createTimers, type GameState } from "@/lib/game/engine/state";
+import { createTimers, type GameState, type PlayerState } from "@/lib/game/engine/state";
 import { tickHealthRegen, tickStarvation } from "@/lib/game/engine/systems/playerStats";
 import { applyNonLethalDamage, applyUnmitigatedDamage } from "@/lib/game/engine/systems/playerLife";
 import type { Difficulty } from "@/lib/game/difficulties";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { EffectId } from "@/lib/game/types";
 
-function makeState(overrides: Partial<GameState> = {}): GameState {
-  return {
-    player: { position: new THREE.Vector3(0, 64, 0), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true },
+function makeState(overrides: Partial<GameState> = {}): GameState & PlayerState {
+  const state = {
+    position: new THREE.Vector3(0, 64, 0),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true,
     gameMode: "survival" as GameMode,
     difficulty: "normal" as Difficulty,
     hearts: MAX_HEARTS,
@@ -20,17 +24,20 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     effects: new Map<EffectId, number>(),
     timers: createTimers(),
     ...overrides
-  } as unknown as GameState;
+  } as unknown as GameState & PlayerState;
+  // The flat fixture IS its own player (the old single-player shape).
+  (state as { player: unknown }).player = state;
+  return state;
 }
 
 // The same wiring the engine uses: Easy/Normal floor via applyNonLethalDamage,
 // Hard (floor 0) kills via applyUnmitigatedDamage.
-const applyFloored = (state: GameState) => (amount: number, floorHp: number) => void applyNonLethalDamage(state, amount, floorHp);
-const applyLethal = (state: GameState) => (amount: number) => void applyUnmitigatedDamage(state, amount);
+const applyFloored = (state: GameState & PlayerState) => (amount: number, floorHp: number) => void applyNonLethalDamage(state, amount, floorHp);
+const applyLethal = (state: GameState & PlayerState) => (amount: number) => void applyUnmitigatedDamage(state, amount);
 
 /** Advances starvation by `seconds` of game time in one call. */
-function starve(state: GameState, seconds: number): void {
-  tickStarvation(state, seconds, applyFloored(state), applyLethal(state));
+function starve(state: GameState & PlayerState, seconds: number): void {
+  tickStarvation(state, state, seconds, applyFloored(state), applyLethal(state));
 }
 
 describe("tickStarvation", () => {
@@ -100,12 +107,12 @@ describe("tickStarvation", () => {
 describe("tickHealthRegen difficulty scaling", () => {
   test("Peaceful heals in half the time of the baseline interval", () => {
     const peaceful = makeState({ difficulty: "peaceful", hearts: 10, hunger: 20 });
-    tickHealthRegen(peaceful, HEALTH_REGEN_INTERVAL_SECONDS * 0.5); // Peaceful's faster cadence
+    tickHealthRegen(peaceful, peaceful, HEALTH_REGEN_INTERVAL_SECONDS * 0.5); // Peaceful's faster cadence
     expect(peaceful.hearts).toBe(11);
 
     // Normal needs the full interval — half of it isn't enough.
     const normal = makeState({ difficulty: "normal", hearts: 10, hunger: 20 });
-    tickHealthRegen(normal, HEALTH_REGEN_INTERVAL_SECONDS * 0.5);
+    tickHealthRegen(normal, normal, HEALTH_REGEN_INTERVAL_SECONDS * 0.5);
     expect(normal.hearts).toBe(10);
   });
 });

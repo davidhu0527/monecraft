@@ -37,6 +37,7 @@ import {
   CHEST_OPEN_SOUND,
   SMELT_SOUND,
   TILL_SOUND,
+  VEHICLE_DENIED_SOUND,
   VICTORY_SOUND,
   EXPLOSION_SOUND,
   TNT_FUSE_SOUND,
@@ -201,6 +202,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "blockPlaced":
           backend.play(PLACE_SOUNDS[materialGroupFor(event.blockId)]);
+          break;
+        case "vehiclePlaced":
+          backend.play(PLACE_SOUNDS.wood); // rafts and ships are wooden — reuse the plank thunk
+          break;
+        case "vehiclePlaceFailed":
+          backend.play(VEHICLE_DENIED_SOUND);
           break;
         case "playerHurt":
           backend.play(HURT_SOUND);

@@ -664,6 +664,38 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       tremolo: 0.25
     })
   },
+  cod: {
+    // A soft underwater bubble blip.
+    params: zz({
+      volume: 0.3,
+      randomness: 0.25,
+      frequency: 320,
+      sustain: 0.02,
+      release: 0.08,
+      shape: 0,
+      shapeCurve: 1.2,
+      slide: 2,
+      sustainVolume: 0.5,
+      decay: 0.03,
+      filter: -400
+    })
+  },
+  salmon: {
+    // A slightly deeper bubble blip than the cod's.
+    params: zz({
+      volume: 0.3,
+      randomness: 0.25,
+      frequency: 240,
+      sustain: 0.02,
+      release: 0.09,
+      shape: 0,
+      shapeCurve: 1.2,
+      slide: 2,
+      sustainVolume: 0.5,
+      decay: 0.03,
+      filter: -400
+    })
+  },
   raider: {
     // A low, menacing grunt.
     params: zz({
@@ -881,6 +913,37 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       sustainVolume: 0.7,
       decay: 0.03,
       filter: 700
+    }),
+    minRetriggerMs: 120
+  },
+  // Fish never attack (attackDamage 0) — a splash, mapped only for exhaustiveness.
+  cod: {
+    params: zz({
+      volume: 0.35,
+      randomness: 0.2,
+      frequency: 220,
+      sustain: 0.02,
+      release: 0.08,
+      shape: 4,
+      noise: 0.7,
+      sustainVolume: 0.6,
+      decay: 0.03,
+      filter: -400
+    }),
+    minRetriggerMs: 120
+  },
+  salmon: {
+    params: zz({
+      volume: 0.35,
+      randomness: 0.2,
+      frequency: 180,
+      sustain: 0.02,
+      release: 0.08,
+      shape: 4,
+      noise: 0.7,
+      sustainVolume: 0.6,
+      decay: 0.03,
+      filter: -400
     }),
     minRetriggerMs: 120
   },
@@ -1251,6 +1314,23 @@ export const FISHING_REEL_EMPTY_SOUND: SoundDef = {
     filter: -300
   }),
   minRetriggerMs: 120
+};
+
+/** Low, muffled thud when a raft/ship can't be placed — no water, blocked, or at the cap. */
+export const VEHICLE_DENIED_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.32,
+    randomness: 0.1,
+    frequency: 150,
+    sustain: 0.03,
+    release: 0.09,
+    shape: 0,
+    slide: -3,
+    sustainVolume: 0.4,
+    decay: 0.02,
+    filter: -420
+  }),
+  minRetriggerMs: 160
 };
 
 /** Soft munch when an animal is fed. */

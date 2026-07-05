@@ -1,10 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput } from "@/lib/game/engine/state";
 import { createAudioDirector, DEFAULT_AUDIO_SETTINGS, type AudioGraph } from "./audioDirector";
 import type { MusicMood } from "./musicBrain";
 import type { PlayOptions, SynthBackend } from "./synth";
-import { BREAK_SOUNDS, HIT_TICK_SOUNDS, HURT_SOUND, JUMP_SOUND, LAND_SOUND, PLACE_SOUNDS, FOOTSTEP_SOUNDS, type SoundDef } from "./soundParams";
+import {
+  BREAK_SOUNDS,
+  HIT_TICK_SOUNDS,
+  HURT_SOUND,
+  JUMP_SOUND,
+  LAND_SOUND,
+  PLACE_SOUNDS,
+  FOOTSTEP_SOUNDS,
+  VEHICLE_DENIED_SOUND,
+  type SoundDef
+} from "./soundParams";
 import { BlockId } from "@/lib/world";
 
 function mulberry32(seed: number): () => number {
@@ -62,14 +73,7 @@ function makeEngine(): GameEngine {
   return new GameEngine({ seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
 }
 
-function input(overrides: Partial<{ keys: string[]; leftMouseHeld: boolean; pointerLocked: boolean }> = {}): FrameInput {
-  return {
-    keys: new Set(overrides.keys ?? []),
-    capsActive: false,
-    leftMouseHeld: overrides.leftMouseHeld ?? false,
-    pointerLocked: overrides.pointerLocked ?? false
-  };
-}
+const input = frameInput;
 
 /** Steps the engine while piping events and state to the director, like the shell loop. */
 function runWired(
@@ -112,6 +116,14 @@ describe("audio director", () => {
     expect(played[3].def).toBe(HURT_SOUND);
   });
 
+  test("placing a vehicle thunks like wood; a failed placement plays the denial cue", async () => {
+    const { director, played } = await createUnlockedDirector();
+    director.handleEvent({ type: "vehiclePlaced", kind: "raft" });
+    director.handleEvent({ type: "vehiclePlaceFailed" });
+    expect(played[0].def).toBe(PLACE_SOUNDS.wood);
+    expect(played[1].def).toBe(VEHICLE_DENIED_SOUND);
+  });
+
   test("landing volume scales with impact", async () => {
     const { director, played } = await createUnlockedDirector();
     director.handleEvent({ type: "landed", impact: 3 });
@@ -145,7 +157,7 @@ describe("audio director", () => {
     state.player.position.z = pz + 0.5;
     state.player.pitch = -Math.PI / 2 + 0.02;
     played.length = 0;
-    runWired(engine, director, 4, input({ leftMouseHeld: true, pointerLocked: true }));
+    runWired(engine, director, 4, input({ mineHeld: true }));
     const ticks = Object.values(HIT_TICK_SOUNDS);
     const breaks = Object.values(BREAK_SOUNDS);
     expect(played.filter((p) => ticks.includes(p.def)).length).toBeGreaterThanOrEqual(2);

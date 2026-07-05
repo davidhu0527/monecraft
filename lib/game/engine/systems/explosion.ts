@@ -1,14 +1,15 @@
 import * as THREE from "three";
 import { BlockId, doorState, isDoorBlock } from "@/lib/world";
 import { EXPLOSION_DAMAGE_PER_POWER, TNT_CHAIN_FUSE_MAX_SECONDS, TNT_CHAIN_FUSE_MIN_SECONDS, TNT_EXPLOSION_POWER, TNT_FUSE_SECONDS } from "@/lib/game/config";
-import type { EmitGameEvent, GameState } from "../state";
+import type { EmitGameEvent, GameState, PlayerState } from "../state";
 
 /**
  * Everything an explosion needs from the engine. A subset of `MobTickDeps`, so
  * the creeper branch in mobAI can pass its `deps` straight through.
  */
 export type ExplosionDeps = {
-  applyDamage: (amount: number) => void;
+  /** Armor-mitigated combat damage to a specific player — a blast hits everyone in range. */
+  damagePlayer: (player: PlayerState, amount: number) => void;
   rng: () => number;
   emit: EmitGameEvent;
 };
@@ -102,12 +103,13 @@ export function explode(state: GameState, cx: number, cy: number, cz: number, po
   const damageRange = power * 2;
   const peak = power * EXPLOSION_DAMAGE_PER_POWER;
 
-  // Player: armor-aware damage + knockback away from the blast.
-  const { player } = state;
-  const pdist = Math.hypot(player.position.x - cx, player.position.y - cy, player.position.z - cz);
-  if (pdist < damageRange) {
+  // Players: armor-aware damage + knockback away from the blast — a blast is
+  // indiscriminate and hits every player in range, not just whoever is primary.
+  for (const player of state.players.values()) {
+    const pdist = Math.hypot(player.position.x - cx, player.position.y - cy, player.position.z - cz);
+    if (pdist >= damageRange) continue;
     const falloff = 1 - pdist / damageRange;
-    deps.applyDamage(Math.max(1, Math.round(peak * falloff)));
+    deps.damagePlayer(player, Math.max(1, Math.round(peak * falloff)));
     if (pdist > 0.001) {
       scratchKnock
         .set(player.position.x - cx, player.position.y - cy, player.position.z - cz)

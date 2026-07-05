@@ -88,6 +88,24 @@ export function createMinimapRenderer(container: HTMLElement): MinimapRenderer |
       const offsetZ = pz - baseOriginZ - SAMPLE_SIZE / 2;
       ctx.drawImage(base, -offsetX, -offsetZ);
 
+      // Red X markers for unlooted buried treasure while a treasure map is held.
+      if (state.inventory[state.selectedSlot]?.id === "treasure_map") {
+        ctx.strokeStyle = "#e23b2e";
+        ctx.lineWidth = 1.5;
+        for (const site of state.treasureSites) {
+          if (state.lootedWorldgenChests.has(site.index)) continue;
+          const mx = site.x + 0.5 - px + SAMPLE_SIZE / 2;
+          const mz = site.z + 0.5 - pz + SAMPLE_SIZE / 2;
+          if (mx < 3 || mz < 3 || mx > SAMPLE_SIZE - 3 || mz > SAMPLE_SIZE - 3) continue;
+          ctx.beginPath();
+          ctx.moveTo(mx - 3, mz - 3);
+          ctx.lineTo(mx + 3, mz + 3);
+          ctx.moveTo(mx + 3, mz - 3);
+          ctx.lineTo(mx - 3, mz + 3);
+          ctx.stroke();
+        }
+      }
+
       // Player arrow (yaw 0 looks toward -Z, i.e. up/north on the map).
       const cx = SAMPLE_SIZE / 2;
       ctx.save();

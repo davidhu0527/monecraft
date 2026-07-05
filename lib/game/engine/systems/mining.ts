@@ -4,9 +4,9 @@ import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE,
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
 import { canEditBlocks, freeBuild } from "@/lib/game/gameModes";
-import type { EmitGameEvent, FrameInput, GameState } from "../state";
+import type { EmitGameEvent, FrameInput, GameState, PlayerState } from "../state";
 import { efficiencyMultiplier, fortuneLevel } from "@/lib/game/enchantments";
-import { fillDungeonChestIfUnlooted } from "./dungeon";
+import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
 import { hasteMultiplier } from "./statusEffects";
@@ -15,13 +15,13 @@ import type { InventorySlot } from "@/lib/game/types";
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
-function eyePosition(state: GameState, out: THREE.Vector3): THREE.Vector3 {
-  const { position } = state.player;
+function eyePosition(player: PlayerState, out: THREE.Vector3): THREE.Vector3 {
+  const { position } = player;
   return out.set(position.x, position.y + EYE_HEIGHT, position.z);
 }
 
-export function selectedTool(state: GameState): InventorySlot | null {
-  const slot = state.inventory[state.selectedSlot];
+export function selectedTool(player: PlayerState): InventorySlot | null {
+  const slot = player.inventory[player.selectedSlot];
   return slot?.kind === "tool" && slot.count > 0 ? slot : null;
 }
 
@@ -40,14 +40,14 @@ export function miningSpeed(tool: InventorySlot | null): number {
   return (tool?.minePower ?? BARE_HAND_MINE_POWER) * efficiencyMultiplier(tool);
 }
 
-export function resetMining(state: GameState): void {
-  state.mining.targetKey = "";
-  state.mining.progress = 0;
+export function resetMining(player: PlayerState): void {
+  player.mining.targetKey = "";
+  player.mining.progress = 0;
 }
 
-function addBlockDrop(state: GameState, block: BlockId, rng: () => number, tool: InventorySlot | null): void {
+function addBlockDrop(player: PlayerState, block: BlockId, rng: () => number, tool: InventorySlot | null): void {
   for (const drop of rollBlockDrops(block, rng, fortuneLevel(tool))) {
-    state.inventory = adjustSlotCount(state.inventory, drop.itemId, drop.count) ?? state.inventory;
+    player.inventory = adjustSlotCount(player.inventory, drop.itemId, drop.count) ?? player.inventory;
   }
 }
 
@@ -57,18 +57,18 @@ function addBlockDrop(state: GameState, block: BlockId, rng: () => number, tool:
  * (no room — the chest is left intact). On success the container entry is
  * removed and a pickedUp toast announces what was retrieved.
  */
-function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): boolean {
-  // Breaking an unopened dungeon chest still pays out its loot.
-  fillDungeonChestIfUnlooted(state, idx);
+function spillChestOnBreak(state: GameState, player: PlayerState, idx: number, emit: EmitGameEvent): boolean {
+  // Breaking an unopened worldgen chest still pays out its loot.
+  fillWorldgenChestIfUnlooted(state, idx, emit);
   const container = state.containers.get(idx);
   const items = container?.filter((slot) => slot.id && slot.count > 0) ?? [];
   if (items.length > 0) {
-    const merged = tryInsertSlots(state.inventory, items);
+    const merged = tryInsertSlots(player.inventory, items);
     if (!merged) {
       emit({ type: "breakBlocked", reason: "containerFull" });
       return false;
     }
-    state.inventory = merged;
+    player.inventory = merged;
     const picked = new Map<string, number>();
     for (const slot of items) picked.set(slot.id!, (picked.get(slot.id!) ?? 0) + slot.count);
     emit({ type: "pickedUp", items: [...picked].map(([itemId, count]) => ({ itemId, count })) });
@@ -77,26 +77,39 @@ function spillChestOnBreak(state: GameState, idx: number, emit: EmitGameEvent): 
   return true;
 }
 
-/** Advances mining progress while the mouse is held; breaks the block at full progress. */
-export function tickMining(state: GameState, input: FrameInput, dt: number, emit: EmitGameEvent, rng: () => number): void {
-  if (!input.leftMouseHeld) {
+/**
+ * Advances mining progress while the mouse is held; breaks the block at full
+ * progress. `cosmetic` (a multiplayer replica) accrues progress for the crack
+ * overlay but never commits the break — the server's blockBroken event does.
+ */
+export function tickMining(
+  state: GameState,
+  player: PlayerState,
+  input: FrameInput,
+  dt: number,
+  emit: EmitGameEvent,
+  rng: () => number,
+  opts: { cosmetic?: boolean } = {}
+): void {
+  if (!input.mineHeld) {
     // Releasing the button abandons progress (matching the crack overlay).
-    if (state.mining.progress > 0) resetMining(state);
+    if (player.mining.progress > 0) resetMining(player);
     return;
   }
-  if (state.inventoryOpen || state.isDead || !input.pointerLocked) return;
+  if (player.inventoryOpen || player.isDead) return;
   // Adventure and Spectator can't break terrain.
-  if (!canEditBlocks(state.gameMode)) {
-    resetMining(state);
+  if (!canEditBlocks(player.gameMode)) {
+    resetMining(player);
     return;
   }
 
-  const { world, mining } = state;
-  const origin = eyePosition(state, scratchEye);
-  const direction = lookDirection(state.player.yaw, state.player.pitch, scratchDir);
+  const { world } = state;
+  const { mining } = player;
+  const origin = eyePosition(player, scratchEye);
+  const direction = lookDirection(player.yaw, player.pitch, scratchDir);
   const result = voxelRaycast(world, origin, direction, MINE_REACH);
   if (!result) {
-    resetMining(state);
+    resetMining(player);
     return;
   }
 
@@ -104,13 +117,13 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   const by = result.hit.y;
   const bz = result.hit.z;
   const targetBlock = world.get(bx, by, bz);
-  const tool = selectedTool(state);
+  const tool = selectedTool(player);
   const tier = tool?.mineTier ?? 0;
   // Creative breaks anything (bar bedrock) instantly, regardless of tool tier.
-  const creative = freeBuild(state.gameMode);
+  const creative = freeBuild(player.gameMode);
 
   if (targetBlock === BlockId.Bedrock || targetBlock === BlockId.Air || (!creative && !canMineBlock(targetBlock as BlockId, tier))) {
-    resetMining(state);
+    resetMining(player);
     return;
   }
 
@@ -122,8 +135,15 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
 
   if (!creative) {
     const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
-    mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(state);
+    mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(player);
+    // A replica shows the final crack stage and waits for the server's break.
+    if (opts.cosmetic) {
+      mining.progress = Math.min(mining.progress, hardness * 0.99);
+      return;
+    }
     if (mining.progress < hardness) return;
+  } else if (opts.cosmetic) {
+    return; // creative replica: even the instant break is the server's call
   }
 
   // Breaking a chest empties it into the inventory first; if it does not all
@@ -132,8 +152,8 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
   const chestIndex = targetBlock === BlockId.Chest ? world.index(bx, by, bz) : null;
   if (chestIndex !== null) {
     if (creative) state.containers.delete(chestIndex);
-    else if (!spillChestOnBreak(state, chestIndex, emit)) {
-      resetMining(state);
+    else if (!spillChestOnBreak(state, player, chestIndex, emit)) {
+      resetMining(player);
       return;
     }
   }
@@ -145,26 +165,38 @@ export function tickMining(state: GameState, input: FrameInput, dt: number, emit
     if (other && other.upper !== door.upper) {
       state.blockChanges.set(bx, door.upper ? by - 1 : by + 1, bz, BlockId.Air);
     }
+  } else if (targetBlock === BlockId.Kelp) {
+    // Breaking a kelp cell breaks the whole stalk above it (each cell drops),
+    // and a submerged stalk refills with water — never air — so harvesting
+    // doesn't leave air pockets in the ocean. The targeted cell's own drop
+    // rides the shared addBlockDrop call below.
+    let top = by;
+    while (world.get(bx, top + 1, bz) === BlockId.Kelp) top += 1;
+    const fill = world.get(bx, top + 1, bz) === BlockId.Water ? BlockId.Water : BlockId.Air;
+    for (let y = by; y <= top; y += 1) {
+      state.blockChanges.set(bx, y, bz, fill);
+      if (!creative && y > by) addBlockDrop(player, BlockId.Kelp, rng, tool);
+    }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
   }
   // Creative breaks for free: no tool wear, no drops, no XP.
-  if (tool && !creative) state.inventory = consumeToolDurability(state.inventory, state.selectedSlot, 1, rng) ?? state.inventory;
+  if (tool && !creative) player.inventory = consumeToolDurability(player.inventory, player.selectedSlot, 1, rng) ?? player.inventory;
   if (!creative) {
-    addBlockDrop(state, targetBlock as BlockId, rng, tool); // Fortune on the tool multiplies ore drops
-    awardXp(state, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
+    addBlockDrop(player, targetBlock as BlockId, rng, tool); // Fortune on the tool multiplies ore drops
+    awardXp(player, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
   }
   state.worldMeshDirty = true;
-  resetMining(state);
+  resetMining(player);
   emit({ type: "blockBroken", blockId: targetBlock as BlockId, x: bx, y: by, z: bz });
 }
 
 /** Places the selected block against the targeted face, refusing self-entombment. */
-export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void {
-  if (!canEditBlocks(state.gameMode)) return; // Adventure and Spectator can't place
+export function placeSelectedBlock(state: GameState, player: PlayerState, emit: EmitGameEvent): void {
+  if (!canEditBlocks(player.gameMode)) return; // Adventure and Spectator can't place
   const { world } = state;
-  const origin = eyePosition(state, scratchEye);
-  const direction = lookDirection(state.player.yaw, state.player.pitch, scratchDir);
+  const origin = eyePosition(player, scratchEye);
+  const direction = lookDirection(player.yaw, player.pitch, scratchDir);
   const result = voxelRaycast(world, origin, direction, MINE_REACH);
   if (!result) return;
 
@@ -175,35 +207,35 @@ export function placeSelectedBlock(state: GameState, emit: EmitGameEvent): void 
   const replacedBlock = world.get(tx, ty, tz);
   if (replacedBlock !== BlockId.Air && replacedBlock !== BlockId.Water) return;
 
-  const slot = state.inventory[state.selectedSlot];
+  const slot = player.inventory[player.selectedSlot];
   if (!slot || !slot.id || slot.kind !== "block" || slot.count <= 0 || slot.blockId === undefined) return;
   if (slot.blockId === BlockId.Bedrock) return;
 
   // Creative builds without spending the held stack (so no take, no refund).
-  const consume = !freeBuild(state.gameMode);
+  const consume = !freeBuild(player.gameMode);
   if (consume) {
-    const afterTake = adjustSlotCount(state.inventory, slot.id, -1, state.selectedSlot);
+    const afterTake = adjustSlotCount(player.inventory, slot.id, -1, player.selectedSlot);
     if (!afterTake) return;
-    state.inventory = afterTake;
+    player.inventory = afterTake;
   }
   let replacedUpper: BlockId | null = null;
   if (slot.id === "door") {
     const support = world.get(tx, ty - 1, tz);
     replacedUpper = world.get(tx, ty + 1, tz) as BlockId;
     if (ty + 1 >= world.sizeY || (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
-      if (consume) state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
+      if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
       return;
     }
-    const facing = doorFacingFromYaw(state.player.yaw);
+    const facing = doorFacingFromYaw(player.yaw);
     state.blockChanges.set(tx, ty, tz, doorBlock(facing, false, false));
     state.blockChanges.set(tx, ty + 1, tz, doorBlock(facing, false, true));
   } else {
     state.blockChanges.set(tx, ty, tz, slot.blockId);
   }
-  if (collidesAt(world, state.player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+  if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
     state.blockChanges.set(tx, ty, tz, replacedBlock as BlockId);
     if (replacedUpper !== null) state.blockChanges.set(tx, ty + 1, tz, replacedUpper);
-    if (consume) state.inventory = adjustSlotCount(state.inventory, slot.id, 1, state.selectedSlot) ?? state.inventory;
+    if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
     return;
   }
 

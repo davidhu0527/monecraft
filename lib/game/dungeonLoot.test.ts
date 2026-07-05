@@ -56,7 +56,7 @@ describe("dungeon loot tables", () => {
   });
 
   test("a roll can never overflow a chest, so loot is never silently dropped", () => {
-    // fillDungeonChestIfUnlooted inserts loot into a CHEST_SLOTS chest and falls
+    // fillWorldgenChestIfUnlooted inserts loot into a CHEST_SLOTS chest and falls
     // back to the original slots if it doesn't fit. That fallback must be
     // unreachable: the total number of loot entries (each yields at most one
     // slot — small stacks, durables one-per-slot) has to stay within capacity.

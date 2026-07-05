@@ -11,6 +11,7 @@ import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
 import { createParticleSystem, hexToRgb, type ParticleSystem } from "./particleSystem";
 import { createPlayerVisuals, type PlayerVisuals } from "./playerVisuals";
+import { createRemotePlayerVisuals, type RemotePlayerInfo, type RemotePlayerVisuals } from "./remotePlayerVisuals";
 import { createProjectileVisuals, type ProjectileVisuals } from "./projectileVisuals";
 import { createBobberVisuals, type BobberVisuals } from "./bobberVisuals";
 import { createCaughtItemVisuals, type CaughtItemVisuals } from "./caughtItemVisuals";
@@ -95,6 +96,9 @@ export class GameRenderer {
   private readonly caughtItems: CaughtItemVisuals;
   private readonly catchTarget = new THREE.Vector3();
   private readonly playerVisuals: PlayerVisuals;
+  private readonly remotePlayerVisuals: RemotePlayerVisuals;
+  /** Names/skins for remote avatars (a NetworkSession provides it; SP renders none). */
+  remotePlayerInfo: (id: string) => RemotePlayerInfo = () => ({ name: "player", skinId: null });
   private readonly particles: ParticleSystem;
   private readonly sky: SkyView;
   private readonly precip: PrecipitationView;
@@ -169,6 +173,7 @@ export class GameRenderer {
     this.bobberVisuals = createBobberVisuals(this.scene);
     this.caughtItems = createCaughtItemVisuals(this.scene);
     this.playerVisuals = createPlayerVisuals(this.scene);
+    this.remotePlayerVisuals = createRemotePlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
     this.sky = createSkyView(this.scene, this.camera);
     this.precip = createPrecipitation(this.scene);
@@ -212,6 +217,7 @@ export class GameRenderer {
     this.projectileVisuals.sync(state.projectiles);
     // Body must sync before the rod-tip read so the third-person hand matrices are fresh.
     this.playerVisuals.sync(state, timeMs);
+    this.remotePlayerVisuals.sync(state.players, state.primaryPlayerId, this.remotePlayerInfo, timeMs);
     const rodTip = state.cameraMode === "first" ? this.camera.localToWorld(this.bobberTip.copy(ROD_TIP_OFFSET)) : this.playerVisuals.getRodTip(this.bobberTip);
     this.bobberVisuals.sync(state.fishing, rodTip, dtMs);
     this.caughtItems.sync(timeMs, this.catchTarget.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z));
@@ -561,6 +567,7 @@ export class GameRenderer {
     this.sky.dispose();
     this.particles.dispose();
     this.playerVisuals.dispose();
+    this.remotePlayerVisuals.dispose();
     this.spearVisuals.dispose();
     this.vehicleVisuals.dispose();
     this.projectileVisuals.dispose();

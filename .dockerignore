@@ -1,0 +1,17 @@
+# flyctl launch added from .entire/.gitignore
+.entire/**/tmp
+.entire/**/settings.local.json
+.entire/**/metadata
+.entire/**/logs
+.entire/**/redactors/local
+
+# flyctl launch added from .gitignore
+**/.next
+**/node_modules
+**/bun.lockb
+**/.DS_Store
+**/tsconfig.tsbuildinfo
+**/playwright-report
+**/test-results
+**/next-env.d.ts
+fly.toml

@@ -4,7 +4,7 @@ import { BlockId, VoxelWorld } from "@/lib/world";
 import { CREEPER_FUSE_SECONDS, PET_FIGHT_RANGE } from "@/lib/game/config";
 import { FACTION_BY_KIND, mobHalfHeight } from "@/lib/game/mobs";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
-import type { GameEvent, GameState, MobState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState, MobState, PlayerState } from "@/lib/game/engine/state";
 import { tickMobs, type MobTickDeps } from "@/lib/game/engine/systems/mobAI";
 import type { MobKind } from "@/lib/game/types";
 
@@ -38,18 +38,30 @@ function makeMob(kind: MobKind, x: number, y: number, z: number, attackTimer = 0
 
 function makeState(mobs: MobState[]): GameState {
   const world = new VoxelWorld(48, 48, 48, 1);
+  // Real players map: mobAI selects hunt/anchor targets from it. gameMode
+  // lives on the player now (hostiles only threaten survival/adventure).
+  const player = {
+    id: "local",
+    position: new THREE.Vector3(24, 30, 24),
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+    onGround: true,
+    gameMode: "survival",
+    isDead: false
+  } as unknown as PlayerState;
   return {
+    players: new Map([["local", player]]),
     world,
     blockChanges: createBlockChangeTracker(world),
     primedTnt: new Map<number, number>(),
     worldMeshDirty: false,
-    gameMode: "survival", // hostiles only threaten survival/adventure players
     difficulty: "normal", // baseline 1× mob-damage multiplier
     mobs,
     projectiles: [],
     nextProjectileId: 1,
     daylight: 0.1, // night-ish so hostiles stay active and don't burn
-    player: { position: new THREE.Vector3(24, 30, 24), velocity: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true }
+    player
   } as unknown as GameState;
 }
 
@@ -58,7 +70,7 @@ function makeDeps() {
   let damage = 0;
   const deps: MobTickDeps = {
     surfaceYAt: () => 29, // keeps mob.y ≈ player.y so the vertical gap stays small
-    applyDamage: (a: number) => {
+    damagePlayer: (_p: PlayerState, a: number) => {
       damage += a;
     },
     removeMobAt: () => {},
@@ -313,7 +325,7 @@ describe("companion pets (allies)", () => {
     const pet = makeMob("wolf", x, 30, z);
     pet.hostile = false;
     pet.faction = "ally";
-    pet.owner = "player";
+    pet.owner = "local"; // the state's sole player (pets now follow their owner, not the nearest player)
     pet.detectRange = PET_FIGHT_RANGE;
     pet.attackDamage = 4;
     return Object.assign(pet, overrides);
@@ -369,5 +381,91 @@ describe("companion pets (allies)", () => {
     tickMobs(state, 0.05, deps);
 
     expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(3); // teleported adjacent
+  });
+
+  test("a pet follows its OWNER, not a nearer stranger", () => {
+    const pet = makePet(40, 40); // owner "local" sits at (24,24) — past FOLLOW_MAX, within TELEPORT
+    const state = makeState([pet]);
+    // A stranger stands right next to the pet; the owner is far away.
+    const stranger = {
+      id: "acct-2",
+      position: new THREE.Vector3(41, 30, 41),
+      velocity: new THREE.Vector3(),
+      yaw: 0,
+      pitch: 0,
+      onGround: true,
+      gameMode: "survival",
+      isDead: false
+    } as unknown as PlayerState;
+    state.players.set("acct-2", stranger);
+    const { deps } = makeDeps();
+
+    const startToOwner = Math.hypot(40 - 24, 40 - 24);
+    for (let i = 0; i < 40; i += 1) tickMobs(state, 0.1, deps);
+
+    // Closed on its owner at (24,24)…
+    expect(Math.hypot(pet.position.x - 24, pet.position.z - 24)).toBeLessThan(startToOwner);
+    // …and moved AWAY from the adjacent stranger (it never trailed them).
+    expect(Math.hypot(pet.position.x - 41, pet.position.z - 41)).toBeGreaterThan(Math.hypot(40 - 41, 40 - 41));
+  });
+});
+
+describe("aquatic fish", () => {
+  /** Fills a water pool (x,z in 20..28, y in 18..22) into the state's empty world. */
+  function fillPool(state: GameState): void {
+    for (let x = 20; x <= 28; x += 1) {
+      for (let z = 20; z <= 28; z += 1) {
+        for (let y = 18; y <= 22; y += 1) state.world.set(x, y, z, BlockId.Water);
+      }
+    }
+  }
+
+  function makeFish(x: number, y: number, z: number): MobState {
+    const fish = makeMob("cod", x, y, z);
+    fish.hostile = false;
+    return fish;
+  }
+
+  test("a swimming fish stays confined to water cells", () => {
+    const fish = makeFish(24.5, 20.5, 24.5);
+    const state = makeState([fish]);
+    fillPool(state);
+    const { deps } = makeDeps();
+
+    // Long run with wandering turns: wherever it ends up each tick, the cell
+    // holding its body center is always water (it bounces off the pool walls).
+    for (let i = 0; i < 200; i += 1) {
+      tickMobs(state, 0.1, deps);
+      const cell = state.world.get(Math.floor(fish.position.x), Math.floor(fish.position.y), Math.floor(fish.position.z));
+      expect(cell).toBe(BlockId.Water);
+    }
+  });
+
+  test("a fish flees the player in 3D when approached", () => {
+    const fish = makeFish(24.5, 20.5, 24.5);
+    const state = makeState([fish]);
+    fillPool(state);
+    state.player.position.set(24.5, 20.5, 22.5); // 2 blocks away, inside FISH_FLEE_RANGE
+    const { deps } = makeDeps();
+
+    for (let i = 0; i < 10; i += 1) tickMobs(state, 0.1, deps);
+
+    expect(fish.position.z).toBeGreaterThan(24.5); // swam away (+z) from the player
+    expect(fish.moveSpeed).toBeCloseTo(fish.speed * 1.6, 5); // flee boost
+  });
+
+  test("a beached fish is immobile, suffocates, and is eventually swept", () => {
+    const fish = makeFish(24, 30, 24); // dry cell: the state world is air here
+    const state = makeState([fish]);
+    const removed: number[] = [];
+    const { deps } = makeDeps();
+    deps.removeMobAt = (i: number) => removed.push(i);
+
+    tickMobs(state, 1, deps);
+    expect(fish.moveSpeed).toBe(0);
+    expect(fish.hp).toBeCloseTo(9 - 2, 5); // FISH_SUFFOCATION_HP_PER_SECOND drain
+
+    for (let i = 0; i < 5; i += 1) tickMobs(state, 1, deps);
+    expect(removed).toContain(0); // dead and swept
   });
 });

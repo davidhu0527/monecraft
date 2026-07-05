@@ -3,9 +3,9 @@
 [![CI](https://github.com/hutusi/monecraft/actions/workflows/ci.yml/badge.svg)](https://github.com/hutusi/monecraft/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/tag/hutusi/monecraft?label=release&sort=semver)](https://github.com/hutusi/monecraft/tags)
 
-A playable, Minecraft-inspired voxel game that runs entirely in your browser. Explore procedural terrain across five biomes, cross water by **raft** or **ship**, and dig into **dark caves** — lit only by the torches you craft and place, where lava pools and mobs lurk. Mine ores, raid **underground dungeons** for loot, build and farm, breed animals, craft through seven gear tiers up to a **bow** and throwable **spears**, and take on an **endgame boss** for a true win condition — all across a day-night cycle with hunger, drowning, and lava hazards.
+A playable, Minecraft-inspired voxel game that runs entirely in your browser. Explore procedural terrain across five biomes, cross water by **raft** or **ship** — over living oceans with **fish**, **kelp**, sunken **shipwrecks** to dive, and **buried treasure** to hunt by map — and dig into **dark caves** — lit only by the torches you craft and place, where lava pools and mobs lurk. Mine ores, raid **underground dungeons** for loot, build and farm, breed animals, craft through seven gear tiers up to a **bow** and throwable **spears**, and take on an **endgame boss** for a true win condition — all across a day-night cycle with hunger, drowning, and lava hazards.
 
-The twist: **everything is procedural — zero binary assets.** Block textures and item sprites are painted from pixel code, all sound and music is synthesized at runtime, and lighting is computed per voxel. Single-player and client-only: keep **multiple worlds** under **multiple player profiles**, all saved to localStorage.
+The twist: **everything is procedural — zero binary assets.** Block textures and item sprites are painted from pixel code, all sound and music is synthesized at runtime, and lighting is computed per voxel. Single-player is client-only: keep **multiple worlds** under **multiple player profiles**, all saved to localStorage, no account needed. Or play **online co-op** (2–8 players): host a server-backed world with a free account and share an invite link — friends register and join in a click. See [docs/manual.md](docs/manual.md#playing-online).
 
 ## Run
 
@@ -29,6 +29,7 @@ The game opens to a menu: pick or create a **profile** (your name and look), the
 - `1..9`: Select hotbar slot
 - `I`: Inventory & crafting · `L`: Advancements & statistics · `F`: Eat food · `Shift+U`: Emergency unstuck
 - `V`: Camera view (first-person → third-person rear → third-person front)
+- `T` or `Enter`: Chat (online worlds)
 - `Esc`: Pause menu — three tabs: **Game** (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** and **Difficulty** switchers), **Options** (sound/music volume, Appearance skins), and **Controls** · `F3`: Debug overlay
 
 New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more.
@@ -53,4 +54,5 @@ All of these are enforced by CI on every PR. The game simulation is a headless e
 - [docs/architecture.md](docs/architecture.md) — engine/renderer/shell layering and invariants
 - [docs/adding-content.md](docs/adding-content.md) — add a block, item, recipe, mob, or mechanic
 - [docs/save-format.md](docs/save-format.md) — save schema and compatibility rules
+- [docs/deploy.md](docs/deploy.md) — deploy online multiplayer (Vercel + Neon + Fly.io)
 - [CONTRIBUTING.md](CONTRIBUTING.md) — workflow and verification baseline

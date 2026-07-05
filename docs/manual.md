@@ -68,6 +68,7 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 | `L`                | Open / close advancements & statistics                                                                        |
 | `F`                | Eat the selected food, or drink a selected potion                                                             |
 | `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
+| `T` or `Enter`     | Chat (online worlds only) — `Esc` closes without sending                                                      |
 | `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
 | `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins), Controls tabs |
 | `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                           |
@@ -177,7 +178,10 @@ to travel over water without swimming. Hold the vehicle and **right-click a wate
 surface** to place it. A raft is compact and slow; aim at it and right-click again
 to board. A ship is larger and faster — step onto its deck and you board
 automatically. While aboard, steer with the movement keys; crouch dismounts when
-there is room beside the vehicle.
+there is room beside the vehicle. Placing needs open water within reach — aim
+somewhere that can't hold a boat, or once the world hits its 64-vehicle cap, and
+you'll hear a dull "can't place here" thud instead. Rafts and ships appear in
+their own **Vehicles** crafting category.
 
 ### Hunger
 
@@ -583,10 +587,33 @@ A calm, renewable way to feed yourself — and the odd lucky find:
    that's a bite. **Right-click again right away** (within about a second) to reel
    it in. Miss the moment and the catch gets away, but the bobber keeps fishing.
 4. You'll mostly land **raw fish** (cook it at a furnace for more hunger), sometimes
-   junk (string, bone, seeds, rotten flesh), and once in a while a treasure.
+   junk (string, bone, seeds, rotten flesh), and once in a while a treasure —
+   including, very rarely, a **treasure map** (see [The ocean](#the-ocean)).
 
 Wandering too far from the bobber, putting the rod away, or draining the water all
 retract the line.
+
+## The ocean
+
+The sea is worth sailing (see [Rafts and ships](#rafts-and-ships)):
+
+- **Fish.** Schools of **cod and salmon** swim the open water. They flee when you
+  get close and drop **raw fish** when killed — the same fish the rod catches and
+  cats are tamed with. A fish knocked onto land flops helplessly and suffocates.
+- **Kelp and coral.** The sandy ocean floor grows swaying **kelp stalks** and
+  scattered pink/blue **coral**. Kelp breaks instantly (breaking one cell takes
+  the whole stalk above it, and the water fills back in), regrows over time, and
+  **smelts into dried kelp** — a cheap snack (2 hunger, 3 per fuel). Kelp stalks
+  always leave a few blocks of clear water at the surface, so boats never snag.
+- **Shipwrecks.** Broken plank hulls lie sunken on the deep ocean floor. Dive
+  down (mind your breath — a Water Breathing potion helps) and loot their chests
+  for salvage: emeralds, materials, food, and often a **treasure map**.
+- **Buried treasure.** While you hold a treasure map, a **compass pill** at the
+  top of the screen points to the nearest unearthed hoard (bearing and distance),
+  and red **X** marks appear on the minimap. Head to the beach it points at and
+  **dig two blocks under the sand** for the richest chest in the game — emeralds
+  guaranteed, diamonds often. Digging one up retargets the map to the next; the
+  first unlocks the **X Marks the Spot** advancement.
 
 ## Beds and sleeping
 
@@ -614,3 +641,75 @@ contents of every chest — so the world regenerates identically and picks up wh
 you left off. Because saves
 live in the browser, they're tied to that browser on that device; "Reset" starts a
 fresh world.
+
+## Playing online
+
+Online worlds are shared worlds that live on a server and hold **2–8 players** —
+private co-op with people you invite, not public matchmaking. Everything offline
+stays exactly as it is: local worlds never need an account or a connection.
+
+**Getting an identity.** Online play needs an **account** — a one-time
+email/password registration from the **Account** panel on the profile screen
+(or right on an invite page). Signed in, the menu becomes your account home:
+up to five **online profiles** (name + skin) that follow you across devices,
+each owning its online worlds. Your local worlds stay put — press **Play
+locally** to visit them (and their cloud-save controls) without signing out.
+
+**Hosting.** Pick an online profile to see its worlds. **New Online World**
+uses the same form as a local world (name, seed, world type, mode,
+difficulty); creating it connects you straight in. Press **Copy invite** on
+your world's card to put a join link on the clipboard — send it to your
+friends. Invite links expire after a while; copy a fresh one any time.
+
+**Singleplayer, synced.** A profile can also hold **singleplayer** worlds
+(**New Singleplayer World** on the same screen): they play exactly like local
+worlds — entirely on your machine, no game-server connection — but the save
+lives with your account, so signing in on another computer picks up right
+where you left off. Online and singleplayer worlds share the same per-profile
+limit.
+
+**Joining.** Opening an invite link shows the world's name and asks you to
+sign in (or register) if you aren't; the world then joins your account and
+shows up in every profile's world list with a **Joined** tag — click its card
+to play. The world is yours to rejoin from that list from then on; the link
+is only needed once.
+
+**Playing together.** Everyone shares one world: block edits, mobs, chests,
+day and night. You'll see the other players in the world with their names
+overhead, and a player list in the top-right corner. Press **`T`** (or
+`Enter`) to chat; a ping badge shows your connection quality, and losing the
+connection pops a notice with the option to leave. The **server** owns the
+world — your mining completes when it confirms the break (a barely-noticeable
+beat on a good connection), and your health, hunger, and inventory are its
+word, not the client's.
+
+A few things work differently online, and the rest is the same game:
+
+- **Pause is personal.** `Esc` opens your menu but the world keeps running —
+  nobody can stop a shared world. "Save & Quit" becomes **Leave world**.
+- **Sleeping needs everyone.** The night skips only when **all** players are
+  in bed (dead and Spectator players excepted) — climb back out to cancel.
+- **Progress is your own.** Advancements, statistics, XP, and kill credit are
+  per-player — you earn your own, whether the kill was a sword, an arrow, or
+  your pet's doing. Your pet follows **you**, not the nearest player.
+- **The world owner can kick.** If you created the world, the player list shows
+  a **Kick** button beside everyone else (free your cursor with `Esc` to click
+  it) — for removing a griefer on the spot. To stop them coming back, also
+  **Revoke links** from the world's menu card.
+- **Boats are shared.** Rafts and ships are boardable online — pile into one
+  together.
+- The world saves on the server automatically; there's nothing to manage.
+
+### Cloud saves — your single-player worlds across devices
+
+Signed in, you can make a **single-player** world follow you between browsers
+and machines. On the world's card, **Upload to cloud** copies it to your
+account (the card then reads **☁ Synced**), and from there every save syncs up
+automatically as you play. On another device, your synced worlds appear under
+**Cloud Saves** — **Download** brings one onto that device to play.
+
+It's last-write-wins: if the same world is played on two devices, the most
+recent save wins. Open a synced world and it always catches up to the latest
+first; a world you played offline keeps its newer progress rather than being
+overwritten by an older cloud copy. Local worlds you never upload stay entirely
+offline, exactly as before — cloud saves are opt-in, one world at a time.
