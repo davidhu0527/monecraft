@@ -474,6 +474,13 @@ None affect single-player, and none are save-sensitive.
   (`20` = 1 s replay-log pose anchors). `INTERPOLATION_DELAY_MS` (`125`,
   `lib/net/interpolation.ts`) is how far in the past remote entities render —
   larger absorbs more jitter at the cost of visible lag.
+- **Wire size** — replicated poses quantize before serialization (`qPos` 2
+  decimals, `qAng` 3 — `lib/net/codec.ts`; margins sit well inside every
+  movement clamp and deadband) and the server offers **permessage-deflate**
+  (`server/index.ts`, dedicated 16 KB windows — ~1 MB across a full house).
+  Caveat: `/rooms`' `kbOutPerSec` counts pre-compression bytes, so it shows
+  the quantization win only; verify deflate via DevTools
+  (`Sec-WebSocket-Extensions` on the 101 response) or Fly egress metrics.
 - **Backpressure** — `BACKPRESSURE_SOFT_BYTES` (256 KB → shed `pp`/`mp`),
   `BACKPRESSURE_KICK_BYTES` (1 MB) + `BACKPRESSURE_KICK_STRIKES` (~5 s sustained
   → `4008` kick).

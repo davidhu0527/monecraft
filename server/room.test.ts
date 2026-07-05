@@ -102,6 +102,11 @@ describe("room lifecycle", () => {
     // …and bob's tick carries alice's pose, not his own.
     expect(tickB?.pp.some((p) => p.id === "alice")).toBe(true);
     expect(tickB?.pp.some((p) => p.id === "bob")).toBe(false);
+    // Wire poses are quantized (re-quantizing is a no-op).
+    for (const p of tickB!.pp) {
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.yaw).toBe(Math.round(p.yaw * 1000) / 1000);
+    }
   });
 
   test("a speed-hacked pose is refused and answered with forcePose; an honest one sticks", async () => {

@@ -12,7 +12,7 @@ import {
 } from "@/lib/game/save";
 import type { SavedPlayer } from "@/lib/game/types";
 import type { PlayerState } from "@/lib/game/engine/state";
-import { encodeServerMessage, gzipWorldSync } from "@/lib/net/codec";
+import { encodeServerMessage, gzipWorldSync, qAng, qPos } from "@/lib/net/codec";
 import {
   CLOSE_KICKED,
   CLOSE_ROOM_FULL,
@@ -470,10 +470,10 @@ export class Room {
       id: player.id,
       name: conn.name,
       skinId: conn.skinId,
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z,
-      yaw: player.yaw
+      x: qPos(player.position.x),
+      y: qPos(player.position.y),
+      z: qPos(player.position.z),
+      yaw: qAng(player.yaw)
     };
   }
 
@@ -498,7 +498,14 @@ export class Room {
     const out: PlayerPose[] = [];
     for (const player of this.engine.state.players.values()) {
       if (player.id === except) continue;
-      out.push({ id: player.id, x: player.position.x, y: player.position.y, z: player.position.z, yaw: player.yaw, pitch: player.pitch });
+      out.push({
+        id: player.id,
+        x: qPos(player.position.x),
+        y: qPos(player.position.y),
+        z: qPos(player.position.z),
+        yaw: qAng(player.yaw),
+        pitch: qAng(player.pitch)
+      });
     }
     return out;
   }
@@ -518,10 +525,10 @@ export class Room {
         id: mob.id,
         kind: mob.kind,
         hostile: mob.hostile,
-        x: mob.position.x,
-        y: mob.position.y,
-        z: mob.position.z,
-        yaw: mob.yaw,
+        x: qPos(mob.position.x),
+        y: qPos(mob.position.y),
+        z: qPos(mob.position.z),
+        yaw: qAng(mob.yaw),
         hp: mob.hp,
         moveSpeed: mob.moveSpeed
       });
@@ -550,7 +557,15 @@ export class Room {
         riderId !== shadow.riderId;
       if (!force && !moved) continue;
       this.vehicleShadow.set(vehicle.id, { x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw, riderId });
-      out.push({ id: vehicle.id, kind: vehicle.kind, x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw, riderId });
+      out.push({
+        id: vehicle.id,
+        kind: vehicle.kind,
+        x: qPos(vehicle.position.x),
+        y: qPos(vehicle.position.y),
+        z: qPos(vehicle.position.z),
+        yaw: qAng(vehicle.yaw),
+        riderId
+      });
     }
     return out;
   }
@@ -559,12 +574,12 @@ export class Room {
   private collectProjectilePoses(): ProjectilePose[] {
     return this.engine.state.projectiles.map((p) => ({
       id: p.id,
-      x: p.position.x,
-      y: p.position.y,
-      z: p.position.z,
-      vx: p.velocity.x,
-      vy: p.velocity.y,
-      vz: p.velocity.z
+      x: qPos(p.position.x),
+      y: qPos(p.position.y),
+      z: qPos(p.position.z),
+      vx: qAng(p.velocity.x),
+      vy: qAng(p.velocity.y),
+      vz: qAng(p.velocity.z)
     }));
   }
 
@@ -599,9 +614,9 @@ export class Room {
     const mountChanged = !previous || previous.mountedVehicleId !== player.mountedVehicleId;
     if (mountChanged) delta.mountedVehicleId = player.mountedVehicleId;
     if (mounted || mountChanged) {
-      delta.x = player.position.x;
-      delta.y = player.position.y;
-      delta.z = player.position.z;
+      delta.x = qPos(player.position.x);
+      delta.y = qPos(player.position.y);
+      delta.z = qPos(player.position.z);
     }
     conn.shadow = {
       inventory: player.inventory,

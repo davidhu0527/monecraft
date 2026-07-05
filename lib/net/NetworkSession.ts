@@ -8,7 +8,7 @@ import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { FACTION_BY_KIND } from "@/lib/game/mobs";
 import type { MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
-import { decodeServerFrame, encodeClientMessage, gunzipWorldSync } from "./codec";
+import { decodeServerFrame, encodeClientMessage, gunzipWorldSync, qAng, qPos } from "./codec";
 import { createPoseBuffer, INTERPOLATION_DELAY_MS, type PoseBuffer } from "./interpolation";
 import {
   CLOSE_BAD_TICKET,
@@ -552,7 +552,7 @@ export async function connectNetworkSession(
         t: "cmd",
         seq,
         cmd: command,
-        pose: { x: self.position.x, y: self.position.y, z: self.position.z, yaw: self.yaw, pitch: self.pitch }
+        pose: { x: qPos(self.position.x), y: qPos(self.position.y), z: qPos(self.position.z), yaw: qAng(self.yaw), pitch: qAng(self.pitch) }
       })
     );
   };
@@ -609,11 +609,11 @@ export async function connectNetworkSession(
           encodeClientMessage({
             t: "pose",
             seq,
-            x: self.position.x,
-            y: self.position.y,
-            z: self.position.z,
-            yaw: self.yaw,
-            pitch: self.pitch,
+            x: qPos(self.position.x),
+            y: qPos(self.position.y),
+            z: qPos(self.position.z),
+            yaw: qAng(self.yaw),
+            pitch: qAng(self.pitch),
             onGround: self.onGround,
             move: self.input.move,
             mineHeld: self.input.mineHeld
