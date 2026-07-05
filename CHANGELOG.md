@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-05
+
 ### Added
 
 - **Singleplayer worlds in account mode**: an online profile's world screen now has two sections — **Online Worlds** (server-hosted co-op, as before) and **Singleplayer**. A **New Singleplayer World** plays exactly like a local world (full client-side engine, **no game-server connection** — join tickets only exist for the mp kind) but its save syncs to your account, so signing in on another computer continues the same world with the same open-time reconcile and last-write-wins rules as cloud saves. Online and singleplayer worlds share the per-profile `MAX_WORLDS_PER_PROFILE` limit (the create buttons now count both kinds, matching what the server always enforced); singleplayer cards get a Delete action; saves uploaded from the local menus (which belong to the account, not a profile) appear under every profile. Proven by a cross-device e2e: a world created and edited in one browser context is continued, edit intact, by a fresh context signing into the same account.
