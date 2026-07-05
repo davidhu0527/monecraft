@@ -16,6 +16,19 @@ describe("client message validation", () => {
       t: "cmd",
       cmd: { type: "attack" }
     });
+    // v3 view stamp: optional; carried through when numeric, absent when omitted.
+    expect(readClientMessage({ t: "cmd", seq: 2, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: 12345 })).toMatchObject({
+      t: "cmd",
+      view: 12345
+    });
+    const unstamped = readClientMessage({ t: "cmd", seq: 2, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 } });
+    expect(unstamped && unstamped.t === "cmd" ? "view" in unstamped : null).toBe(false);
+    // The reader doesn't police which command types carry it — that's the room's call.
+    expect(
+      readClientMessage({ t: "cmd", seq: 3, cmd: { type: "selectSlot", index: 3 }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: 50 })
+    ).toMatchObject({
+      view: 50
+    });
     expect(readClientMessage({ t: "chat", text: "hi" })).toMatchObject({ t: "chat", text: "hi" });
     expect(readClientMessage({ t: "ping", id: 1, tMs: 123 })).toMatchObject({ t: "ping" });
     expect(readClientMessage({ t: "resync" })).toMatchObject({ t: "resync" });
@@ -36,6 +49,9 @@ describe("client message validation", () => {
       { t: "pose", seq: 1, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, onGround: true, move: { forward: 1 }, mineHeld: false },
       { t: "cmd", seq: 1, cmd: { type: "hackTheGibson" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 } },
       { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: "here", y: 0, z: 0, yaw: 0, pitch: 0 } },
+      { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: "abc" },
+      { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: Number.NaN },
+      { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: Number.POSITIVE_INFINITY },
       { t: "chat", text: "   " },
       { t: "ping", id: "one", tMs: 2 }
     ]) {
