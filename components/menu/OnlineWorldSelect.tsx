@@ -59,6 +59,7 @@ export default function OnlineWorldSelect({ profile, onPlayOnline, onPlayCloud, 
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitesRevoked, setInvitesRevoked] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deleteFailedId, setDeleteFailedId] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     void listOnlineWorlds().then((all) => setWorlds(all));
@@ -185,9 +186,12 @@ export default function OnlineWorldSelect({ profile, onPlayOnline, onPlayCloud, 
                           <button
                             className="mc-button danger"
                             onClick={() =>
-                              void deleteOnlineWorld(world.id).then(() => {
+                              void deleteOnlineWorld(world.id).then((deleted) => {
                                 setConfirmingDeleteId(null);
-                                refresh();
+                                // A failed delete would otherwise just re-list
+                                // the world as if nothing happened — say so.
+                                setDeleteFailedId(deleted ? null : world.id);
+                                if (deleted) refresh();
                               })
                             }
                           >
@@ -206,7 +210,7 @@ export default function OnlineWorldSelect({ profile, onPlayOnline, onPlayCloud, 
                         </button>
                         <div className="menu-card-actions">
                           <button className="mc-button" onClick={() => setConfirmingDeleteId(world.id)}>
-                            Delete
+                            {deleteFailedId === world.id ? "Delete failed — retry" : "Delete"}
                           </button>
                         </div>
                       </>

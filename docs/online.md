@@ -93,9 +93,12 @@ of either kind (same form as local worlds — the row lives in Postgres; the
 game server hosts only the mp kind), and mints invite links (`/join/<token>`
 — the landing page previews the world's name, asks the visitor to sign in or
 register if they aren't, then accepts the membership; the world appears in
-their account's world list). Playing one runs `GameShell.playOnline`:
-`POST /api/worlds/:id/ticket` → `connectNetworkSession(gameServerUrl, ticket)`
-→ mount the game on the session's replica engine. The connection lifecycle (chat, ping badge,
+their account's world list). Playing an **online** one runs
+`GameShell.playOnline`: `POST /api/worlds/:id/ticket` →
+`connectNetworkSession(gameServerUrl, ticket)` → mount the game on the
+session's replica engine. (A **singleplayer** world instead runs
+`GameShell.playCloud` — the cloud-save reconcile above and a full local
+engine, no ticket, no socket.) The connection lifecycle (chat, ping badge,
 disconnect modal, leave) lives in the session + three HUD components
 (`ChatPanel`, `ConnectionStatus`, `RosterPanel`); the architecture of the
 replica/routing/interpolation stack is in

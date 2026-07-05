@@ -5,7 +5,12 @@ import { MAX_WORLDS_PER_PROFILE } from "@/lib/game/config";
 import type { OnlineWorld } from "@/lib/online/onlineClient";
 
 // Swap the online worlds client for a controllable fake — no network/game server.
-const fake = { worlds: [] as OnlineWorld[], created: [] as Array<{ name: string; kind?: string; profileId?: string }>, deleted: [] as string[] };
+const fake = {
+  worlds: [] as OnlineWorld[],
+  created: [] as Array<{ name: string; kind?: string; profileId?: string }>,
+  deleted: [] as string[],
+  deleteRejects: false
+};
 
 function mpWorld(id: string, profileId: string | null, overrides: Partial<OnlineWorld> = {}): OnlineWorld {
   return {
@@ -39,6 +44,7 @@ void mock.module("@/lib/online/onlineClient", () => ({
   createInviteLink: async () => "http://localhost/join/tok",
   revokeInviteLinks: async () => 1,
   deleteOnlineWorld: async (id: string) => {
+    if (fake.deleteRejects) return false;
     fake.deleted.push(id);
     fake.worlds = fake.worlds.filter((world) => world.id !== id);
     return true;
@@ -143,6 +149,19 @@ describe("OnlineWorldSelect", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete" })); // confirm
     await waitFor(() => expect(fake.deleted).toEqual(["sp1"]));
     await waitFor(() => expect(screen.queryByText("W-sp1")).toBeNull());
+  });
+
+  test("a failed delete keeps the world listed and says so", async () => {
+    fake.worlds = [mpWorld("sp1", "p1", { kind: "sp-cloud" })];
+    fake.deleteRejects = true;
+    renderSelect();
+    await waitFor(() => expect(screen.getByText("W-sp1")).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]); // confirm
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete failed — retry" })).toBeTruthy());
+    expect(screen.getByText("W-sp1")).toBeTruthy(); // still listed, still playable
+    fake.deleteRejects = false;
   });
 
   test("owned worlds of BOTH kinds count toward the create cap", async () => {

@@ -313,14 +313,18 @@ export default function GameShell() {
         profile={profileFromOnline(screen.profile)}
         onQuitToWorlds={() => setScreen(backToWorlds)}
         onDeleteWorld={() => {
-          // Hardcore game-over: delete the cloud world (row + blob) and this
-          // device's save cache, then return to the profile's world list.
-          void deleteOnlineWorld(screen.world.id);
-          try {
-            localStorage.removeItem(worldSaveKey(`cloud:${screen.world.id}`));
-          } catch {
-            // Cache cleanup only — never fatal.
-          }
+          // Hardcore game-over: delete the cloud world (row + blob), then this
+          // device's save cache — only after the server confirmed, so a failed
+          // delete (offline) leaves a still-playable world in the list rather
+          // than a hollow one that re-downloads its own game-over.
+          void deleteOnlineWorld(screen.world.id).then((deleted) => {
+            if (!deleted) return;
+            try {
+              localStorage.removeItem(worldSaveKey(`cloud:${screen.world.id}`));
+            } catch {
+              // Cache cleanup only — never fatal.
+            }
+          });
           setScreen(backToWorlds);
         }}
         onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
