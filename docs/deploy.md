@@ -98,7 +98,9 @@ copies of the room — everyone connects "successfully" and everyone is alone
 _count_, which is runtime state, hence the explicit scale step), **always
 on** (`min_machines_running = 1`, `auto_stop_machines = "off"` — a room must keep
 ticking while players are in it), a `/health` check, `PERSISTENCE = "postgres"`,
-`MAX_ROOMS = 6`, and a 2 GB VM (rooms are ~74 MB each). SIGTERM on a redeploy
+`MAX_ROOMS = 3`, and a 512 MB VM — rooms are ~74 MB each, so memory and
+`MAX_ROOMS` scale **together** (6 rooms needs ~1 GB; resize with
+`fly scale memory`, then raise the env). SIGTERM on a redeploy
 drains every room to Postgres first, so a deploy loses at most the last 60 s
 (the dirty-persist interval), crash-safe.
 

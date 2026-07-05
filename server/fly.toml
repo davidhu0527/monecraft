@@ -10,7 +10,9 @@ primary_region = 'ord'
   dockerfile = 'Dockerfile'
 
 [env]
-  MAX_ROOMS = '6'
+  # Sized to the 512 MB VM below: ~74 MB/room + the Bun runtime. Raise memory
+  # and MAX_ROOMS together (docs/deploy.md) — 6 rooms needs ~1 GB.
+  MAX_ROOMS = '3'
   PERSISTENCE = 'postgres'
 
 [http_service]
@@ -29,6 +31,6 @@ primary_region = 'ord'
 
 [[vm]]
   size = 'shared-cpu-2x'
-  memory = '2gb'
+  memory = '512mb'
   cpus = 2
-  memory_mb = 2048
+  memory_mb = 512
