@@ -6,11 +6,16 @@ import { WORLDGEN_VERSION } from "@/lib/game/config";
  * window.__monecraft debug handle rather than pixels — see docs/testing.md.
  */
 
-export const test = base.extend<{ gamePage: Page }>({
+export const test = base.extend<{ gamePage: Page; touchMode: "on" | "off" }>({
+  // Seeds the persisted touch preference before boot: "on" forces the touch
+  // controller regardless of device detection (Playwright's hasTouch does not
+  // flip `pointer: coarse`, so auto-detection can't be exercised here — it's
+  // unit-tested in touchSettings.test.ts instead).
+  touchMode: ["off", { option: true }],
   // A page that has booted the game, with console errors treated as failures.
   // (The fixture continuation is named `runTest`, not Playwright's
   // conventional `use`, to avoid colliding with React's rules-of-hooks lint.)
-  gamePage: async ({ page }, runTest) => {
+  gamePage: async ({ page, touchMode }, runTest) => {
     const errors: string[] = [];
     page.on("console", (message) => {
       if (message.type() !== "error") return;
@@ -21,23 +26,27 @@ export const test = base.extend<{ gamePage: Page }>({
     // Seed a known profile + world so the menu has something to enter. Runs on
     // every navigation (including reloads), but only fills the manifests when
     // absent so a test's own writes survive a reload.
-    await page.addInitScript((worldgenVersion) => {
-      if (!localStorage.getItem("minecraft_profiles_v1")) {
-        localStorage.setItem(
-          "minecraft_profiles_v1",
-          JSON.stringify({ version: 1, profiles: [{ id: "e2e-profile", name: "Tester", skinId: "default", createdAt: 1 }], activeProfileId: "e2e-profile" })
-        );
-      }
-      if (!localStorage.getItem("minecraft_worlds_v1")) {
-        localStorage.setItem(
-          "minecraft_worlds_v1",
-          JSON.stringify({
-            version: 1,
-            worlds: [{ id: "e2e-world", profileId: "e2e-profile", name: "Test World", seed: 1337, worldgenVersion, createdAt: 1, lastPlayedAt: 1 }]
-          })
-        );
-      }
-    }, WORLDGEN_VERSION);
+    await page.addInitScript(
+      ({ worldgenVersion, touch }) => {
+        if (!localStorage.getItem("minecraft_profiles_v1")) {
+          localStorage.setItem(
+            "minecraft_profiles_v1",
+            JSON.stringify({ version: 1, profiles: [{ id: "e2e-profile", name: "Tester", skinId: "default", createdAt: 1 }], activeProfileId: "e2e-profile" })
+          );
+        }
+        if (!localStorage.getItem("minecraft_worlds_v1")) {
+          localStorage.setItem(
+            "minecraft_worlds_v1",
+            JSON.stringify({
+              version: 1,
+              worlds: [{ id: "e2e-world", profileId: "e2e-profile", name: "Test World", seed: 1337, worldgenVersion, createdAt: 1, lastPlayedAt: 1 }]
+            })
+          );
+        }
+        if (touch) localStorage.setItem("minecraft_touch_v1", JSON.stringify({ mode: "on" }));
+      },
+      { worldgenVersion: WORLDGEN_VERSION, touch: touchMode === "on" }
+    );
 
     await page.goto("/");
     // Enter the world through the menus (first load only; reloads auto-resume
