@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Account menu — Create account is now a visible button**: the logged-out account panel (welcome/first-run screen, Local Profiles screen, and invite landing page) now shows **Create account** next to **Sign in**. Registration used to be hidden behind Sign in → "I need an account", so a new user saw no way to create an account; the in-form toggle between the two modes remains.
+
 ## [0.14.0] - 2026-07-05
 
 ### Added

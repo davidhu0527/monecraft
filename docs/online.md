@@ -47,7 +47,9 @@ Postgres.
 - Sessions are better-auth cookies; the game server never sees them.
 - The Account panel renders on the profile-select screen **and on the
   first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
-  sign in / register is reachable before any local profile exists.
+  sign in / register is reachable before any local profile exists. Logged out
+  it offers **Sign in** and **Create account** side by side (the form also has
+  an in-form toggle between the two modes).
 
 ## Worlds, invites, cloud saves
 
