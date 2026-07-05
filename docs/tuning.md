@@ -256,8 +256,8 @@ shorten the cycle for more frequent, briefer showers.
 ## Progression — mining & combat reach
 
 `MINE_REACH`, `MINING_RATE`, `BARE_HAND_MINE_POWER`, `FIST_DAMAGE`, `ATTACK_REACH`,
-`ATTACK_AIM_DOT`, `MELEE_KNOCKBACK_IMPULSE`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
-`SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
+`ATTACK_AIM_DOT`, `MELEE_KNOCKBACK_IMPULSE`, `MELEE_REWIND_MAX_MS`, `SPEAR_MELEE_REACH`,
+`SPEAR_THROW_SPEED`, `SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
 `SPEAR_STUCK_SECONDS`, `SPEAR_THROW_COOLDOWN_SECONDS`, `SPEAR_HIT_RADIUS`.
 
 Read by `systems/mining.ts`, `systems/combat.ts`, and `systems/spears.ts`.
@@ -273,6 +273,16 @@ gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config. Spears
 override only melee reach; their projectile speed, gravity, lifetime, cooldown,
 terrain embed duration, and collision radius are global, while tier
 damage/durability live in `items.ts`.
+
+`MELEE_REWIND_MAX_MS` (900, **online only**) is how far back the game server may
+rewind melee target selection toward a high-ping attacker's stamped view of the
+world — the max interpolation delay (450 ms) plus a generous half-RTT budget.
+Raising it forgives more lag; lowering it makes laggy players whiff on moving
+mobs again. The trade-off is the ghost-hit window: other players can see a mob
+struck up to this long after it visibly moved away. Single-player never rewinds.
+The server's history ring depth derives from it (`server/mobHistory.ts`), and a
+related room constant, `MELEE_ATTACKS_PER_SECOND` (12, `server/room.ts`), caps
+attack spam so the rewind window can't be trawled with varied stamps.
 
 ## Ranged combat & endgame
 
