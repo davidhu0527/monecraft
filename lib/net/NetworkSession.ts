@@ -673,18 +673,23 @@ export async function connectNetworkSession(
   let seq = 0;
   let lastPoseSentMs = 0;
   let lastPingMs = 0;
+  /** The last frame's interpolation render time (server timeline ms) — the attack view stamp. Null until the clock syncs. */
+  let lastRenderTimeMs: number | null = null;
 
   const sendCmd = (command: Command) => {
     seq += 1;
     // Foot position (matching the pose stream): the server clamps it into
     // player.position, then the engine derives the eye/aim ray from it by
     // adding EYE_HEIGHT — sending eye height here would double that offset.
+    // Attacks additionally carry the render-time view stamp so the server can
+    // rewind melee target selection to what this player saw (bounded there).
     delayedSend(
       encodeClientMessage({
         t: "cmd",
         seq,
         cmd: command,
-        pose: { x: qPos(self.position.x), y: qPos(self.position.y), z: qPos(self.position.z), yaw: qAng(self.yaw), pitch: qAng(self.pitch) }
+        pose: { x: qPos(self.position.x), y: qPos(self.position.y), z: qPos(self.position.z), yaw: qAng(self.yaw), pitch: qAng(self.pitch) },
+        ...(command.type === "attack" && lastRenderTimeMs !== null ? { view: Math.round(Math.max(0, lastRenderTimeMs)) } : {})
       })
     );
   };
@@ -803,6 +808,10 @@ export async function connectNetworkSession(
       // Interpolation: remote entities render in the past, far enough to
       // absorb the measured arrival jitter (adaptive, slewed — no warping).
       const renderTime = (clock.ready() ? clock.estimatedServerTimeMs(nowMs) : serverTickTimeMs) - delayCtl.effectiveDelayMs(nowMs);
+      // The view stamp for lag compensation: a click lands between frames, so
+      // the mobs on screen are the ones THIS sample time drew. Only trusted
+      // once the clock is synced — until then attacks go out unstamped.
+      if (clock.ready()) lastRenderTimeMs = renderTime;
       for (const [id, buffer] of playerBuffers) {
         const player = state.players.get(id);
         const pose = buffer.sample(renderTime);
