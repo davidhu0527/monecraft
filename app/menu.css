@@ -49,6 +49,16 @@
   padding: 18px 8px;
 }
 
+/* One-line hint under a screen title (which store these profiles live in). */
+.menu-note {
+  text-align: center;
+  color: var(--mc-text-light);
+  font-size: 12px;
+  opacity: 0.7;
+  text-shadow: var(--mc-text-shadow);
+  margin: -4px 0 10px;
+}
+
 .menu-list {
   display: flex;
   flex-direction: column;

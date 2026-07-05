@@ -33,6 +33,7 @@ export default function ProfileSelect({ onPlay, onAuthChange, onBackToAccount }:
   if (creating || firstRun) {
     return (
       <MenuScreen title={firstRun ? "Create Your Profile" : "New Profile"}>
+        {firstRun && <p className="menu-note">A local player, stored in this browser — no account needed.</p>}
         {/* First run has no profile list to host the account controls, so surface
             them here too — otherwise sign in / register is unreachable until a
             local profile exists. (The list view renders its own panel below.)
@@ -57,7 +58,8 @@ export default function ProfileSelect({ onPlay, onAuthChange, onBackToAccount }:
   }
 
   return (
-    <MenuScreen title="Select Profile">
+    <MenuScreen title="Local Profiles">
+      <p className="menu-note">Stored in this browser — no account needed.</p>
       <AccountPanel onAuthChange={onAuthChange} />
       {onBackToAccount && (
         <button type="button" className="mc-button" data-testid="back-to-account" onClick={onBackToAccount}>

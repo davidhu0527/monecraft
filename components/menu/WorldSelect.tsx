@@ -127,7 +127,7 @@ export default function WorldSelect({ profile, onPlay, onDownloadCloud, cloudEna
   const cloudWorlds = cloudEnabled ? (cloudWorldList?.filter((world) => world.kind === "sp-cloud" && !linkedCloudIds.has(world.id)) ?? []) : [];
 
   return (
-    <MenuScreen title={`${profile.name} — Worlds`}>
+    <MenuScreen title={`${profile.name} — Local Worlds`}>
       {worlds.length === 0 ? (
         <p className="menu-empty">No worlds yet. Create your first world.</p>
       ) : (

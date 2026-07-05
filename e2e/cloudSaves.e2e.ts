@@ -57,7 +57,7 @@ test("a single-player world uploads to the cloud and downloads onto a fresh devi
 
     // Signing in flips the menu to the account home; cloud saves live with the
     // LOCAL worlds, one "Play locally" click away.
-    await expect(page.getByText("Your Profiles")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Online Profiles")).toBeVisible({ timeout: 15000 });
     await page.getByTestId("play-locally").click();
     await page.getByTestId("profile-cloud-profile").click();
 
