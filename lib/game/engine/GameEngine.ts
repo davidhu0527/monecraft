@@ -136,7 +136,7 @@ import {
   tryTradeAimedVillager,
   tryUseHeldItem
 } from "./systems/interact";
-import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
+import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach, type MobPositionOf } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
 import { restoreVehicle, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
@@ -203,6 +203,16 @@ export type GameEngineOptions = {
 
 /** Upper bound on the gap `applyRemotePose` scales its speed clamps by, so a withheld-pose gap can't inflate them. */
 const MAX_REMOTE_POSE_ELAPSED = 0.5;
+
+/**
+ * Per-dispatch server-side context. `mobPosOf` rewinds melee TARGET SELECTION
+ * to where the attacker saw each mob (lag compensation) — damage, knockback,
+ * and kill credit still act on the live mob. The server room is the sole
+ * producer; a local engine never rewinds, and options never travel through
+ * `routeDispatch` (a replica's rerouted command reaches the server as a plain
+ * wire cmd — the server derives its own rewind from the cmd's view stamp).
+ */
+export type DispatchOptions = { mobPosOf?: MobPositionOf };
 
 /**
  * The framework-agnostic game core. Owns all simulation state, advances it in
@@ -701,8 +711,13 @@ export class GameEngine {
    * Applies a discrete player intent. `playerId` says whose intent it is —
    * the single-player shell omits it (primary); a server passes the sender's
    * id, so every mutation in here acts on the commanding player.
+   *
+   * `opts` is server-only lag compensation: the room is the sole producer
+   * (a local engine never rewinds), and opts do NOT travel through
+   * `routeDispatch` — a replica's rerouted command reaches the server as a
+   * plain wire cmd whose rewind the server derives itself.
    */
-  dispatch(command: Command, playerId?: PlayerId): void {
+  dispatch(command: Command, playerId?: PlayerId, opts?: DispatchOptions): void {
     if (this.routeDispatch && playerId === undefined) {
       this.routeDispatch(command);
       return;
@@ -714,13 +729,13 @@ export class GameEngine {
     const priorActor = this.actingPlayer;
     this.actingPlayer = player.id;
     try {
-      this.dispatchCommand(state, player, command);
+      this.dispatchCommand(state, player, command, opts);
     } finally {
       this.actingPlayer = priorActor;
     }
   }
 
-  private dispatchCommand(state: GameState, player: PlayerState, command: Command): void {
+  private dispatchCommand(state: GameState, player: PlayerState, command: Command, opts?: DispatchOptions): void {
     switch (command.type) {
       case "selectSlot": {
         if (command.index >= 0 && command.index < Math.min(HOTBAR_SLOTS, player.inventory.length)) {
@@ -937,7 +952,8 @@ export class GameEngine {
           this.removeMobAt,
           weaponReach(player),
           knockbackBonus(heldWeapon),
-          lootingLevel(heldWeapon)
+          lootingLevel(heldWeapon),
+          opts?.mobPosOf
         );
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });

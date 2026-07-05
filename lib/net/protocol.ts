@@ -17,7 +17,7 @@ import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedStat } 
  * feeds hostile bytes through these readers and gets a typed message or
  * null — never an exception, never a partially-checked object.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 // ── close codes (WebSocket application range) ────────────────────────────────
 export const CLOSE_BAD_TICKET = 4000;
@@ -62,9 +62,13 @@ export type PoseMessage = {
  * A discrete command. Carries the client's claimed eye pose at click time:
  * the server applies it (sanity-checked like any pose) before dispatch, so
  * aimed raycasts (attack/placeBlock) resolve against the server's world from
- * where the client actually looked.
+ * where the client actually looked. `view` (v3) is the client's render-time
+ * view of the world — ms on the server tick timeline (`tick × 50`), i.e. the
+ * instant the interpolated mobs on its screen were sampled at — letting the
+ * server rewind melee target selection to what the player saw. Absent while
+ * the clock isn't synced; the server clamps it, never trusts it.
  */
-export type CmdMessage = { t: "cmd"; seq: number; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number } };
+export type CmdMessage = { t: "cmd"; seq: number; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number }; view?: number };
 
 export type ChatMessage = { t: "chat"; text: string };
 export type PingMessage = { t: "ping"; id: number; tMs: number };
@@ -302,10 +306,11 @@ export function readClientMessage(v: unknown): ClientMessage | null {
     }
     case "cmd": {
       if (!isNum(m.seq)) return null;
+      if (m.view !== undefined && !isNum(m.view)) return null;
       const cmd = readCommand(m.cmd);
       const pose = readEyePose(m.pose);
       if (!cmd || !pose) return null;
-      return { t: "cmd", seq: m.seq, cmd, pose };
+      return { t: "cmd", seq: m.seq, cmd, pose, ...(m.view !== undefined ? { view: m.view } : {}) };
     }
     case "chat":
       return isStr(m.text) && m.text.trim().length > 0 ? { t: "chat", text: m.text.slice(0, 256) } : null;

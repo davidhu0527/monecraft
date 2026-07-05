@@ -597,4 +597,38 @@ describe("predictive block breaking + instant swing", () => {
     expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(true); // someone else's
     session.dispose();
   });
+
+  test("attack cmds carry the render-time view stamp once the clock is synced; nothing else does", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    const lastCmd = () =>
+      instances[0].sent
+        .map((s) => JSON.parse(s) as { t: string; cmd?: { type: string }; view?: number })
+        .filter((m) => m.t === "cmd")
+        .at(-1)!;
+
+    // Before any pong the clock isn't synced: attacks go out unstamped.
+    session.dispatch({ type: "attack" });
+    expect(lastCmd().cmd?.type).toBe("attack");
+    expect("view" in lastCmd()).toBe(false);
+
+    // One pong (serverTick 100 → the 5000 ms mark on the server timeline) syncs
+    // the clock; the next frame samples the interpolation render time.
+    instances[0].emit(JSON.stringify({ t: "pong", id: 1, tMs: performance.now() - 20, serverTick: 100 }));
+    session.afterFrame(performance.now());
+    session.dispatch({ type: "attack" });
+    const stamped = lastCmd();
+    expect(stamped.view).toBeDefined();
+    // The stamp is the render time: behind the ~5000 ms server-time estimate by
+    // the interpolation delay (125–450 ms), never ahead of it.
+    expect(stamped.view!).toBeGreaterThan(5000 - 450 - 100);
+    expect(stamped.view!).toBeLessThan(5000 - 125 + 100);
+
+    // Non-attack commands are never stamped, synced or not.
+    session.dispatch({ type: "selectSlot", index: 2 });
+    expect(lastCmd().cmd?.type).toBe("selectSlot");
+    expect("view" in lastCmd()).toBe(false);
+    session.dispose();
+  });
 });

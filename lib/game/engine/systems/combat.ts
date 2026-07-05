@@ -15,7 +15,7 @@ import {
 import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
 import { powerBonus, punchKnockback } from "@/lib/game/enchantments";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
-import type { EmitGameEvent, GameState, PlayerState } from "../state";
+import type { EmitGameEvent, GameState, MobState, PlayerState } from "../state";
 import { spawnArrow } from "../projectiles";
 import { lookDirection } from "./playerMotion";
 
@@ -37,11 +37,21 @@ export function weaponReach(player: PlayerState): number {
 }
 
 /**
+ * Where a mob counts as standing for melee target selection. The default is
+ * its live position; a server room substitutes a historical position (lag
+ * compensation — the mob where the ATTACKER saw it). Selection only: damage,
+ * knockback, and kill credit always act on the live mob.
+ */
+export type MobPositionOf = (mob: MobState) => { x: number; y: number; z: number };
+
+const livePosition: MobPositionOf = (mob) => mob.position;
+
+/**
  * Index of the mob nearest the crosshair within melee reach and aim cone, or
  * -1. Shared by attacking and by feeding animals (Phase 5) so both use the same
  * "what am I pointing at" rule.
  */
-export function findAimedMobIndex(state: GameState, player: PlayerState, reach = ATTACK_REACH): number {
+export function findAimedMobIndex(state: GameState, player: PlayerState, reach = ATTACK_REACH, posOf: MobPositionOf = livePosition): number {
   const { position } = player;
   scratchOrigin.set(position.x, position.y + EYE_HEIGHT, position.z);
   lookDirection(player.yaw, player.pitch, scratchForward);
@@ -51,7 +61,8 @@ export function findAimedMobIndex(state: GameState, player: PlayerState, reach =
 
   for (let i = 0; i < state.mobs.length; i += 1) {
     const mob = state.mobs[i];
-    scratchToMob.copy(mob.position).sub(scratchOrigin);
+    const at = posOf(mob);
+    scratchToMob.set(at.x, at.y, at.z).sub(scratchOrigin);
     const dist = scratchToMob.length();
     if (dist > reach) continue;
     scratchToMob.normalize();
@@ -79,10 +90,11 @@ export function tryAttackMob(
   onMobKilled: (index: number, lootingLevel?: number) => void,
   reach = ATTACK_REACH,
   knockback = 0,
-  lootingLevel = 0
+  lootingLevel = 0,
+  posOf: MobPositionOf = livePosition
 ): MobKind | null {
   const { position } = player;
-  const bestIndex = findAimedMobIndex(state, player, reach);
+  const bestIndex = findAimedMobIndex(state, player, reach, posOf);
   if (bestIndex < 0) return null;
   const mob = state.mobs[bestIndex];
   mob.hp -= damage;

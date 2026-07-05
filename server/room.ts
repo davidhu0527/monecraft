@@ -1,5 +1,6 @@
-import { GameEngine } from "@/lib/game/engine/GameEngine";
+import { GameEngine, type DispatchOptions } from "@/lib/game/engine/GameEngine";
 import type { Command } from "@/lib/game/engine/commands";
+import { createMobPoseHistory, MELEE_REWIND_MAX_TICKS } from "./mobHistory";
 import { createFixedTicker, TICK_SECONDS, type FixedTicker } from "@/lib/game/engine/tickDriver";
 import {
   serializeEffects,
@@ -58,7 +59,7 @@ type ClientConn = {
   /** Tick of the last accepted pose (drives the clamp's elapsed time). */
   lastPoseTick: number;
   /** Per-second message budgets (reset each second-boundary tick). */
-  budget: { cmd: number; chat: number };
+  budget: { cmd: number; chat: number; attack: number };
   /** Sustained-backpressure strikes toward a slow-client kick. */
   slowStrikes: number;
   /** Shadow of the last self-delta sent (reference/primitive compares). */
@@ -97,10 +98,21 @@ const BACKPRESSURE_SOFT_BYTES = 256 * 1024;
 const BACKPRESSURE_KICK_BYTES = 1024 * 1024;
 const BACKPRESSURE_KICK_STRIKES = 100; // ~5s of sustained >1MB at 20Hz
 const DEFAULT_COMMAND_LOG_SIZE = 4096;
+/**
+ * Per-second cap on attack commands per client. Far above honest clicking,
+ * but with lag-compensated rewind an unbounded rate would let a scripted
+ * client sweep a mob's whole 900 ms position trail with varied view stamps.
+ */
+const MELEE_ATTACKS_PER_SECOND = 12;
 
-/** One entry in a room's replay log: a dispatched command (with its claimed eye pose) or a periodic pose anchor. */
+/**
+ * One entry in a room's replay log: a dispatched command (with its claimed eye
+ * pose, plus the v3 view stamp when present) or a periodic pose anchor. Replay
+ * ignores `view` — attack-replay fidelity was already approximate (1 s pose
+ * anchors); it's recorded for offline diagnosis of rewind disputes.
+ */
 export type CommandLogEntry =
-  | { tick: number; playerId: string; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number } }
+  | { tick: number; playerId: string; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number }; view?: number }
   | { tick: number; playerId: string; pose: { x: number; y: number; z: number; yaw: number; pitch: number } };
 
 /** A room's replay log plus the world constants needed to reconstruct it offline (see server/scripts/replay.ts). */
@@ -125,6 +137,8 @@ export class Room {
   private tickCount = 0;
   private dirtySinceStore = false;
   private readonly mobShadow = new Map<number, { x: number; y: number; z: number; hp: number }>();
+  /** Per-tick mob positions for melee lag compensation (see handleMessage "cmd"). */
+  private readonly mobHistory = createMobPoseHistory();
   private readonly vehicleShadow = new Map<number, { x: number; y: number; z: number; yaw: number; riderId: string | null }>();
   /** Count of live arrows broadcast last tick — drives one trailing empty `prj` frame so the client prunes the last one. */
   private lastProjectileCount = 0;
@@ -242,7 +256,7 @@ export class Room {
       sink,
       poseSeq: -1,
       lastPoseTick: this.tickCount,
-      budget: { cmd: 0, chat: 0 },
+      budget: { cmd: 0, chat: 0, attack: 0 },
       slowStrikes: 0,
       shadow: null
     };
@@ -327,6 +341,10 @@ export class Room {
       case "cmd": {
         if (conn.budget.cmd >= 60) return; // per-second flood guard
         conn.budget.cmd += 1;
+        if (message.cmd.type === "attack") {
+          if (conn.budget.attack >= MELEE_ATTACKS_PER_SECOND) return;
+          conn.budget.attack += 1;
+        }
         // Room-wide settings are the owner's call, not any member's.
         if ((message.cmd.type === "setDifficulty" || message.cmd.type === "setGameMode") && conn.role !== "owner") return;
         // Apply the claimed pose (same clamps as the stream) so the command's
@@ -340,8 +358,20 @@ export class Room {
         // Advance the pose clock on an accepted cmd pose too — otherwise a
         // client sending only cmds lets `elapsed` grow and inflate the clamp.
         if (accepted) conn.lastPoseTick = this.tickCount;
-        this.recordLog({ tick: this.tickCount, playerId, cmd: message.cmd, pose: message.pose });
-        this.engine.dispatch(message.cmd, playerId);
+        this.recordLog({ tick: this.tickCount, playerId, cmd: message.cmd, pose: message.pose, ...(message.view !== undefined ? { view: message.view } : {}) });
+        // Melee lag compensation: a stamped attack rewinds TARGET SELECTION to
+        // the tick the attacker was rendering, clamped into the rewind window.
+        // Everything degrades to live behavior: unstamped/future/too-stale
+        // stamps, mobs without history (spawned since), non-attack commands.
+        let opts: DispatchOptions | undefined;
+        if (message.cmd.type === "attack" && message.view !== undefined) {
+          const viewTick = Math.round(message.view / (TICK_SECONDS * 1000));
+          const rewindTick = Math.min(this.tickCount, Math.max(viewTick, this.tickCount - MELEE_REWIND_MAX_TICKS));
+          if (rewindTick < this.tickCount) {
+            opts = { mobPosOf: (mob) => this.mobHistory.positionAt(rewindTick, mob.id) ?? mob.position };
+          }
+        }
+        this.engine.dispatch(message.cmd, playerId, opts);
         return;
       }
       case "chat": {
@@ -397,10 +427,14 @@ export class Room {
     const started = this.now();
     this.tickCount += 1;
     if (this.tickCount % 20 === 0) {
-      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0 };
+      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0 };
     }
 
     this.engine.step(dt);
+    // Post-step positions: exactly what this tick's mp/keyframe broadcasts,
+    // i.e. the timeline the client's interpolation buffers (and view stamps)
+    // live on.
+    this.mobHistory.record(this.tickCount, this.engine.state.mobs);
     const events = this.engine.consumeEvents();
     const blocks = this.engine.state.blockChanges.drainEdits();
     if (events.some((e) => e.type === "blockPlaced" || e.type === "blockBroken" || e.type === "explosion")) this.dirtySinceStore = true;
