@@ -149,6 +149,23 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 - `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
 - `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.
 
+## Offline / PWA (`app/manifest.ts`, `public/sw.js`)
+
+The app installs as a desktop PWA and boots single-player offline after one online visit. `app/manifest.ts` plus the programmatic icons (shell section above) are the identity; `public/sw.js` — hand-rolled plain JS, no workbox/serwist dependency — owns offline caching:
+
+| Request                                                                        | Strategy                                                                                         |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| navigation to `/`                                                              | network-first, cached shell as offline fallback; changed HTML re-precaches its static refs       |
+| `/_next/static/*`                                                              | cache-first (content-hashed, immutable), insertion-order trim at 100 entries                     |
+| manifest + icon routes                                                         | stale-while-revalidate                                                                           |
+| everything else — `/api/*`, cross-origin, non-GET, RSC payloads, `/join/*` nav | **bypass, never touched** — the classifier's default, so online features can't be cache-poisoned |
+
+- Install fetches `/` fresh and precaches every `/_next/static` URL parsed out of the HTML. All play-critical JS is statically imported from `/`; the one dynamic import (zzfx, gesture-gated — see Audio) is picked up by cache-first on the first online audio unlock, and missing it degrades to a silent game, never a broken one.
+- `SW_VERSION` bumps only on cache-shape changes; HTML freshness never depends on it, which is what makes `skipWaiting`+`clients.claim` safe. Deploys apply silently on the next online load.
+- Known bounded gap: going offline mid-re-precache leaves a broken offline boot until the next online visit — self-healing, and preferred over any stale-HTML scheme (those end in a purged-chunk 404 loop).
+- `/sw.js` is served with a no-cache header (`next.config.mjs` `headers()`) and registered with `updateViaCache: "none"`; the pure `classify()` is exposed via `self.__sw` for unit tests (`tests/sw.test.ts`).
+- **Dev invariant**: `components/ServiceWorkerRegistration.tsx` registers only in production builds; in development it actively **unregisters** service workers and deletes `monecraft-*` caches. e2e runs a prod build on `localhost:3000`, and a lingering SW would serve stale chunks to `bun run dev` on the same origin.
+
 ## Engine invariants & gotchas
 
 Hard-won invariants — easy to silently break:

@@ -16,6 +16,8 @@ bun run dev
 
 Then open `http://localhost:3000`.
 
+Monecraft is also an installable **PWA**: in a Chromium browser, the address-bar install button turns it into a desktop app, and after the first visit **single-player works fully offline** (online features — accounts, cloud saves, co-op — still need a connection). Not a mobile game: it needs a mouse and pointer lock.
+
 The game opens with a choice: **Sign in** for online play (co-op worlds, cloud saves — a free account), or **Play locally** with browser profiles and no account. Locally, pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — a **game mode**, a **difficulty** (Peaceful · Easy · Normal · Hard), an optional **Hardcore** toggle (permadeath, locked to Survival + Hard), and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
 
 ## Controls

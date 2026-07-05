@@ -4,6 +4,7 @@ import "./ui.css";
 import "./menu.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import { pixelFont } from "./fonts";
 
 export const metadata: Metadata = {
@@ -18,7 +19,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={pixelFont.variable}>
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegistration />
+        {children}
+      </body>
     </html>
   );
 }
