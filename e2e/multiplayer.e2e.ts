@@ -171,6 +171,7 @@ test("two accounts share an online world via an invite link", async ({ browser }
   });
   const friendEdits = await friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length);
   await acquirePointerLock(friend);
+  await friend.waitForTimeout(1000); // settle (slow CI renderers need the margin — same as the host break)
   await friend.evaluate(() => {
     window.__monecraft!.engine.state.player.pitch = -Math.PI / 2 + 0.02;
   });

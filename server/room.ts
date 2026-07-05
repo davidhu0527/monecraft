@@ -132,7 +132,13 @@ export class Room {
   emptySinceMs: number | null;
   /** p95-ish diagnostics: the slowest tick of the last window. */
   private slowestTickMs = 0;
-  /** Total bytes sent downstream (monotonic); diagnostics reports the delta since its last read. */
+  /**
+   * Total bytes sent downstream (monotonic); diagnostics reports the delta
+   * since its last read. Counts PRE-compression payload sizes — Bun exposes
+   * no per-send compressed size, so with permessage-deflate negotiated the
+   * real wire usage is smaller than `kbOutPerSec` suggests (documented in
+   * tuning.md; check Fly egress metrics for wire-accurate numbers).
+   */
   private bytesOut = 0;
   private lastDiagBytes = 0;
   private lastDiagTick = 0;
@@ -577,9 +583,11 @@ export class Room {
       x: qPos(p.position.x),
       y: qPos(p.position.y),
       z: qPos(p.position.z),
-      vx: qAng(p.velocity.x),
-      vy: qAng(p.velocity.y),
-      vz: qAng(p.velocity.z)
+      // Velocity only orients the client's arrow mesh — position-grade
+      // precision (2 dp) is ample even for a slow arrow at arc's end.
+      vx: qPos(p.velocity.x),
+      vy: qPos(p.velocity.y),
+      vz: qPos(p.velocity.z)
     }));
   }
 

@@ -493,8 +493,8 @@ None affect single-player, and none are save-sensitive.
   (`40`), `OFFSET_SNAP_MS` (`250` — bigger errors snap: first fix, reconnect).
   The client pings at `PING_INTERVAL_MS` (`1000`, `NetworkSession.ts`).
 - **Wire size** — replicated poses quantize before serialization (`qPos` 2
-  decimals, `qAng` 3 — `lib/net/codec.ts`; margins sit well inside every
-  movement clamp and deadband) and the server offers **permessage-deflate**
+  decimals for positions/velocities, `qAng` 3 for angles — `lib/net/codec.ts`;
+  margins sit well inside every movement clamp and deadband) and the server offers **permessage-deflate**
   (`server/index.ts`, dedicated 16 KB windows — ~1 MB across a full house).
   Caveat: `/rooms`' `kbOutPerSec` counts pre-compression bytes, so it shows
   the quantization win only; verify deflate via DevTools

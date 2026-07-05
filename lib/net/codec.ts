@@ -15,7 +15,7 @@ import { readClientMessage, type ClientMessage, type ServerMessage, type WorldSy
  * Precision margins: 1 cm ≪ every movement clamp and deadband in play.
  */
 export const qPos = (v: number): number => Math.round(v * 100) / 100;
-/** 3-decimal angle/velocity quantizer (~0.06° — invisible at render scale). */
+/** 3-decimal angle quantizer (~0.06° — invisible at render scale). Velocities take qPos: they only orient meshes. */
 export const qAng = (v: number): number => Math.round(v * 1000) / 1000;
 
 export function encodeServerMessage(message: ServerMessage): string {

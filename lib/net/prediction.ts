@@ -43,7 +43,19 @@ export const predictionTimeoutMs = (rttMs: number): number => Math.min(PREDICTIO
  */
 export const ECHO_SUPPRESS_EXTRA_MS = 3000;
 
-export type JournalResolution = { refunds: PredictionRefund[] };
+export type JournalResolution = {
+  refunds: PredictionRefund[];
+  /**
+   * Unconfirmed SIBLING edits of dropped predictions (a door's other cell
+   * when one cell lost a race): the server may never write them — its whole
+   * placement failed — so the caller must revert them or they ghost until
+   * relog. Never includes the mismatched cell itself (the caller is about to
+   * write the server's value there) or confirmed cells (the server said
+   * those are right; if it rewrites them later in the same batch, that write
+   * still wins).
+   */
+  reverts: PredictedEdit[];
+};
 
 export type PredictionLedger = {
   add(
@@ -86,6 +98,7 @@ export function createPredictionLedger(): PredictionLedger {
 
     onJournal(idx, block) {
       const refunds: PredictionRefund[] = [];
+      const reverts: PredictedEdit[] = [];
       for (const prediction of [...pending]) {
         const touched = prediction.edits.find((e) => e.idx === idx);
         if (!touched) continue;
@@ -94,15 +107,19 @@ export function createPredictionLedger(): PredictionLedger {
           if (prediction.edits.every((e) => e.confirmed)) retire(prediction);
         } else {
           // The server wrote something else here: the prediction lost (a
-          // race, a rejection). Drop it whole — its other cells will be
-          // rewritten by the server's own journal or reverted by nothing,
-          // and the world already shows this cell's authoritative value
-          // (the caller applies the journal regardless).
+          // race, a rejection). Drop it whole — the world already shows this
+          // cell's authoritative value (the caller applies the journal
+          // regardless) — and hand back its unconfirmed sibling cells for
+          // revert: the server's own placement may have failed entirely, in
+          // which case nothing else will ever rewrite them.
           retire(prediction);
           if (prediction.refund) refunds.push(prediction.refund);
+          for (const edit of prediction.edits) {
+            if (edit.idx !== idx && !edit.confirmed) reverts.push(edit);
+          }
         }
       }
-      return { refunds };
+      return { refunds, reverts };
     },
 
     expire(nowMs) {

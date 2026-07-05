@@ -232,6 +232,16 @@ describe("room lifecycle", () => {
     const t = b.messagesOf("tick").at(-1);
     expect(t?.vp?.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
     expect(t?.prj?.some((p) => p.id === 99 && p.vx === 8)).toBe(true);
+    // Wire quantization holds on every pose channel (re-quantizing is a no-op).
+    for (const v of t!.vp!) {
+      expect(v.x).toBe(Math.round(v.x * 100) / 100);
+      expect(v.yaw).toBe(Math.round(v.yaw * 1000) / 1000);
+    }
+    for (const p of t!.prj!) {
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.vx).toBe(Math.round(p.vx * 100) / 100);
+    }
+    for (const m of t?.mp ?? []) expect(m.x).toBe(Math.round(m.x * 100) / 100);
 
     // A late joiner's world-sync keyframe carries both (force-emits past the deadband).
     const c = fakeSink();

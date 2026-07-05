@@ -18,9 +18,10 @@ Two wire-size measures keep the JSON hot path cheap (neither changes the
 envelope, so no protocol bump):
 
 - **Pose quantization** (`qPos`/`qAng`, `lib/net/codec.ts`): every replicated
-  position rounds to 2 decimals (1 cm) and every angle/velocity to 3 before
-  serialization — well inside all movement clamps and deadbands. Applied at
-  the serialization sites only; server-side shadows keep full precision.
+  position and velocity rounds to 2 decimals (1 cm) and every angle to 3
+  before serialization — well inside all movement clamps and deadbands.
+  Applied at the serialization sites only; server-side shadows keep full
+  precision.
 - **permessage-deflate**: the server offers it (`server/index.ts`), browsers
   negotiate automatically. Note `/rooms`' `kbOutPerSec` counts
   **pre-compression** bytes, so it reflects quantization but not deflate;

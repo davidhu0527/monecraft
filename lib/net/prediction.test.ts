@@ -44,10 +44,46 @@ describe("prediction ledger", () => {
   test("a mismatching write drops the whole prediction and surfaces the refund", () => {
     const ledger = createPredictionLedger();
     ledger.add("place", [{ idx: 42, block: DIRT, prev: AIR }], { itemId: "dirt", count: 1 }, 0, 100);
-    const { refunds } = ledger.onJournal(42, 7); // someone else's block won the race
+    const { refunds, reverts } = ledger.onJournal(42, 7); // someone else's block won the race
     expect(refunds).toEqual([{ itemId: "dirt", count: 1 }]);
+    expect(reverts).toEqual([]); // single-cell: no sibling to strand
     expect(ledger.size()).toBe(0);
     expect(ledger.expire(999_999)).toEqual([]); // dropped — no later revert of a cell the server owns
+  });
+
+  test("a mismatch on one cell of a multi-cell prediction surfaces the unconfirmed sibling for revert", () => {
+    const ledger = createPredictionLedger();
+    ledger.add(
+      "place",
+      [
+        { idx: 10, block: 21, prev: AIR },
+        { idx: 20, block: 22, prev: AIR }
+      ],
+      { itemId: "door", count: 1 },
+      0,
+      100
+    );
+    const { refunds, reverts } = ledger.onJournal(10, 7); // lower cell lost the race
+    expect(refunds).toEqual([{ itemId: "door", count: 1 }]);
+    expect(reverts).toEqual([{ idx: 20, block: 22, prev: AIR, confirmed: false }]); // the upper half must not ghost
+    expect(ledger.size()).toBe(0);
+  });
+
+  test("confirmed siblings are NOT surfaced for revert on a later mismatch", () => {
+    const ledger = createPredictionLedger();
+    ledger.add(
+      "place",
+      [
+        { idx: 10, block: 21, prev: AIR },
+        { idx: 20, block: 22, prev: AIR }
+      ],
+      null,
+      0,
+      100
+    );
+    ledger.onJournal(20, 22); // upper confirmed first
+    const { reverts } = ledger.onJournal(10, 7); // then the lower mismatches
+    expect(reverts).toEqual([]); // the server said the upper is right — leave it
   });
 
   test("breaks carry no refund even on override", () => {

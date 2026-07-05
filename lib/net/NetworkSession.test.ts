@@ -454,6 +454,28 @@ describe("optimistic block placement", () => {
     session.dispose();
   });
 
+  test("a door race reverts the stranded upper half, not just the contested cell", async () => {
+    const { session, instances, state, self, g } = await placeScene();
+    self.inventory = [...self.inventory];
+    self.inventory[0] = createSlot("door", 2);
+    session.dispatch({ type: "placeBlock" }); // predicts BOTH door cells at (6, g+1..g+2, 5)
+    expect(state.world.get(6, g + 1, 5)).not.toBe(BlockId.Air);
+    expect(state.world.get(6, g + 2, 5)).not.toBe(BlockId.Air);
+    expect(session.netStats().pendingPredictions).toBe(1);
+
+    // Another player's stone won the lower cell; the server never wrote the
+    // upper (its whole door placement failed) — the replica must not keep a
+    // floating half-door.
+    const lowerIdx = state.world.index(6, g + 1, 5);
+    instances[0].emit(tick(undefined, { blocks: [[lowerIdx, BlockId.Stone]] }));
+
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Stone); // server truth
+    expect(state.world.get(6, g + 2, 5)).toBe(BlockId.Air); // sibling reverted
+    expect(state.players.get("acct-1")!.inventory[0]?.count).toBe(2); // door refunded
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  });
+
   test("a lost race reverts to the server's block and refunds the stack", async () => {
     const { session, instances, state, g, idx } = await placeScene();
     session.dispatch({ type: "placeBlock" });

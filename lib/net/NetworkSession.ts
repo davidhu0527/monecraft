@@ -485,12 +485,24 @@ export async function connectNetworkSession(
     if (updated) self.inventory = updated;
   };
 
+  /** Undo one predicted cell through the relight chokepoint (a predicted chest also brought a fresh container). */
+  const revertPredictedEdit = (edit: { idx: number; block: number; prev: number }) => {
+    const { x, y, z } = cellOf(edit.idx);
+    if (edit.block === BlockId.Chest) state.containers.delete(edit.idx);
+    state.blockChanges.set(x, y, z, edit.prev as never);
+  };
+
   const applyBlocks = (blocks: Array<[number, number]>) => {
     for (const [idx, block] of blocks) {
       // The journal is the authority: it confirms matching predictions (skip
-      // the redundant rewrite) and overrides losing ones (refund now — an
-      // inventorySlots delta in the same tick wins over this anyway).
-      for (const refund of ledger.onJournal(idx, block).refunds) refundToInventory(refund);
+      // the redundant rewrite) and overrides losing ones — refund now (an
+      // inventorySlots delta in the same tick wins over this anyway) and
+      // revert the dropped prediction's unconfirmed sibling cells (a door's
+      // other half): the server's placement may have failed entirely, and a
+      // same-batch server write to a reverted cell still lands afterward.
+      const { refunds, reverts } = ledger.onJournal(idx, block);
+      for (const refund of refunds) refundToInventory(refund);
+      for (const edit of reverts) revertPredictedEdit(edit);
       const { x, y, z } = cellOf(idx);
       if (state.world.get(x, y, z) !== block) state.blockChanges.set(x, y, z, block as never); // relights locally too
     }
@@ -758,10 +770,7 @@ export async function connectNetworkSession(
       // a late confirm re-applies via the journal without a doubled sound.
       for (const prediction of ledger.expire(performance.now())) {
         for (const edit of [...prediction.edits].reverse()) {
-          if (edit.confirmed) continue;
-          const { x, y, z } = cellOf(edit.idx);
-          if (edit.block === BlockId.Chest) state.containers.delete(edit.idx); // a predicted chest brought a fresh container
-          state.blockChanges.set(x, y, z, edit.prev as never);
+          if (!edit.confirmed) revertPredictedEdit(edit);
         }
         if (prediction.refund) refundToInventory(prediction.refund);
         state.blockChanges.drainEditsDetailed(); // reverts aren't predictions either
