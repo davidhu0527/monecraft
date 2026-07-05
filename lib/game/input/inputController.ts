@@ -1,6 +1,7 @@
 import type { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { FrameInput, MoveIntents } from "@/lib/game/engine/state";
 import { FLY_DOUBLE_TAP_WINDOW_SECONDS } from "@/lib/game/config";
+import { isUiBlocked } from "./inputGating";
 
 const MOUSE_SENSITIVITY = 0.0021;
 
@@ -70,7 +71,7 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
     input.mineHeld = leftMouseHeld && pointerLocked;
   };
 
-  const uiBlocked = () => engine.state.inventoryOpen || engine.state.advancementsOpen || engine.state.isDead || engine.state.paused;
+  const uiBlocked = () => isUiBlocked(engine);
 
   // Timestamp (ms) of the last discrete Space press, for double-tap-to-fly detection.
   let lastSpaceTapAt = -Infinity;

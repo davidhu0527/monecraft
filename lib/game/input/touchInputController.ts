@@ -11,6 +11,7 @@ import {
   TOUCH_TAP_SLOP_PX
 } from "@/lib/game/config";
 import type { InputController } from "./inputController";
+import { isUiBlocked } from "./inputGating";
 
 /**
  * The touch counterpart of createInputController: same InputController
@@ -92,8 +93,7 @@ export function createTouchInputController(args: CreateTouchInputControllerArgs)
   let lastJoystickEngageAt = -Infinity;
   let lastJumpTapAt = -Infinity;
 
-  const uiBlocked = () => engine.state.inventoryOpen || engine.state.advancementsOpen || engine.state.isDead || engine.state.paused;
-  const gated = () => !active || uiBlocked();
+  const gated = () => !active || isUiBlocked(engine);
 
   const clearJoystick = () => {
     joystick = null;

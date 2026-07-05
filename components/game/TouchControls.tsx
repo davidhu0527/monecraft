@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { TOUCH_JOYSTICK_RADIUS_PX } from "@/lib/game/config";
 import type { TouchControlsApi } from "@/lib/game/input/touchInputController";
 
@@ -41,7 +41,11 @@ function capture(e: React.PointerEvent): void {
 export default function TouchControls({ controls, showEat, isFlying, onPause, onOpenInventory, onToggleCamera, onDeactivate }: TouchControlsProps) {
   // Visual knob offset (clamped); the controller does its own vector math.
   const [knob, setKnob] = useState({ x: 0, y: 0 });
-  const [sneakOn, setSneakOn] = useState(controls.sneakLatched);
+  // The sneak latch is read LIVE from the controller (never cached — a
+  // clearKeys/release could reset it under a cached copy); the reducer just
+  // forces a re-render after each press so aria-pressed updates.
+  const [, refreshSneak] = useReducer((n: number) => n + 1, 0);
+  const sneakOn = controls.sneakLatched;
   const joystickCenterRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => () => onDeactivate(), [onDeactivate]);
@@ -105,6 +109,7 @@ export default function TouchControls({ controls, showEat, isFlying, onPause, on
             data-testid="touch-eat"
             onPointerDown={() => controls.buttonDown("eat")}
             onPointerUp={() => controls.buttonUp("eat")}
+            onPointerCancel={() => controls.buttonUp("eat")}
           >
             Eat
           </button>
@@ -115,6 +120,7 @@ export default function TouchControls({ controls, showEat, isFlying, onPause, on
           data-testid="touch-place"
           onPointerDown={() => controls.buttonDown("place")}
           onPointerUp={() => controls.buttonUp("place")}
+          onPointerCancel={() => controls.buttonUp("place")}
         >
           Place
         </button>
@@ -125,9 +131,10 @@ export default function TouchControls({ controls, showEat, isFlying, onPause, on
           aria-pressed={sneakOn}
           onPointerDown={() => {
             controls.buttonDown("sneak");
-            setSneakOn(controls.sneakLatched);
+            refreshSneak();
           }}
           onPointerUp={() => controls.buttonUp("sneak")}
+          onPointerCancel={() => controls.buttonUp("sneak")}
         >
           {isFlying ? "Descend" : "Sneak"}
         </button>

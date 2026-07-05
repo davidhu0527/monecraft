@@ -246,6 +246,9 @@ describe("action buttons", () => {
     c.controls.buttonDown("eat");
     expect(dispatch).toHaveBeenCalledWith({ type: "eatFood" });
 
+    // The afterEach only disposes the LAST setup()'s controller — dispose the
+    // first one here or its visibilitychange listener leaks into later tests.
+    c.dispose();
     const potion = setup([{ effect: "haste" }]);
     potion.c.controls.buttonDown("eat");
     expect(potion.dispatch).toHaveBeenCalledWith({ type: "drinkPotion" });

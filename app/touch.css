@@ -1,9 +1,10 @@
 /* --- On-screen touch controls (components/game/TouchControls.tsx) ---
    Layering: the look pad sits at z-index 3 — above the canvas/vignette (2),
    below the HUD (4) — so hotbar taps hit the hotbar while everything that
-   falls through becomes look/mine input. Buttons and the joystick float at
-   HUD level; panels (z 9) cover the lot, and the overlay unmounts anyway
-   whenever one opens. */
+   falls through becomes look/mine input. Buttons and the joystick sit at
+   z-index 5, one layer above the HUD (4) so they never lose a tap to it;
+   panels (z 9) cover the lot, and the overlay unmounts anyway whenever one
+   opens. */
 
 .touch-lookpad {
   position: absolute;
