@@ -128,7 +128,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const [saveMessage, setSaveMessage] = useState("");
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The live input controller — a ref (not a closure capture) so the rAF loop
+  // and event drain always act on the current one, which lets a touch/desktop
+  // controller swap happen without tearing down the whole renderer effect.
+  const inputRef = useRef<InputController | null>(null);
   const minimapNodeRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<AudioDirector | null>(null);
   // The rAF effect must not re-run on volume tweaks — it reads through a ref.
@@ -288,7 +291,6 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       return;
     }
     const renderer = created.renderer;
-    canvasRef.current = renderer.domElement;
     rendererRef.current = renderer;
     // Before the first rAF, so no frame can ever show the default palette.
     renderer.setPlayerSkin(getSkinPreset(skinIdRef.current).palette);
@@ -309,6 +311,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         setLocked(isLocked);
       }
     });
+    inputRef.current = input;
+    // Everything below must reach the controller through the ref, never the
+    // `input` closure — after a hot swap the closure points at a disposed one.
+    const liveInput = () => inputRef.current ?? input;
 
     // Autoplay policy: the AudioContext may only start inside a user gesture.
     const unlockAudio = () => audio.unlock();
@@ -328,7 +334,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
     window.addEventListener("beforeunload", autoSave);
 
-    window.__monecraft = { engine: gameEngine, renderer, input, audio, net: online ?? undefined };
+    window.__monecraft = { engine: gameEngine, renderer, input: liveInput(), audio, net: online ?? undefined };
 
     let minimap: MinimapRenderer | null = null;
     let animationFrame = 0;
@@ -337,7 +343,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const accumulator = createAccumulator({ startMs: performance.now() });
     const clock = () => {
       const now = performance.now();
-      const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, input.input));
+      const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, liveInput().input));
 
       // Online: replicated server events (mob deaths, other players' block
       // edits, …) join the local drain so toasts/audio/particles treat them
@@ -350,8 +356,8 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
           // Free the cursor so the death/victory/game-over button is clickable; the
           // pause command ignores those states, so the lock-loss won't open the menu too.
-          input.clearKeys();
-          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+          liveInput().clearKeys();
+          liveInput().release();
         }
         // Hardcore permadeath is permanent — persist it now so closing the tab right
         // after death still reloads the dead world spectating (not a fresh run).
@@ -359,13 +365,13 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
           persistGame(gameEngine, saveKey, () => {});
           syncCloudSave(gameEngine, false);
         }
-        if (event.type === "respawned") input.clearKeys();
+        if (event.type === "respawned") liveInput().clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
           // A furnace/chest opened the inventory from a mouse click — release the
           // keys and pointer lock the same way KeyI does on the DOM side.
-          input.clearKeys();
-          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+          liveInput().clearKeys();
+          liveInput().release();
         }
         if (event.type === "breakBlocked") {
           flashMessage("Not enough room to empty the chest");
@@ -430,7 +436,6 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       }
       online?.dispose();
       delete window.__monecraft;
-      canvasRef.current = null;
       rendererRef.current = null;
       minimap?.dispose();
       cancelAnimationFrame(animationFrame);
@@ -440,17 +445,18 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       document.removeEventListener("keydown", unlockAudio);
       audioRef.current = null;
       audio.dispose();
-      input.dispose();
-      document.exitPointerLock();
+      liveInput().release();
+      liveInput().dispose();
+      inputRef.current = null;
       renderer.dispose();
     };
   }, [ctx, flashMessage, syncCloudSave]);
 
-  // Re-locking can legitimately reject (e.g. Chrome's cooldown right after
-  // Escape); the player just clicks the canvas to lock again.
-  const requestPointerLock = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (canvas) Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  // Re-entering play goes through the controller's engage() — pointer lock on
+  // desktop (which can legitimately reject, e.g. Chrome's cooldown right after
+  // Escape; the player just clicks the canvas again), a virtual flag on touch.
+  const engageControls = useCallback(() => {
+    inputRef.current?.engage();
   }, []);
 
   return {
@@ -521,7 +527,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     unequipArmor: (slot: ArmorSlot) => engine?.dispatch({ type: "unequipArmor", slot }),
     resumeNow: () => {
       engine?.dispatch({ type: "resume" });
-      requestPointerLock();
+      engageControls();
     },
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
     dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),

@@ -17,6 +17,17 @@ export type InputController = {
    * keys/mouse → engine wiring — see e2e/helpers.ts.
    */
   forcePointerLock(locked: boolean): void;
+  /**
+   * Enter gameplay capture. Desktop: request pointer lock (may legitimately
+   * reject — e.g. Chrome's cooldown right after Escape; the game just stays
+   * unlocked). A touch controller flips its virtual "playing" flag instead.
+   * The shell must use engage()/release() rather than poking
+   * requestPointerLock/exitPointerLock directly — a controller whose lock is
+   * virtual would silently desync otherwise.
+   */
+  engage(): void;
+  /** Leave gameplay capture (release pointer lock if this controller holds it). */
+  release(): void;
   dispose(): void;
 };
 
@@ -230,6 +241,14 @@ export function createInputController(args: CreateInputControllerArgs): InputCon
       // poking the raw flag. Only the engine-facing gates are faked.
       pointerLocked = locked;
       syncIntents();
+    },
+
+    engage() {
+      Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+    },
+
+    release() {
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
     },
 
     dispose() {
