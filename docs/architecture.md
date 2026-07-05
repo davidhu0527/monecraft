@@ -26,6 +26,7 @@ The ONLINE layer (accounts, cloud saves, invites, join tickets) sits beside the 
 - WebGL init failure is surfaced as `rendererError` and rendered as a fallback panel instead of crashing.
 - On mount the shell installs a `window.__monecraft` debug handle (`{ engine, renderer, input, audio, net? }` — `net` is the live `NetworkSession` in online play) and deletes it on unmount. The Playwright suite in `e2e/` drives the game through this handle — asserting on engine state and `renderer.renderedTriangles()` rather than pixels (see [testing.md](testing.md)); it's also handy from the browser console.
 - UI pixel art is procedural: `lib/ui/` generates 16×16 item/HUD sprites as pure pixel buffers (`spritePixels.ts`, `hudPixels.ts` — DOM-free, unit-tested) wrapped by a cached canvas→data-URL layer (`sprites.ts`, falls back to a transparent pixel under happy-dom). `chromeTiles.ts` (`installUiTiles`, idempotent, `document`-guarded) installs the GUI textures as CSS vars: the menu-backdrop noise (`--mc-tile-dirt/stone`) and the chrome grain layered over the flat panel/slot/button colors (`--mc-tile-panel/well/button`, which default to `none` so SSR/pre-install falls back to the solid color). No image assets, no licensing exposure. `lib/ui/` must not import Three.js or the engine.
+- The installable app identity is procedural too: `app/manifest.ts` (name "Monecraft", standalone/landscape, theme colors from the menu gate's gradient in `menu.css`) plus icons generated from pixel code — `lib/ui/appIcon.tsx` paints an 8×8 grass-block face from `BLOCK_COLORS` as nested flex divs (Satori supports flex, not canvas/grid), wired through the `app/icon.tsx`/`app/apple-icon.tsx` file conventions and the explicit `/icons/{192,512,maskable}` route handlers the manifest references (file-convention icons don't auto-wire into the manifest).
 - Item hovers use `useItemTooltip` (`components/game/ItemTooltip.tsx`): a cursor-following, `aria-hidden`, `pointer-events:none` tooltip portaled to `document.body` (so it never clips inside the scrollable inventory or blocks the pointer-lock click), replacing native `title=` on the hotbar, inventory, and recipe entries. Elements keep their `aria-label` for the accessible name.
 - The one binary asset is the UI pixel font (Monocraft, a Minecraft-style face under SIL OFL 1.1), self-hosted via `next/font/local` from the committed woff2 in `app/fonts/` and exposed as `--mc-font`; the monospace stack stays as the fallback and on the F3 debug readout, and Monocraft's coding ligatures are disabled in `base.css`. This is the single sanctioned exception to "zero binary assets".
 - Note for the React Compiler lint rules: consume the hook with destructuring (`const { … } = useMinecraftGame()`); property access on the result object can false-positive `react-hooks/refs`.
@@ -147,6 +148,23 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 - `meshing.ts` — `buildGeometryRegion(world, …)` with face culling, baked ambient occlusion, atlas UVs, and a per-vertex `aLight` (sky-exposure, block-light) sampled from the faced voxel; `buildGeometryLayersRegion` splits opaque terrain from clear glass for the renderer.
 - `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
 - `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.
+
+## Offline / PWA (`app/manifest.ts`, `public/sw.js`)
+
+The app installs as a desktop PWA and boots single-player offline after one online visit. `app/manifest.ts` plus the programmatic icons (shell section above) are the identity; `public/sw.js` — hand-rolled plain JS, no workbox/serwist dependency — owns offline caching:
+
+| Request                                                                        | Strategy                                                                                         |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| navigation to `/`                                                              | network-first, cached shell as offline fallback; changed HTML re-precaches its static refs       |
+| `/_next/static/*`                                                              | cache-first (content-hashed, immutable), insertion-order trim at 100 entries                     |
+| manifest + icon routes                                                         | stale-while-revalidate                                                                           |
+| everything else — `/api/*`, cross-origin, non-GET, RSC payloads, `/join/*` nav | **bypass, never touched** — the classifier's default, so online features can't be cache-poisoned |
+
+- Install fetches `/` fresh and precaches every `/_next/static` URL parsed out of the HTML. All play-critical JS is statically imported from `/`; the one dynamic import (zzfx, gesture-gated — see Audio) is picked up by cache-first on the first online audio unlock, and missing it degrades to a silent game, never a broken one.
+- `SW_VERSION` bumps only on cache-shape changes; HTML freshness never depends on it, which is what makes `skipWaiting`+`clients.claim` safe. Deploys apply silently on the next online load.
+- Known bounded gap: going offline mid-re-precache leaves a broken offline boot until the next online visit — self-healing, and preferred over any stale-HTML scheme (those end in a purged-chunk 404 loop).
+- `/sw.js` is served with a no-cache header (`next.config.mjs` `headers()`) and registered with `updateViaCache: "none"`; the pure `classify()` is exposed via `self.__sw` for unit tests (`tests/sw.test.ts`).
+- **Dev invariant**: `components/ServiceWorkerRegistration.tsx` registers only in production builds; in development it actively **unregisters** service workers and deletes `monecraft-*` caches. e2e runs a prod build on `localhost:3000`, and a lingering SW would serve stale chunks to `bun run dev` on the same origin.
 
 ## Engine invariants & gotchas
 

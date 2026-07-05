@@ -48,6 +48,20 @@ export default defineConfig([
     }
   },
   {
+    // The service worker is plain JS in worker scope: no DOM lib, no module
+    // system, tsc ignores it (allowJs off) — lint is its only static check.
+    files: ["public/**/*.js"],
+    languageOptions: {
+      globals: {
+        self: "readonly",
+        caches: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
+        URL: "readonly"
+      }
+    }
+  },
+  {
     // Engine systems must address players explicitly: the flat GameState
     // fields (state.player, state.inventory, …) are accessor aliases onto the
     // PRIMARY player — kept for the single-player shell, tests, and

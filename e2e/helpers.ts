@@ -14,8 +14,6 @@ export const test = base.extend<{ gamePage: Page }>({
     const errors: string[] = [];
     page.on("console", (message) => {
       if (message.type() !== "error") return;
-      // The app ships no favicon; Chrome's automatic /favicon.ico 404 is noise.
-      if (message.text().includes("Failed to load resource") && message.location().url.endsWith("/favicon.ico")) return;
       errors.push(`${message.text()} (${message.location().url})`);
     });
     page.on("pageerror", (error) => errors.push(String(error)));
