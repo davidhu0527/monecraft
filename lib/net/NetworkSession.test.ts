@@ -303,13 +303,20 @@ describe("connectNetworkSession", () => {
     expect(session.simulatedJitter()).toBe(30);
     const before = instances[0].sent.length;
     for (let i = 0; i < 20; i += 1) session.sendChat(`m${i}`);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const chats = instances[0].sent
-      .slice(before)
-      .map((s) => JSON.parse(s) as { t: string; text?: string })
-      .filter((m) => m.t === "chat")
-      .map((m) => m.text);
-    expect(chats).toEqual(Array.from({ length: 20 }, (_, i) => `m${i}`));
+    const chatsSoFar = () =>
+      instances[0].sent
+        .slice(before)
+        .map((s) => JSON.parse(s) as { t: string; text?: string })
+        .filter((m) => m.t === "chat")
+        .map((m) => m.text);
+    // Poll for completeness rather than sleeping a fixed 300 ms — a loaded CI
+    // runner can starve the delivery timers past any fixed deadline, and this
+    // test is about ORDER, not delivery speed.
+    const deadline = Date.now() + 5000;
+    while (chatsSoFar().length < 20 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(chatsSoFar()).toEqual(Array.from({ length: 20 }, (_, i) => `m${i}`));
     session.dispose();
   });
 
