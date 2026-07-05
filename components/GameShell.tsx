@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import MinecraftGame from "@/components/MinecraftGame";
 import AccountProfileSelect from "@/components/menu/AccountProfileSelect";
+import AuthScreen from "@/components/menu/AuthScreen";
 import OnlineWorldSelect from "@/components/menu/OnlineWorldSelect";
 import ProfileSelect from "@/components/menu/ProfileSelect";
+import WelcomeScreen from "@/components/menu/WelcomeScreen";
 import WorldSelect from "@/components/menu/WorldSelect";
 import { currentUser, onlineUsed, type OnlineUser } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
@@ -19,14 +21,20 @@ import { connectNetworkSession, type NetworkSession } from "@/lib/net/NetworkSes
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 /**
- * Top-level menu shell. Owns the screen state machine (profile-select ->
- * world-select -> play) and boots the legacy migration once on mount. The play
- * screen mounts MinecraftGame keyed by world id + a reload nonce, so switching
- * worlds (or Load/Reset) remounts the subtree — the game effect's cleanup
- * disposes the old engine/renderer and a fresh mount boots the next world, with
- * no page reload.
+ * Top-level menu shell. Owns the screen state machine — logged out it roots at
+ * the welcome gate (sign in via the dedicated auth screen, or play locally:
+ * welcome -> auth | profile-select -> world-select -> play), while a signed-in
+ * session skips the gate straight to the account home — and boots the legacy
+ * migration once on mount. The play screen mounts MinecraftGame keyed by world
+ * id + a reload nonce, so switching worlds (or Load/Reset) remounts the
+ * subtree — the game effect's cleanup disposes the old engine/renderer and a
+ * fresh mount boots the next world, with no page reload.
  */
 type Screen =
+  // The logged-out root: choose an online account or local (browser) play.
+  | { name: "welcome" }
+  // The dedicated sign-in / register screen behind the gate's "Sign in".
+  | { name: "auth" }
   | { name: "profile-select" }
   | { name: "world-select"; profileId: string }
   | { name: "online-worlds"; profile: OnlineProfile }
@@ -101,7 +109,7 @@ function writeSessionPointer(pointer: { profileId: string; worldId: string } | n
 
 export default function GameShell() {
   const [ready, setReady] = useState(false);
-  const [screen, setScreen] = useState<Screen>({ name: "profile-select" });
+  const [screen, setScreen] = useState<Screen>({ name: "welcome" });
   const [reloadNonce, setReloadNonce] = useState(0);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -111,15 +119,28 @@ export default function GameShell() {
   // The signed-in account (its presence flips the menu into account mode).
   // Offline-first: never asked until this browser went online.
   const [onlineUser, setOnlineUser] = useState<OnlineUser | null>(null);
-  // The "Play locally" door: a signed-in account browsing its local (browser)
+  // The local-worlds door: a signed-in account browsing its local (browser)
   // profiles/worlds — where cloud-save sync lives — without signing out.
   const [browsingLocal, setBrowsingLocal] = useState(false);
+  // True once the mount-time session probe has answered (or was skipped) —
+  // the welcome gate holds a neutral frame until then, so a signed-in reload
+  // lands straight on the account home with no gate flash.
+  const [authProbed, setAuthProbed] = useState(false);
   const refreshOnlineUser = useCallback(() => {
-    if (onlineUsed())
-      void currentUser().then((user) => {
+    if (!onlineUsed()) {
+      // Pure-local browser: nothing to probe. Microtask hop keeps the set off
+      // the synchronous effect path (cascading-render lint).
+      queueMicrotask(() => setAuthProbed(true));
+      return;
+    }
+    void currentUser().then(
+      (user) => {
         setOnlineUser(user);
         if (!user) setBrowsingLocal(false); // signed out: the door has no "back"
-      });
+        setAuthProbed(true);
+      },
+      () => setAuthProbed(true) // probe failed (offline): treat as logged out
+    );
   }, []);
 
   /**
@@ -386,19 +407,39 @@ export default function GameShell() {
     );
   }
 
-  // The profile-select screen is auth-aware: a signed-in account browses its
-  // synced online profiles (unless it stepped through the "Play locally" door);
-  // everyone else gets the local (browser) profiles.
+  // The root menus are auth-aware: a signed-in account gets its account home
+  // (unless it stepped through the local-worlds door), a logged-out visitor
+  // roots at the welcome gate — sign in on the dedicated screen, or browse the
+  // local (browser) profiles.
   const accountMode = onlineUser !== null;
   if (accountMode && !browsingLocal) {
     return (
       <AccountProfileSelect
         user={onlineUser}
         onPlay={(profile) => setScreen({ name: "online-worlds", profile })}
-        onPlayLocally={() => setBrowsingLocal(true)}
-        onSignedOut={() => setOnlineUser(null)}
+        onPlayLocally={() => {
+          // Set the screen too: it may still read "welcome"/"auth", which
+          // would bounce the door back to the gate instead of the local list.
+          setBrowsingLocal(true);
+          setScreen({ name: "profile-select" });
+        }}
+        onSignedOut={() => {
+          setOnlineUser(null);
+          setScreen({ name: "welcome" }); // sign-out lands on the gate
+        }}
       />
     );
+  }
+
+  if (screen.name === "auth") {
+    return <AuthScreen onAuthChange={refreshOnlineUser} onBack={() => setScreen({ name: "welcome" })} />;
+  }
+
+  if (screen.name === "welcome") {
+    // Hold the neutral frame until the session probe answers — a signed-in
+    // reload goes straight to the account home above, never a gate flash.
+    if (!authProbed) return <div className="menu-screen" />;
+    return <WelcomeScreen onSignIn={() => setScreen({ name: "auth" })} onPlayLocally={() => setScreen({ name: "profile-select" })} />;
   }
 
   return (
@@ -407,8 +448,8 @@ export default function GameShell() {
         setActiveProfile(profileId);
         setScreen({ name: "world-select", profileId });
       }}
-      onAuthChange={refreshOnlineUser}
       onBackToAccount={accountMode ? () => setBrowsingLocal(false) : undefined}
+      onBackToWelcome={accountMode ? undefined : () => setScreen({ name: "welcome" })}
     />
   );
 }

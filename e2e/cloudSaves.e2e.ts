@@ -34,7 +34,8 @@ test("a single-player world uploads to the cloud and downloads onto a fresh devi
     const page = await context.newPage();
     watchErrors(page, errors);
 
-    // Seed a profile so the menu opens on the profile list (where the account panel lives).
+    // Seed a profile for the local-worlds half of the journey (sign-in itself
+    // starts at the welcome gate — no local profile needed for it).
     await page.addInitScript(() => {
       if (!localStorage.getItem("minecraft_profiles_v1")) {
         localStorage.setItem(
@@ -56,7 +57,7 @@ test("a single-player world uploads to the cloud and downloads onto a fresh devi
     await page.getByRole("button", { name: "Create account" }).click();
 
     // Signing in flips the menu to the account home; cloud saves live with the
-    // LOCAL worlds, one "Play locally" click away.
+    // LOCAL worlds, one local-worlds footer link away.
     await expect(page.getByText("Online Profiles")).toBeVisible({ timeout: 15000 });
     await page.getByTestId("play-locally").click();
     await page.getByTestId("profile-cloud-profile").click();

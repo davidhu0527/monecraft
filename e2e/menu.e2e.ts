@@ -3,18 +3,24 @@ import { expect, test } from "@playwright/test";
 /**
  * Profile/world menu flow. Unlike the gameplay smoke suite (which seeds a world
  * and enters it via a fixture), these start from empty storage and drive the
- * real menus. A fresh install has no profiles, so the shell opens straight into
- * the create-profile form.
+ * real menus: through the welcome gate's "Play locally" door, where a fresh
+ * install has no profiles and opens straight into the create-profile form.
  */
 
-/** Fresh install → create a profile through the first-run form, landing on its world list. */
+/** Fresh visit → through the welcome gate into the local menus. */
+async function openLocalMenus(page: import("@playwright/test").Page): Promise<void> {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play locally" }).click();
+}
+
+/** Create a profile through the create form, landing on its world list. */
 async function createProfile(page: import("@playwright/test").Page, name: string): Promise<void> {
   await page.getByLabel("Profile name").fill(name);
   await page.getByRole("button", { name: "Create" }).click();
 }
 
 test("create worlds, play them, and switch between them without a reload", async ({ page }) => {
-  await page.goto("/");
+  await openLocalMenus(page);
 
   await createProfile(page, "Tester");
   await expect(page.getByText(/No worlds yet/i)).toBeVisible();
@@ -47,7 +53,7 @@ test("create worlds, play them, and switch between them without a reload", async
 });
 
 test("a Superflat world generates level terrain near spawn", async ({ page }) => {
-  await page.goto("/");
+  await openLocalMenus(page);
   await createProfile(page, "Builder");
 
   await page.getByTestId("new-world").click();
@@ -76,7 +82,7 @@ test("a Superflat world generates level terrain near spawn", async ({ page }) =>
 });
 
 test("reloading resumes the world being played", async ({ page }) => {
-  await page.goto("/");
+  await openLocalMenus(page);
   await createProfile(page, "Tester");
   await page.getByTestId("new-world").click();
   await page.getByLabel("World name").fill("Persistent");
@@ -90,7 +96,7 @@ test("reloading resumes the world being played", async ({ page }) => {
 });
 
 test("a Hardcore world boots locked to Survival + Hard", async ({ page }) => {
-  await page.goto("/");
+  await openLocalMenus(page);
   await createProfile(page, "Brave");
 
   await page.getByTestId("new-world").click();
@@ -108,7 +114,7 @@ test("a Hardcore world boots locked to Survival + Hard", async ({ page }) => {
 });
 
 test("profiles own separate world lists", async ({ page }) => {
-  await page.goto("/");
+  await openLocalMenus(page);
 
   // The first profile is created through the forced first-run form.
   await createProfile(page, "Bob");
