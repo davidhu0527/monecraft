@@ -580,6 +580,37 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     expect(sheep.hp).toBeLessThan(50);
   });
 
+  test("attack commands are budgeted per second; the budget refills at the boundary", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const alice = room.engine.state.players.get("alice")!;
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    // A 20-attack burst inside one second: only 12 swings make it through.
+    for (let i = 0; i < 20; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "attack" }, pose });
+    tick();
+    const swings = b
+      .messagesOf("tick")
+      .at(-1)
+      ?.ev.filter((e) => e.type === "attackSwung").length;
+    expect(swings).toBe(12);
+
+    // Cross a second boundary (budgets reset every 20th tick) and swing again.
+    for (let i = 0; i < 20; i += 1) tick();
+    await room.handleMessage("alice", { t: "cmd", seq: 99, cmd: { type: "attack" }, pose });
+    tick();
+    expect(
+      b
+        .messagesOf("tick")
+        .at(-1)
+        ?.ev.filter((e) => e.type === "attackSwung").length
+    ).toBe(1);
+  });
+
   test("a view stamp on a non-attack command is inert", async () => {
     const { room, alice, tick } = await setup();
     tick();

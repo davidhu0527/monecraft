@@ -59,7 +59,7 @@ type ClientConn = {
   /** Tick of the last accepted pose (drives the clamp's elapsed time). */
   lastPoseTick: number;
   /** Per-second message budgets (reset each second-boundary tick). */
-  budget: { cmd: number; chat: number };
+  budget: { cmd: number; chat: number; attack: number };
   /** Sustained-backpressure strikes toward a slow-client kick. */
   slowStrikes: number;
   /** Shadow of the last self-delta sent (reference/primitive compares). */
@@ -98,6 +98,12 @@ const BACKPRESSURE_SOFT_BYTES = 256 * 1024;
 const BACKPRESSURE_KICK_BYTES = 1024 * 1024;
 const BACKPRESSURE_KICK_STRIKES = 100; // ~5s of sustained >1MB at 20Hz
 const DEFAULT_COMMAND_LOG_SIZE = 4096;
+/**
+ * Per-second cap on attack commands per client. Far above honest clicking,
+ * but with lag-compensated rewind an unbounded rate would let a scripted
+ * client sweep a mob's whole 900 ms position trail with varied view stamps.
+ */
+const MELEE_ATTACKS_PER_SECOND = 12;
 
 /**
  * One entry in a room's replay log: a dispatched command (with its claimed eye
@@ -250,7 +256,7 @@ export class Room {
       sink,
       poseSeq: -1,
       lastPoseTick: this.tickCount,
-      budget: { cmd: 0, chat: 0 },
+      budget: { cmd: 0, chat: 0, attack: 0 },
       slowStrikes: 0,
       shadow: null
     };
@@ -335,6 +341,10 @@ export class Room {
       case "cmd": {
         if (conn.budget.cmd >= 60) return; // per-second flood guard
         conn.budget.cmd += 1;
+        if (message.cmd.type === "attack") {
+          if (conn.budget.attack >= MELEE_ATTACKS_PER_SECOND) return;
+          conn.budget.attack += 1;
+        }
         // Room-wide settings are the owner's call, not any member's.
         if ((message.cmd.type === "setDifficulty" || message.cmd.type === "setGameMode") && conn.role !== "owner") return;
         // Apply the claimed pose (same clamps as the stream) so the command's
@@ -417,7 +427,7 @@ export class Room {
     const started = this.now();
     this.tickCount += 1;
     if (this.tickCount % 20 === 0) {
-      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0 };
+      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0 };
     }
 
     this.engine.step(dt);
