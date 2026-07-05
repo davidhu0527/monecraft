@@ -5,6 +5,7 @@ import { frameInput } from "@/lib/game/engine/testSupport";
 import { LOCAL_PLAYER_ID, type MobState } from "@/lib/game/engine/state";
 import { allEligiblePlayersSleeping, nearestTargetablePlayer } from "@/lib/game/engine/players";
 import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
+import { BlockId } from "@/lib/world";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 
 function mulberry32(seed: number): () => number {
@@ -426,5 +427,66 @@ describe("event attribution", () => {
     const swung = engine.consumeEvents().find((e) => e.type === "attackSwung");
     expect(swung).toBeDefined();
     expect(swung?.playerId).toBeUndefined();
+  });
+});
+
+describe("predictive mining (replica step)", () => {
+  function makeReplica(): GameEngine {
+    return new GameEngine({ seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 }, authority: "local", replica: true });
+  }
+
+  /** Pin `block` underfoot, center + aim the player straight down at it. */
+  function aimUnderfoot(engine: GameEngine, block: BlockId): { px: number; py: number; pz: number } {
+    const { state } = engine;
+    const px = Math.floor(state.player.position.x);
+    const py = Math.floor(state.player.position.y) - 1;
+    const pz = Math.floor(state.player.position.z);
+    state.blockChanges.set(px, py, pz, block);
+    state.blockChanges.drainEditsDetailed(); // the pin is scenery, not a prediction
+    state.player.position.x = px + 0.5;
+    state.player.position.z = pz + 0.5;
+    state.player.pitch = -Math.PI / 2 + 0.02;
+    return { px, py, pz };
+  }
+
+  const mine = (engine: GameEngine, seconds: number) => {
+    const held = frameInput({ mineHeld: true });
+    for (let t = 0; t < seconds; t += 0.05) engine.step(0.05, held);
+  };
+
+  /** Hold the mouse just until the pinned cell breaks — one more frame and the ray cascades into the terrain below. */
+  const mineUntilBroken = (engine: GameEngine, px: number, py: number, pz: number) => {
+    const held = frameInput({ mineHeld: true });
+    for (let t = 0; t < 8 && engine.state.world.get(px, py, pz) !== BlockId.Air; t += 0.05) engine.step(0.05, held);
+  };
+
+  test("the break commits at full crack — block + event, but no drops, XP, or tool wear", () => {
+    const engine = makeReplica();
+    const { state } = engine;
+    const { px, py, pz } = aimUnderfoot(engine, BlockId.Dirt);
+    const invBefore = state.player.inventory;
+    const xpBefore = state.player.xp;
+    engine.consumeEvents();
+
+    mineUntilBroken(engine, px, py, pz);
+
+    expect(state.world.get(px, py, pz)).toBe(BlockId.Air);
+    expect(engine.consumeEvents().some((e) => e.type === "blockBroken")).toBe(true);
+    expect(state.player.inventory).toBe(invBefore); // no drop, no durability write
+    expect(state.player.xp).toBe(xpBefore);
+    const edits = state.blockChanges.drainEditsDetailed();
+    expect(edits).toEqual([{ idx: state.world.index(px, py, pz), block: BlockId.Air, prev: BlockId.Dirt }]);
+  });
+
+  test("chests hold at the final crack stage and wait for the server", () => {
+    const engine = makeReplica();
+    const { state } = engine;
+    const { px, py, pz } = aimUnderfoot(engine, BlockId.Chest);
+
+    mine(engine, 8);
+
+    expect(state.world.get(px, py, pz)).toBe(BlockId.Chest);
+    expect(state.player.mining.progress).toBeGreaterThan(0);
+    expect(state.blockChanges.drainEditsDetailed()).toEqual([]);
   });
 });

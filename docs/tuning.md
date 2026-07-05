@@ -485,7 +485,9 @@ None affect single-player, and none are save-sensitive.
   `PREDICTION_TIMEOUT_MAX_MS` (`1000`/`5000`); own-echo suppression outlives
   the entry by `ECHO_SUPPRESS_EXTRA_MS` (`3000`) because the echo rides the
   confirming tick. Raising the floor hides slow-server rejects longer;
-  lowering it flickers honest placements on RTT spikes.
+  lowering it flickers honest placements on RTT spikes. Breaking predicts
+  too (`tickMining` `authority: "predict"` — chests excepted); drops/XP
+  stay server-owned, so pickup feedback is delta-bound (~RTT).
 - **Clock sync** (`lib/net/clock.ts`) — `OFFSET_WINDOW_SIZE` (`16` pongs
   considered for the NTP-style min-RTT offset pick), `OFFSET_SLEW_MS_PER_SEC`
   (`40`), `OFFSET_SNAP_MS` (`250` — bigger errors snap: first fix, reconnect).

@@ -542,7 +542,11 @@ export class GameEngine {
         // tick); predicting motion here would rubber-band against that stream.
         let walked = 0;
         if (primary.mountedVehicleId === null) walked = tickPlayerMotion(state, primary, primary.input, dt, () => {}).horizontalDistance;
-        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { cosmetic: true });
+        // Predictive mining: the break commits locally the moment the crack
+        // completes (chests excepted). NetworkSession captures the written
+        // cells from the detailed journal each frame and reconciles them
+        // against the server's own break via the prediction ledger.
+        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { authority: "predict" });
         // Accumulate the two continuously-ticking display stats locally — they're
         // excluded from the SelfDelta (which syncs only the event-driven counters
         // the replica can't derive), so the Statistics tab stays roughly right.

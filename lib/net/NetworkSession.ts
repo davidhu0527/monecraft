@@ -286,6 +286,9 @@ export async function connectNetworkSession(
       const predicted = engine.predictPlaceBlock();
       if (predicted) ledger.add("place", predicted.edits, predicted.refund, performance.now(), clock.rttMs());
     }
+    // Swing feedback is pure cosmetics — present it at click time and swallow
+    // the attributed echo (hit results, damage, knockback stay server-owned).
+    if (command.type === "attack" && status === "online") pendingEvents.push({ type: "attackSwung" });
     sendCmd(command);
   };
 
@@ -555,6 +558,8 @@ export async function connectNetworkSession(
           ) {
             continue;
           }
+          // Own swing echoes: the synthetic swing already played at click time.
+          if (ev.type === "attackSwung" && ev.playerId === playerId) continue;
           pendingEvents.push(ev);
           callbacks.onEvent?.(ev);
         }
@@ -727,6 +732,25 @@ export async function connectNetworkSession(
 
     afterFrame(nowMs) {
       rollTrafficWindow(nowMs);
+      const socketOpen = ws?.readyState === WebSocket.OPEN;
+      // Predictive-mining capture: any journal entries at this point are
+      // breaks the replica step just committed (placement and server writes
+      // drain inline where they happen). While disconnected the server can't
+      // hear the mineHeld stream, so an offline break would ghost forever —
+      // undo it on the spot instead of ledgering it.
+      const mined = state.blockChanges.drainEditsDetailed().filter((e) => e.block !== e.prev);
+      if (mined.length > 0) {
+        if (socketOpen && status === "online") {
+          ledger.add("break", mined, null, performance.now(), clock.rttMs());
+        } else {
+          for (const edit of [...mined].reverse()) {
+            const { x, y, z } = cellOf(edit.idx);
+            state.blockChanges.set(x, y, z, edit.prev as never);
+          }
+          state.blockChanges.drainEditsDetailed();
+          state.worldMeshDirty = true;
+        }
+      }
       // Expired predictions: the server neither confirmed nor overrode in
       // time (a rejected place, a lost cmd). Revert newest-first through the
       // same chokepoint that applied them — relighting rides along — and hand
@@ -743,7 +767,7 @@ export async function connectNetworkSession(
         state.blockChanges.drainEditsDetailed(); // reverts aren't predictions either
         state.worldMeshDirty = true;
       }
-      const open = ws?.readyState === WebSocket.OPEN;
+      const open = socketOpen;
       // Pose stream at tick rate.
       if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
         lastPoseSentMs = nowMs;

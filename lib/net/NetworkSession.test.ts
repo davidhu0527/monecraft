@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { connectNetworkSession, type JoinGrant, type NetworkSession } from "./NetworkSession";
 import { BlockId } from "@/lib/world";
 import { createSlot } from "@/lib/game/items";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import { gzipWorldSync } from "./codec";
 import type { SelfDelta, WelcomeMessage, WorldSync } from "./protocol";
 
@@ -496,6 +497,75 @@ describe("optimistic block placement", () => {
     session.dispatch({ type: "placeBlock" });
     expect(session.netStats().pendingPredictions).toBe(0);
     expect(instances[0].sentTypes().filter((t) => t === "cmd").length).toBe(cmdsBefore + 1);
+    session.dispose();
+  });
+});
+
+describe("predictive block breaking + instant swing", () => {
+  /** Pin dirt underfoot, aim straight down, and hold the mouse until the replica commits the break. */
+  async function breakScene() {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    const state = session.engine.state;
+    const self = state.players.get("acct-1")!;
+    const g = state.world.highestSolidY(5, 5);
+    state.blockChanges.set(5, g, 5, BlockId.Dirt);
+    state.blockChanges.drainEditsDetailed(); // the pin is scenery, not a prediction
+    self.position.set(5.5, g + 1, 5.5);
+    self.pitch = -Math.PI / 2 + 0.02;
+    const held = frameInput({ mineHeld: true });
+    for (let t = 0; t < 8 && state.world.get(5, g, 5) !== BlockId.Air; t += 0.05) session.engine.step(0.05, held);
+    const idx = state.world.index(5, g, 5);
+    return { session, instances, state, g, idx };
+  }
+
+  test("a mined block vanishes at crack completion and the ledger tracks it through confirmation", async () => {
+    const { session, instances, state, g, idx } = await breakScene();
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Air); // committed by the replica step
+
+    session.afterFrame(performance.now()); // capture into the ledger
+    expect(session.netStats().pendingPredictions).toBe(1);
+
+    session.drainEvents();
+    instances[0].emit(
+      tick(undefined, {
+        blocks: [[idx, BlockId.Air]],
+        ev: [{ type: "blockBroken", blockId: BlockId.Dirt, x: 5, y: g, z: 5, playerId: "acct-1" }]
+      })
+    );
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Air);
+    expect(session.netStats().pendingPredictions).toBe(0);
+    expect(session.drainEvents().some((e) => e.type === "blockBroken")).toBe(false); // echo swallowed
+    session.dispose();
+  });
+
+  test("a break committed while disconnected reverts immediately (the server never heard the mining)", async () => {
+    const { session, instances, state, g } = await breakScene();
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Air);
+
+    instances[0].emitClose(4000, "bad ticket"); // fatal: no reconnect, socket gone
+    session.afterFrame(performance.now());
+
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Dirt); // undone on the spot
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  });
+
+  test("attack swings locally at click time and its echo is suppressed; other players' swings pass", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    session.dispatch({ type: "attack" });
+    expect(instances[0].sentTypes()).toContain("cmd");
+    expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(true); // synthetic, instant
+
+    instances[0].emit(tick(undefined, { ev: [{ type: "attackSwung", playerId: "acct-1" }] }));
+    expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(false); // own echo
+
+    instances[0].emit(tick(undefined, { ev: [{ type: "attackSwung", playerId: "acct-2" }] }));
+    expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(true); // someone else's
     session.dispose();
   });
 });

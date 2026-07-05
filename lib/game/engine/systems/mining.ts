@@ -79,8 +79,18 @@ function spillChestOnBreak(state: GameState, player: PlayerState, idx: number, e
 
 /**
  * Advances mining progress while the mouse is held; breaks the block at full
- * progress. `cosmetic` (a multiplayer replica) accrues progress for the crack
- * overlay but never commits the break — the server's blockBroken event does.
+ * progress. The `authority` mode shapes what a full crack does:
+ * - `"full"` (default, single-player and the server): the real break — block,
+ *   drops, XP, tool wear, chest spill.
+ * - `"cosmetic"`: accrues progress for the crack overlay but never commits —
+ *   the server's blockBroken event does (retained for chests on a replica).
+ * - `"predict"` (a multiplayer replica): commits a REDUCED break the moment
+ *   the crack completes — the block write (relight + remesh ride the
+ *   chokepoint) and the blockBroken emit for instant sound/particles, but NO
+ *   drops/XP/durability (those stay server-owned and arrive on the deltas).
+ *   Chests fall back to cosmetic: their spill is too entangled with
+ *   server-owned containers, and a delayed chest break is honest. The caller
+ *   captures the written cells for its prediction ledger.
  */
 export function tickMining(
   state: GameState,
@@ -89,7 +99,7 @@ export function tickMining(
   dt: number,
   emit: EmitGameEvent,
   rng: () => number,
-  opts: { cosmetic?: boolean } = {}
+  opts: { authority?: "full" | "cosmetic" | "predict" } = {}
 ): void {
   if (!input.mineHeld) {
     // Releasing the button abandons progress (matching the crack overlay).
@@ -133,18 +143,22 @@ export function tickMining(
     mining.progress = 0;
   }
 
+  const authority = opts.authority ?? "full";
+  // Chests are never predicted — hold at the final crack stage like cosmetic.
+  const holdShort = authority === "cosmetic" || (authority === "predict" && targetBlock === BlockId.Chest);
   if (!creative) {
     const hardness = BREAK_HARDNESS[targetBlock as BlockId] ?? 2;
     mining.progress += dt * miningSpeed(tool) * MINING_RATE * hasteMultiplier(player);
     // A replica shows the final crack stage and waits for the server's break.
-    if (opts.cosmetic) {
+    if (holdShort) {
       mining.progress = Math.min(mining.progress, hardness * 0.99);
       return;
     }
     if (mining.progress < hardness) return;
-  } else if (opts.cosmetic) {
-    return; // creative replica: even the instant break is the server's call
+  } else if (holdShort) {
+    return; // creative replica chest / cosmetic: even the instant break is the server's call
   }
+  const predict = authority === "predict";
 
   // Breaking a chest empties it into the inventory first; if it does not all
   // fit, refuse the break so nothing is lost (the chest stays intact). Creative
@@ -175,14 +189,15 @@ export function tickMining(
     const fill = world.get(bx, top + 1, bz) === BlockId.Water ? BlockId.Water : BlockId.Air;
     for (let y = by; y <= top; y += 1) {
       state.blockChanges.set(bx, y, bz, fill);
-      if (!creative && y > by) addBlockDrop(player, BlockId.Kelp, rng, tool);
+      if (!creative && !predict && y > by) addBlockDrop(player, BlockId.Kelp, rng, tool);
     }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
   }
-  // Creative breaks for free: no tool wear, no drops, no XP.
-  if (tool && !creative) player.inventory = consumeToolDurability(player.inventory, player.selectedSlot, 1, rng) ?? player.inventory;
-  if (!creative) {
+  // Creative breaks for free: no tool wear, no drops, no XP. A predicted
+  // break skips them too — the server owns them and its deltas deliver.
+  if (tool && !creative && !predict) player.inventory = consumeToolDurability(player.inventory, player.selectedSlot, 1, rng) ?? player.inventory;
+  if (!creative && !predict) {
     addBlockDrop(player, targetBlock as BlockId, rng, tool); // Fortune on the tool multiplies ore drops
     awardXp(player, xpForBlock(targetBlock as BlockId), emit); // ore blocks grant XP; everything else is 0
   }
