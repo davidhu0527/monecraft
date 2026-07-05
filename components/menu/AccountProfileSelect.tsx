@@ -15,8 +15,9 @@ import { skinPortraitUrl } from "@/lib/ui/sprites";
  * The signed-in account's home: its server-side profiles (name + skin), synced
  * across devices. The account-mode counterpart to ProfileSelect — picking a
  * profile shows that profile's online worlds. Local Players (logged out) never
- * see this. Capped at MAX_ONLINE_PROFILES. "Play locally" opens the browser's
- * local profiles/worlds (where cloud-save sync lives) without signing out.
+ * see this. Capped at MAX_ONLINE_PROFILES. A quiet footer link ("Local worlds
+ * on this browser") opens the local profiles/worlds — where cloud-save sync
+ * lives — without signing out.
  */
 
 type AccountProfileSelectProps = {
@@ -173,20 +174,20 @@ export default function AccountProfileSelect({ user, onPlay, onPlayLocally, onSi
           ))}
         </ul>
       )}
-      <div className="menu-bottom-row">
-        <button className="mc-button" data-testid="play-locally" onClick={onPlayLocally}>
-          Play locally
-        </button>
-        <button
-          className="mc-button menu-primary"
-          data-testid="new-online-profile"
-          disabled={atCap}
-          title={atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : undefined}
-          onClick={() => setCreating(true)}
-        >
-          {atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : "New Profile"}
-        </button>
-      </div>
+      <button
+        className="mc-button menu-primary"
+        data-testid="new-online-profile"
+        disabled={atCap}
+        title={atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : undefined}
+        onClick={() => setCreating(true)}
+      >
+        {atCap ? `Profile limit reached (${MAX_ONLINE_PROFILES})` : "New Profile"}
+      </button>
+      {/* Deliberately quiet: signed-in play lives in the profiles above; this
+          door exists for the browser's local worlds and their cloud-save sync. */}
+      <button type="button" className="menu-footer-link" data-testid="play-locally" onClick={onPlayLocally}>
+        Local worlds on this browser
+      </button>
     </MenuScreen>
   );
 }
