@@ -339,6 +339,16 @@ crater and hurts anything close. TNT next to more TNT chains. It won't touch
 bedrock, and it mostly destroys rather than drops blocks, so it's for digging and
 demolition, not free resources.
 
+**Slabs and stairs.** Cut your materials into half-blocks for real architecture:
+**slabs** (3 planks/stone/cobble → 6) fill the bottom half of a block, and
+**stairs** (6 → 4) add a raised back that faces **away from you** when placed —
+walk straight up what you just laid. You **step up** half-height rises
+automatically (no jumping up your own staircase; a full block still needs the
+jump — and that auto-step works on any half-high lip, not just cut blocks).
+Half-blocks are solid to walk on but can't support floor-mounted fittings: doors,
+redstone parts, and rails all need a full block under them. A slab roof still
+casts full shade.
+
 ## Dungeons and loot
 
 Digging around underground can turn up a **dungeon**: a small cobblestone room,

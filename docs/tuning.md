@@ -15,14 +15,18 @@ Worldgen constants live in the frozen `GEN` object in
 ## Player feel — physics & movement
 
 `GRAVITY`, `JUMP_VELOCITY`, `WALK_SPEED`, `SPRINT_SPEED`, `CROUCH_SPEED`,
-`PLAYER_HEIGHT`, `PLAYER_HALF_WIDTH`, `EYE_HEIGHT`, `WORLD_BORDER_PADDING`.
+`STEP_UP_HEIGHT`, `PLAYER_HEIGHT`, `PLAYER_HALF_WIDTH`, `EYE_HEIGHT`,
+`WORLD_BORDER_PADDING`.
 
 Read by `systems/playerMotion.ts`. These set the moment-to-moment feel.
 `JUMP_VELOCITY` vs `GRAVITY` together fix jump height (currently a ~1-block hop);
 raise gravity for a snappier, heavier fall. `SPRINT_SPEED` is deliberately far
 above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what burns
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
-changing them affects which gaps the player fits through.
+changing them affects which gaps the player fits through. `STEP_UP_HEIGHT` (0.55)
+is how tall a rise grounded walking climbs without a jump — 0.5 shapes (slabs,
+stairs) step, full blocks don't; push it to 1.0+ and jumping stops mattering on
+land at all, which changes the whole terrain game.
 
 ## Touch feel
 
