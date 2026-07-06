@@ -113,6 +113,7 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 | ---------------- | ----------------------- |
 | Wood Hoe         | 2 Planks + 1 Wood       |
 | Fishing Rod      | 3 Wood + 2 String       |
+| Bucket           | 3 Sliver Ore            |
 | Wood Pickaxe     | 2 Planks + 2 Wood       |
 | Stone Pickaxe    | 2 Cobble + 1 Wood       |
 | Sliver Pickaxe   | 2 Sliver Ore + 1 Wood   |
@@ -257,9 +258,10 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
 ## Blocks
 
-**55 block types** (plus air). Hardness is relative break time — higher is slower.
+**56 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
-hands or any tool. Bedrock, water, and lava cannot be broken.
+hands or any tool. Bedrock, water, and lava cannot be broken (though water and
+lava can be **scooped with a bucket**).
 
 | Block                     | Hardness | Mine with       | Notes                                                                                                                                                                                            |
 | ------------------------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -284,7 +286,7 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Wood Door                 | 3        | any             | **Interactive** — thin 1×2 panel; right-click to open/close; mobs cannot operate it                                                                                                              |
 | Torch                     | 1        | any             | Place it to light the dark; emits block light 14. Crafted 4-at-a-time from 1 coal + 1 wood                                                                                                       |
 | TNT                       | 1        | any             | **Interactive** — right-click with a torch to light a fuse, then it explodes (power 4). Crafted from gunpowder + sand                                                                            |
-| Lava                      | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). Worldgen-only, no item                                                                                     |
+| Lava                      | —        | (unbreakable)   | Glows in the deepest caves; **burns on contact** (3 hearts / 0.5 s, armor-bypassing). No item, but a **bucket** scoops and re-places it; **water poured onto it quenches it into obsidian**      |
 | Mossy Cobblestone         | 5        | Wood Pickaxe    | Dungeon walls; mineable into a `mossy_cobble` item (found-only, no recipe)                                                                                                                       |
 | Spawner                   | 30       | (unbreakable\*) | Dungeon-only; drips hostiles when you're near. Very hard and drops nothing — mining it out just stops it                                                                                         |
 | Coal Ore                  | 6        | Wood Pickaxe    | Shallow and common; drops the `coal` fuel item (not a placeable block)                                                                                                                           |
@@ -311,8 +313,9 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Detector Rail             | 1        | any             | Redstone **source**: powers its neighbors like a pressed plate while a minecart sits on it                                                                                                       |
 | Plank/Stone/Cobble Slab   | 2–4      | any             | Bottom-half block; walked up automatically (auto step-up). Not valid support for doors/redstone/rails. Casts full shade                                                                          |
 | Plank/Stone/Cobble Stairs | 2–4      | any             | Slab plus a raised back facing away from the placer (turned by look direction); climbed without jumping. Every facing drops the one item                                                         |
+| Obsidian                  | 40       | Diamond Pickaxe | The hardest mineable block. Created only by **pouring water onto lava**; drops itself                                                                                                            |
 | Bedrock                   | —        | unbreakable     | World floor and border                                                                                                                                                                           |
-| Water                     | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second                                                                                     |
+| Water                     | —        | —               | Liquid; place blocks into it to replace cells; a **bucket** scoops and re-places it; 60 s continuous immersion starts 1.5-heart damage each second                                               |
 
 ## Mobs
 
@@ -498,6 +501,10 @@ fertilizer: right-click it on a sapling to grow the tree instantly, or on
 immature wheat to advance it 1–2 stages. Fuels: **Coal** (mined from coal ore)
 and **Charcoal** (smelted from wood) — interchangeable for smelting and torches.
 **Gunpowder** (creeper drop) crafts TNT. **Emerald** is the villager [trading](#trading) currency.
+The **Bucket** (3 sliver ore; stacks
+to 16 empty) scoops a water or lava block on right-click and pours it back out
+on a solid face — a filled **Water/Lava Bucket** carries one block and never
+stacks; water poured on lava quenches it into [obsidian](#blocks).
 Ranged/endgame materials: **Arrow** (bow ammo),
 **Cursed Totem** (right-click to summon the boss), and **Dragon Heart** (the
 boss drop that crafts the Dragon Sword). The **Treasure Map** (found in

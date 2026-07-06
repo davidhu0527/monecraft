@@ -188,6 +188,23 @@ touching it burns you **immediately** for 3 hearts every half-second — no grac
 period — and you keep burning for a few seconds even after you scramble off. Armor
 doesn't help. Bridge over it carefully.
 
+### Buckets, lava, and obsidian
+
+Craft a **bucket** (3 sliver ore) to carry fluids. Right-click a **water surface**
+to scoop a block of water, or aim at a **lava** block to scoop lava (careful with
+the approach — the burn rules above still apply). Right-click a solid face with a
+filled bucket to pour the fluid back out into the empty cell in front of it.
+Fluids are **still**: there is no flowing or spreading, so scooping a block out
+of the ocean leaves a neat one-block hole, and a poured block stays exactly where
+you put it. Empty buckets stack to 16; a filled bucket rides alone in its slot.
+
+Pour **water directly onto a lava block** and it hisses into **obsidian** — the
+hardest mineable block in the game. Only a **diamond pickaxe** can dig it out,
+and slowly at that. The deep lava floods (below Y≈9, under the cave layer) are
+the natural quarry: bring water buckets down, quench, and mine. For now obsidian
+is a trophy building block — a very patient burglar's nightmare — but it is also
+the raw material of things to come.
+
 ### Rafts and ships
 
 Craft a **raft** (4 planks + 2 wood) or a **ship** (8 planks + 3 wood + 2 string)
