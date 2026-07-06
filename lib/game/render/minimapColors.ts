@@ -6,9 +6,18 @@ import { BLOCK_COLORS, BlockId, type VoxelWorld } from "@/lib/world";
  * lives in minimap.ts.
  */
 
-/** Topmost non-air block of a column (water included, unlike highestSolidY). */
-export function topBlockAt(world: VoxelWorld, x: number, z: number): { block: BlockId; y: number } {
-  for (let y = world.sizeY - 1; y >= 0; y -= 1) {
+/**
+ * Topmost non-air block of a column (water included, unlike highestSolidY).
+ * In a `roofed` dimension (the nether — bedrock-capped) the scan first skips
+ * the ceiling mass, so the map shows the cavern beneath, not a uniform roof;
+ * a column solid to the floor reads as its (deep, dark-shaded) last block.
+ */
+export function topBlockAt(world: VoxelWorld, x: number, z: number, roofed = false): { block: BlockId; y: number } {
+  let y = world.sizeY - 1;
+  if (roofed) {
+    while (y > 0 && world.get(x, y, z) !== BlockId.Air) y -= 1;
+  }
+  for (; y >= 0; y -= 1) {
     const block = world.get(x, y, z);
     if (block !== BlockId.Air) return { block: block as BlockId, y };
   }
@@ -21,8 +30,8 @@ const FALLBACK: [number, number, number] = [0.45, 0.45, 0.45];
  * Display color (0–255 RGB) for a column: the top block's atlas color with
  * height-based brightness so terrain relief reads on the map.
  */
-export function columnColor(world: VoxelWorld, x: number, z: number): [number, number, number] {
-  const { block, y } = topBlockAt(world, x, z);
+export function columnColor(world: VoxelWorld, x: number, z: number, roofed = false): [number, number, number] {
+  const { block, y } = topBlockAt(world, x, z, roofed);
   if (block === BlockId.Air) return [0, 0, 0];
   const base = BLOCK_COLORS[block] ?? FALLBACK;
   // Brightness 0.6 at bedrock level up to 1.1 at the world ceiling.
