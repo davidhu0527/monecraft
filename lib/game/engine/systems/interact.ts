@@ -375,6 +375,17 @@ export function tryUseHeldItem(state: GameState, player: PlayerState, emit: Emit
     return true;
   }
 
+  // Water poured ON a lava block quenches it into obsidian — the game's only
+  // obsidian source. The cell keeps its place in the world; only the block
+  // (and its max-light emission, via applyEdit) changes.
+  if (isWaterBucket && block === BlockId.Lava) {
+    if (!swapHeldForItem(player, "bucket")) return false;
+    state.blockChanges.set(x, y, z, BlockId.Obsidian);
+    state.worldMeshDirty = true;
+    emit({ type: "lavaSolidified" });
+    return true;
+  }
+
   // Filled bucket: pour into the empty cell in front of the aimed face. Lava is
   // a solid block, so a pour that would entomb the player rolls back (the
   // placeSelectedBlock rule); the click is still consumed.

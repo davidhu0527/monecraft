@@ -253,3 +253,69 @@ describe("tryUseHeldItem — buckets", () => {
     expect(events).toHaveLength(0);
   });
 });
+
+describe("tryUseHeldItem — quenching lava", () => {
+  const FLOOR_Y = 10;
+  const CELL = { x: 7, y: FLOOR_Y + 1, z: 5 } as const;
+
+  function makeQuenchFixture(slots: InventorySlot[]): { state: GameState; player: PlayerState; events: GameEvent[] } {
+    const world = new VoxelWorld(24, 24, 24, 1);
+    for (let x = 0; x < world.sizeX; x += 1) {
+      for (let z = 0; z < world.sizeZ; z += 1) world.set(x, FLOOR_Y, z, BlockId.Stone);
+    }
+    const player = {
+      id: "local",
+      position: new THREE.Vector3(CELL.x + 0.5, CELL.y + 3, CELL.z + 0.5),
+      velocity: new THREE.Vector3(),
+      yaw: 0,
+      pitch: -Math.PI / 2,
+      onGround: false,
+      gameMode: "survival",
+      selectedSlot: 0,
+      inventory: slots
+    } as unknown as PlayerState;
+    const events: GameEvent[] = [];
+    const state = {
+      world,
+      blockChanges: createBlockChangeTracker(world),
+      players: new Map([["local", player]]),
+      worldMeshDirty: false
+    } as unknown as GameState;
+    // Lava arrives via the tracker so its emission is lit (the applyEdit path),
+    // letting the quench assert the light actually goes out.
+    state.blockChanges.set(CELL.x, CELL.y, CELL.z, BlockId.Lava);
+    return { state, player, events };
+  }
+
+  test("water poured on lava quenches it to obsidian and puts the light out", () => {
+    const { state, player, events } = makeQuenchFixture(inventory([["water_bucket", 1]]));
+    expect(state.world.getBlockLight(CELL.x, CELL.y + 1, CELL.z)).toBeGreaterThan(0); // lava glows
+
+    expect(
+      tryUseHeldItem(
+        state,
+        player,
+        (e) => events.push(e),
+        () => 0.5
+      )
+    ).toBe(true);
+
+    expect(state.world.get(CELL.x, CELL.y, CELL.z)).toBe(BlockId.Obsidian);
+    expect(state.world.getBlockLight(CELL.x, CELL.y + 1, CELL.z)).toBe(0); // light removed
+    expect(player.inventory[player.selectedSlot]?.id).toBe("bucket");
+    expect(events).toContainEqual({ type: "lavaSolidified" });
+    expect(events.some((e) => e.type === "bucketEmptied")).toBe(false); // quench, not pour
+  });
+
+  test("a lava bucket aimed at lava does not quench (pours against the face instead)", () => {
+    const { state, player, events } = makeQuenchFixture(inventory([["lava_bucket", 1]]));
+    tryUseHeldItem(
+      state,
+      player,
+      (e) => events.push(e),
+      () => 0.5
+    );
+    expect(state.world.get(CELL.x, CELL.y, CELL.z)).toBe(BlockId.Lava); // untouched
+    expect(events.some((e) => e.type === "lavaSolidified")).toBe(false);
+  });
+});

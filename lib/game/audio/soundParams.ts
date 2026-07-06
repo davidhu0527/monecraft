@@ -1344,6 +1344,24 @@ export const BUCKET_POUR_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** A sharp steam hiss as water quenches lava into obsidian. */
+export const LAVA_QUENCH_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    randomness: 0.2,
+    frequency: 900,
+    sustain: 0.08,
+    release: 0.3,
+    shape: 0,
+    slide: -6,
+    noise: 1,
+    sustainVolume: 0.6,
+    decay: 0.06,
+    filter: 800
+  }),
+  minRetriggerMs: 150
+};
+
 /** A whoosh into a soft plop as the bobber lands on the water. */
 export const FISHING_CAST_SOUND: SoundDef = {
   params: zz({

@@ -17,6 +17,7 @@ import {
   FISHING_REEL_EMPTY_SOUND,
   DEATH_SOUND,
   DRINK_SOUND,
+  LAVA_QUENCH_SOUND,
   EAT_SOUND,
   XP_SOUND,
   ENCHANT_SOUND,
@@ -320,6 +321,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "bucketEmptied":
           backend.play(BUCKET_POUR_SOUND);
+          break;
+        case "lavaSolidified":
+          backend.play(LAVA_QUENCH_SOUND);
           break;
         case "fishingCast":
           backend.play(FISHING_CAST_SOUND);

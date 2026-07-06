@@ -582,6 +582,7 @@ export type GameEvent =
   | { type: "usedBoneMeal" }
   | { type: "bucketFilled"; fluid: "water" | "lava" }
   | { type: "bucketEmptied"; fluid: "water" | "lava" }
+  | { type: "lavaSolidified" }
   | { type: "fishingCast"; x: number; y: number; z: number }
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
