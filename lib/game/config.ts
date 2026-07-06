@@ -9,6 +9,9 @@ export const JUMP_VELOCITY = 8.2;
 export const WALK_SPEED = 4.8;
 export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
+// Grounded walking climbs rises up to this height without a jump (slabs and
+// stairs at 0.5). Deliberately under 1.0: full blocks still need the jump.
+export const STEP_UP_HEIGHT = 0.55;
 export const WORLD_BORDER_PADDING = 1.2;
 
 // Vehicles. Rafts are compact and slower; ships are larger and faster; the
