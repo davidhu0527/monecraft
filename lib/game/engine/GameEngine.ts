@@ -81,6 +81,7 @@ import {
   restoreInventorySlots,
   restorePlayerDimension,
   restorePlayerPosition,
+  restorePortalArrival,
   restoreGameMode,
   restoreDifficulty,
   restoreHardcore,
@@ -141,7 +142,7 @@ import {
   tryTradeAimedVillager,
   tryUseHeldItem
 } from "./systems/interact";
-import { tryIgnitePortal } from "./systems/portal";
+import { ensureArrivalPortal, tickPortalDwell, tryIgnitePortal } from "./systems/portal";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach, type MobPositionOf } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
@@ -335,14 +336,22 @@ export class GameEngine {
     const blockChanges = createBlockChangeTracker(world);
     if (section) blockChanges.applySavedChanges(section.changes);
 
-    // Bake per-voxel light now the block grid is final (worldgen + saved edits).
-    // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
-    world.light = computeFullLight(world);
-
     // The nether is roofed: its "surface" is the highest cavern-floor pocket,
     // not highestSolidY (which would be the bedrock ceiling). One seam fixes
     // every consumer — unstuck, respawn, and the spawn directors.
     this.surfaceYAt = dimension === "nether" ? createNetherFloorYAt(world) : createSurfaceYAt(world);
+
+    const bootPlayer = options.bootPlayer ?? true;
+    // A portal travel wrote a one-shot arrival anchor: find (or build) the
+    // arrival portal now, BEFORE the light bake, so its blocks ride the one
+    // full bake and persist as ordinary diff. Idempotent — a crash before the
+    // next save just re-finds the same portal on the next boot.
+    const arrival = bootPlayer && savedLocal ? restorePortalArrival(savedLocal) : null;
+    const arrivalPos = arrival ? ensureArrivalPortal(world, blockChanges, this.surfaceYAt, arrival) : null;
+
+    // Bake per-voxel light now the block grid is final (worldgen + saved edits).
+    // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
+    world.light = computeFullLight(world);
 
     const firstSpawn =
       dimension === "nether"
@@ -359,7 +368,6 @@ export class GameEngine {
     // A restored save's own (possibly switched) mode wins; hardcore forces Survival,
     // except after game-over, where the player spectates their dead world.
     const gameMode = gameOver ? "spectator" : hardcore ? "survival" : savedLocal ? restoreGameMode(savedLocal) : (options.gameMode ?? "survival");
-    const bootPlayer = options.bootPlayer ?? true;
     const localPlayer: PlayerState = {
       id: LOCAL_PLAYER_ID,
       position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
@@ -468,6 +476,14 @@ export class GameEngine {
         this.state.daylight = dimensionDaylightAt(dimension, savedClock);
         this.state.daylightPercent = Math.round(this.state.daylight * 100);
       }
+    }
+
+    // A travel boot lands the player inside the arrival portal — overriding the
+    // saved position — latched so the dwell can't re-fire until they step out.
+    if (bootPlayer && arrivalPos) {
+      localPlayer.position.set(arrivalPos.x + 0.5, arrivalPos.y, arrivalPos.z + 0.5);
+      localPlayer.velocity.set(0, 0, 0);
+      localPlayer.timers.portalLatched = true;
     }
 
     // Safety check: if stuck after load, relocate to a plain — but never for a
@@ -780,6 +796,9 @@ export class GameEngine {
     tickWaterExposure(state, player, dt, damageEnv);
     tickLavaExposure(state, player, dt, damageEnv, hasEffect(player, "fire_resistance"));
     tickOxygen(state, player, dt, damageEnv, hasEffect(player, "water_breathing"));
+    // Dimension travel is single-player only (like ignition): the shell hears
+    // the event and performs the save + remount swap.
+    if (this.portalsEnabled) tickPortalDwell(state, player, dt, this.emit);
     player.timers.bowCooldownTimer = Math.max(0, player.timers.bowCooldownTimer - dt);
     player.timers.spearThrowCooldown = Math.max(0, player.timers.spearThrowCooldown - dt);
     tickMining(state, player, input, dt, this.emit, this.rng);
@@ -1303,6 +1322,22 @@ export class GameEngine {
     // the server room (overworld) can never lose a world's nether builds.
     if (this.foreignDimensions) save.dimensions = this.foreignDimensions;
     return save;
+  }
+
+  /**
+   * The travel save: an ordinary serialize with the local player rewritten to
+   * the target dimension at the portal anchor, plus the one-shot portalArrival
+   * the next boot consumes (finds or builds the arrival portal there). The
+   * shell writes this and remounts; no live state crosses the swap.
+   */
+  serializeForTravel(target: DimensionId, anchor: { x: number; y: number; z: number }): SaveData {
+    const save = this.serialize();
+    return {
+      ...save,
+      players: save.players.map((p) =>
+        p.id === this.state.primaryPlayerId ? { ...p, dimension: target, position: { ...anchor }, portalArrival: { ...anchor } } : p
+      )
+    };
   }
 
   /**

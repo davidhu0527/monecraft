@@ -253,6 +253,10 @@ export type PlayerTimers = {
   spearThrowCooldown: number;
   /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
   bowCooldownTimer: number;
+  /** Seconds spent standing in a portal surface; travel fires at PORTAL_DWELL_SECONDS. */
+  portalDwellSeconds: number;
+  /** Travel fired (or the player arrived inside a portal) — no re-fire until they step out. */
+  portalLatched: boolean;
 };
 
 /** World-scoped director/sampler timers — live on GameState.timers. */
@@ -439,7 +443,9 @@ export function createPlayerTimers(): PlayerTimers {
     effectPoisonTimer: 0,
     stuckTimer: 0,
     spearThrowCooldown: 0,
-    bowCooldownTimer: 0
+    bowCooldownTimer: 0,
+    portalDwellSeconds: 0,
+    portalLatched: false
   };
 }
 
@@ -602,6 +608,7 @@ export type GameEvent =
   | { type: "lavaSolidified" }
   | { type: "portalLit" }
   | { type: "portalDenied"; reason: "online" | "invalidFrame" }
+  | { type: "dimensionTravel"; target: DimensionId; anchor: { x: number; y: number; z: number } }
   | { type: "fishingCast"; x: number; y: number; z: number }
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }

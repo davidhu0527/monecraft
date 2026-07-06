@@ -168,6 +168,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // discard) the on-disk save, so the unmount must NOT persist the live state
   // over it. Consumed once by the cleanup; every other unmount saves.
   const skipUnmountSaveRef = useRef(false);
+  // The shell's remount trigger, fixed for the mount's life (like the world id);
+  // a ref so the rAF event drain can fire portal travel without an opts dep.
+  const onReloadWorldRef = useRef(opts.onReloadWorld);
 
   // Audio is a global preference loaded after mount: render never touches
   // localStorage (SSR), and the setState hops a microtask like the
@@ -465,6 +468,26 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
           persistGame(gameEngine, worldId, () => {});
           syncCloudSave(gameEngine, false);
         }
+        // Portal travel = swap-on-travel: write the travel save (the local player
+        // flipped into the target dimension with a one-shot arrival anchor), then
+        // remount so the engine reboots there. The skip flag MUST be armed before
+        // the write — it gates the autosave interval and the unload flush, either
+        // of which would otherwise overwrite the travel save with pre-travel state.
+        // Cloud sync is deliberately skipped here; the next autosave pushes both
+        // dimension sections together.
+        if (event.type === "dimensionTravel" && !online) {
+          skipUnmountSaveRef.current = true;
+          const data = gameEngine.serializeForTravel(event.target, event.anchor);
+          void worldSaves.write(worldId, data).then(
+            () => scheduleTimeout(() => onReloadWorldRef.current(), 60),
+            () => {
+              // The travel save failed: stay put rather than strand the player.
+              skipUnmountSaveRef.current = false;
+              flashMessage("Travel failed — save error");
+            }
+          );
+          flashMessage(event.target === "nether" ? "Entering the Nether…" : "Returning home…", 2000);
+        }
         if (event.type === "respawned") liveInput().clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -563,7 +586,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setTouchControls(null);
       renderer.dispose();
     };
-  }, [ctx, flashMessage, syncCloudSave]);
+  }, [ctx, flashMessage, scheduleTimeout, syncCloudSave]);
 
   // Re-entering play goes through the controller's engage() — pointer lock on
   // desktop (which can legitimately reject, e.g. Chrome's cooldown right after

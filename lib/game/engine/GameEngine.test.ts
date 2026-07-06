@@ -3300,3 +3300,53 @@ describe("dimension-aware boot (the nether)", () => {
     expect(home.serialize().dimensions?.nether?.changes).toHaveLength(1); // the nether edit still rides along
   });
 });
+
+describe("portal travel (swap-on-travel)", () => {
+  test("serializeForTravel rewrites only the local player: dimension, position, and the one-shot anchor", () => {
+    const engine = makeEngine();
+    const anchor = { x: 30, y: 41, z: 30 };
+    const travel = engine.serializeForTravel("nether", anchor);
+    expect(travel.players[0].dimension).toBe("nether");
+    expect(travel.players[0].position).toEqual(anchor);
+    expect(travel.players[0].portalArrival).toEqual(anchor);
+    // The world half is an ordinary serialize.
+    expect(travel.seed).toBe(engine.serialize().seed);
+    // An ordinary serialize never writes the one-shot anchor.
+    expect(engine.serialize().players[0].portalArrival).toBeUndefined();
+  });
+
+  test("booting from a travel save builds the arrival portal, lands the player inside it, latched", () => {
+    const over = makeEngine();
+    const travel = over.serializeForTravel("nether", { x: 30, y: 41, z: 30 });
+    const nether = new GameEngine({ save: travel, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+
+    expect(nether.state.dimension).toBe("nether");
+    const feet = nether.state.player.position;
+    const cell = nether.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z));
+    expect(cell).toBe(BlockId.NetherPortal); // landed inside the arrival portal
+    expect(nether.state.player.timers.portalLatched).toBe(true);
+
+    // Latched: standing put through several dwell windows never fires travel.
+    run(nether, 8);
+    expect(nether.consumeEvents().some((e) => e.type === "dimensionTravel")).toBe(false);
+
+    // The built portal persists as ordinary diff — a plain reload finds it again.
+    const reload = new GameEngine({ save: nether.serialize(), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(reload.state.dimension).toBe("nether");
+    expect(reload.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
+  });
+
+  test("the return trip reuses the departure-side portal", () => {
+    const over = makeEngine();
+    // Travel out and straight back: the return anchor is the overworld frame
+    // base, so the arrival scan must find a portal there if one exists. Build
+    // one first (as ignition would have).
+    const anchor = { x: 30, y: 41, z: 30 };
+    const travel = over.serializeForTravel("nether", anchor);
+    const nether = new GameEngine({ save: travel, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    const home = new GameEngine({ save: nether.serializeForTravel("overworld", anchor), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(home.state.dimension).toBe("overworld");
+    const feet = home.state.player.position;
+    expect(home.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
+  });
+});

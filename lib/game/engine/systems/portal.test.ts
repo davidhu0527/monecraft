@@ -3,15 +3,15 @@ import * as THREE from "three";
 import { EYE_HEIGHT } from "@/lib/game/config";
 import { BlockId, VoxelWorld } from "@/lib/world";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
-import type { GameEvent, GameState, PlayerState } from "@/lib/game/engine/state";
-import { clearAttachedPortal, findPortalFrame, fillPortalFrame, tryIgnitePortal } from "@/lib/game/engine/systems/portal";
+import { createPlayerTimers, type GameEvent, type GameState, type PlayerState } from "@/lib/game/engine/state";
+import { clearAttachedPortal, ensureArrivalPortal, findPortalFrame, fillPortalFrame, tickPortalDwell, tryIgnitePortal } from "@/lib/game/engine/systems/portal";
 import { createSlot } from "@/lib/game/items";
 import type { InventorySlot } from "@/lib/game/types";
 
 const FLOOR_Y = 10;
 
 /**
- * Builds an obsidian frame standing on a stone floor with a `w`×`h` interior,
+ * Builds an obsidian frame standing on a stone floor with a `w`Ã`h` interior,
  * running along `axis`, its interior base corner at (bx, FLOOR_Y+1, bz).
  */
 function buildFrame(world: VoxelWorld, axis: "x" | "z", bx: number, bz: number, w: number, h: number): void {
@@ -60,7 +60,7 @@ function makeState(world: VoxelWorld, slots: InventorySlot[], playerPos: THREE.V
 }
 
 describe("findPortalFrame", () => {
-  test("validates a minimal 2×3 frame from any interior cell, on both axes", () => {
+  test("validates a minimal 2Ã3 frame from any interior cell, on both axes", () => {
     for (const axis of ["x", "z"] as const) {
       const world = makeWorld();
       buildFrame(world, axis, 8, 8, 2, 3);
@@ -79,7 +79,7 @@ describe("findPortalFrame", () => {
     }
   });
 
-  test("validates the maximum 4×4 interior", () => {
+  test("validates the maximum 4Ã4 interior", () => {
     const world = makeWorld();
     buildFrame(world, "x", 8, 8, 4, 4);
     const frame = findPortalFrame(world, 9, FLOOR_Y + 2, 8);
@@ -104,7 +104,7 @@ describe("findPortalFrame", () => {
 
   test("an oversize interior is rejected", () => {
     const world = makeWorld();
-    buildFrame(world, "x", 8, 8, 5, 3); // 5 wide — past the 4 cap
+    buildFrame(world, "x", 8, 8, 5, 3); // 5 wide â past the 4 cap
     expect(findPortalFrame(world, 9, FLOOR_Y + 1, 8)).toBeNull();
     const tall = makeWorld();
     buildFrame(tall, "x", 8, 8, 2, 5); // 5 tall
@@ -120,7 +120,7 @@ describe("findPortalFrame", () => {
     expect(findPortalFrame(short, 8, FLOOR_Y + 1, 8)).toBeNull();
   });
 
-  test("a lit portal (interior already filled) still validates — the travel-time backstop", () => {
+  test("a lit portal (interior already filled) still validates â the travel-time backstop", () => {
     const world = makeWorld();
     buildFrame(world, "x", 8, 8, 2, 3);
     for (let i = 0; i < 2; i += 1) for (let j = 0; j < 3; j += 1) world.set(8 + i, FLOOR_Y + 1 + j, 8, BlockId.NetherPortal);
@@ -130,7 +130,7 @@ describe("findPortalFrame", () => {
 
 describe("tryIgnitePortal", () => {
   /**
-   * The player stands INSIDE the (unlit) frame — the Minecraft gesture is
+   * The player stands INSIDE the (unlit) frame â the Minecraft gesture is
    * striking the bottom bar's inner face, so the raycast's `previous` cell is
    * the interior base cell. Aiming straight down from inside guarantees it.
    */
@@ -237,10 +237,84 @@ describe("clearAttachedPortal", () => {
   });
 });
 
-/** Points the player's eye ray at a world position (matches lookDirection's yaw/pitch convention: x = -cp·sin(yaw), y = sin(pitch), z = -cp·cos(yaw)). */
+/** Points the player's eye ray at a world position (matches lookDirection's yaw/pitch convention: x = -cpÂ·sin(yaw), y = sin(pitch), z = -cpÂ·cos(yaw)). */
 function aimAt(player: PlayerState, tx: number, ty: number, tz: number): void {
   const eye = new THREE.Vector3(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
   const dir = new THREE.Vector3(tx, ty, tz).sub(eye).normalize();
   player.pitch = Math.asin(dir.y);
   player.yaw = Math.atan2(-dir.x, -dir.z);
 }
+
+describe("tickPortalDwell", () => {
+  function dwellFixture(): { state: GameState; player: PlayerState; events: GameEvent[] } {
+    const world = makeWorld();
+    buildFrame(world, "x", 8, 8, 2, 3);
+    const fixture = makeState(world, [], new THREE.Vector3(8.5, FLOOR_Y + 1, 8.5));
+    fixture.player.timers = createPlayerTimers();
+    fillPortalFrame(fixture.state, { axis: "x", base: { x: 8, y: FLOOR_Y + 1, z: 8 }, w: 2, h: 3 });
+    return fixture;
+  }
+
+  test("standing in the surface for the dwell time fires dimensionTravel exactly once, anchored at the frame base", () => {
+    const { state, player, events } = dwellFixture();
+    const emit = (e: GameEvent) => events.push(e);
+    for (let t = 0; t < 5; t += 0.1) tickPortalDwell(state, player, 0.1, emit);
+    const travels = events.filter((e) => e.type === "dimensionTravel");
+    expect(travels).toHaveLength(1);
+    expect(travels[0]).toEqual({ type: "dimensionTravel", target: "nether", anchor: { x: 8, y: FLOOR_Y + 1, z: 8 } });
+  });
+
+  test("stepping out resets the latch so a re-entry can travel again", () => {
+    const { state, player, events } = dwellFixture();
+    const emit = (e: GameEvent) => events.push(e);
+    for (let t = 0; t < 4; t += 0.1) tickPortalDwell(state, player, 0.1, emit);
+    player.position.set(2.5, FLOOR_Y + 1, 2.5); // step out
+    tickPortalDwell(state, player, 0.1, emit);
+    expect(player.timers.portalLatched).toBe(false);
+    player.position.set(8.5, FLOOR_Y + 1, 8.5); // step back in
+    for (let t = 0; t < 4; t += 0.1) tickPortalDwell(state, player, 0.1, emit);
+    expect(events.filter((e) => e.type === "dimensionTravel")).toHaveLength(2);
+  });
+
+  test("a nether-side portal targets the overworld", () => {
+    const { state, player, events } = dwellFixture();
+    (state as { dimension: string }).dimension = "nether";
+    for (let t = 0; t < 4; t += 0.1) tickPortalDwell(state, player, 0.1, (e) => events.push(e));
+    const travel = events.find((e) => e.type === "dimensionTravel");
+    expect(travel && travel.type === "dimensionTravel" && travel.target).toBe("overworld");
+  });
+
+  test("a de-framed portal clears at travel time instead of traveling (the lazy backstop)", () => {
+    const { state, player, events } = dwellFixture();
+    state.world.set(7, FLOOR_Y, 8, BlockId.Air); // corner knocked out behind the hook's back
+    for (let t = 0; t < 4; t += 0.1) tickPortalDwell(state, player, 0.1, (e) => events.push(e));
+    expect(events.some((e) => e.type === "dimensionTravel")).toBe(false);
+    expect(state.world.get(8, FLOOR_Y + 1, 8)).toBe(BlockId.Air); // surface cleared
+  });
+});
+
+describe("ensureArrivalPortal", () => {
+  test("with no portal nearby it builds a lit, valid frame on a safe pad and lands the player inside", () => {
+    const world = makeWorld();
+    const changes = createBlockChangeTracker(world);
+    const floorYAt = () => FLOOR_Y + 1;
+    const pos = ensureArrivalPortal(world, changes, floorYAt, { x: 12, y: 11, z: 12 });
+    expect(world.get(pos.x, pos.y, pos.z)).toBe(BlockId.NetherPortal);
+    // The built frame validates â the surface it lit is travel-worthy.
+    expect(findPortalFrame(world, pos.x, pos.y, pos.z)).not.toBeNull();
+    // The build persists as ordinary diff.
+    expect(changes.changes().length).toBeGreaterThan(0);
+  });
+
+  test("an existing portal inside the search radius is reused instead of building", () => {
+    const world = makeWorld();
+    buildFrame(world, "x", 8, 8, 2, 3);
+    for (let i = 0; i < 2; i += 1) for (let j = 0; j < 3; j += 1) world.set(8 + i, FLOOR_Y + 1 + j, 8, BlockId.NetherPortal);
+    const changes = createBlockChangeTracker(world);
+    const pos = ensureArrivalPortal(world, changes, () => FLOOR_Y + 1, { x: 14, y: 11, z: 10 });
+    // Lands in the existing surface (its nearest column's lowest cell)…
+    expect(world.get(pos.x, pos.y, pos.z)).toBe(BlockId.NetherPortal);
+    expect(pos.y).toBe(FLOOR_Y + 1);
+    expect(changes.changes()).toHaveLength(0); // …and nothing was built
+  });
+});
