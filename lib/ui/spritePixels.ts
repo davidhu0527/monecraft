@@ -53,7 +53,9 @@ export const MATERIAL_PALETTES: Record<string, { m: Rgb; M: Rgb; l: Rgb }> = {
   gold: { m: [240, 190, 60], M: [180, 128, 32], l: [252, 228, 130] },
   diamond: { m: [110, 228, 235], M: [52, 160, 170], l: [190, 248, 250] },
   // Endgame Dragon gear: a smouldering violet/magenta ramp, unlike any tier.
-  dragon: { m: [168, 58, 196], M: [104, 30, 128], l: [226, 138, 244] }
+  dragon: { m: [168, 58, 196], M: [104, 30, 128], l: [226, 138, 244] },
+  // The post-diamond nether tier: ember orange over charcoal.
+  blazite: { m: [232, 116, 40], M: [130, 52, 22], l: [255, 190, 110] }
 };
 
 const STEEL: { m: Rgb; M: Rgb; l: Rgb } = { m: [192, 197, 207], M: [124, 131, 144], l: [236, 239, 246] };
@@ -674,6 +676,27 @@ const BONE_MEAL_PALETTE: PixelPalette = { c: [232, 228, 212], C: [196, 190, 170]
 const EMERALD_PALETTE: PixelPalette = { c: [46, 184, 110], C: [24, 120, 70], h: [150, 240, 180] };
 const GLOWSTONE_DUST_PALETTE: PixelPalette = { c: [244, 205, 92], C: [190, 140, 40], h: [255, 244, 190] };
 const BLAZITE_ORE_PALETTE: PixelPalette = { c: [235, 120, 40], C: [140, 55, 25], h: [255, 200, 110] };
+
+// A cast metal bar in the blazite ramp: top face light, front face main, dark edge.
+const INGOT_GRID = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "......llll......",
+  "....llmmmmll....",
+  "..llmmmmmmmmll..",
+  ".cmmmmmmmmmmmmc.",
+  ".cmmmmmmmmmmmmc.",
+  ".ccmmmmmmmmmmcc.",
+  "..ccmmmmmmmmcc..",
+  "....ccmmmmcc....",
+  "......cccc......",
+  "................",
+  "................",
+  "................"
+];
+const BLAZITE_INGOT_PALETTE: PixelPalette = { m: [232, 116, 40], c: [130, 52, 22], l: [255, 190, 110] };
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 // A weathered parchment chart with a red X where the treasure lies.
 const TREASURE_MAP_PALETTE: PixelPalette = { o: [110, 88, 55], p: [222, 205, 160], P: [186, 166, 122], x: [190, 50, 40] };
@@ -921,6 +944,7 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   emerald: { grid: COAL_GRID, palette: EMERALD_PALETTE },
   glowstone_dust: { grid: COAL_GRID, palette: GLOWSTONE_DUST_PALETTE },
   blazite_ore: { grid: COAL_GRID, palette: BLAZITE_ORE_PALETTE },
+  blazite_ingot: { grid: INGOT_GRID, palette: BLAZITE_INGOT_PALETTE },
   raw_chicken: { grid: RAW_MEAT_GRID, palette: RAW_CHICKEN_PALETTE },
   raw_mutton: { grid: RAW_MEAT_GRID, palette: RAW_MUTTON_PALETTE },
   rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE },

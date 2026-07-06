@@ -31,7 +31,7 @@ describe("item definitions", () => {
 
   test("every spear has long melee reach and throw damage", () => {
     const spears = ITEM_DEFS.filter((item) => item.id.endsWith("_spear"));
-    expect(spears).toHaveLength(7);
+    expect(spears).toHaveLength(8); // seven ore tiers plus blazite
     for (const spear of spears) {
       expect(spear.meleeReach).toBeGreaterThan(4.5);
       expect(spear.throwDamage).toBeGreaterThan(spear.attack ?? 0);

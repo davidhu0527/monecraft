@@ -172,6 +172,28 @@ const CRAFTING_RECIPES: Recipe[] = [
   // no fuel itself), so this is a straight wood -> charcoal conversion — the
   // bootstrap fuel for a player who hasn't found coal yet.
   { id: "charcoal", label: "1 Wood -> 1 Charcoal", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "charcoal", count: 1 }, station: "furnace" },
+  // Raw nether blazite smelts into the ingot the post-diamond gear is forged
+  // from (fuel is an ingredient, so the usual coal/charcoal variant pair).
+  {
+    id: "smelt_blazite",
+    label: "2 Blazite Ore + Coal -> Blazite Ingot",
+    cost: [
+      { slotId: "blazite_ore", count: 2 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "blazite_ingot", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "smelt_blazite_charcoal",
+    label: "2 Blazite Ore + Charcoal -> Blazite Ingot",
+    cost: [
+      { slotId: "blazite_ore", count: 2 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "blazite_ingot", count: 1 },
+    station: "furnace"
+  },
   // Cooking burns a fuel ingredient: coal (mined) or charcoal (smelted from wood).
   {
     id: "cook_chicken",
@@ -461,6 +483,15 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "diamond_pickaxe", count: 1 }
   },
   {
+    id: "blazite_pickaxe",
+    label: "2 Blazite Ingot + 1 Wood -> Blazite Pickaxe",
+    cost: [
+      { slotId: "blazite_ingot", count: 2 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "blazite_pickaxe", count: 1 }
+  },
+  {
     id: "knife",
     label: "1 Stone + 1 Wood -> Knife",
     cost: [
@@ -533,6 +564,15 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "diamond_sword", count: 1 }
   },
   {
+    id: "blazite_sword",
+    label: "2 Blazite Ingot + 1 Wood -> Blazite Sword",
+    cost: [
+      { slotId: "blazite_ingot", count: 2 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "blazite_sword", count: 1 }
+  },
+  {
     id: "wood_spear",
     label: "1 Planks + 2 Wood -> Wood Spear",
     cost: [
@@ -594,6 +634,15 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "wood", count: 2 }
     ],
     result: { slotId: "diamond_spear", count: 1 }
+  },
+  {
+    id: "blazite_spear",
+    label: "1 Blazite Ingot + 2 Wood -> Blazite Spear",
+    cost: [
+      { slotId: "blazite_ingot", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "blazite_spear", count: 1 }
   },
   {
     id: "bow",

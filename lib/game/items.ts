@@ -185,6 +185,9 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
+  // The post-diamond tier, forged from smelted nether blazite (tier 8 — above
+  // every gate in the game, so it also chews obsidian and blazite ore).
+  { id: "blazite_pickaxe", label: "Blazite Pickaxe", kind: "tool", minePower: 5.0, mineTier: 8, maxDurability: 900 },
   // A durable tool used (via the right-click held-item path) to fish, not to mine —
   // minePower 0 means it breaks no blocks; it renders from a custom sprite grid.
   { id: "fishing_rod", label: "Fishing Rod", kind: "tool", minePower: 0, mineTier: 0, maxDurability: FISHING_ROD_DURABILITY },
@@ -200,6 +203,7 @@ export const ITEM_DEFS: ItemDef[] = [
   // blazite ore smelts into ingots for the post-diamond gear tier.
   { id: "glowstone_dust", label: "Glowstone Dust", kind: "material" },
   { id: "blazite_ore", label: "Blazite Ore", kind: "material" },
+  { id: "blazite_ingot", label: "Blazite Ingot", kind: "material" },
   { id: "food", label: "Food", kind: "food", hunger: 7 },
   // Mob materials — craft ingredients with no direct use on their own yet.
   { id: "wool", label: "Wool", kind: "material" },
@@ -274,6 +278,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35, maxDurability: 450 },
   { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40, maxDurability: 540 },
   { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47, maxDurability: 720 },
+  // Post-diamond, still under the boss-trophy Dragon Sword (60/1200).
+  { id: "blazite_sword", label: "Blazite Sword", kind: "weapon", attack: 53, maxDurability: 950 },
   {
     id: "wood_spear",
     label: "Wood Spear",
@@ -336,6 +342,15 @@ export const ITEM_DEFS: ItemDef[] = [
     meleeReach: SPEAR_MELEE_REACH,
     throwDamage: 55,
     maxDurability: 680
+  },
+  {
+    id: "blazite_spear",
+    label: "Blazite Spear",
+    kind: "weapon",
+    attack: 50,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 62,
+    maxDurability: 880
   },
   // Bow fires arrows; it never melees (attack 0), so the attack input branches
   // to firing when a bow is held. Arrows are the consumable ammo.
@@ -420,6 +435,9 @@ export const REPAIR_MATERIAL_BY_ITEM: Record<string, string> = {
   diamond_pickaxe: "diamond_ore",
   diamond_sword: "diamond_ore",
   diamond_spear: "diamond_ore",
+  blazite_pickaxe: "blazite_ingot",
+  blazite_sword: "blazite_ingot",
+  blazite_spear: "blazite_ingot",
   dragon_sword: "diamond_ore",
   bow: "string",
   fishing_rod: "string",
