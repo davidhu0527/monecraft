@@ -640,3 +640,35 @@ Change these only with care:
   and bumps `WORLDGEN_VERSION` (which discards stale worlds of every type). Islands
   values are constrained by spawn: keep land biomes gently sloped so
   `findSpawnOnLand` still lands the player on dry ground.
+
+## The Nether & portals
+
+- **`PORTAL_DWELL_SECONDS`** (3) — how long a player stands in a portal surface
+  before travel fires. Shorter feels snappier but makes an accidental brush
+  through a portal a trip; longer makes escaping into a portal under fire a
+  real gamble. The dwell latches after firing — no re-fire until you step out.
+- **`PORTAL_MIN_INTERIOR` / `PORTAL_MAX_INTERIOR`** (2×3 / 4×4) — the interior
+  sizes `findPortalFrame` accepts (obsidian border, corners required). Raising
+  the max makes grand gates possible but costs more obsidian and widens the
+  frame-validation scan bounds.
+- **`PORTAL_SEARCH_RADIUS`** (24) — how far around the mapped 1:1 arrival point
+  an existing portal is reused instead of building a new one. Too small and
+  paired portals drift apart into portal farms; too large and a deliberately
+  separate second portal gets hijacked as an arrival.
+- **`NETHER_DAYLIGHT`** (0.22) — the nether's pinned daylight. It must sit
+  below `HOSTILE_SPAWN_BELOW_DAYLIGHT` (0.28, keeps spawns perpetual) and below
+  `HOSTILE_BURN_ABOVE_DAYLIGHT` (0.72, nothing combusts); it also sits below
+  the sleep threshold, which is why beds carry an explicit dimension refusal.
+  Nudging it changes nothing visually (the renderer's nether profile drives the
+  look) — it is purely the gameplay-gates dial.
+- **`FIREBALL_DAMAGE` / `FIREBALL_SPEED`** (6 / 16) — the scorcher's shot:
+  slower than a skeleton arrow (27) so strafing dodges it, harder-hitting so
+  ignoring it doesn't pay. Difficulty scales the damage like every mob hit.
+- **Nether worldgen** lives in the frozen `NETHER_GEN` (`netherGeneration.ts`):
+  `lavaSeaLevel` (32), worm/sea-chamber/vein counts (scaled by world area), the
+  per-cell `glowstoneChance`, and `blaziteMaxY` (40). Any change is a deliberate
+  worldgen re-baseline: bump `WORLDGEN_VERSION` and re-pin the nether hashes —
+  the one stamp discards BOTH dimensions' saved diffs (see docs/save-format.md).
+- The nether's _look_ (sky, fog, the raised sky-light floor that is its ambient
+  glow) is the renderer's `DIMENSION_PROFILES.nether`
+  (`lib/game/render/dimensionProfiles.ts`) — visual-only, no save impact.

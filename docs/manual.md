@@ -221,6 +221,31 @@ Beds don't work in the Nether — there is no morning to skip to — and portals
 are **not yet available in online worlds** (the game will say so if you try to
 light one there).
 
+### Surviving the Nether
+
+The other side is a sealed world of **netherrack** caverns under a bedrock sky,
+lit by hanging **glowstone** clusters and the glow of **lava seas** that fill
+the deeps. There is no day, no weather, no water, and no mercy: **imps**
+(fast, vicious melee brutes) and **scorchers** (hovering fire-spirits that lob
+fireballs) spawn near you _constantly_ — the darkness that summons monsters
+never lifts here. Come armed, wall yourself in when you mine, and consider a
+Fire Resistance potion before working near the seas.
+
+Why go? Three exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
+recombine into a placeable glowstone block — a torch-strength light source for
+your builds). **Blazite ore** — the post-diamond ore, found deep (below Y≈40)
+and gated behind a diamond pickaxe like the obsidian you came through. Smelt 2
+raw ore into a **blazite ingot** and forge the game's best craftable gear: the
+**blazite pickaxe** (faster than diamond, and it chews obsidian), **sword**
+(stronger than diamond, shy of the Dragon Sword), and **spear**. And bragging
+rights: four advancements live down here.
+
+Your arrival portal is your lifeline home — its frame is ordinary obsidian, so
+keep a spare flint & steel (and ideally frame material) on you. And know this
+before you risk it: **dying in the Nether respawns you in the Nether**, at a
+random cavern floor — your bed is a world away and can't reach you here. The
+walk back to your (still lit, still glowing) portal is part of the price.
+
 ### Rafts and ships
 
 Craft a **raft** (4 planks + 2 wood) or a **ship** (8 planks + 3 wood + 2 string)
