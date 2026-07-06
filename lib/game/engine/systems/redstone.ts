@@ -3,9 +3,12 @@ import {
   BlockId,
   doorBlock,
   doorState,
+  isDetectorRail,
   isDoorBlock,
   isLever,
+  isPoweredRail,
   isPressurePlate,
+  isRailBlock,
   isRedstoneBlock,
   isRedstoneButton,
   isRedstoneLamp,
@@ -44,11 +47,13 @@ export function createRedstoneState(): RedstoneState {
 /**
  * Boot-time seeding: every redstone block is craft-only, hence player-placed,
  * hence present in the save's block diff — scanning it recovers the full
- * component set with no persistence of our own.
+ * component set with no persistence of our own. Rails (plain included) are
+ * tracked too: the pass owns their support-pop, detector toggling, and
+ * powered-rail output.
  */
 export function seedRedstoneCells(state: GameState): void {
   for (const [index, block] of state.blockChanges.changes()) {
-    if (isRedstoneBlock(block)) state.redstone.cells.add(index);
+    if (isRedstoneBlock(block) || isRailBlock(block)) state.redstone.cells.add(index);
   }
 }
 
@@ -84,7 +89,7 @@ export function pressButton(state: GameState, emit: EmitGameEvent, x: number, y:
   return true;
 }
 
-/** Feet cells currently standing on the ground — players and mobs both press plates. */
+/** Feet cells currently standing on the ground — players, mobs, and minecarts all press. */
 function collectOccupiedCells(state: GameState): Set<number> {
   const occupied = new Set<number>();
   const { world } = state;
@@ -99,6 +104,15 @@ function collectOccupiedCells(state: GameState): Set<number> {
     const x = Math.floor(mob.position.x);
     const y = Math.floor(mob.position.y - mob.halfHeight + 0.05);
     const z = Math.floor(mob.position.z);
+    if (world.inBounds(x, y, z)) occupied.add(world.index(x, y, z));
+  }
+  for (const vehicle of state.vehicles) {
+    // A cart rides RIDE_HEIGHT above its rail cell — the -0.05 lands us on it.
+    // This is what a detector rail reads, and it lets a cart hold a plate down.
+    if (vehicle.kind !== "minecart") continue;
+    const x = Math.floor(vehicle.position.x);
+    const y = Math.floor(vehicle.position.y - 0.05);
+    const z = Math.floor(vehicle.position.z);
     if (world.inBounds(x, y, z)) occupied.add(world.index(x, y, z));
   }
   return occupied;
@@ -141,7 +155,7 @@ export function tickRedstone(state: GameState, dt: number, emit: EmitGameEvent):
   const occupied = collectOccupiedCells(state);
   for (const index of rs.cells) {
     const block = world.blocks[index];
-    if (!isRedstoneBlock(block)) {
+    if (!isRedstoneBlock(block) && !isRailBlock(block)) {
       // Mined, exploded, or overwritten (locally or by a server delta): forget it.
       rs.cells.delete(index);
       rs.buttonTimers.delete(index);
@@ -150,12 +164,12 @@ export function tickRedstone(state: GameState, dt: number, emit: EmitGameEvent):
     const x = xOf(index);
     const y = yOf(index);
     const z = zOf(index);
-    // An overlay whose support vanished pops off (no drop — whatever removed
-    // the support, e.g. an explosion, would have vaporized the component too;
-    // direct mining cascades the drop in mining.ts before this runs).
-    if (isRedstoneOverlay(block)) {
+    // An overlay (or rail) whose support vanished pops off (no drop — whatever
+    // removed the support, e.g. an explosion, would have vaporized the
+    // component too; direct mining cascades the drop in mining.ts before this).
+    if (isRedstoneOverlay(block) || isRailBlock(block)) {
       const support = world.get(x, y - 1, z);
-      if (!world.isSolid(x, y - 1, z) || isRedstoneOverlay(support) || isDoorBlock(support)) {
+      if (!world.isSolid(x, y - 1, z) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support)) {
         write(x, y, z, BlockId.Air);
         rs.cells.delete(index);
         rs.buttonTimers.delete(index);
@@ -167,6 +181,14 @@ export function tickRedstone(state: GameState, dt: number, emit: EmitGameEvent):
       if (pressed !== isRedstoneOn(block)) {
         write(x, y, z, pressed ? redstoneOn(block as BlockId) : redstoneOff(block as BlockId));
         emit({ type: "plateToggled", on: pressed });
+      }
+    }
+    if (isDetectorRail(block)) {
+      // The plate pattern on rails: pressed while a minecart sits on the cell.
+      const pressed = occupied.has(index);
+      if (pressed !== isRedstoneOn(block)) {
+        write(x, y, z, pressed ? redstoneOn(block as BlockId) : redstoneOff(block as BlockId));
+        emit({ type: "detectorToggled", on: pressed });
       }
     }
     if (block === BlockId.RedstoneButtonOn) {
@@ -199,7 +221,12 @@ export function tickRedstone(state: GameState, dt: number, emit: EmitGameEvent):
 
   for (const index of rs.cells) {
     const block = world.blocks[index];
-    const isSource = block === BlockId.LeverOn || block === BlockId.RedstoneButtonOn || block === BlockId.PressurePlateOn || block === BlockId.RedstoneTorch;
+    const isSource =
+      block === BlockId.LeverOn ||
+      block === BlockId.RedstoneButtonOn ||
+      block === BlockId.PressurePlateOn ||
+      block === BlockId.RedstoneTorch ||
+      block === BlockId.DetectorRailOn;
     if (!isSource) continue;
     const x = xOf(index);
     const y = yOf(index);
@@ -254,6 +281,11 @@ export function tickRedstone(state: GameState, dt: number, emit: EmitGameEvent):
         write(x, y, z, on ? redstoneOn(block as BlockId) : redstoneOff(block as BlockId));
         emit({ type: "lampToggled", on });
       }
+    } else if (isPoweredRail(block)) {
+      // The lamp pattern: a level-triggered output. Silent — the cart's boost
+      // (or hard stop) is the feedback; vehicles.ts reads the lit id directly.
+      const on = powered.has(index);
+      if (on !== isRedstoneOn(block)) write(x, y, z, on ? redstoneOn(block as BlockId) : redstoneOff(block as BlockId));
     } else if (isRedstoneTorch(block)) {
       // The inverter: off while the support block is powered. Computed from
       // this pass's grid, applied next write — a synchronous clocked update,

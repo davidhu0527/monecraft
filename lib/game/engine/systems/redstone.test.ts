@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { BlockId, VoxelWorld } from "@/lib/world";
 import { REDSTONE_BUTTON_PRESS_SECONDS, REDSTONE_TICK_SECONDS, REDSTONE_WIRE_RANGE } from "@/lib/game/config";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
-import type { GameEvent, GameState, MobState, PlayerState, RedstoneState } from "@/lib/game/engine/state";
+import type { GameEvent, GameState, MobState, PlayerState, RedstoneState, VehicleState } from "@/lib/game/engine/state";
 import { createRedstoneState, pressButton, seedRedstoneCells, tickRedstone, toggleLever, trackRedstoneCell } from "@/lib/game/engine/systems/redstone";
 
 const FLOOR_Y = 10;
@@ -65,6 +65,7 @@ function makeFixture(world = makeWorld(), mobs: MobState[] = []): Fixture {
     players: new Map([["local", player]]),
     player,
     mobs,
+    vehicles: [],
     primedTnt: new Map<number, number>(),
     redstone,
     worldMeshDirty: false
@@ -298,5 +299,79 @@ describe("redstone power", () => {
     expect(fx.redstone.cells.size).toBe(3);
     pass(fx);
     expect(fx.state.world.get(12, Y, 10)).toBe(BlockId.RedstoneLampOn);
+  });
+});
+
+describe("rails in the power pass", () => {
+  function parkCart(fx: Fixture, x: number, z: number): void {
+    (fx.state.vehicles as VehicleState[]).push({
+      id: 99,
+      kind: "minecart",
+      position: new THREE.Vector3(x, Y + 0.1, z),
+      yaw: 0,
+      rider: null
+    });
+  }
+
+  test("a lever switches a powered rail on and off", () => {
+    const fx = makeFixture();
+    place(fx, 10, Y, 10, BlockId.Lever);
+    place(fx, 11, Y, 10, BlockId.PoweredRail);
+    expect(toggleLever(fx.state, fx.emit, 10, Y, 10)).toBe(true);
+    pass(fx);
+    expect(fx.state.world.get(11, Y, 10)).toBe(BlockId.PoweredRailOn);
+    expect(toggleLever(fx.state, fx.emit, 10, Y, 10)).toBe(true);
+    pass(fx);
+    expect(fx.state.world.get(11, Y, 10)).toBe(BlockId.PoweredRail);
+  });
+
+  test("a parked cart trips a detector rail, which powers a lamp like a plate", () => {
+    const fx = makeFixture();
+    place(fx, 10, Y, 10, BlockId.DetectorRail);
+    place(fx, 11, Y, 10, BlockId.RedstoneLamp);
+    parkCart(fx, 10.5, 10.5);
+    pass(fx); // detector flips on
+    pass(fx); // and sources the lamp on the next derivation
+    expect(fx.state.world.get(10, Y, 10)).toBe(BlockId.DetectorRailOn);
+    expect(fx.state.world.get(11, Y, 10)).toBe(BlockId.RedstoneLampOn);
+    expect(fx.events).toContainEqual({ type: "detectorToggled", on: true });
+
+    fx.state.vehicles.length = 0; // the cart rolls away
+    pass(fx);
+    pass(fx);
+    expect(fx.state.world.get(10, Y, 10)).toBe(BlockId.DetectorRail);
+    expect(fx.state.world.get(11, Y, 10)).toBe(BlockId.RedstoneLamp);
+    expect(fx.events).toContainEqual({ type: "detectorToggled", on: false });
+  });
+
+  test("a parked cart holds a pressure plate down", () => {
+    const fx = makeFixture();
+    place(fx, 10, Y, 10, BlockId.PressurePlate);
+    parkCart(fx, 10.5, 10.5);
+    pass(fx);
+    expect(fx.state.world.get(10, Y, 10)).toBe(BlockId.PressurePlateOn);
+  });
+
+  test("a rail pops off when its support block vanishes", () => {
+    const fx = makeFixture();
+    place(fx, 10, Y, 10, BlockId.Rail);
+    place(fx, 11, Y, 10, BlockId.PoweredRail);
+    fx.state.blockChanges.set(10, FLOOR_Y, 10, BlockId.Air); // the floor under the plain rail goes
+    pass(fx);
+    expect(fx.state.world.get(10, Y, 10)).toBe(BlockId.Air);
+    expect(fx.state.world.get(11, Y, 10)).toBe(BlockId.PoweredRail); // its neighbor keeps its floor
+    expect(fx.redstone.cells.has(fx.state.world.index(10, Y, 10))).toBe(false);
+  });
+
+  test("seedRedstoneCells recovers plain rails from the block diff", () => {
+    const fx = makeFixture();
+    fx.state.blockChanges.set(10, Y, 10, BlockId.Rail);
+    fx.state.blockChanges.set(11, Y, 10, BlockId.DetectorRail);
+    seedRedstoneCells(fx.state);
+    expect(fx.redstone.cells.size).toBe(2);
+    // The seeded plain rail self-heals like any tracked cell.
+    fx.state.blockChanges.set(10, FLOOR_Y, 10, BlockId.Air);
+    pass(fx);
+    expect(fx.state.world.get(10, Y, 10)).toBe(BlockId.Air);
   });
 });

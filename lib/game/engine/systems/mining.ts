@@ -289,9 +289,9 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
   }
-  // A placed redstone component (lamp included) joins the tracked set so the
-  // power pass sees it; removals self-heal, so placement is the only seam.
-  if (isRedstoneBlock(slot.blockId)) trackRedstoneCell(state, tx, ty, tz);
+  // A placed redstone component (lamp included) or rail joins the tracked set
+  // so the power pass sees it; removals self-heal, so placement is the only seam.
+  if (isRedstoneBlock(slot.blockId) || isRailBlock(slot.blockId)) trackRedstoneCell(state, tx, ty, tz);
 
   state.worldMeshDirty = true;
   emit({ type: "blockPlaced", blockId: slot.blockId, x: tx, y: ty, z: tz });

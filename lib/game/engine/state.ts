@@ -587,6 +587,7 @@ export type GameEvent =
   | { type: "vehiclePlaced"; kind: VehicleKind }
   | { type: "vehiclePlaceFailed" }
   | { type: "vehicleBoarded"; kind: VehicleKind }
+  | { type: "detectorToggled"; on: boolean }
   | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" }
   | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "anvilCombined" }
