@@ -412,13 +412,16 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       syncCloudSave(gameEngine, true);
     };
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
-    // The unload flush rides visibilitychange(hidden) + pagehide, not
-    // beforeunload: an async IndexedDB write can't be awaited there anyway —
-    // flushWrite starts the put synchronously on the warm connection, which
-    // commits even as the document tears down (and a same-tab reload's boot
-    // read queues behind it). These two also fire on mobile app-switch/close,
-    // where beforeunload never did, and skipping beforeunload keeps the page
-    // bfcache-eligible. Silent: a tab switch shouldn't toast "Saved".
+    // The unload flush rides beforeunload + visibilitychange(hidden) +
+    // pagehide. flushWrite starts the put synchronously on the warm connection
+    // and commits it explicitly (a same-tab reload's boot read then queues
+    // behind it). beforeunload matters: it fires before the navigation commits,
+    // so its transaction has the most teardown headroom — measured in headless
+    // Chromium, the visibilitychange/pagehide flushes alone lose the commit
+    // race a large fraction of reloads. Its cost is back/forward-cache
+    // eligibility in Firefox/Safari — save durability wins. The other two
+    // cover mobile app-switch/close, where beforeunload never fired reliably.
+    // Silent: a tab switch shouldn't toast "Saved".
     const flushSave = () => {
       if (online || skipUnmountSaveRef.current) return;
       worldSaves.flushWrite(worldId, gameEngine.serialize());
@@ -427,6 +430,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") flushSave();
     };
+    window.addEventListener("beforeunload", flushSave);
     window.addEventListener("pagehide", flushSave);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
@@ -538,6 +542,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       minimap?.dispose();
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
+      window.removeEventListener("beforeunload", flushSave);
       window.removeEventListener("pagehide", flushSave);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("mousedown", unlockAudio);
