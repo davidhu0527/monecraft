@@ -793,6 +793,35 @@ const VEHICLE_PALETTE: PixelPalette = {
   S: [222, 218, 184]
 };
 
+// An open iron cart seen from the side: dark interior over a lighter body band,
+// riding on two wheel pairs.
+const MINECART_GRID = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "..MMMMMMMMMMMM..",
+  "..MddddddddddM..",
+  "..MddddddddddM..",
+  "..MllllllllllM..",
+  "..MmmmmmmmmmmM..",
+  "..MmmmmmmmmmmM..",
+  "..MMMMMMMMMMMM..",
+  "...WW......WW...",
+  "...WW......WW...",
+  "................",
+  "................",
+  "................"
+];
+
+const MINECART_PALETTE: PixelPalette = {
+  M: [52, 54, 60],
+  d: [30, 30, 36],
+  m: [140, 144, 152],
+  l: [180, 184, 192],
+  W: [40, 40, 46]
+};
+
 // A round flask: dark outline (o), cork (C), glass neck (g) and an `L`/`h`
 // liquid fill recolored per potion. Empty bottles reuse a glass tint for L/h.
 const BOTTLE_GRID = [
@@ -863,6 +892,7 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   arrow: { grid: ARROW_GRID, palette: ARROW_PALETTE },
   raft: { grid: RAFT_GRID, palette: VEHICLE_PALETTE },
   ship: { grid: SHIP_GRID, palette: VEHICLE_PALETTE },
+  minecart: { grid: MINECART_GRID, palette: MINECART_PALETTE },
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
   ominous_horn: { grid: BONE_GRID, palette: OMINOUS_HORN_PALETTE },
   dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },

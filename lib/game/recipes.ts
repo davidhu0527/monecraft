@@ -111,6 +111,38 @@ const CRAFTING_RECIPES: Recipe[] = [
     ],
     result: { slotId: "redstone_lamp", count: 1 }
   },
+  // Rails. Sliver is the iron analog; the batch of 16 makes laying real track
+  // affordable, while the powered rail's gold + dust cost mirrors its redstone
+  // tier (it is a circuit output as much as a track piece).
+  {
+    id: "rail",
+    label: "3 Sliver Ore + 3 Wood -> 16 Rail",
+    cost: [
+      { slotId: "sliver_ore", count: 3 },
+      { slotId: "wood", count: 3 }
+    ],
+    result: { slotId: "rail", count: 16 }
+  },
+  {
+    id: "powered_rail",
+    label: "2 Gold Ore + 1 Redstone Dust + 2 Wood -> 4 Powered Rail",
+    cost: [
+      { slotId: "gold_ore", count: 2 },
+      { slotId: "redstone", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "powered_rail", count: 4 }
+  },
+  {
+    id: "detector_rail",
+    label: "1 Sliver Ore + 1 Redstone Dust + 1 Cobble -> 2 Detector Rail",
+    cost: [
+      { slotId: "sliver_ore", count: 1 },
+      { slotId: "redstone", count: 1 },
+      { slotId: "cobble", count: 1 }
+    ],
+    result: { slotId: "detector_rail", count: 2 }
+  },
   {
     id: "torch",
     label: "1 Coal + 1 Wood -> 4 Torch",
@@ -592,6 +624,12 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "string", count: 2 }
     ],
     result: { slotId: "ship", count: 1 }
+  },
+  {
+    id: "minecart",
+    label: "5 Sliver Ore -> Minecart",
+    cost: [{ slotId: "sliver_ore", count: 5 }],
+    result: { slotId: "minecart", count: 1 }
   },
   {
     id: "arrow",
