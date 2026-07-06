@@ -1,4 +1,5 @@
 import { BlockId } from "./blocks";
+import { isRailBlock } from "./rails";
 import { isRedstoneOverlay } from "./redstone";
 import { VoxelWorld } from "./voxelWorld";
 
@@ -50,8 +51,9 @@ const DOWN = 3;
 export function opacity(block: BlockId): number {
   // Redstone overlays (wire, lever, button, plate, torch) are tiny shapes far
   // from filling their cell — they must not black it out. The lamp is a full
-  // cube and stays default-opaque (an opaque emitter, like lava).
-  if (isRedstoneOverlay(block)) return 0;
+  // cube and stays default-opaque (an opaque emitter, like lava). Rails are
+  // the same flat-overlay shape.
+  if (isRedstoneOverlay(block) || isRailBlock(block)) return 0;
   switch (block) {
     case BlockId.Air:
     case BlockId.Glass:

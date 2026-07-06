@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ATLAS_COLUMNS, ATLAS_ROWS, tileIndexFor } from "./atlas";
 import { BlockId } from "./blocks";
 import { doorBounds, isDoorBlock } from "./doors";
+import { isRailBlock, railAxis, railBounds } from "./rails";
 import { isRedstoneOverlay, redstoneBounds } from "./redstone";
 import { MAX_LIGHT } from "./lighting";
 import { VoxelWorld } from "./voxelWorld";
@@ -226,7 +227,8 @@ function buildGeometryBuffers(
     minY: number,
     maxY: number,
     minZ: number,
-    maxZ: number
+    maxZ: number,
+    rotateTopUV = false
   ) => {
     for (const face of FACE_DEFS) {
       const nx = face.dir[0];
@@ -235,14 +237,21 @@ function buildGeometryBuffers(
       const color = materialTint(ny);
       const light = sampleFaceLight(x + nx, y + ny, z + nz);
       const [u0, v0, u1, v1] = tileUV(block, ny);
+      // Rotating the top-face texture 90° (rails oriented by their neighbors)
+      // is a permutation of the corner UV assignment, not a new tile.
+      const uvA: [number, number] = [u0, v1];
+      const uvB: [number, number] = [u0, v0];
+      const uvC: [number, number] = [u1, v0];
+      const uvD: [number, number] = [u1, v1];
+      const uvs = rotateTopUV && ny > 0 ? [uvB, uvC, uvD, uvA] : [uvA, uvB, uvC, uvD];
       const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + (cy ? maxY : minY), z + (cz ? maxZ : minZ)] as const);
       const [a, b, c, d] = corners;
-      pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
-      pushVertex(target, ...b, nx, ny, nz, color, u0, v0, light);
-      pushVertex(target, ...c, nx, ny, nz, color, u1, v0, light);
-      pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
-      pushVertex(target, ...c, nx, ny, nz, color, u1, v0, light);
-      pushVertex(target, ...d, nx, ny, nz, color, u1, v1, light);
+      pushVertex(target, ...a, nx, ny, nz, color, uvs[0][0], uvs[0][1], light);
+      pushVertex(target, ...b, nx, ny, nz, color, uvs[1][0], uvs[1][1], light);
+      pushVertex(target, ...c, nx, ny, nz, color, uvs[2][0], uvs[2][1], light);
+      pushVertex(target, ...a, nx, ny, nz, color, uvs[0][0], uvs[0][1], light);
+      pushVertex(target, ...c, nx, ny, nz, color, uvs[2][0], uvs[2][1], light);
+      pushVertex(target, ...d, nx, ny, nz, color, uvs[3][0], uvs[3][1], light);
     }
   };
 
@@ -265,6 +274,26 @@ function buildGeometryBuffers(
           pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, bounds.minZ, bounds.maxZ);
           continue;
         }
+        // Rails are the same flat-overlay shape, oriented along their track
+        // axis by rotating the top-face texture (the shape stays symmetric).
+        if (isRailBlock(block)) {
+          const bounds = railBounds();
+          pushBlockCuboid(
+            target,
+            block,
+            x,
+            y,
+            z,
+            bounds.minX,
+            bounds.maxX,
+            bounds.minY,
+            bounds.maxY,
+            bounds.minZ,
+            bounds.maxZ,
+            railAxis(world, x, y, z) === "z"
+          );
+          continue;
+        }
         for (const face of FACE_DEFS) {
           const nx = face.dir[0];
           const ny = face.dir[1];
@@ -272,7 +301,13 @@ function buildGeometryBuffers(
           const neighbor = world.get(x + nx, y + ny, z + nz);
           if (block === BlockId.Water || block === BlockId.Glass) {
             if (neighbor === block) continue;
-          } else if (neighbor !== BlockId.Glass && !isDoorBlock(neighbor) && !isRedstoneOverlay(neighbor) && world.isSolid(x + nx, y + ny, z + nz)) {
+          } else if (
+            neighbor !== BlockId.Glass &&
+            !isDoorBlock(neighbor) &&
+            !isRedstoneOverlay(neighbor) &&
+            !isRailBlock(neighbor) &&
+            world.isSolid(x + nx, y + ny, z + nz)
+          ) {
             continue;
           }
 

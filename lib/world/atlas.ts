@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { BLOCK_COLORS, BlockId } from "./blocks";
 import { doorState, isDoorBlock } from "./doors";
+import { isDetectorRail, isPoweredRail, isRailBlock } from "./rails";
+import { isRedstoneOn } from "./redstone";
 
 // Procedural texture atlas: one 16x16 tile per block face variant, painted on a
 // canvas at startup. This is the only world module that touches the DOM.
@@ -255,6 +257,26 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           const frame = x % 5 === 0 || y % 5 === 0;
           if (frame) c = tone([0.25, 0.2, 0.14], 0.9 + n * 0.2);
           else c = lit ? tone([1, 0.85, 0.42], 0.85 + n * 0.3) : tone([0.5, 0.4, 0.22], 0.85 + n * 0.25);
+        }
+        if (isRailBlock(block)) {
+          // Two steel strips over wooden ties on a gravel bed. The strips run
+          // along the tile's v axis; the mesher rotates the top face 90° for
+          // north-south track. Powered rails carry a center power lane that
+          // glows when on; detector rails a center sensor plate.
+          const lit = isRedstoneOn(block);
+          const strip = x === 3 || x === 4 || x === 11 || x === 12;
+          const tie = y % 5 === 2 || y % 5 === 3;
+          if (strip) {
+            c = isPoweredRail(block) && lit ? tone([0.95, 0.62, 0.28], 0.88 + n * 0.22) : tone([0.62, 0.64, 0.68], 0.85 + n * 0.25);
+          } else if (isDetectorRail(block) && x >= 6 && x <= 9 && y >= 6 && y <= 9) {
+            c = lit ? tone([0.92, 0.3, 0.18], 0.88 + n * 0.22) : tone([0.55, 0.57, 0.6], 0.85 + n * 0.2);
+          } else if (isPoweredRail(block) && (x === 7 || x === 8)) {
+            c = lit ? tone([0.95, 0.35, 0.15], 0.85 + n * 0.3) : tone([0.4, 0.14, 0.1], 0.85 + n * 0.2);
+          } else if (tie) {
+            c = tone([0.45, 0.32, 0.18], 0.85 + n * 0.2);
+          } else {
+            c = tone([0.24, 0.2, 0.16], 0.9 + n * 0.15);
+          }
         }
 
         ctx.fillStyle = rgb(c);

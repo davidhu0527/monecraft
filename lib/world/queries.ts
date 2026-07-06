@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { BlockId } from "./blocks";
 import { VoxelWorld } from "./voxelWorld";
 import { doorBounds, isDoorBlock } from "./doors";
+import { isRailBlock } from "./rails";
 import { isRedstoneOverlay } from "./redstone";
 
 export type RaycastResult = {
@@ -146,7 +147,8 @@ export function collidesAt(world: VoxelWorld, position: THREE.Vector3, halfWidth
         if (!world.isSolid(x, y, z)) continue;
         // Redstone overlays never collide — you walk over wire and plates
         // (feet occupying the plate's cell is exactly what detection needs).
-        if (isRedstoneOverlay(block)) continue;
+        // Rails share the rule: carts glide over them, players step across.
+        if (isRedstoneOverlay(block) || isRailBlock(block)) continue;
         if (!isDoorBlock(block)) return true;
         const bounds = doorBounds(block)!;
         const bodyMinX = position.x - halfWidth + eps;

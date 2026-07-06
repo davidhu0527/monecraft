@@ -76,7 +76,13 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.RedstoneTorchOff]: "wood",
   [BlockId.RedstoneTorch]: "wood",
   [BlockId.RedstoneLamp]: "glass",
-  [BlockId.RedstoneLampOn]: "glass"
+  [BlockId.RedstoneLampOn]: "glass",
+  // Rails clank like stone (metal strips over ties).
+  [BlockId.PoweredRail]: "stone",
+  [BlockId.PoweredRailOn]: "stone",
+  [BlockId.DetectorRail]: "stone",
+  [BlockId.DetectorRailOn]: "stone",
+  [BlockId.Rail]: "stone"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

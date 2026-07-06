@@ -150,6 +150,16 @@ describe("collidesAt", () => {
     expect(collidesAt(world, new THREE.Vector3(5.7, 5.5, 5.5), 0.3, 1.8)).toBe(false);
   });
 
+  test("rails never collide — players walk across track, carts glide over it", () => {
+    const world = emptyWorld();
+    world.set(5, 5, 5, BlockId.Rail);
+    world.set(6, 5, 5, BlockId.PoweredRailOn);
+    world.set(7, 5, 5, BlockId.DetectorRail);
+    expect(collidesAt(world, new THREE.Vector3(5.5, 5.0, 5.5), 0.3, 1.8)).toBe(false);
+    expect(collidesAt(world, new THREE.Vector3(6.5, 5.0, 5.5), 0.3, 1.8)).toBe(false);
+    expect(collidesAt(world, new THREE.Vector3(7.5, 5.0, 5.5), 0.3, 1.8)).toBe(false);
+  });
+
   test("a closed door blocks its opening while an open door leaves the center passable", () => {
     const world = emptyWorld();
     world.set(5, 5, 5, BlockId.DoorNorthLower);

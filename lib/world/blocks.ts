@@ -101,7 +101,16 @@ export const enum BlockId {
   RedstoneTorchOff = 66,
   RedstoneTorch = 67,
   RedstoneLamp = 68,
-  RedstoneLampOn = 69
+  RedstoneLampOn = 69,
+  // Rails (see rails.ts): flat floor overlays like wire, ridden by minecarts.
+  // The powered/detector pairs join the redstone family — power is id PARITY,
+  // so each pair MUST start on an even id. Plain Rail carries no power state
+  // and must never pass through the redstoneOn/redstoneOff parity math.
+  PoweredRail = 70,
+  PoweredRailOn = 71,
+  DetectorRail = 72,
+  DetectorRailOn = 73,
+  Rail = 74
 }
 
 export enum BiomeId {
@@ -152,7 +161,10 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.RedstoneButton]: 0x8f9296,
   [BlockId.PressurePlate]: 0xbe965d,
   [BlockId.RedstoneTorch]: 0xe0503a,
-  [BlockId.RedstoneLamp]: 0xc9a24a
+  [BlockId.RedstoneLamp]: 0xc9a24a,
+  [BlockId.Rail]: 0x8a8f96,
+  [BlockId.PoweredRail]: 0xc9a24a,
+  [BlockId.DetectorRail]: 0x9fa3aa
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -239,5 +251,12 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.RedstoneTorchOff]: [0.3, 0.12, 0.1],
   [BlockId.RedstoneTorch]: [0.8, 0.22, 0.14],
   [BlockId.RedstoneLamp]: [0.45, 0.35, 0.2],
-  [BlockId.RedstoneLampOn]: [0.95, 0.78, 0.4]
+  [BlockId.RedstoneLampOn]: [0.95, 0.78, 0.4],
+  // Rails (painted in atlas.ts): steel strips over wooden ties; the powered
+  // pair glows warm when on, the detector carries a center sensor plate.
+  [BlockId.PoweredRail]: [0.4, 0.28, 0.16],
+  [BlockId.PoweredRailOn]: [0.5, 0.3, 0.15],
+  [BlockId.DetectorRail]: [0.38, 0.32, 0.24],
+  [BlockId.DetectorRailOn]: [0.42, 0.34, 0.24],
+  [BlockId.Rail]: [0.35, 0.28, 0.18]
 };
