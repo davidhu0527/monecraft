@@ -677,6 +677,14 @@ The sea is worth sailing (see [Rafts and ships](#rafts-and-ships)):
 - **Fish.** Schools of **cod and salmon** swim the open water. They flee when you
   get close and drop **raw fish** when killed — the same fish the rod catches and
   cats are tamed with. A fish knocked onto land flops helplessly and suffocates.
+- **The drowned.** At **night** the water itself turns dangerous: sunken,
+  teal-skinned zombies rise near you and pursue you through the water in all
+  three dimensions — a wreck dive after dark is a fight, not a swim. They are
+  strictly water-bound (they never walk ashore; knock one onto the beach and it
+  suffocates like a fish) and burn off no daylight, so a deep hoard stays
+  guarded until you deal with its keeper. They drop **rotten flesh**, often
+  **kelp**, and — rarely — a **sliver spear** torn from some other victim.
+  Slaying your first unlocks **Revenge of the Tides**. On Peaceful none spawn.
 - **Kelp and coral.** The sandy ocean floor grows swaying **kelp stalks** and
   scattered pink/blue **coral**. Kelp breaks instantly (breaking one cell takes
   the whole stalk above it, and the water fills back in), regrows over time, and

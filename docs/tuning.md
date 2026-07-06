@@ -447,7 +447,9 @@ not here.
 ## Fish & the ocean
 
 `FISH_FLEE_RANGE`, `FISH_SUFFOCATION_HP_PER_SECOND`, `AQUATIC_CAP`,
-`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`.
+`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`, `DROWNED_CAP`,
+`DROWNED_MELEE_REACH`, `DROWNED_PURSUE_SPEED_MULTIPLIER`,
+`DROWNED_SPAWN_MIN_RADIUS`.
 
 Read by the aquatic branch in `systems/mobAI.ts` and the aquatic spawn director
 in `systems/spawnDirector.ts`. `FISH_FLEE_RANGE` (5) is the 3D radius inside
@@ -461,6 +463,15 @@ without nearby deep water, so these cost nothing on dry worlds).
 `KELP_GROWTH_CHANCE` (0.2) is the per-sampled-tick odds a kelp stalk grows one
 block (the same sampler as crops — see Farming above); height and surface
 clearance are worldgen invariants in `GEN.oceanFlora`, not tunables here.
+
+The drowned dials shape how dangerous night water feels. `DROWNED_CAP` (6)
+bounds the population separately from the fish budget (and inside the shared
+difficulty-scaled hostile cap) — raise it and night diving becomes a running
+battle. `DROWNED_PURSUE_SPEED_MULTIPLIER` (1.6) is its chase boost over
+template speed; players outswim it in open water, so it threatens confined
+dives (wrecks, kelp forests), not surface crossings. `DROWNED_MELEE_REACH`
+(1.9) is the 3D strike distance and `DROWNED_SPAWN_MIN_RADIUS` (10) the
+standoff that stops one materializing directly under a swimmer.
 
 ## Beds & sleep
 

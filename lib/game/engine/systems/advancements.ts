@@ -79,6 +79,7 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
     }
     case "mobDied":
       if (HOSTILE_MOB_KINDS.has(event.kind)) bump(player, "hostiles_killed");
+      if (event.kind === "drowned") bump(player, "drowned_killed");
       break;
     case "mobBred":
       bump(player, "animals_bred");
@@ -254,6 +255,15 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "minecart",
     category: "Adventure",
     stat: "minecart_rides",
+    threshold: 1
+  },
+  {
+    id: "ocean_purge",
+    title: "Revenge of the Tides",
+    description: "Slay a drowned.",
+    icon: "sliver_spear",
+    category: "Combat",
+    stat: "drowned_killed",
     threshold: 1
   }
 ];

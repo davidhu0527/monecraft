@@ -240,7 +240,8 @@ describe("evaluateAdvancements", () => {
       { type: "sleepStarted" },
       { type: "treasureUnearthed" },
       { type: "leverToggled", on: true },
-      { type: "vehicleBoarded", kind: "minecart" }
+      { type: "vehicleBoarded", kind: "minecart" },
+      { type: "mobDied", kind: "drowned", x: 0, y: 0, z: 0 }
     );
     const unlocked = new Set(evaluateAdvancements(state));
     for (const advancement of ADVANCEMENTS) expect(unlocked.has(advancement.id)).toBe(true);

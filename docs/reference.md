@@ -306,31 +306,34 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 
 ## Mobs
 
-**15 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
+**16 mob kinds** (plus the summoned boss). Passive animals flee but never attack and
 can be bred; wolves and cats are passive until **tamed** into fighting companions;
-**cod and salmon** swim the oceans, flee in 3D, and suffocate out of water;
-the villager is passive but doesn't flee (right-click to trade); hostiles hunt at
-night and also attack villagers; **raiders** storm a village in waves when a raid is
-triggered. Drop counts are inclusive ranges rolled per kill.
+**cod and salmon** swim the oceans, flee in 3D, and suffocate out of water; the
+**drowned** is the hostile of the deep — it spawns in night water, pursues you in 3D,
+and never leaves the water (beached, it suffocates); the villager is passive but
+doesn't flee (right-click to trade); hostiles hunt at night and also attack
+villagers; **raiders** storm a village in waves when a raid is triggered. Drop
+counts are inclusive ranges rolled per kill.
 
-| Mob      | Type    | HP           | Speed | Detect range | Attack             | Cooldown | Drops                           |
-| -------- | ------- | ------------ | ----- | ------------ | ------------------ | -------- | ------------------------------- |
-| Sheep    | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton          |
-| Chicken  | passive | 7            | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken      |
-| Horse    | passive | 14           | 1.4   | —            | —                  | —        | 1–2 Leather                     |
-| Cow      | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef         |
-| Pig      | passive | 8            | 1.0   | —            | —                  | —        | 1 Raw Porkchop                  |
-| Wolf     | passive | 8 (20 tamed) | 1.3   | 12 (tamed)   | 4 (ally, melee)    | 0.9 s    | nothing                         |
-| Cat      | passive | 8 (20 tamed) | 1.35  | 12 (tamed)   | 3 (ally, melee)    | 1.0 s    | nothing                         |
-| Cod      | passive | 3            | 1.1   | —            | —                  | —        | 1 Raw Fish                      |
-| Salmon   | passive | 4            | 1.25  | —            | —                  | —        | 1–2 Raw Fish                    |
-| Villager | passive | 20           | 0.6   | —            | — (trade partner)  | —        | nothing                         |
-| Zombie   | hostile | 100          | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                |
-| Skeleton | hostile | 100          | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                        |
-| Spider   | hostile | 100          | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                      |
-| Creeper  | hostile | 100          | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                   |
-| Raider   | hostile | 120          | 1.1   | 16           | 5 melee            | 1.2 s    | 1–2 Arrow                       |
-| Boss     | hostile | 1000         | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore |
+| Mob      | Type    | HP           | Speed | Detect range | Attack             | Cooldown | Drops                                           |
+| -------- | ------- | ------------ | ----- | ------------ | ------------------ | -------- | ----------------------------------------------- |
+| Sheep    | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Wool, 1 Raw Mutton                          |
+| Chicken  | passive | 7            | 1.2   | —            | —                  | —        | 0–2 Feather, 1 Raw Chicken                      |
+| Horse    | passive | 14           | 1.4   | —            | —                  | —        | 1–2 Leather                                     |
+| Cow      | passive | 10           | 0.9   | —            | —                  | —        | 1–2 Leather, 1 Raw Beef                         |
+| Pig      | passive | 8            | 1.0   | —            | —                  | —        | 1 Raw Porkchop                                  |
+| Wolf     | passive | 8 (20 tamed) | 1.3   | 12 (tamed)   | 4 (ally, melee)    | 0.9 s    | nothing                                         |
+| Cat      | passive | 8 (20 tamed) | 1.35  | 12 (tamed)   | 3 (ally, melee)    | 1.0 s    | nothing                                         |
+| Cod      | passive | 3            | 1.1   | —            | —                  | —        | 1 Raw Fish                                      |
+| Salmon   | passive | 4            | 1.25  | —            | —                  | —        | 1–2 Raw Fish                                    |
+| Drowned  | hostile | 100          | 1.15  | 10           | 3 (in-water melee) | 1.4 s    | 1–2 Rotten Flesh, 50% 1 Kelp, 7% 1 Sliver Spear |
+| Villager | passive | 20           | 0.6   | —            | — (trade partner)  | —        | nothing                                         |
+| Zombie   | hostile | 100          | 1.05  | 11           | 3                  | 1.35 s   | 1–2 Rotten Flesh                                |
+| Skeleton | hostile | 100          | 1.08  | 12           | arrow (4)          | 1.8 s    | 1–2 Bone                                        |
+| Spider   | hostile | 100          | 1.2   | 10           | 2                  | 1.1 s    | 0–2 String                                      |
+| Creeper  | hostile | 100          | 1.0   | 12           | explodes (power 3) | —        | 1–2 Gunpowder                                   |
+| Raider   | hostile | 120          | 1.1   | 16           | 5 melee            | 1.2 s    | 1–2 Arrow                                       |
+| Boss     | hostile | 1000         | 1.1   | 28           | 10 melee / 7 arrow | 1.5 s    | 1 Dragon Heart, 2–4 Diamond Ore                 |
 
 ### Trading
 
