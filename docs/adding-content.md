@@ -8,7 +8,7 @@ Step-by-step recipes for extending the game. See [architecture.md](architecture.
 2. Add a `BREAK_HARDNESS` entry in `lib/game/items.ts` (omitted blocks default to hardness 2).
 3. Make it placeable/droppable: an `ITEM_DEFS` entry (`kind: "block"`, `blockId`) plus a `BLOCK_TO_SLOT` mapping — without the mapping, mining it drops nothing. The inventory icon (isometric cube) auto-generates from `BLOCK_COLORS`; ore-style blocks can add an accent color in `lib/ui/spritePixels.ts` (`ORE_ACCENTS`).
 4. Optionally add `RECIPES` entries in `lib/game/recipes.ts`.
-5. Non-cube, non-solid, or transparent blocks need engine work: collision in `lib/world/queries.ts` / `voxelWorld.ts` and geometry/face visibility in `lib/world/meshing.ts`. Doors are the reference for shared custom bounds; glass is the reference for a separate render layer.
+5. Non-cube, non-solid, or transparent blocks need engine work: collision in `lib/world/queries.ts` / `voxelWorld.ts` and geometry/face visibility in `lib/world/meshing.ts`. Doors are the reference for shared custom bounds (full-height panels); the redstone overlays (`lib/world/redstone.ts` `redstoneBounds` + `pushBlockCuboid`'s Y bounds) are the reference for short floor-mounted shapes that neither collide nor block light; glass is the reference for a separate render layer.
 6. Map it to a sound family in `lib/game/audio/materials.ts` — the `BlockId → MaterialGroup` record is exhaustive, so typecheck fails until the entry exists.
 7. Give it a **lighting class** in `lib/world/lighting.ts`: `opacity` (default is fully opaque — air/glass transmit, water/leaves attenuate) and `emission` (default 0; torches emit 14, lava 15). A light source self-illuminates and lights its neighborhood through the shared flood; an opaque block casts shadow. Both are exercised by `lib/world/lighting.test.ts`.
 8. The item/recipe integrity tests (`lib/game/config.test.ts`) will fail if a mapping is missing or inconsistent — run `bun test`.
@@ -144,6 +144,10 @@ Progression meta lives in one declarative module, `lib/game/engine/systems/advan
 - **A new advancement.** Add a row to the `ADVANCEMENTS` registry: `{ id, title, description, icon, category, stat, threshold }`. Unlock is uniform (`state.stats.get(stat) >= threshold`), so there's **no logic** — pick (or add) the `stat` it keys on and a `category` from `ADVANCEMENT_CATEGORY_ORDER`. `icon` is any existing item/block id (rendered via `itemIconUrl` — **zero new assets**; verify it renders). The engine's `observeProgress` auto-unlocks it, fires the `advancementUnlocked` toast + chime, and `AdvancementsPanel` shows it.
 - **Persist it.** `stats` and `advancements` are **additive save fields** — see [save-format.md](save-format.md) (v13). Both are kept across death (like `xp`, unlike `effects`); `restoreStats`/`restoreAdvancements` validate them on load. No new field is needed for a stat or advancement that keys on existing counters.
 - **Reuse lookups.** Counting hostile kills reads `HOSTILE_MOB_KINDS` (`lib/game/mobs.ts`), the single source of truth (hostility isn't on `MOB_TEMPLATES`) — reuse such a table rather than re-deriving it.
+
+## A powered / redstone component
+
+A block that participates in power circuits follows `lib/game/engine/systems/redstone.ts`: encode its on/off state as an id-parity pair (even off, odd on — see `lib/world/redstone.ts`), add it to the family range so the predicates cover it, and teach `tickRedstone` how it sources, carries, or consumes power. Placement is the only tracking seam (`trackRedstoneCell`); removal self-heals per pass, so mining/explosions need no changes. State toggles are plain `blockChanges.set` id swaps — they relight, remesh, persist in the block diff, and replicate through the tick journal automatically.
 
 ## A new mechanic
 

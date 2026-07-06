@@ -473,6 +473,19 @@ those overflow slots on load (`readContainers` rebuilds a `CHEST_SLOTS`-length a
 `AUTOSAVE_INTERVAL_MS`, `WORLDGEN_VERSION`, `SAVE_KEY` (legacy), `STUCK_RESET_SECONDS`,
 `RENDER_RADIUS`, `RENDER_GRID`, `THIRD_PERSON_DISTANCE`, `THIRD_PERSON_MARGIN`.
 
+## Redstone
+
+`REDSTONE_TICK_SECONDS` (0.1), `REDSTONE_WIRE_RANGE` (15), `REDSTONE_BUTTON_PRESS_SECONDS` (1.0).
+
+`REDSTONE_TICK_SECONDS` is the fixed power-pass cadence and the main dial: lower
+makes circuits snappier but multiplies the remesh/relight (and, online, network
+delta) cost of oscillating contraptions — a torch clock blinks with a period of
+exactly 2x this value, and a stable circuit costs nothing regardless.
+`REDSTONE_WIRE_RANGE` is how many wire cells a signal survives ("the wire runs
+out"); raising it grows the per-pass BFS over large builds.
+`REDSTONE_BUTTON_PRESS_SECONDS` is the button's pulse width — long enough to
+walk through a button-driven door.
+
 `RENDER_RADIUS` is the biggest **performance** lever: the renderer meshes one region
 of this radius around the player, so larger values draw more terrain at higher cost;
 `RENDER_GRID` is how far the player moves before that mesh rebuilds (smaller = more
