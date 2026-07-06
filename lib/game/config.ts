@@ -238,6 +238,15 @@ export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
 // combusts), while the day clock itself keeps ticking (it is shared world time).
 export const NETHER_DAYLIGHT = 0.22;
 
+// Nether portal frame limits (the INTERIOR the obsidian border encloses,
+// corners required) and travel pacing. See lib/game/engine/systems/portal.ts.
+export const PORTAL_MIN_INTERIOR = { w: 2, h: 3 } as const;
+export const PORTAL_MAX_INTERIOR = { w: 4, h: 4 } as const;
+// Seconds a player must stand in the portal surface before travel fires.
+export const PORTAL_DWELL_SECONDS = 3;
+// How far around the mapped arrival point an existing portal is reused.
+export const PORTAL_SEARCH_RADIUS = 24;
+
 // Weather (cosmetic, transient — never persisted, never touches spawn balance).
 // Time is split into fixed windows; a seeded hash of the window index decides
 // whether it precipitates, and a triangular envelope ramps intensity in/out.

@@ -1344,6 +1344,24 @@ export const BUCKET_POUR_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** A deep resonant whoosh as a portal frame ignites. */
+export const PORTAL_LIT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.6,
+    randomness: 0.15,
+    frequency: 120,
+    sustain: 0.15,
+    release: 0.5,
+    shape: 0,
+    slide: 4,
+    noise: 0.8,
+    sustainVolume: 0.7,
+    decay: 0.1,
+    filter: -300
+  }),
+  minRetriggerMs: 300
+};
+
 /** A sharp steam hiss as water quenches lava into obsidian. */
 export const LAVA_QUENCH_SOUND: SoundDef = {
   params: zz({

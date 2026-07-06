@@ -481,6 +481,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
             event.reason === "daylight" ? "You can only sleep at night" : event.reason === "dimension" ? "You can't sleep here" : "Monsters are nearby"
           );
         }
+        if (event.type === "portalDenied") {
+          flashMessage(event.reason === "online" ? "Portals aren't available in online worlds yet" : "The frame is incomplete");
+        }
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
         }

@@ -18,6 +18,7 @@ import {
   DEATH_SOUND,
   DRINK_SOUND,
   LAVA_QUENCH_SOUND,
+  PORTAL_LIT_SOUND,
   EAT_SOUND,
   XP_SOUND,
   ENCHANT_SOUND,
@@ -324,6 +325,9 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "lavaSolidified":
           backend.play(LAVA_QUENCH_SOUND);
+          break;
+        case "portalLit":
+          backend.play(PORTAL_LIT_SOUND);
           break;
         case "fishingCast":
           backend.play(FISHING_CAST_SOUND);

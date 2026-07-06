@@ -141,6 +141,7 @@ import {
   tryTradeAimedVillager,
   tryUseHeldItem
 } from "./systems/interact";
+import { tryIgnitePortal } from "./systems/portal";
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach, type MobPositionOf } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
@@ -508,6 +509,15 @@ export class GameEngine {
     // dereference the missing primary player's aliases. The replica gets its
     // real snapshot the moment addPlayer seats the primary.
     this.snapshot = this.headless || !this.state.players.has(this.state.primaryPlayerId) ? ({} as GameSnapshot) : this.buildSnapshot();
+  }
+
+  /**
+   * Portals work in local single-player only (for now): the server engine and
+   * every replica refuse ignition, so an online world can never strand a
+   * player in a dimension the room doesn't simulate.
+   */
+  private get portalsEnabled(): boolean {
+    return this.authority === "local" && !this.replica;
   }
 
   /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
@@ -1000,6 +1010,10 @@ export class GameEngine {
         if (this.tryStartRaid(player)) break;
         if (tryFish(state, player, this.emit, this.rng)) break;
         if (tryPlaceVehicle(state, player, this.emit)) break;
+        // Portal ignition is single-player only for now: a replica routes this
+        // cmd to the server, whose engine (authority "server") denies with the
+        // "online" reason — the event replicates back and the shell explains.
+        if (tryIgnitePortal(state, player, this.emit, this.portalsEnabled, this.rng)) break;
         if (tryUseHeldItem(state, player, this.emit, this.rng)) break;
         placeSelectedBlock(state, player, this.emit);
         break;

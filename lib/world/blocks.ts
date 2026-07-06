@@ -133,7 +133,11 @@ export const enum BlockId {
   // Volcanic glass, created by quenching lava with a water bucket (interact.ts).
   // The hardest mineable block — diamond-pickaxe-gated (mining.ts) — and the
   // only material a nether portal frame can be built from (portal.ts).
-  Obsidian = 90
+  Obsidian = 90,
+  // The lit portal surface filling an obsidian frame (portal.ts). Non-solid
+  // (walked into, never collided with), unmineable (the solid raycast passes
+  // through it — break the frame instead), emits light, and has no item.
+  NetherPortal = 91
 }
 
 export enum BiomeId {
@@ -307,5 +311,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.CobbleStairsSouth]: [0.42, 0.43, 0.45],
   [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45],
   // Near-black volcanic glass with violet flecks (painted in atlas.ts).
-  [BlockId.Obsidian]: [0.09, 0.07, 0.14]
+  [BlockId.Obsidian]: [0.09, 0.07, 0.14],
+  // A swirling violet portal surface (painted in atlas.ts; emits block light).
+  [BlockId.NetherPortal]: [0.45, 0.18, 0.68]
 };

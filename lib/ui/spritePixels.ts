@@ -862,6 +862,28 @@ const BUCKET_GRID = [
   "......mmmm......",
   "................"
 ];
+// A steel striker arc (m/l) over a dark flint chunk (f), with a spark (s)
+// flying where they meet — reads as the classic fire-starter.
+const FLINT_STEEL_GRID = [
+  "................",
+  "..........s.....",
+  ".........s.s....",
+  "......mm..s.....",
+  ".....mllm.......",
+  "....ml..lm......",
+  "....ml...m......",
+  "....ml..........",
+  "....ml..........",
+  "....ml...m......",
+  ".....mllm.......",
+  "..ff..mm........",
+  ".ffff...........",
+  ".fffff..........",
+  "..fff...........",
+  "................"
+];
+const FLINT_STEEL_PALETTE: PixelPalette = { m: [130, 134, 142], l: [190, 194, 202], f: [52, 50, 56], s: [255, 200, 90] };
+
 const BUCKET_METAL: PixelPalette = { o: [70, 74, 84], r: [180, 184, 192], m: [140, 144, 152] };
 const BUCKET_EMPTY_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [96, 100, 110], h: [120, 124, 134] };
 const BUCKET_WATER_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [58, 110, 200], h: [140, 190, 240] };
@@ -921,6 +943,7 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
   ominous_horn: { grid: BONE_GRID, palette: OMINOUS_HORN_PALETTE },
   dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },
+  flint_and_steel: { grid: FLINT_STEEL_GRID, palette: FLINT_STEEL_PALETTE },
   bucket: { grid: BUCKET_GRID, palette: BUCKET_EMPTY_PALETTE },
   water_bucket: { grid: BUCKET_GRID, palette: BUCKET_WATER_PALETTE },
   lava_bucket: { grid: BUCKET_GRID, palette: BUCKET_LAVA_PALETTE },

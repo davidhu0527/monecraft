@@ -130,6 +130,16 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           c = sheen ? tone([0.24, 0.16, 0.4], 0.9 + n * 0.3) : tone([0.08, 0.06, 0.13], 0.85 + n * 0.35);
           if (n > 0.94) c = tone([0.55, 0.42, 0.78], 1); // light-catching fleck
         }
+        if (block === BlockId.NetherPortal) {
+          // A swirling violet surface: concentric sine bands around the tile
+          // center over a deep purple bed, with bright sparks. Emits light 11,
+          // so it reads as an active gateway.
+          const cx = x - 7.5;
+          const cy = y - 7.5;
+          const ring = Math.sin(Math.sqrt(cx * cx + cy * cy) * 1.4 + n * 4);
+          c = ring > 0.35 ? tone([0.62, 0.3, 0.9], 0.85 + n * 0.3) : tone([0.28, 0.1, 0.45], 0.8 + n * 0.3);
+          if (n > 0.93) c = tone([0.9, 0.75, 1], 1); // spark
+        }
         if (block === BlockId.Tnt) {
           // Classic TNT: a red block of "dynamite" with a white label band around
           // the sides and a darker cap on the top/bottom (the bundled fuse ends).

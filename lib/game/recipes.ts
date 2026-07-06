@@ -620,6 +620,15 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "bucket", count: 1 }
   },
   {
+    id: "flint_and_steel",
+    label: "1 Sliver Ore + 1 Coal -> Flint & Steel",
+    cost: [
+      { slotId: "sliver_ore", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "flint_and_steel", count: 1 }
+  },
+  {
     id: "raft",
     label: "4 Planks + 2 Wood -> Raft",
     cost: [

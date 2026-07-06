@@ -99,7 +99,8 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.CobbleStairsEast]: "stone",
   [BlockId.CobbleStairsSouth]: "stone",
   [BlockId.CobbleStairsWest]: "stone",
-  [BlockId.Obsidian]: "stone"
+  [BlockId.Obsidian]: "stone",
+  [BlockId.NetherPortal]: "glass"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

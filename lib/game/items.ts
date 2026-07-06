@@ -179,6 +179,9 @@ export const ITEM_DEFS: ItemDef[] = [
   // A durable tool used (via the right-click held-item path) to fish, not to mine —
   // minePower 0 means it breaks no blocks; it renders from a custom sprite grid.
   { id: "fishing_rod", label: "Fishing Rod", kind: "tool", minePower: 0, mineTier: 0, maxDurability: FISHING_ROD_DURABILITY },
+  // Strikes sparks — used (via the right-click held-item path) to light a
+  // nether portal's obsidian frame; each ignition wears it by one.
+  { id: "flint_and_steel", label: "Flint & Steel", kind: "tool", minePower: 0, mineTier: 0, maxDurability: 64 },
   // Buckets carry one fluid block (right-click use — see interact.ts). Empties
   // stack in bundles; a filled bucket is a single sloshing payload.
   { id: "bucket", label: "Bucket", kind: "material", stackSize: 16 },
