@@ -52,6 +52,24 @@ describe("light classification", () => {
   test("lava blocks sky light (it is opaque) while still emitting", () => {
     expect(isLightBlocker(BlockId.Lava)).toBe(true);
   });
+
+  test("redstone overlays are transparent; only the lit torch and lamp emit", () => {
+    // Tiny floor shapes must not black out their cell.
+    expect(opacity(BlockId.RedstoneWire)).toBe(0);
+    expect(opacity(BlockId.RedstoneWireOn)).toBe(0);
+    expect(opacity(BlockId.Lever)).toBe(0);
+    expect(opacity(BlockId.PressurePlate)).toBe(0);
+    expect(opacity(BlockId.RedstoneTorch)).toBe(0);
+    // The lamp is a full cube: an opaque emitter like lava.
+    expect(isLightBlocker(BlockId.RedstoneLamp)).toBe(true);
+    expect(isLightBlocker(BlockId.RedstoneLampOn)).toBe(true);
+    // Emission follows the on/off id, so a power toggle relights via applyEdit.
+    expect(emission(BlockId.RedstoneTorch)).toBe(7);
+    expect(emission(BlockId.RedstoneTorchOff)).toBe(0);
+    expect(emission(BlockId.RedstoneLampOn)).toBe(15);
+    expect(emission(BlockId.RedstoneLamp)).toBe(0);
+    expect(emission(BlockId.RedstoneWireOn)).toBe(0);
+  });
 });
 
 describe("block light", () => {

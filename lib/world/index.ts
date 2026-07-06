@@ -3,6 +3,21 @@ export { BLOCK_COLORS, BiomeId, BlockId, HELD_BLOCK_COLORS, HELD_BLOCK_FALLBACK_
 export { VoxelWorld } from "./voxelWorld";
 export { DOOR_BLOCK_IDS, doorBlock, doorBounds, doorFacingFromYaw, doorState, isDoorBlock, type DoorFacing, type DoorState } from "./doors";
 export {
+  isLever,
+  isPressurePlate,
+  isRedstoneBlock,
+  isRedstoneButton,
+  isRedstoneLamp,
+  isRedstoneOn,
+  isRedstoneOverlay,
+  isRedstoneTorch,
+  isRedstoneWire,
+  redstoneBounds,
+  redstoneOff,
+  redstoneOn,
+  type RedstoneBounds
+} from "./redstone";
+export {
   generateWorld,
   collectDungeonSites,
   collectShipwreckSites,
