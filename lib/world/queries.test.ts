@@ -160,6 +160,27 @@ describe("collidesAt", () => {
     expect(collidesAt(world, new THREE.Vector3(7.5, 5.0, 5.5), 0.3, 1.8)).toBe(false);
   });
 
+  test("a slab collides below half height but not above it (partial-Y)", () => {
+    const world = emptyWorld();
+    world.set(5, 5, 5, BlockId.StoneSlab);
+    // Feet inside the bottom half: collides.
+    expect(collidesAt(world, new THREE.Vector3(5.5, 5.2, 5.5), 0.3, 1.8)).toBe(true);
+    // Standing ON the slab's top face (y = 5.5): clear — this is what
+    // auto-step-up lands on.
+    expect(collidesAt(world, new THREE.Vector3(5.5, 5.5, 5.5), 0.3, 1.8)).toBe(false);
+  });
+
+  test("a stair collides per box: the raised back blocks only its half", () => {
+    const world = emptyWorld();
+    world.set(5, 5, 5, BlockId.StoneStairsSouth); // raised back on the +z half
+    // At slab height over the LOW half (z < 5.5): clear.
+    expect(collidesAt(world, new THREE.Vector3(5.2, 5.5, 5.2), 0.2, 1.8)).toBe(false);
+    // At slab height over the HIGH half (z > 5.5): the back collides.
+    expect(collidesAt(world, new THREE.Vector3(5.2, 5.5, 5.8), 0.2, 1.8)).toBe(true);
+    // Standing on top of the high back (y = 6, the full-cube rule): clear.
+    expect(collidesAt(world, new THREE.Vector3(5.2, 6.0, 5.8), 0.2, 1.8)).toBe(false);
+  });
+
   test("a closed door blocks its opening while an open door leaves the center passable", () => {
     const world = emptyWorld();
     world.set(5, 5, 5, BlockId.DoorNorthLower);

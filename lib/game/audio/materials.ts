@@ -82,7 +82,23 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.PoweredRailOn]: "stone",
   [BlockId.DetectorRail]: "stone",
   [BlockId.DetectorRailOn]: "stone",
-  [BlockId.Rail]: "stone"
+  [BlockId.Rail]: "stone",
+  // Slabs/stairs sound like their material.
+  [BlockId.PlankSlab]: "wood",
+  [BlockId.StoneSlab]: "stone",
+  [BlockId.CobbleSlab]: "stone",
+  [BlockId.PlankStairsNorth]: "wood",
+  [BlockId.PlankStairsEast]: "wood",
+  [BlockId.PlankStairsSouth]: "wood",
+  [BlockId.PlankStairsWest]: "wood",
+  [BlockId.StoneStairsNorth]: "stone",
+  [BlockId.StoneStairsEast]: "stone",
+  [BlockId.StoneStairsSouth]: "stone",
+  [BlockId.StoneStairsWest]: "stone",
+  [BlockId.CobbleStairsNorth]: "stone",
+  [BlockId.CobbleStairsEast]: "stone",
+  [BlockId.CobbleStairsSouth]: "stone",
+  [BlockId.CobbleStairsWest]: "stone"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

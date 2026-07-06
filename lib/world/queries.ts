@@ -4,6 +4,7 @@ import { VoxelWorld } from "./voxelWorld";
 import { doorBounds, isDoorBlock } from "./doors";
 import { isRailBlock } from "./rails";
 import { isRedstoneOverlay } from "./redstone";
+import { isPartialBlock, shapeBoxes } from "./slabs";
 
 export type RaycastResult = {
   hit: THREE.Vector3;
@@ -149,6 +150,30 @@ export function collidesAt(world: VoxelWorld, position: THREE.Vector3, halfWidth
         // (feet occupying the plate's cell is exactly what detection needs).
         // Rails share the rule: carts glide over them, players step across.
         if (isRedstoneOverlay(block) || isRailBlock(block)) continue;
+        // Slabs and stairs collide box-by-box — the first partial-Y collision
+        // (doors below are partial only in x/z). Standing ON a slab's top face
+        // must not collide, which is what makes auto-step-up land on it.
+        if (isPartialBlock(block)) {
+          const bodyMinX = position.x - halfWidth + eps;
+          const bodyMaxX = position.x + halfWidth - eps;
+          const bodyMinZ = position.z - halfWidth + eps;
+          const bodyMaxZ = position.z + halfWidth - eps;
+          const bodyMinY = position.y + eps;
+          const bodyMaxY = position.y + height - eps;
+          for (const box of shapeBoxes(block)!) {
+            if (
+              bodyMaxX > x + box.minX &&
+              bodyMinX < x + box.maxX &&
+              bodyMaxZ > z + box.minZ &&
+              bodyMinZ < z + box.maxZ &&
+              bodyMaxY > y + box.minY &&
+              bodyMinY < y + box.maxY
+            ) {
+              return true;
+            }
+          }
+          continue;
+        }
         if (!isDoorBlock(block)) return true;
         const bounds = doorBounds(block)!;
         const bodyMinX = position.x - halfWidth + eps;

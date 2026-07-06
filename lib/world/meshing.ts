@@ -4,6 +4,7 @@ import { BlockId } from "./blocks";
 import { doorBounds, isDoorBlock } from "./doors";
 import { isRailBlock, railAxis, railBounds } from "./rails";
 import { isRedstoneOverlay, redstoneBounds } from "./redstone";
+import { isPartialBlock, shapeBoxes } from "./slabs";
 import { MAX_LIGHT } from "./lighting";
 import { VoxelWorld } from "./voxelWorld";
 
@@ -294,6 +295,14 @@ function buildGeometryBuffers(
           );
           continue;
         }
+        // Slabs are one half-height box; stairs are that box plus a raised
+        // back — the same shape boxes collision reads (slabs.ts).
+        if (isPartialBlock(block)) {
+          for (const box of shapeBoxes(block)!) {
+            pushBlockCuboid(target, block, x, y, z, box.minX, box.maxX, box.minY, box.maxY, box.minZ, box.maxZ);
+          }
+          continue;
+        }
         for (const face of FACE_DEFS) {
           const nx = face.dir[0];
           const ny = face.dir[1];
@@ -306,6 +315,7 @@ function buildGeometryBuffers(
             !isDoorBlock(neighbor) &&
             !isRedstoneOverlay(neighbor) &&
             !isRailBlock(neighbor) &&
+            !isPartialBlock(neighbor) &&
             world.isSolid(x + nx, y + ny, z + nz)
           ) {
             continue;

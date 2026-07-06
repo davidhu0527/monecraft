@@ -3,6 +3,7 @@ import { BLOCK_COLORS, BlockId } from "./blocks";
 import { doorState, isDoorBlock } from "./doors";
 import { isDetectorRail, isPoweredRail, isRailBlock } from "./rails";
 import { isRedstoneOn } from "./redstone";
+import { isPartialBlock } from "./slabs";
 
 // Procedural texture atlas: one 16x16 tile per block face variant, painted on a
 // canvas at startup. This is the only world module that touches the DOM.
@@ -66,8 +67,20 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         let c = tone(base, 0.92 + n * 0.22);
 
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
-        if ((block === BlockId.Stone || block === BlockId.Cobblestone || block === BlockId.Bedrock) && n > 0.8) c = tone(base, 1.18);
-        if ((block === BlockId.Wood || block === BlockId.Planks) && (x + y) % 4 === 0) c = tone(base, 0.82);
+        // Slabs/stairs inherit their material's accent so cut blocks read as
+        // the same substance (plank grain / stone-cobble speckle).
+        const stoneLike =
+          block === BlockId.Stone ||
+          block === BlockId.Cobblestone ||
+          block === BlockId.Bedrock ||
+          (isPartialBlock(block) && block !== BlockId.PlankSlab && !(block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest));
+        const plankLike =
+          block === BlockId.Wood ||
+          block === BlockId.Planks ||
+          block === BlockId.PlankSlab ||
+          (block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest);
+        if (stoneLike && n > 0.8) c = tone(base, 1.18);
+        if (plankLike && (x + y) % 4 === 0) c = tone(base, 0.82);
         if (block === BlockId.CoalOre && n > 0.82) c = tone([0.09, 0.09, 0.11], 1);
         if (block === BlockId.SliverOre && n > 0.86) c = tone([0.93, 0.93, 0.95], 1);
         if (block === BlockId.RubyOre && n > 0.88) c = tone([0.86, 0.24, 0.24], 1);
