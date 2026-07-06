@@ -175,6 +175,13 @@ export type ProjectileState = {
   owner?: PlayerId;
   /** Seconds remaining before the arrow despawns mid-air. */
   ttl: number;
+  /**
+   * Visual/audio family; absent = an ordinary arrow. The scorcher's fireball
+   * flies and hits exactly like an arrow — only its look differs. SP-only
+   * today (nether mobs never exist in an online world), so it never crosses
+   * the wire.
+   */
+  kind?: "arrow" | "fireball";
 };
 
 export type MiningState = {

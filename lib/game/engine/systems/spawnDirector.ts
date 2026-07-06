@@ -115,9 +115,27 @@ export function spawnAquaticGroup(
  * petting zoo; hostiles stay closer (the dawn-aggro behavior tests document).
  */
 export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
-  // The nether has its own (hostile-only) population, seeded by the content
-  // stage's nether branch — none of the overworld groups belong there.
-  if (state.dimension === "nether") return;
+  // The nether's population is hostile-only — no animals, no fish, no
+  // villagers — seeded around the arrival area at a respectful standoff.
+  if (state.dimension === "nether") {
+    if (!hostilesSpawn(state.difficulty)) return; // Peaceful nether: empty, still deadly terrain
+    const anchor = nearestPlayerTo(state, state.world.sizeX / 2, state.world.sizeZ / 2);
+    const cx = anchor ? anchor.position.x : state.world.sizeX / 2;
+    const cz = anchor ? anchor.position.z : state.world.sizeZ / 2;
+    const netherGroups: Array<[MobKind, number]> = [
+      ["imp", 6],
+      ["scorcher", 4]
+    ];
+    for (const [kind, count] of netherGroups) {
+      spawnMobGroup(
+        state,
+        { kind, hostile: true, count, centerX: cx, centerZ: cz, radius: RENDER_RADIUS * 0.8, minRadius: HOSTILE_SPAWN_MIN_RADIUS },
+        rng,
+        surfaceYAt
+      );
+    }
+    return;
+  }
   // Day-one population centers on the booting player; a playerless world (a
   // fresh server room before the first join) seeds around the map center.
   const anchor = nearestPlayerTo(state, state.world.sizeX / 2, state.world.sizeZ / 2);
@@ -251,11 +269,13 @@ function partyCapScale(state: GameState): number {
   return Math.max(1, Math.ceil(state.players.size / 2));
 }
 
-/** Trickles hostile mobs in around the player at night, up to the cap. Difficulty scales the cadence and cap; Peaceful spawns none. */
+/**
+ * Trickles hostile mobs in around the player at night, up to the cap.
+ * Difficulty scales the cadence and cap; Peaceful spawns none. In the nether
+ * the roster swaps to imps and scorchers — and the pinned daylight (under the
+ * spawn threshold) makes the trickle perpetual: there is no dawn to end it.
+ */
 export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
-  // The nether gets its own hostile kinds from the content stage; until then
-  // the overworld roster must not materialize there.
-  if (state.dimension === "nether") return;
   if (!hostilesSpawn(state.difficulty)) return;
   state.timers.hostileSpawnTimer += dt;
   const interval = HOSTILE_SPAWN_INTERVAL_SECONDS * hostileSpawnIntervalScale(state.difficulty);
@@ -268,7 +288,7 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
 
   const center = spawnCenterPlayer(state, rng);
   if (!center) return;
-  const spawnKinds: Array<"zombie" | "skeleton" | "spider" | "creeper"> = ["zombie", "skeleton", "spider", "creeper"];
+  const spawnKinds: MobKind[] = state.dimension === "nether" ? ["imp", "imp", "scorcher"] : ["zombie", "skeleton", "spider", "creeper"];
   const kind = spawnKinds[Math.floor(rng() * spawnKinds.length)];
   // A wave is 1–2 mobs, but never more than the slots left under the cap — so a
   // 2-pack rolled at cap-1 can't overshoot (especially Easy's tighter cap of 8).

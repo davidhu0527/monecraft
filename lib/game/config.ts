@@ -173,6 +173,10 @@ export const SKELETON_STANDOFF_MIN = 5; // back away when the player is closer t
 export const SKELETON_STANDOFF_MAX = 9; // approach when farther; hold in the band
 export const SKELETON_ARROW_DAMAGE = 4;
 export const SKELETON_ARROW_SPEED = 27; // a touch slower than the player's bow (34)
+// The scorcher's fireball: slower than an arrow (dodgeable by strafing) but
+// harder-hitting — the nether's ranged pressure. Flies/hits like an arrow.
+export const FIREBALL_DAMAGE = 6;
+export const FIREBALL_SPEED = 16;
 export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
 export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
 export const MOB_ARROW_KNOCKBACK = 0.35;

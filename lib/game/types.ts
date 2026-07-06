@@ -105,7 +105,9 @@ export type MobKind =
   | "creeper"
   | "raider"
   | "villager"
-  | "boss";
+  | "boss"
+  | "imp"
+  | "scorcher";
 
 /**
  * A mob's social allegiance — the axis that drives who fights whom (see mobAI's

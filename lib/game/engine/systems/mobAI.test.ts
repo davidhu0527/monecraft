@@ -94,6 +94,19 @@ describe("ranged skeletons", () => {
     expect(events.some((e) => e.type === "mobAttacked" && e.kind === "skeleton")).toBe(true);
   });
 
+  test("a scorcher fires a fireball-kind projectile (same flight machinery, its own look)", () => {
+    const scorcher = makeMob("scorcher", 24, 30, 17); // in the standoff band, like the skeleton
+    const state = makeState([scorcher]);
+    const { deps, events } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.projectiles[0].kind).toBe("fireball");
+    expect(state.projectiles[0].fromPlayer).toBe(false);
+    expect(events.some((e) => e.type === "mobAttacked" && e.kind === "scorcher")).toBe(true);
+  });
+
   test("a skeleton kites away when the player is too close", () => {
     const skeleton = makeMob("skeleton", 24, 30, 21, 1); // 3 blocks away (< standoff min), cooldown not ready
     const state = makeState([skeleton]);

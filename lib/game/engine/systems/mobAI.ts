@@ -17,6 +17,8 @@ import {
   CREEPER_FUSE_SECONDS,
   DROWNED_MELEE_REACH,
   DROWNED_PURSUE_SPEED_MULTIPLIER,
+  FIREBALL_DAMAGE,
+  FIREBALL_SPEED,
   HOSTILE_BURN_ABOVE_DAYLIGHT,
   HOSTILE_CAP,
   MOB_ARROW_KNOCKBACK,
@@ -150,8 +152,9 @@ function mobVsMobLineOfSight(world: GameState["world"], mob: MobState, dx: numbe
 }
 
 /**
- * A ranged mob looses an arrow from its eye toward the player's chest, leading a
- * moving target by a fraction of the arrow's travel time. The arrow is not
+ * A ranged mob looses an arrow (or the scorcher's fireball — same flight, its
+ * own look) from its eye toward the player's chest, leading a moving target by
+ * a fraction of the projectile's travel time. The projectile is not
  * player-owned, so it only ever hits the player (never the firer or other mobs).
  */
 function fireMobArrow(state: GameState, player: PlayerState, mob: MobState, damage: number, speed: number, emit: EmitGameEvent): void {
@@ -168,7 +171,8 @@ function fireMobArrow(state: GameState, player: PlayerState, mob: MobState, dama
     damage,
     knockback: MOB_ARROW_KNOCKBACK,
     fromPlayer: false,
-    ttl: ARROW_TTL
+    ttl: ARROW_TTL,
+    kind: MOB_TEMPLATES[mob.kind].projectileKind
   });
   emit({ type: "mobAttacked", kind: mob.kind });
 }
@@ -495,6 +499,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
         }
       } else if (fireReady) {
         if (isBoss) fireBossSpread(state, hunted, mob, dmgScale, deps.emit);
+        else if (MOB_TEMPLATES[mob.kind].projectileKind === "fireball") fireMobArrow(state, hunted, mob, FIREBALL_DAMAGE * dmgScale, FIREBALL_SPEED, deps.emit);
         else fireMobArrow(state, hunted, mob, SKELETON_ARROW_DAMAGE * dmgScale, SKELETON_ARROW_SPEED, deps.emit);
       }
       mob.attackTimer = mob.attackCooldown;

@@ -40,7 +40,9 @@ const MOB_LABELS: Record<MobKind, string> = {
   creeper: "a creeper",
   raider: "a raider",
   villager: "a villager",
-  boss: "the boss"
+  boss: "the boss",
+  imp: "an imp",
+  scorcher: "a scorcher"
 };
 
 /**

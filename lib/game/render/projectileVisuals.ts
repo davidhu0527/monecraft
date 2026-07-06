@@ -22,6 +22,9 @@ const scratchQuat = new THREE.Quaternion();
 export function createProjectileVisuals(scene: THREE.Scene): ProjectileVisuals {
   const geometry = buildExtrudedSpriteGeometry(renderSpritePixels("arrow"));
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.1 });
+  // The scorcher's fireball: a small self-lit ember cube (shared like the arrow pair).
+  const fireballGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+  const fireballMaterial = new THREE.MeshStandardMaterial({ color: 0xff8a2a, emissive: 0xff5a10, emissiveIntensity: 1.8, roughness: 0.4 });
   const meshes = new Map<number, THREE.Mesh>();
   const seen = new Set<number>();
 
@@ -39,7 +42,7 @@ export function createProjectileVisuals(scene: THREE.Scene): ProjectileVisuals {
         seen.add(p.id);
         let mesh = meshes.get(p.id);
         if (!mesh) {
-          mesh = new THREE.Mesh(geometry, material);
+          mesh = p.kind === "fireball" ? new THREE.Mesh(fireballGeometry, fireballMaterial) : new THREE.Mesh(geometry, material);
           meshes.set(p.id, mesh);
           scene.add(mesh);
         }
@@ -58,6 +61,8 @@ export function createProjectileVisuals(scene: THREE.Scene): ProjectileVisuals {
       for (const id of [...meshes.keys()]) removeMesh(id);
       geometry.dispose();
       material.dispose();
+      fireballGeometry.dispose();
+      fireballMaterial.dispose();
     }
   };
 }
