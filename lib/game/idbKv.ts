@@ -86,7 +86,15 @@ export function createIdbKv(dbName: string, storeName: string, factory?: IDBFact
     tryPutSync: (key, value) => {
       if (!openDb) return false;
       try {
-        openDb.transaction(storeName, "readwrite").objectStore(storeName).put(value, key);
+        const tx = openDb.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).put(value, key);
+        // Explicit commit, not auto-commit: auto-commit waits for request
+        // callbacks that a document mid-teardown never runs, and the browser
+        // then aborts the transaction — losing exactly the unload save this
+        // path exists for (verified against headless Chromium reloads).
+        // Optional-called for old engines; there the put still auto-commits
+        // whenever the page survives (tab switch), which is the common case.
+        tx.commit?.();
         return true;
       } catch {
         return false;

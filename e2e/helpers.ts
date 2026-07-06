@@ -107,3 +107,35 @@ export async function acquirePointerLock(page: Page): Promise<void> {
 export async function itemCount(page: Page, itemId: string): Promise<number> {
   return page.evaluate((id) => window.__monecraft!.engine.state.inventory.filter((slot) => slot.id === id).reduce((sum, slot) => sum + slot.count, 0), itemId);
 }
+
+/**
+ * Reads the active session's world save straight out of IndexedDB (database
+ * `monecraft`, store `worldSaves` — see lib/game/saveStore.ts), or null when
+ * no record exists. World saves no longer live in localStorage.
+ */
+export async function readWorldSave(page: Page): Promise<{ seed: number; version: number } | null> {
+  return page.evaluate(() => {
+    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
+    return new Promise<{ seed: number; version: number } | null>((resolve, reject) => {
+      const open = indexedDB.open("monecraft");
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const request = db.transaction("worldSaves", "readonly").objectStore("worldSaves").get(session.worldId);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          db.close();
+          resolve((request.result as { seed: number; version: number } | undefined) ?? null);
+        };
+      };
+    });
+  });
+}
+
+/** Saves through the pause menu and waits for the "Saved" toast — which, with
+ *  the IndexedDB store, fires only once the write has durably committed. */
+export async function saveViaPauseMenu(page: Page): Promise<void> {
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Save Game" }).click();
+  await expect(page.locator(".pause-save-message")).toHaveText("Saved");
+}

@@ -1,4 +1,4 @@
-import { acquirePointerLock, calmDaytime, expect, itemCount, playerPosition, test } from "./helpers";
+import { acquirePointerLock, calmDaytime, expect, itemCount, playerPosition, readWorldSave, saveViaPauseMenu, test } from "./helpers";
 
 test("boots without errors and renders the world", async ({ gamePage: page }) => {
   await expect(page.locator(".game-canvas-wrap canvas")).toBeVisible();
@@ -181,10 +181,14 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   expect(storedId).toBe("grass");
 
   // Persist and reload: the chest block-entity survives in the per-world save.
-  await page.evaluate(() => {
-    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
-    localStorage.setItem(`minecraft_world_save_${session.worldId}`, JSON.stringify(window.__monecraft!.engine.serialize()));
-  });
+  // Saved through the real pause-menu path — saves live in IndexedDB now, so
+  // there is no synchronous localStorage write to fake.
+  await page.keyboard.press("Escape"); // close the chest panel (lock was released when it opened)
+  // Headless Chromium held a *forced* lock flag (acquirePointerLock's fallback),
+  // which the container-open release can't clear — drop it so Escape reaches
+  // the pause branch instead of reading as a lock exit.
+  await page.evaluate(() => window.__monecraft!.input.forcePointerLock(false));
+  await saveViaPauseMenu(page);
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
 
@@ -282,15 +286,12 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   const seed = await page.evaluate(() => window.__monecraft!.engine.state.world.seed);
   const positionBefore = await playerPosition(page);
 
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Save Game" }).click();
-  const saved = await page.evaluate(() => {
-    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
-    return localStorage.getItem(`minecraft_world_save_${session.worldId}`);
-  });
+  // The "Saved" toast now means the IndexedDB write durably committed.
+  await saveViaPauseMenu(page);
+  const saved = await readWorldSave(page);
   expect(saved).not.toBeNull();
-  expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(17);
+  expect(saved!.seed).toBe(seed);
+  expect(saved!.version).toBe(17);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });

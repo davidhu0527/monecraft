@@ -18,6 +18,7 @@ import VictoryScreen from "@/components/game/VictoryScreen";
 import XpBar from "@/components/game/XpBar";
 import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, ENCHANT_COST_LEVELS } from "@/lib/game/config";
 import type { Profile } from "@/lib/game/profiles";
+import type { SaveData } from "@/lib/game/types";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { takesDamage, usesInventory } from "@/lib/game/gameModes";
 import type { WorldMeta } from "@/lib/game/worlds";
@@ -30,6 +31,8 @@ import type { NetworkSession } from "@/lib/net/NetworkSession";
 type MinecraftGameProps = {
   world: WorldMeta;
   profile: Profile;
+  /** Preloaded by the shell's WorldSaveGate; null boots a fresh world from seed. */
+  initialSave: SaveData | null;
   /** A connected multiplayer session — this world lives on the server. */
   online?: NetworkSession;
   onQuitToWorlds: () => void;
@@ -38,7 +41,7 @@ type MinecraftGameProps = {
   onReloadWorld: () => void;
 };
 
-export default function MinecraftGame({ world, profile, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
+export default function MinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -119,7 +122,7 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
     touchMode,
     updateTouchSettings,
     unstuckNow
-  } = useMinecraftGame({ world, profile, online, onQuitToWorlds, onReloadWorld });
+  } = useMinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
     installUiTiles();

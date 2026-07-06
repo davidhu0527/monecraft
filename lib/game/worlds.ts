@@ -1,10 +1,11 @@
 /**
  * Worlds — the second level of the save hierarchy. Each world belongs to one
- * profile (`profileId`) and owns a single bundled SaveData blob under its own
- * `minecraft_world_save_<id>` key (read/written with the existing
- * lib/game/save.ts helpers). The world *index* — names, seeds, ordering — lives
- * in one versioned manifest blob; the heavy per-world saves stay separate so
- * the index reads cheaply.
+ * profile (`profileId`) and owns a single bundled SaveData blob, stored in
+ * IndexedDB keyed by world id (lib/game/saveStore.ts; legacy blobs migrate
+ * from their `minecraft_world_save_<id>` localStorage keys). The world
+ * *index* — names, seeds, ordering — lives in one versioned localStorage
+ * manifest blob; the heavy per-world saves stay separate so the index reads
+ * cheaply and synchronously during render.
  *
  * A world's `seed` is resolved once at creation and is the source of truth for
  * regeneration; `worldgenVersion` records the WORLDGEN_VERSION it was generated
@@ -62,7 +63,7 @@ export const MAX_SEED = 2147483647;
 
 export const DEFAULT_WORLDS_MANIFEST: WorldsManifest = { version: 1, worlds: [] };
 
-/** The per-world SaveData key handed to readSave/writeSave. */
+/** The per-world legacy localStorage key — the migration source and the store's fallback location. */
 export function worldSaveKey(worldId: string): string {
   return WORLD_SAVE_PREFIX + worldId;
 }
@@ -215,16 +216,27 @@ export function touchWorld(id: string, deps: ManifestDeps = {}): WorldsManifest 
   return next;
 }
 
+/**
+ * Fire-and-forget removal of a world's IndexedDB save record. A dynamic import
+ * keeps this manifest module free of an eager store dependency (it must stay
+ * importable server-side and under bun test, where the store just falls back);
+ * a failed cleanup leaves an orphaned record the index no longer references.
+ */
+function removeStoredSave(id: string): void {
+  void import("./saveStore").then(({ worldSaves }) => worldSaves.remove(id)).catch(() => {});
+}
+
 /** Removes a world from the index and deletes its save blob. */
 export function deleteWorld(id: string, storage: Storage = localStorage): WorldsManifest {
   const manifest = readWorlds(storage);
   const next: WorldsManifest = { version: 1, worlds: manifest.worlds.filter((w) => w.id !== id) };
   writeManifest(WORLDS_KEY, next, storage);
   try {
-    storage.removeItem(worldSaveKey(id));
+    storage.removeItem(worldSaveKey(id)); // a not-yet-migrated legacy blob
   } catch {
     // A failed blob cleanup just leaves an orphaned key; the index no longer references it.
   }
+  removeStoredSave(id);
   return next;
 }
 
@@ -236,10 +248,11 @@ export function deleteWorldsForProfile(profileId: string, storage: Storage = loc
   writeManifest(WORLDS_KEY, next, storage);
   for (const world of doomed) {
     try {
-      storage.removeItem(worldSaveKey(world.id));
+      storage.removeItem(worldSaveKey(world.id)); // a not-yet-migrated legacy blob
     } catch {
       // Orphaned blob; the index no longer references it.
     }
+    removeStoredSave(world.id);
   }
   return next;
 }

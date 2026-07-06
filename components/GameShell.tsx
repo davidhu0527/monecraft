@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import MinecraftGame from "@/components/MinecraftGame";
 import AccountProfileSelect from "@/components/menu/AccountProfileSelect";
 import AuthScreen from "@/components/menu/AuthScreen";
@@ -12,8 +12,9 @@ import { currentUser, onlineUsed, type OnlineUser } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { DEFAULT_SKIN_ID, isSkinId } from "@/lib/game/playerSkins";
 import { getProfile, setActiveProfile, type Profile } from "@/lib/game/profiles";
-import { createWorld, deleteWorld, getWorld, touchWorld, worldSaveKey, type WorldMeta } from "@/lib/game/worlds";
-import { writeSave } from "@/lib/game/save";
+import { createWorld, deleteWorld, getWorld, readWorlds, touchWorld, type WorldMeta } from "@/lib/game/worlds";
+import { requestPersistentStorage, worldSaves } from "@/lib/game/saveStore";
+import type { SaveData } from "@/lib/game/types";
 import { pullCloudSaveIfNewer } from "@/lib/game/cloudSaves";
 import { deleteOnlineWorld, requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
 import type { OnlineProfile } from "@/lib/online/profilesClient";
@@ -110,6 +111,35 @@ function writeSessionPointer(pointer: { profileId: string; worldId: string } | n
   }
 }
 
+/**
+ * Preloads a world's SaveData so the engine boot inside useMinecraftGame stays
+ * synchronous (IndexedDB reads are async; the mount callback can't await).
+ * Callers key this by world id + reload nonce: a Load/Reset remount re-runs
+ * the read, which the save store orders after the previous mount's enqueued
+ * write (read-your-writes). A read failure boots a fresh world from seed —
+ * the same total behavior readSave always had.
+ */
+function WorldSaveGate({ worldId, children }: { worldId: string; children: (save: SaveData | null) => ReactNode }) {
+  // Wrapped in an object so "loaded, but no save" (null) is distinct from "loading".
+  const [loaded, setLoaded] = useState<{ save: SaveData | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false; // StrictMode double-invoke / fast-unmount guard
+    worldSaves.read(worldId).then(
+      (save) => {
+        if (!cancelled) setLoaded({ save });
+      },
+      () => {
+        if (!cancelled) setLoaded({ save: null });
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [worldId]);
+  if (!loaded) return <div className="menu-screen" />;
+  return <>{children(loaded.save)}</>;
+}
+
 export default function GameShell() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<Screen>({ name: "welcome" });
@@ -169,7 +199,7 @@ export default function GameShell() {
       setConnecting(world.name);
       try {
         const decision = await pullCloudSaveIfNewer(world.cloudId);
-        if (decision.adopt) writeSave(worldSaveKey(worldId), decision.save);
+        if (decision.adopt) await worldSaves.write(worldId, decision.save);
       } catch {
         // Offline or a bad blob → fall through and play the local copy.
       } finally {
@@ -202,7 +232,7 @@ export default function GameShell() {
     setConnecting(world.name);
     try {
       const decision = await pullCloudSaveIfNewer(world.id);
-      if (decision.adopt) writeSave(worldSaveKey(`cloud:${world.id}`), decision.save);
+      if (decision.adopt) await worldSaves.write(`cloud:${world.id}`, decision.save);
     } catch {
       // Offline or a bad blob → play this device's cache (or a fresh world).
     } finally {
@@ -266,6 +296,12 @@ export default function GameShell() {
   useEffect(() => {
     installUiTiles(); // the menu chrome shares the in-game noise tiles
     migrateLegacySave();
+    // Sweep any legacy localStorage save blobs into IndexedDB (idempotent,
+    // copy-then-delete; picks up what migrateLegacySave just wrote too), and
+    // ask for eviction protection — but only for returning players, so a
+    // first-time visitor never sees Firefox's permission prompt.
+    void worldSaves.migrateAll().catch(() => {});
+    if (readWorlds().worlds.length > 0) requestPersistentStorage();
     // Resume the tab's world if one was being played and still exists.
     const pointer = readSessionPointer();
     const resume: Screen | null =
@@ -317,21 +353,25 @@ export default function GameShell() {
     // Both exist in normal flow; a cross-tab delete drops us back to a menu.
     if (profile && world) {
       return (
-        <MinecraftGame
-          key={`${world.id}:${reloadNonce}`}
-          world={world}
-          profile={profile}
-          onQuitToWorlds={() => {
-            writeSessionPointer(null);
-            setScreen({ name: "world-select", profileId: profile.id });
-          }}
-          onDeleteWorld={() => {
-            deleteWorld(world.id); // hardcore Game Over: erase the dead world and leave
-            writeSessionPointer(null);
-            setScreen({ name: "world-select", profileId: profile.id });
-          }}
-          onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
-        />
+        <WorldSaveGate key={`${world.id}:${reloadNonce}`} worldId={world.id}>
+          {(save) => (
+            <MinecraftGame
+              world={world}
+              profile={profile}
+              initialSave={save}
+              onQuitToWorlds={() => {
+                writeSessionPointer(null);
+                setScreen({ name: "world-select", profileId: profile.id });
+              }}
+              onDeleteWorld={() => {
+                deleteWorld(world.id); // hardcore Game Over: erase the dead world and leave
+                writeSessionPointer(null);
+                setScreen({ name: "world-select", profileId: profile.id });
+              }}
+              onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+            />
+          )}
+        </WorldSaveGate>
       );
     }
   }
@@ -339,28 +379,27 @@ export default function GameShell() {
   if (screen.name === "play-cloud") {
     const backToWorlds: Screen = { name: "online-worlds", profile: screen.profile };
     return (
-      <MinecraftGame
-        key={`cloud:${screen.world.id}:${reloadNonce}`}
-        world={cloudWorldMeta(screen.world, screen.profile.id)}
-        profile={profileFromOnline(screen.profile)}
-        onQuitToWorlds={() => setScreen(backToWorlds)}
-        onDeleteWorld={() => {
-          // Hardcore game-over: delete the cloud world (row + blob), then this
-          // device's save cache — only after the server confirmed, so a failed
-          // delete (offline) leaves a still-playable world in the list rather
-          // than a hollow one that re-downloads its own game-over.
-          void deleteOnlineWorld(screen.world.id).then((deleted) => {
-            if (!deleted) return;
-            try {
-              localStorage.removeItem(worldSaveKey(`cloud:${screen.world.id}`));
-            } catch {
-              // Cache cleanup only — never fatal.
-            }
-          });
-          setScreen(backToWorlds);
-        }}
-        onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
-      />
+      <WorldSaveGate key={`cloud:${screen.world.id}:${reloadNonce}`} worldId={`cloud:${screen.world.id}`}>
+        {(save) => (
+          <MinecraftGame
+            world={cloudWorldMeta(screen.world, screen.profile.id)}
+            profile={profileFromOnline(screen.profile)}
+            initialSave={save}
+            onQuitToWorlds={() => setScreen(backToWorlds)}
+            onDeleteWorld={() => {
+              // Hardcore game-over: delete the cloud world (row + blob), then this
+              // device's save cache — only after the server confirmed, so a failed
+              // delete (offline) leaves a still-playable world in the list rather
+              // than a hollow one that re-downloads its own game-over.
+              void deleteOnlineWorld(screen.world.id).then((deleted) => {
+                if (deleted) void worldSaves.remove(`cloud:${screen.world.id}`).catch(() => {});
+              });
+              setScreen(backToWorlds);
+            }}
+            onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+          />
+        )}
+      </WorldSaveGate>
     );
   }
 
@@ -372,6 +411,7 @@ export default function GameShell() {
         key={`online:${screen.world.id}`}
         world={onlineWorldMeta(screen.world, screen.profile.id)}
         profile={screen.profile}
+        initialSave={null} // the server owns the world; nothing is read locally
         online={screen.session}
         onQuitToWorlds={() => setScreen(backToWorlds)}
         onDeleteWorld={() => {
