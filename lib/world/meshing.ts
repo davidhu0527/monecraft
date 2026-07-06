@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ATLAS_COLUMNS, ATLAS_ROWS, tileIndexFor } from "./atlas";
 import { BlockId } from "./blocks";
 import { doorBounds, isDoorBlock } from "./doors";
+import { isRedstoneOverlay, redstoneBounds } from "./redstone";
 import { MAX_LIGHT } from "./lighting";
 import { VoxelWorld } from "./voxelWorld";
 
@@ -214,7 +215,19 @@ function buildGeometryBuffers(
     return Math.max(0.8, 1 - occ * 0.06);
   };
 
-  const pushBlockCuboid = (target: GeometryBuffers, block: number, x: number, y: number, z: number, minX: number, maxX: number, minZ: number, maxZ: number) => {
+  const pushBlockCuboid = (
+    target: GeometryBuffers,
+    block: number,
+    x: number,
+    y: number,
+    z: number,
+    minX: number,
+    maxX: number,
+    minY: number,
+    maxY: number,
+    minZ: number,
+    maxZ: number
+  ) => {
     for (const face of FACE_DEFS) {
       const nx = face.dir[0];
       const ny = face.dir[1];
@@ -222,7 +235,7 @@ function buildGeometryBuffers(
       const color = materialTint(ny);
       const light = sampleFaceLight(x + nx, y + ny, z + nz);
       const [u0, v0, u1, v1] = tileUV(block, ny);
-      const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + cy, z + (cz ? maxZ : minZ)] as const);
+      const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + (cy ? maxY : minY), z + (cz ? maxZ : minZ)] as const);
       const [a, b, c, d] = corners;
       pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
       pushVertex(target, ...b, nx, ny, nz, color, u0, v0, light);
@@ -241,7 +254,15 @@ function buildGeometryBuffers(
         const target = splitGlass && block === BlockId.Glass ? glass : opaque;
         if (isDoorBlock(block)) {
           const bounds = doorBounds(block)!;
-          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, bounds.minZ, bounds.maxZ);
+          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, 0, 1, bounds.minZ, bounds.maxZ);
+          continue;
+        }
+        // Redstone overlays are small floor-mounted boxes (flat wire, a lever
+        // base, a torch stub) — like doors, they mesh as inset cuboids with no
+        // neighbor culling either way.
+        if (isRedstoneOverlay(block)) {
+          const bounds = redstoneBounds(block)!;
+          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, bounds.minZ, bounds.maxZ);
           continue;
         }
         for (const face of FACE_DEFS) {
@@ -251,7 +272,7 @@ function buildGeometryBuffers(
           const neighbor = world.get(x + nx, y + ny, z + nz);
           if (block === BlockId.Water || block === BlockId.Glass) {
             if (neighbor === block) continue;
-          } else if (neighbor !== BlockId.Glass && !isDoorBlock(neighbor) && world.isSolid(x + nx, y + ny, z + nz)) {
+          } else if (neighbor !== BlockId.Glass && !isDoorBlock(neighbor) && !isRedstoneOverlay(neighbor) && world.isSolid(x + nx, y + ny, z + nz)) {
             continue;
           }
 

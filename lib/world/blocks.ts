@@ -83,7 +83,25 @@ export const enum BlockId {
   Kelp = 55,
   // Decorative reef blocks scattered on the ocean floor (worldgen only).
   CoralPink = 56,
-  CoralBlue = 57
+  CoralBlue = 57,
+  // Redstone-lite (see redstone.ts). Power state is id PARITY — even = off,
+  // odd = on (`b | 1` / `b & ~1`) — so toggles ride the save diff like doors.
+  // Ids 58-67 are floor-mounted "overlays": non-cube, non-colliding shapes
+  // meshed via redstoneBounds. The lamp pair is a plain full cube.
+  RedstoneWire = 58,
+  RedstoneWireOn = 59,
+  Lever = 60,
+  LeverOn = 61,
+  RedstoneButton = 62,
+  RedstoneButtonOn = 63,
+  PressurePlate = 64,
+  PressurePlateOn = 65,
+  // The torch item places the LIT variant; the power pass turns it off when
+  // its support block is powered (the inverter rule).
+  RedstoneTorchOff = 66,
+  RedstoneTorch = 67,
+  RedstoneLamp = 68,
+  RedstoneLampOn = 69
 }
 
 export enum BiomeId {
@@ -128,7 +146,13 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Grindstone]: 0x8a7a5c,
   [BlockId.Kelp]: 0x3f7a4a,
   [BlockId.CoralPink]: 0xd9739c,
-  [BlockId.CoralBlue]: 0x4f86c8
+  [BlockId.CoralBlue]: 0x4f86c8,
+  [BlockId.RedstoneWire]: 0xb03a2a,
+  [BlockId.Lever]: 0x8a8f96,
+  [BlockId.RedstoneButton]: 0x8f9296,
+  [BlockId.PressurePlate]: 0xbe965d,
+  [BlockId.RedstoneTorch]: 0xe0503a,
+  [BlockId.RedstoneLamp]: 0xc9a24a
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -202,5 +226,18 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.Kelp]: [0.16, 0.4, 0.24],
   // Reef corals: a branching pattern over the base color (painted in atlas.ts).
   [BlockId.CoralPink]: [0.8, 0.42, 0.58],
-  [BlockId.CoralBlue]: [0.28, 0.5, 0.76]
+  [BlockId.CoralBlue]: [0.28, 0.5, 0.76],
+  // Redstone components (painted in atlas.ts); the on variants glow brighter.
+  [BlockId.RedstoneWire]: [0.35, 0.1, 0.08],
+  [BlockId.RedstoneWireOn]: [0.75, 0.16, 0.1],
+  [BlockId.Lever]: [0.45, 0.46, 0.48],
+  [BlockId.LeverOn]: [0.45, 0.46, 0.48],
+  [BlockId.RedstoneButton]: [0.5, 0.52, 0.54],
+  [BlockId.RedstoneButtonOn]: [0.44, 0.46, 0.48],
+  [BlockId.PressurePlate]: [0.7, 0.56, 0.35],
+  [BlockId.PressurePlateOn]: [0.62, 0.5, 0.31],
+  [BlockId.RedstoneTorchOff]: [0.3, 0.12, 0.1],
+  [BlockId.RedstoneTorch]: [0.8, 0.22, 0.14],
+  [BlockId.RedstoneLamp]: [0.45, 0.35, 0.2],
+  [BlockId.RedstoneLampOn]: [0.95, 0.78, 0.4]
 };

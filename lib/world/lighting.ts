@@ -1,4 +1,5 @@
 import { BlockId } from "./blocks";
+import { isRedstoneOverlay } from "./redstone";
 import { VoxelWorld } from "./voxelWorld";
 
 /**
@@ -47,6 +48,10 @@ const DOWN = 3;
  * OPAQUE — a solid block casts shadow until classified otherwise.
  */
 export function opacity(block: BlockId): number {
+  // Redstone overlays (wire, lever, button, plate, torch) are tiny shapes far
+  // from filling their cell — they must not black it out. The lamp is a full
+  // cube and stays default-opaque (an opaque emitter, like lava).
+  if (isRedstoneOverlay(block)) return 0;
   switch (block) {
     case BlockId.Air:
     case BlockId.Glass:
@@ -75,6 +80,13 @@ export function emission(block: BlockId): number {
     case BlockId.Torch:
       return 14;
     case BlockId.Lava:
+      return MAX_LIGHT;
+    // A lit redstone torch glows dimmer than a real torch; the powered lamp is
+    // a full-strength light source. Their off variants emit nothing — a power
+    // toggle swaps the id, and applyEdit re-derives emission at the cell.
+    case BlockId.RedstoneTorch:
+      return 7;
+    case BlockId.RedstoneLampOn:
       return MAX_LIGHT;
     default:
       return 0;

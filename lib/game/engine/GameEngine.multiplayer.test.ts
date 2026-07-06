@@ -5,6 +5,7 @@ import { frameInput } from "@/lib/game/engine/testSupport";
 import { LOCAL_PLAYER_ID, type MobState } from "@/lib/game/engine/state";
 import { allEligiblePlayersSleeping, nearestTargetablePlayer } from "@/lib/game/engine/players";
 import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
+import { seedRedstoneCells } from "@/lib/game/engine/systems/redstone";
 import { BlockId } from "@/lib/world";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 
@@ -445,6 +446,41 @@ describe("event attribution", () => {
     const swung = engine.consumeEvents().find((e) => e.type === "attackSwung");
     expect(swung).toBeDefined();
     expect(swung?.playerId).toBeUndefined();
+  });
+});
+
+describe("redstone online", () => {
+  test("a server engine's power pass rides the block journal like any other edit", () => {
+    const engine = makeEngine("server");
+    calm(engine);
+    const { state } = engine;
+    const ground = 30;
+    state.blockChanges.set(20, ground - 1, 20, BlockId.Stone);
+    state.blockChanges.set(21, ground - 1, 20, BlockId.Stone);
+    state.blockChanges.set(20, ground, 20, BlockId.LeverOn);
+    state.blockChanges.set(21, ground, 20, BlockId.RedstoneWire);
+    seedRedstoneCells(state);
+    state.blockChanges.drainEdits(); // the setup is scenery; drain it like the room does
+
+    engine.step(0.2); // past REDSTONE_TICK_SECONDS — the pass flips the wire on
+    const edits = state.blockChanges.drainEdits();
+    expect(edits).toContainEqual([state.world.index(21, ground, 20), BlockId.RedstoneWireOn]);
+  });
+
+  test("a replica never simulates redstone — the server's deltas own it", () => {
+    const replica = new GameEngine({ seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 }, authority: "local", replica: true });
+    const { state } = replica;
+    const ground = 30;
+    state.blockChanges.set(20, ground - 1, 20, BlockId.Stone);
+    state.blockChanges.set(21, ground - 1, 20, BlockId.Stone);
+    state.blockChanges.set(20, ground, 20, BlockId.LeverOn);
+    state.blockChanges.set(21, ground, 20, BlockId.RedstoneWire);
+    seedRedstoneCells(state);
+    state.blockChanges.drainEditsDetailed();
+
+    for (let t = 0; t < 1; t += 0.05) replica.step(0.05, frameInput());
+    expect(state.world.get(21, ground, 20)).toBe(BlockId.RedstoneWire); // untouched
+    expect(state.blockChanges.drainEditsDetailed()).toHaveLength(0);
   });
 });
 

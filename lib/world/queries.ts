@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { BlockId } from "./blocks";
 import { VoxelWorld } from "./voxelWorld";
 import { doorBounds, isDoorBlock } from "./doors";
+import { isRedstoneOverlay } from "./redstone";
 
 export type RaycastResult = {
   hit: THREE.Vector3;
@@ -143,6 +144,9 @@ export function collidesAt(world: VoxelWorld, position: THREE.Vector3, halfWidth
       for (let x = minX; x <= maxX; x += 1) {
         const block = world.get(x, y, z);
         if (!world.isSolid(x, y, z)) continue;
+        // Redstone overlays never collide — you walk over wire and plates
+        // (feet occupying the plate's cell is exactly what detection needs).
+        if (isRedstoneOverlay(block)) continue;
         if (!isDoorBlock(block)) return true;
         const bounds = doorBounds(block)!;
         const bodyMinX = position.x - halfWidth + eps;

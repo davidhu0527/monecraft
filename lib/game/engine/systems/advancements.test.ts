@@ -229,7 +229,8 @@ describe("evaluateAdvancements", () => {
       { type: "enchanted", enchant: "sharpness" },
       { type: "drankPotion" },
       { type: "sleepStarted" },
-      { type: "treasureUnearthed" }
+      { type: "treasureUnearthed" },
+      { type: "leverToggled", on: true }
     );
     const unlocked = new Set(evaluateAdvancements(state));
     for (const advancement of ADVANCEMENTS) expect(unlocked.has(advancement.id)).toBe(true);

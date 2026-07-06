@@ -200,6 +200,62 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           else c = tone(base, 0.95 + n * 0.12);
           if (!state.upper && x >= 11 && x <= 12 && y >= 5 && y <= 6) c = tone([0.82, 0.72, 0.36], 0.9 + n * 0.15);
         }
+        if (block === BlockId.RedstoneWire || block === BlockId.RedstoneWireOn) {
+          // A dust trail crossing the tile on a dark bed; the on variant reads
+          // bright signal-red. The mesh is a flat overlay, so the top face is
+          // what players mostly see.
+          const lit = block === BlockId.RedstoneWireOn;
+          const onTrail = (x >= 6 && x <= 9) || (y >= 6 && y <= 9);
+          if (onTrail) c = lit ? tone([0.95, 0.22, 0.12], 0.82 + n * 0.35) : tone([0.45, 0.12, 0.08], 0.85 + n * 0.25);
+          else c = tone([0.16, 0.14, 0.13], 0.9 + n * 0.15);
+        }
+        if (block === BlockId.Lever || block === BlockId.LeverOn) {
+          // A cobblestone base with a wooden handle; the on state tips the
+          // handle to the other side and lights a red fleck on the base top.
+          const on = block === BlockId.LeverOn;
+          const handleX = on ? 10 : 5;
+          const onHandle = Math.abs(x - handleX) <= 1 && y >= 3 && y <= 11;
+          if (face === "top") {
+            c = tone([0.45, 0.46, 0.48], 0.85 + n * 0.25);
+            if (on && Math.abs(x - 7.5) + Math.abs(y - 7.5) < 3) c = tone([0.9, 0.25, 0.15], 0.9 + n * 0.2);
+          } else if (y >= 12) c = tone([0.45, 0.46, 0.48], 0.85 + n * 0.25);
+          else if (onHandle) c = tone([0.55, 0.38, 0.2], 0.85 + n * 0.2);
+          else c = tone([0.1, 0.1, 0.12], 1);
+        }
+        if (block === BlockId.RedstoneButton || block === BlockId.RedstoneButtonOn) {
+          // A small stone pad with a beveled rim; pressed reads darker (and
+          // the pressed mesh sits lower).
+          const pressed = block === BlockId.RedstoneButtonOn;
+          c = tone([0.5, 0.52, 0.54], (pressed ? 0.72 : 0.9) + n * 0.18);
+          if (x < 1 || x > 14 || y < 1 || y > 14) c = tone([0.3, 0.31, 0.33], 0.9 + n * 0.1);
+        }
+        if (block === BlockId.PressurePlate || block === BlockId.PressurePlateOn) {
+          // A plank pad with grain and a beveled rim; pressed reads darker.
+          const pressed = block === BlockId.PressurePlateOn;
+          c = tone([0.7, 0.56, 0.35], (pressed ? 0.75 : 0.92) + n * 0.15);
+          if ((x + y) % 4 === 0) c = tone([0.6, 0.47, 0.29], pressed ? 0.75 : 0.9);
+          if (x < 2 || x > 13 || y < 2 || y > 13) c = tone([0.5, 0.4, 0.25], 0.85 + n * 0.1);
+        }
+        if (block === BlockId.RedstoneTorchOff || block === BlockId.RedstoneTorch) {
+          // The torch motif with a redstone tip: bright red when lit, a dead
+          // crimson knob when its support is powered (the inverter's off state).
+          const lit = block === BlockId.RedstoneTorch;
+          const onStick = x >= 7 && x <= 8 && y >= 6;
+          const tip = x >= 6 && x <= 9 && y <= 6 && Math.abs(x - 7.5) + y * 0.5 < 4;
+          if (face === "top") c = lit ? tone([1, 0.35, 0.2], 0.8 + n * 0.5) : tone([0.3, 0.1, 0.08], 0.9 + n * 0.2);
+          else if (tip) c = lit ? tone([0.95, 0.28, 0.15], 0.78 + n * 0.5) : tone([0.28, 0.09, 0.07], 0.9 + n * 0.2);
+          else if (onStick) c = tone([0.55, 0.38, 0.2], 0.85 + n * 0.2);
+          else c = tone([0.05, 0.05, 0.07], 1);
+        }
+        if (block === BlockId.RedstoneLamp || block === BlockId.RedstoneLampOn) {
+          // A glowstone-style lattice: a dark frame over an ochre core that
+          // brightens to a saturated glow when powered — the emitted block
+          // light (emission 15) does the rest of the glowing.
+          const lit = block === BlockId.RedstoneLampOn;
+          const frame = x % 5 === 0 || y % 5 === 0;
+          if (frame) c = tone([0.25, 0.2, 0.14], 0.9 + n * 0.2);
+          else c = lit ? tone([1, 0.85, 0.42], 0.85 + n * 0.3) : tone([0.5, 0.4, 0.22], 0.85 + n * 0.25);
+        }
 
         ctx.fillStyle = rgb(c);
         ctx.fillRect(ox + x, oy + y, 1, 1);

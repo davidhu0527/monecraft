@@ -79,7 +79,20 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Sapling]: 1,
   [BlockId.Kelp]: 1,
   [BlockId.CoralPink]: 2,
-  [BlockId.CoralBlue]: 2
+  [BlockId.CoralBlue]: 2,
+  // Redstone components snap off instantly; the lamp breaks like glass-ish gear.
+  [BlockId.RedstoneWire]: 1,
+  [BlockId.RedstoneWireOn]: 1,
+  [BlockId.Lever]: 1,
+  [BlockId.LeverOn]: 1,
+  [BlockId.RedstoneButton]: 1,
+  [BlockId.RedstoneButtonOn]: 1,
+  [BlockId.PressurePlate]: 1,
+  [BlockId.PressurePlateOn]: 1,
+  [BlockId.RedstoneTorchOff]: 1,
+  [BlockId.RedstoneTorch]: 1,
+  [BlockId.RedstoneLamp]: 3,
+  [BlockId.RedstoneLampOn]: 3
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -109,6 +122,14 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
   { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
+  // Redstone-lite components. The dust item places wire; the torch item places
+  // the LIT variant (the power pass turns it off on a powered support).
+  { id: "redstone", label: "Redstone Dust", kind: "block", blockId: BlockId.RedstoneWire },
+  { id: "lever", label: "Lever", kind: "block", blockId: BlockId.Lever },
+  { id: "stone_button", label: "Stone Button", kind: "block", blockId: BlockId.RedstoneButton },
+  { id: "pressure_plate", label: "Pressure Plate", kind: "block", blockId: BlockId.PressurePlate },
+  { id: "redstone_torch", label: "Redstone Torch", kind: "block", blockId: BlockId.RedstoneTorch },
+  { id: "redstone_lamp", label: "Redstone Lamp", kind: "block", blockId: BlockId.RedstoneLamp },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -399,6 +420,19 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.CoralPink]: "coral_pink",
   [BlockId.CoralBlue]: "coral_blue",
   [BlockId.DoorNorthLower]: "door",
+  // Redstone components: on and off variants both drop the one item.
+  [BlockId.RedstoneWire]: "redstone",
+  [BlockId.RedstoneWireOn]: "redstone",
+  [BlockId.Lever]: "lever",
+  [BlockId.LeverOn]: "lever",
+  [BlockId.RedstoneButton]: "stone_button",
+  [BlockId.RedstoneButtonOn]: "stone_button",
+  [BlockId.PressurePlate]: "pressure_plate",
+  [BlockId.PressurePlateOn]: "pressure_plate",
+  [BlockId.RedstoneTorchOff]: "redstone_torch",
+  [BlockId.RedstoneTorch]: "redstone_torch",
+  [BlockId.RedstoneLamp]: "redstone_lamp",
+  [BlockId.RedstoneLampOn]: "redstone_lamp",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",

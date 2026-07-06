@@ -36,6 +36,7 @@ import {
   SLEEP_SOUND,
   CHEST_OPEN_SOUND,
   SMELT_SOUND,
+  SWITCH_CLICK_SOUND,
   TILL_SOUND,
   VEHICLE_DENIED_SOUND,
   VICTORY_SOUND,
@@ -325,6 +326,17 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "doorToggled":
           backend.play(PLACE_SOUNDS.wood, { gain: event.open ? 0.8 : 1 });
+          break;
+        // Redstone switches share one click; off states play slightly softer.
+        // Lamp toggles stay silent — the light change is the feedback.
+        case "leverToggled":
+          backend.play(SWITCH_CLICK_SOUND, { gain: event.on ? 1 : 0.8 });
+          break;
+        case "buttonPressed":
+          backend.play(SWITCH_CLICK_SOUND);
+          break;
+        case "plateToggled":
+          backend.play(SWITCH_CLICK_SOUND, { gain: event.on ? 0.9 : 0.7 });
           break;
         case "mobFed":
           backend.play(MOB_FED_SOUND);

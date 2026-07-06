@@ -207,6 +207,15 @@ export const TNT_FUSE_SECONDS = 2.5; // delay between igniting and detonating
 export const TNT_CHAIN_FUSE_MIN_SECONDS = 0.1;
 export const TNT_CHAIN_FUSE_MAX_SECONDS = 0.35;
 
+// Redstone-lite (see engine/systems/redstone.ts)
+// The fixed power-pass cadence: lower = snappier circuits but more remesh/net
+// traffic from oscillators (a torch clock's period is 2x this).
+export const REDSTONE_TICK_SECONDS = 0.1;
+// Max wire cells a signal travels from a source ("the wire runs out").
+export const REDSTONE_WIRE_RANGE = 15;
+// How long a pressed button stays on before popping back.
+export const REDSTONE_BUTTON_PRESS_SECONDS = 1.0;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;

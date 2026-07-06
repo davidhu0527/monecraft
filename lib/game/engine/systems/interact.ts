@@ -22,13 +22,14 @@ import { findAimedMobIndex } from "./combat";
 import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { primeTnt } from "./explosion";
 import { lookDirection } from "./playerMotion";
+import { pressButton, toggleLever } from "./redstone";
 import { growTreeAt } from "./treeGrowth";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil" | "grindstone";
+export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil" | "grindstone" | "lever" | "button";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
@@ -38,6 +39,10 @@ export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Anvil]: "anvil",
   [BlockId.Grindstone]: "grindstone",
   [BlockId.Chest]: "chest",
+  [BlockId.Lever]: "lever",
+  [BlockId.LeverOn]: "lever",
+  [BlockId.RedstoneButton]: "button",
+  [BlockId.RedstoneButtonOn]: "button",
   [BlockId.DoorNorthLower]: "door",
   [BlockId.DoorNorthUpper]: "door",
   [BlockId.DoorEastLower]: "door",
@@ -83,6 +88,8 @@ export function tryInteractBlock(state: GameState, player: PlayerState, emit: Em
   if (kind === "grindstone") return interactGrindstone(player, emit);
   if (kind === "chest") return interactChest(state, player, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "door") return interactDoor(state, emit, result.hit.x, result.hit.y, result.hit.z);
+  if (kind === "lever") return toggleLever(state, emit, result.hit.x, result.hit.y, result.hit.z);
+  if (kind === "button") return pressButton(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
 }
 

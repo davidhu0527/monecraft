@@ -70,6 +70,47 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "grindstone", count: 1 }
   },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
+  // Redstone-lite. Dust is craft-only for now (gold as the conductor gates
+  // circuits behind a tier-3 pick); redstone ORE worldgen is deferred to a
+  // future WORLDGEN_VERSION batch.
+  {
+    id: "redstone",
+    label: "1 Gold Ore + 1 Coal -> 8 Redstone Dust",
+    cost: [
+      { slotId: "gold_ore", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "redstone", count: 8 }
+  },
+  {
+    id: "lever",
+    label: "1 Cobble + 1 Planks -> Lever",
+    cost: [
+      { slotId: "cobble", count: 1 },
+      { slotId: "planks", count: 1 }
+    ],
+    result: { slotId: "lever", count: 1 }
+  },
+  { id: "stone_button", label: "1 Cobble -> 2 Stone Button", cost: [{ slotId: "cobble", count: 1 }], result: { slotId: "stone_button", count: 2 } },
+  { id: "pressure_plate", label: "2 Planks -> Pressure Plate", cost: [{ slotId: "planks", count: 2 }], result: { slotId: "pressure_plate", count: 1 } },
+  {
+    id: "redstone_torch",
+    label: "1 Redstone Dust + 1 Wood -> 2 Redstone Torch",
+    cost: [
+      { slotId: "redstone", count: 1 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "redstone_torch", count: 2 }
+  },
+  {
+    id: "redstone_lamp",
+    label: "4 Redstone Dust + 2 Glass -> Redstone Lamp",
+    cost: [
+      { slotId: "redstone", count: 4 },
+      { slotId: "glass", count: 2 }
+    ],
+    result: { slotId: "redstone_lamp", count: 1 }
+  },
   {
     id: "torch",
     label: "1 Coal + 1 Wood -> 4 Torch",

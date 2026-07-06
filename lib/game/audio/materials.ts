@@ -64,7 +64,19 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.Grindstone]: "stone",
   [BlockId.Kelp]: "grass",
   [BlockId.CoralPink]: "stone",
-  [BlockId.CoralBlue]: "stone"
+  [BlockId.CoralBlue]: "stone",
+  [BlockId.RedstoneWire]: "sand", // dust
+  [BlockId.RedstoneWireOn]: "sand",
+  [BlockId.Lever]: "wood",
+  [BlockId.LeverOn]: "wood",
+  [BlockId.RedstoneButton]: "stone",
+  [BlockId.RedstoneButtonOn]: "stone",
+  [BlockId.PressurePlate]: "stone",
+  [BlockId.PressurePlateOn]: "stone",
+  [BlockId.RedstoneTorchOff]: "wood",
+  [BlockId.RedstoneTorch]: "wood",
+  [BlockId.RedstoneLamp]: "glass",
+  [BlockId.RedstoneLampOn]: "glass"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

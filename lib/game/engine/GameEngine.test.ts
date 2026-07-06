@@ -44,6 +44,7 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillWorldgenChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
+import { seedRedstoneCells } from "@/lib/game/engine/systems/redstone";
 import type { FrameInput, GameEvent } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -976,6 +977,112 @@ describe("doors", () => {
     expect(mob.position.z).toBe(beforeZ);
     expect(state.world.get(20, ground, 20)).toBe(BlockId.DoorNorthLower);
     expect(state.world.get(20, ground + 1, 20)).toBe(BlockId.DoorNorthUpper);
+  });
+});
+
+describe("redstone", () => {
+  /** Builds a supported lever→wire→lamp line at eye height in front of the player, aimed at the lever. */
+  function setAimedCircuit(engine: GameEngine): { x: number; y: number; z: number } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    // Support column under each overlay (the tick pops orphans otherwise).
+    for (let dz = 0; dz >= -2; dz -= 1) state.blockChanges.set(x, y - 1, z + dz, BlockId.Stone);
+    state.blockChanges.set(x, y, z, BlockId.Lever);
+    state.blockChanges.set(x, y, z - 1, BlockId.RedstoneWire);
+    state.blockChanges.set(x, y, z - 2, BlockId.RedstoneLamp);
+    seedRedstoneCells(state); // as the boot path does after applySavedChanges
+    return { x, y, z };
+  }
+
+  test("right-clicking a lever toggles it and the circuit lights the lamp through real steps", () => {
+    const engine = makeEngine();
+    const lever = setAimedCircuit(engine);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" }); // right-click → interact wins over place
+    expect(engine.state.world.get(lever.x, lever.y, lever.z)).toBe(BlockId.LeverOn);
+    expect(engine.consumeEvents()).toContainEqual({ type: "leverToggled", on: true });
+
+    run(engine, 0.5); // several power passes
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 1)).toBe(BlockId.RedstoneWireOn);
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLampOn);
+
+    engine.dispatch({ type: "placeBlock" }); // flip it back
+    run(engine, 0.5);
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 1)).toBe(BlockId.RedstoneWire);
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLamp);
+  });
+
+  test("circuit state persists through the ordinary block-change save and re-arms on boot", () => {
+    const engine = makeEngine();
+    const lever = setAimedCircuit(engine);
+    engine.dispatch({ type: "placeBlock" });
+    run(engine, 0.5);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.world.get(lever.x, lever.y, lever.z)).toBe(BlockId.LeverOn);
+    expect(restored.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLampOn);
+    // The boot seed recovered the cells: the restored circuit still simulates.
+    restored.state.blockChanges.set(lever.x, lever.y, lever.z, BlockId.Lever);
+    run(restored, 0.5);
+    expect(restored.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLamp);
+  });
+
+  test("an overlay refuses placement without solid support and refunds the item", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 3;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 3.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    // A floating stone two cells out: the raycast's previous cell hangs in air.
+    state.blockChanges.set(x, y, z, BlockId.Stone);
+    state.blockChanges.set(x, y - 1, z + 1, BlockId.Air);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("redstone", 4);
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(state.world.get(x, y, z + 1)).toBe(BlockId.Air); // refused
+    expect(state.inventory[state.selectedSlot].count).toBe(4); // refunded
+  });
+
+  test("breaking the support block pops the wire above and drops its item", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(x, y, z, BlockId.Dirt); // bare-hand mineable support (the aimed block)
+    state.blockChanges.set(x, y + 1, z, BlockId.RedstoneWire);
+    seedRedstoneCells(state);
+    const before = countsById(state.inventory).get("redstone") ?? 0;
+
+    run(engine, 5, input({ mineHeld: true }));
+    expect(state.world.get(x, y, z)).toBe(BlockId.Air);
+    expect(state.world.get(x, y + 1, z)).toBe(BlockId.Air);
+    expect(countsById(state.inventory).get("redstone")).toBe(before + 1);
   });
 });
 

@@ -492,6 +492,33 @@ half to open or close the whole door. Closed doors block players and mobs; open
 doors rotate against their hinge so you can pass. Mobs cannot open or close doors.
 Breaking either half removes the whole door and returns one door item.
 
+## Redstone
+
+Build **power circuits** that open doors, light lamps, and set off TNT. Craft
+**Redstone Dust** from **1 gold ore + 1 coal** (→ 8 dust — you'll need a
+sliver-tier pickaxe to reach gold), then wire up:
+
+- **Sources** make power: a **lever** (right-click to toggle), a **stone button**
+  (right-click for a ~1-second pulse), a **pressure plate** (press by standing on
+  it — mobs trigger plates too, so traps work), and a **redstone torch** (always
+  on... see below).
+- **Redstone dust** places as **wire**: a flat trail that carries power up to
+  **15 blocks** from a source, climbing single-block steps. Powered wire glows
+  red. Wire, levers, buttons, plates, and torches all mount on top of a solid
+  block and pop off (dropping their item) if you break the block under them.
+- **Consumers** react to power: a **door** next to a powered wire is forced open
+  (and closes when the power drops — you can still open/close it by hand in
+  between), **TNT** ignites its fuse, and the new **redstone lamp**
+  (4 dust + 2 glass) lights up like a torch you can switch.
+
+The **redstone torch** (1 dust + 1 wood → 2) is the clever piece: it powers its
+neighbors like a tiny always-on source, **unless the block it stands on is
+powered — then it turns off**. That inversion is a **NOT gate**: lever → wire →
+torch's base block, and the torch's output is the opposite of the lever. Feed a
+torch's output back to its own base through a wire loop and it blinks — a
+**clock** for flashing lamps. Circuits update on a fixed ~0.1 s tick, so signals
+ripple visibly through long contraptions.
+
 ## Storage
 
 Your pack only holds 36 slots, so build **chests** to stash the overflow. Craft a

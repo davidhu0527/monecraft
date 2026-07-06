@@ -58,7 +58,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**74 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**80 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -71,24 +71,30 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 
 ### Building & materials
 
-| Result             | Ingredients              |
-| ------------------ | ------------------------ |
-| 4 Planks           | 2 Wood                   |
-| 2 Glass            | 4 Sand                   |
-| 2 Brick            | 2 Dirt + 2 Stone         |
-| 1 Furnace          | 8 Cobble                 |
-| 1 Chest            | 8 Planks                 |
-| 1 Brewing Stand    | 3 Cobble + 1 Gold Ore    |
-| 1 Enchanting Table | 2 Diamond Ore + 4 Cobble |
-| 1 Anvil            | 3 Gold Ore + 4 Cobble    |
-| 1 Grindstone       | 2 Cobble + 2 Planks      |
-| 1 Wood Door        | 6 Planks                 |
-| 4 Torch            | 1 Coal + 1 Wood          |
-| 1 Bed              | 3 Wool + 3 Planks        |
-| 1 Wool             | 4 String                 |
-| 1 TNT              | 4 Gunpowder + 1 Sand     |
-| 3 Bone Meal        | 1 Bone                   |
-| 3 Glass Bottle     | 3 Glass                  |
+| Result             | Ingredients               |
+| ------------------ | ------------------------- |
+| 4 Planks           | 2 Wood                    |
+| 2 Glass            | 4 Sand                    |
+| 2 Brick            | 2 Dirt + 2 Stone          |
+| 1 Furnace          | 8 Cobble                  |
+| 1 Chest            | 8 Planks                  |
+| 1 Brewing Stand    | 3 Cobble + 1 Gold Ore     |
+| 1 Enchanting Table | 2 Diamond Ore + 4 Cobble  |
+| 1 Anvil            | 3 Gold Ore + 4 Cobble     |
+| 1 Grindstone       | 2 Cobble + 2 Planks       |
+| 1 Wood Door        | 6 Planks                  |
+| 4 Torch            | 1 Coal + 1 Wood           |
+| 1 Bed              | 3 Wool + 3 Planks         |
+| 1 Wool             | 4 String                  |
+| 1 TNT              | 4 Gunpowder + 1 Sand      |
+| 3 Bone Meal        | 1 Bone                    |
+| 3 Glass Bottle     | 3 Glass                   |
+| 8 Redstone Dust    | 1 Gold Ore + 1 Coal       |
+| 1 Lever            | 1 Cobble + 1 Planks       |
+| 2 Stone Button     | 1 Cobble                  |
+| 1 Pressure Plate   | 2 Planks                  |
+| 2 Redstone Torch   | 1 Redstone Dust + 1 Wood  |
+| 1 Redstone Lamp    | 4 Redstone Dust + 2 Glass |
 
 ### Tools
 
@@ -239,7 +245,7 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
 ## Blocks
 
-**40 block types** (plus air). Hardness is relative break time — higher is slower.
+**46 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
@@ -282,6 +288,12 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Sapling           | 1        | any             | Plant on grass/dirt; grows into a tree over time (or instantly with bone meal). Drops itself                                                                                                     |
 | Kelp              | 1        | any             | Ocean-floor stalks; breaking a cell breaks the stalk above it and submerged cells refill with **water**, never air. Grows upward over time (capped ~3 below the surface). Smelts into dried kelp |
 | Pink/Blue Coral   | 2        | any             | Decorative reef blocks scattered on the sandy ocean floor (worldgen-only source; drop themselves)                                                                                                |
+| Redstone Wire     | 1        | any             | Flat power trail placed from Redstone Dust; carries a signal up to 15 blocks from a source, climbing single-block steps. Glows red while powered. Needs a solid block below                      |
+| Lever             | 1        | any             | **Interactive** — right-click to toggle a constant power source. Floor-mounted                                                                                                                   |
+| Stone Button      | 1        | any             | **Interactive** — right-click for a ~1 s power pulse. Floor-mounted                                                                                                                              |
+| Pressure Plate    | 1        | any             | Powers while a player **or mob** stands on it. Floor-mounted                                                                                                                                     |
+| Redstone Torch    | 1        | any             | Constant power source and **inverter**: turns off while its support block is powered (never powers its own support). Emits block light 7 while lit                                               |
+| Redstone Lamp     | 3        | any             | Lights up (block light 15) while powered — a switchable light source                                                                                                                             |
 | Bedrock           | —        | unbreakable     | World floor and border                                                                                                                                                                           |
 | Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second                                                                                     |
 
@@ -560,6 +572,7 @@ each is a declarative `{ stat, threshold }` row, so nothing is gated behind them
 | Sleep Tight      | Adventure | Sleep through the night        |
 | Hired Help       | Adventure | Trade with a villager          |
 | X Marks the Spot | Adventure | Dig up a buried treasure chest |
+| Circuit Breaker  | Adventure | Flip a lever                   |
 
 ## Statistics
 
