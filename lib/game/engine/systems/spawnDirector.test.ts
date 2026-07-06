@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { AQUATIC_CAP, AQUATIC_SPAWN_INTERVAL_SECONDS, HOSTILE_CAP } from "@/lib/game/config";
+import { AQUATIC_CAP, AQUATIC_SPAWN_INTERVAL_SECONDS, DROWNED_CAP, DROWNED_SPAWN_MIN_RADIUS, HOSTILE_CAP } from "@/lib/game/config";
 import { BlockId, VoxelWorld, generateWorld } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
@@ -196,8 +196,9 @@ describe("spawnAquaticGroup", () => {
 describe("tickAquaticSpawnDirector", () => {
   /** A hand-built state over a world-wide water basin (the director samples a
    *  wide radius around the player, so the whole floor must hold water), with
-   *  the player floating above it. */
-  function makeAquaticState(): GameState {
+   *  the player floating above it. Daytime by default — the drowned branch
+   *  only arms at night. */
+  function makeAquaticState(daylight = 1, difficulty: GameState["difficulty"] = "normal"): GameState {
     const world = new VoxelWorld(64, 64, 64, 1);
     for (let x = 0; x < 64; x += 1) {
       for (let z = 0; z < 64; z += 1) {
@@ -209,6 +210,8 @@ describe("tickAquaticSpawnDirector", () => {
       world,
       mobs: [],
       nextMobId: 1,
+      daylight,
+      difficulty,
       timers: createTimers(),
       player: { position: new THREE.Vector3(32, 16, 32) },
       players: new Map([["local", { position: new THREE.Vector3(32, 16, 32) }]])
@@ -227,7 +230,7 @@ describe("tickAquaticSpawnDirector", () => {
     expect(state.mobs.length).toBeGreaterThan(0); // the director's own path spawned
     expect(state.timers.aquaticSpawnTimer).toBe(0); // and reset its timer
     for (const mob of state.mobs) {
-      expect(["cod", "salmon"]).toContain(mob.kind);
+      expect(["cod", "salmon"]).toContain(mob.kind); // daytime: never a drowned
       const cell = state.world.get(Math.floor(mob.position.x), Math.floor(mob.position.y), Math.floor(mob.position.z));
       expect(cell).toBe(BlockId.Water);
     }
@@ -241,5 +244,62 @@ describe("tickAquaticSpawnDirector", () => {
     tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS, rng);
 
     expect(state.mobs).toHaveLength(AQUATIC_CAP);
+  });
+
+  test("night spawns a drowned — hostile, submerged, never point-blank", () => {
+    const state = makeAquaticState(0.1);
+    tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS, mulberry32(7));
+    const drowned = state.mobs.filter((mob) => mob.kind === "drowned");
+    expect(drowned).toHaveLength(1);
+    expect(drowned[0].hostile).toBe(true);
+    expect(drowned[0].faction).toBe("hostile");
+    const cell = state.world.get(
+      Math.floor(drowned[0].position.x),
+      Math.floor(drowned[0].position.y + drowned[0].halfHeight * 0.5),
+      Math.floor(drowned[0].position.z)
+    );
+    expect(cell).toBe(BlockId.Water);
+    const dist = Math.hypot(drowned[0].position.x - 32, drowned[0].position.z - 32);
+    expect(dist).toBeGreaterThanOrEqual(DROWNED_SPAWN_MIN_RADIUS);
+  });
+
+  test("daylight and Peaceful both keep the drowned out of the water", () => {
+    const day = makeAquaticState(1);
+    tickAquaticSpawnDirector(day, AQUATIC_SPAWN_INTERVAL_SECONDS, mulberry32(7));
+    expect(day.mobs.some((mob) => mob.kind === "drowned")).toBe(false);
+
+    const peaceful = makeAquaticState(0.1, "peaceful");
+    tickAquaticSpawnDirector(peaceful, AQUATIC_SPAWN_INTERVAL_SECONDS, mulberry32(7));
+    expect(peaceful.mobs.some((mob) => mob.kind === "drowned")).toBe(false);
+  });
+
+  test("the drowned population respects its own cap without starving the fish", () => {
+    const state = makeAquaticState(0.1);
+    const rng = mulberry32(7);
+    for (let i = 0; i < DROWNED_CAP; i += 1) pushMob(state, "drowned", true, 20, 12, 20, rng);
+
+    tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS, rng);
+
+    // No new drowned past the cap — but the fish top-up still ran: hostiles
+    // must not count against AQUATIC_CAP's passive budget.
+    expect(state.mobs.filter((mob) => mob.kind === "drowned")).toHaveLength(DROWNED_CAP);
+    expect(state.mobs.some((mob) => mob.kind === "cod" || mob.kind === "salmon")).toBe(true);
+  });
+
+  test("a dry world spawns no drowned (the sampler fails closed)", () => {
+    const world = new VoxelWorld(64, 64, 64, 1);
+    for (let x = 0; x < 64; x += 1) for (let z = 0; z < 64; z += 1) world.set(x, 10, z, BlockId.Grass);
+    const state = {
+      world,
+      mobs: [],
+      nextMobId: 1,
+      daylight: 0.1,
+      difficulty: "normal",
+      timers: createTimers(),
+      player: { position: new THREE.Vector3(32, 16, 32) },
+      players: new Map([["local", { position: new THREE.Vector3(32, 16, 32) }]])
+    } as unknown as GameState;
+    tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS, mulberry32(7));
+    expect(state.mobs).toHaveLength(0);
   });
 });

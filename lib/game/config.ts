@@ -330,6 +330,15 @@ export const FISH_SUFFOCATION_HP_PER_SECOND = 2;
 export const AQUATIC_CAP = 24;
 export const AQUATIC_SPAWN_INTERVAL_SECONDS = 8;
 
+// The drowned — the hostile aquatic (night oceans). Strictly water-bound: it
+// pursues via the same destination-gated swim as fish, so it can never leave
+// the water. Its population has its own bound (inside the global hostile cap)
+// so drowned don't starve the fish population against AQUATIC_CAP.
+export const DROWNED_CAP = 6;
+export const DROWNED_MELEE_REACH = 1.9;
+export const DROWNED_PURSUE_SPEED_MULTIPLIER = 1.6; // over template speed while a target is in detect range
+export const DROWNED_SPAWN_MIN_RADIUS = 10; // never materializes point-blank under a swimmer
+
 // Fishing. Cast a bobber at water within FISHING_REACH; after a random wait in
 // [BITE_MIN, BITE_MAX] the bobber dips for FISHING_BITE_WINDOW_SECONDS — reel in
 // (right-click) during that window to catch, else a new wait begins. The cast is
