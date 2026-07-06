@@ -21,6 +21,7 @@ import {
   migrateSaveV15toV16,
   migrateSaveV16toV17,
   isPersistentMob,
+  parseSave,
   readContainers,
   readLootedChests,
   readSave,
@@ -894,6 +895,35 @@ describe("readSave rejects corrupt data", () => {
   test("JSON null and primitives", () => {
     expect(readSave(KEY, memoryStorage({ [KEY]: "null" }))).toBeNull();
     expect(readSave(KEY, memoryStorage({ [KEY]: "42" }))).toBeNull();
+  });
+});
+
+// parseSave takes the decoded object directly (the IndexedDB path — records
+// are stored as structured clones, never as JSON strings).
+describe("parseSave on decoded objects", () => {
+  test("a current v17 object passes through unchanged", () => {
+    expect(parseSave(sampleSave())).toEqual(sampleSave());
+  });
+
+  test("a flat v16 object migrates to the v17 shape", () => {
+    expect(parseSave(sampleSaveV16())).toEqual(sampleSave());
+  });
+
+  test("garbage shapes yield null", () => {
+    expect(parseSave(undefined)).toBeNull();
+    expect(parseSave(null)).toBeNull();
+    expect(parseSave(42)).toBeNull();
+    expect(parseSave("not a save")).toBeNull();
+    expect(parseSave({})).toBeNull();
+  });
+
+  test("missing seed or non-array changes yields null", () => {
+    expect(parseSave({ ...sampleSave(), seed: "abc" })).toBeNull();
+    expect(parseSave({ ...sampleSave(), changes: {} })).toBeNull();
+  });
+
+  test("unknown future version yields null", () => {
+    expect(parseSave({ ...sampleSave(), version: 18 })).toBeNull();
   });
 });
 

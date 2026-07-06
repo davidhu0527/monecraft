@@ -274,12 +274,15 @@ export function migrateSaveV16toV17(save: SaveDataV16): SaveData {
   };
 }
 
-// Storage is injectable so save logic can be tested without a browser.
-export function readSave(saveKey: string, storage: Storage = localStorage): SaveData | null {
+/**
+ * Validates a decoded save of any historical version and migrates it to the
+ * current SaveData. Total: unknown shapes, future versions, and migration
+ * throws all yield null. Shared by the JSON string path (readSave) and
+ * callers that hold the decoded object itself (the IndexedDB save store).
+ */
+export function parseSave(value: unknown): SaveData | null {
   try {
-    const raw = storage.getItem(saveKey);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as
+    const parsed = value as
       | SaveData
       | SaveDataV16
       | SaveDataV15
@@ -333,6 +336,17 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
     if (migrated.version !== 17) return null;
     if (!Array.isArray(migrated.players)) return null;
     return migrated;
+  } catch {
+    return null;
+  }
+}
+
+// Storage is injectable so save logic can be tested without a browser.
+export function readSave(saveKey: string, storage: Storage = localStorage): SaveData | null {
+  try {
+    const raw = storage.getItem(saveKey);
+    if (!raw) return null;
+    return parseSave(JSON.parse(raw));
   } catch {
     return null;
   }

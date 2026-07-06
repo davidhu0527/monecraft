@@ -17,12 +17,12 @@ import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } fro
 import { RECIPES } from "@/lib/game/recipes";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
-import { readSave, writeSave } from "@/lib/game/save";
+import { worldSaves } from "@/lib/game/saveStore";
 import { pushSave } from "@/lib/game/cloudSaves";
-import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId, Recipe, SaveData } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
+import type { WorldMeta } from "@/lib/game/worlds";
 import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 /**
@@ -85,13 +85,20 @@ declare global {
   }
 }
 
-function persistGame(api: GameApi, saveKey: string, onMessage: (text: string) => void): void {
+function persistGame(api: GameApi, worldId: string, onMessage: (text: string) => void): void {
+  let data: SaveData;
   try {
-    writeSave(saveKey, api.serialize());
-    onMessage("Saved");
+    data = api.serialize();
   } catch {
     onMessage("Save failed");
+    return;
   }
+  // Queued latest-wins write; the toast fires when the data (or newer) is
+  // durably committed, and a remount read is ordered after it by the store.
+  void worldSaves.write(worldId, data).then(
+    () => onMessage("Saved"),
+    () => onMessage("Save failed")
+  );
 }
 
 /**
@@ -103,9 +110,14 @@ export type UseMinecraftGameOptions = {
   world: WorldMeta;
   profile: Profile;
   /**
+   * The world's SaveData preloaded by the shell (WorldSaveGate) so the engine
+   * boot in the mount callback stays synchronous. Null = fresh world from seed.
+   */
+  initialSave: SaveData | null;
+  /**
    * A connected multiplayer session: its replica engine is mounted instead of
    * constructing one, dispatch routes through it (GameEngine.routeDispatch),
-   * localStorage persistence is skipped (the server owns the world), and its
+   * local persistence is skipped (the server owns the world), and its
    * pose stream flushes each frame. Absent = classic offline single-player.
    */
   online?: NetworkSession;
@@ -118,8 +130,9 @@ export type UseMinecraftGameOptions = {
 export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // The owning shell keys this hook by world id, so the world is fixed for the
   // mount's life; capturing it once in refs lets the long-lived rAF/autosave
-  // effect read the save key and seed without re-subscribing.
-  const saveKeyRef = useRef(worldSaveKey(opts.world.id));
+  // effect read the world id and seed without re-subscribing.
+  const worldIdRef = useRef(opts.world.id);
+  const initialSaveRef = useRef(opts.initialSave);
   const worldSeedRef = useRef(opts.world.seed);
   const worldTypeRef = useRef(opts.world.worldType);
   const worldModeRef = useRef(opts.world.gameMode);
@@ -250,12 +263,14 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     }
     // Online: the session already holds the synced replica engine. Offline: a
     // saved blob carries its own seed + type + mode + difficulty (engine
-    // prefers them); a fresh world boots from the world's stored values.
+    // prefers them); a fresh world boots from the world's stored values. The
+    // blob was preloaded by the shell — IndexedDB reads are async, so they
+    // can't happen here in the commit-phase callback.
     setCtx({
       engine:
         onlineRef.current?.engine ??
         new GameEngine({
-          save: readSave(saveKeyRef.current),
+          save: initialSaveRef.current,
           seed: worldSeedRef.current,
           worldType: worldTypeRef.current,
           gameMode: worldModeRef.current,
@@ -383,18 +398,41 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     document.addEventListener("keydown", unlockAudio);
     document.addEventListener("pointerdown", unlockAudio);
 
-    // The save key is fixed for the mount's life (the shell keys this hook by
+    // The world id is fixed for the mount's life (the shell keys this hook by
     // world id), so capture it once — also keeps it out of the cleanup's ref read.
-    // Online worlds never touch localStorage: the SERVER persists them.
+    // Online worlds never persist locally: the SERVER persists them.
     const online = onlineRef.current;
-    const saveKey = saveKeyRef.current;
+    const worldId = worldIdRef.current;
     const autoSave = () => {
-      if (online) return;
-      persistGame(gameEngine, saveKey, flashMessage);
+      // The skip flag also gates the interval and unload flushes: while a
+      // Load/Reset (or hardcore delete) awaits its remount, a save firing in
+      // that window would resurrect the blob being re-read or discarded.
+      if (online || skipUnmountSaveRef.current) return;
+      persistGame(gameEngine, worldId, flashMessage);
       syncCloudSave(gameEngine, true);
     };
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
-    window.addEventListener("beforeunload", autoSave);
+    // The unload flush rides beforeunload + visibilitychange(hidden) +
+    // pagehide. flushWrite starts the put synchronously on the warm connection
+    // and commits it explicitly (a same-tab reload's boot read then queues
+    // behind it). beforeunload matters: it fires before the navigation commits,
+    // so its transaction has the most teardown headroom — measured in headless
+    // Chromium, the visibilitychange/pagehide flushes alone lose the commit
+    // race a large fraction of reloads. Its cost is back/forward-cache
+    // eligibility in Firefox/Safari — save durability wins. The other two
+    // cover mobile app-switch/close, where beforeunload never fired reliably.
+    // Silent: a tab switch shouldn't toast "Saved".
+    const flushSave = () => {
+      if (online || skipUnmountSaveRef.current) return;
+      worldSaves.flushWrite(worldId, gameEngine.serialize());
+      syncCloudSave(gameEngine, true);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushSave();
+    };
+    window.addEventListener("beforeunload", flushSave);
+    window.addEventListener("pagehide", flushSave);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     window.__monecraft = { engine: gameEngine, renderer, input: liveInput(), audio, net: online ?? undefined };
 
@@ -424,7 +462,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         // Hardcore permadeath is permanent — persist it now so closing the tab right
         // after death still reloads the dead world spectating (not a fresh run).
         if (event.type === "gameOver" && !online) {
-          persistGame(gameEngine, saveKey, () => {});
+          persistGame(gameEngine, worldId, () => {});
           syncCloudSave(gameEngine, false);
         }
         if (event.type === "respawned") liveInput().clearKeys();
@@ -487,13 +525,15 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
 
     return () => {
       // Persist on teardown so progress survives an unmount that fires no
-      // `beforeunload` — most importantly dev Fast Refresh, which remounts the
-      // component (losing everything since the last 15s autosave) without a page
-      // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
-      // intentionally re-read or discard the on-disk save.
+      // page-lifecycle event — most importantly dev Fast Refresh, which remounts
+      // the component (losing everything since the last 15s autosave) without a
+      // page reload. The write is enqueued, and the remount's gate read is
+      // ordered after it by the save store. Silent (no "Saved" toast) and
+      // skipped for Load/Reset, which intentionally re-read or discard the
+      // on-disk save.
       if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
       else if (!online) {
-        persistGame(gameEngine, saveKey, () => {});
+        persistGame(gameEngine, worldId, () => {});
         syncCloudSave(gameEngine, false); // flush to cloud on leave/unmount (covers Save & Quit)
       }
       online?.dispose();
@@ -502,7 +542,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       minimap?.dispose();
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
-      window.removeEventListener("beforeunload", autoSave);
+      window.removeEventListener("beforeunload", flushSave);
+      window.removeEventListener("pagehide", flushSave);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("mousedown", unlockAudio);
       document.removeEventListener("keydown", unlockAudio);
       document.removeEventListener("pointerdown", unlockAudio);
@@ -622,39 +664,51 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     saveNow: () => {
       if (onlineRef.current) flashMessage("The server saves online worlds");
       else if (engine) {
-        persistGame(engine, saveKeyRef.current, flashMessage);
+        persistGame(engine, worldIdRef.current, flashMessage);
         syncCloudSave(engine, true);
       }
     },
     loadNow: () => {
-      if (!readSave(saveKeyRef.current)) {
-        flashMessage("No save found", 1400);
-        return;
-      }
-      flashMessage("Loaded");
-      // Remount this world (no page reload) so the engine re-reads the saved blob.
-      // Suppress the unmount save so it can't overwrite the blob we're reloading.
-      skipUnmountSaveRef.current = true;
-      scheduleTimeout(() => opts.onReloadWorld(), 120);
+      void worldSaves.read(worldIdRef.current).then((save) => {
+        if (!save) {
+          flashMessage("No save found", 1400);
+          return;
+        }
+        flashMessage("Loaded");
+        // Remount this world (no page reload) so the engine re-reads the saved blob.
+        // Suppress the unmount save so it can't overwrite the blob we're reloading.
+        skipUnmountSaveRef.current = true;
+        scheduleTimeout(() => opts.onReloadWorld(), 120);
+      });
     },
     resetNow: () => {
-      try {
-        localStorage.removeItem(saveKeyRef.current);
-        setSaveMessage("Resetting...");
-        // Remount with no blob: the fresh engine regenerates from the stored seed.
-        // Suppress the unmount save so it can't rewrite the blob we just removed.
-        skipUnmountSaveRef.current = true;
-        scheduleTimeout(() => opts.onReloadWorld(), 500);
-      } catch {
-        flashMessage("Reset failed");
-      }
+      setSaveMessage("Resetting...");
+      void worldSaves.remove(worldIdRef.current).then(
+        () => {
+          // Remount with no blob: the fresh engine regenerates from the stored seed.
+          // Suppress the unmount save so it can't rewrite the blob we just removed.
+          skipUnmountSaveRef.current = true;
+          scheduleTimeout(() => opts.onReloadWorld(), 500);
+        },
+        () => flashMessage("Reset failed")
+      );
     },
     quitToWorlds: () => {
-      // The autosave interval is cleared on unmount and beforeunload won't fire
-      // on an in-app navigation, so persist synchronously before leaving.
+      // The autosave interval is cleared on unmount and no unload event fires
+      // on an in-app navigation, so persist before leaving. The write is only
+      // enqueued, but an immediate re-open reads through the store's queue.
       // Online: the unmount cleanup disposes the session; the server persists.
-      if (engine && !onlineRef.current) persistGame(engine, saveKeyRef.current, flashMessage);
+      if (engine && !onlineRef.current) persistGame(engine, worldIdRef.current, flashMessage);
       opts.onQuitToWorlds();
+    },
+    /**
+     * Arms the same skip flag Load/Reset use, for unmounts that must not
+     * persist — the hardcore-delete path, where the teardown save would
+     * recreate the blob the shell just removed. (The gameOver force-save
+     * already persisted the dead world; only spectator drift is dropped.)
+     */
+    suppressUnmountSave: () => {
+      skipUnmountSaveRef.current = true;
     }
   };
 }
