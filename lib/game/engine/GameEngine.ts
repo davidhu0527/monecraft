@@ -142,6 +142,7 @@ import { tickFishing, tryFish } from "./systems/fishing";
 import { restoreVehicle, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
 import { tickMobs } from "./systems/mobAI";
 import { tickPrimedTnt } from "./systems/explosion";
+import { createRedstoneState, seedRedstoneCells, tickRedstone } from "./systems/redstone";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
@@ -381,8 +382,13 @@ export class GameEngine {
       timers: createWorldTimers(),
       worldMeshDirty: true,
       victory: false,
-      raid: null
+      raid: null,
+      redstone: createRedstoneState()
     });
+
+    // Recover the redstone component set from the block diff (craft-only
+    // blocks are always player-placed, so the diff is a complete census).
+    seedRedstoneCells(this.state);
 
     if (save) {
       if (bootPlayer && savedLocal) this.restorePlayerFields(localPlayer, savedLocal);
@@ -616,6 +622,10 @@ export class GameEngine {
     tickAquaticSpawnDirector(state, dt, this.rng);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    // After the player loop (this frame's lever/button clicks are visible) and
+    // before the TNT countdown (wire-lit fuses start ticking the same frame).
+    // Replicas never reach here — redstone runs server-side only online.
+    tickRedstone(state, dt, this.emit);
     tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);

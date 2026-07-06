@@ -379,6 +379,24 @@ export type GameState = {
   victory: boolean;
   /** The active village raid, or null. Session-only (a reload cancels it). */
   raid: RaidState | null;
+  /**
+   * Redstone bookkeeping (session-only, never serialized): the tracked
+   * component cells, pressed-button timers, last pass's powered doors, and the
+   * fixed-cadence accumulator. Power itself is re-derived from the block grid
+   * every pass, so nothing here needs to survive a reload.
+   */
+  redstone: RedstoneState;
+};
+
+export type RedstoneState = {
+  /** Voxel indices holding redstone components; self-heals when a cell changes. */
+  cells: Set<number>;
+  /** Pressed button → seconds until pop-back (the primedTnt pattern). */
+  buttonTimers: Map<number, number>;
+  /** Lower-half indices of doors powered last pass (edge detection). */
+  prevDoorPowered: Set<number>;
+  /** Accumulator toward the next fixed-cadence power pass. */
+  timer: number;
 };
 
 export function createPlayerTimers(): PlayerTimers {
@@ -570,6 +588,10 @@ export type GameEvent =
   | { type: "grindstoneStripped" }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }
+  | { type: "leverToggled"; on: boolean }
+  | { type: "buttonPressed" }
+  | { type: "plateToggled"; on: boolean }
+  | { type: "lampToggled"; on: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "crafted"; recipeId: string }

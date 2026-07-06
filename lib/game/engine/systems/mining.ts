@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlock, voxelRaycast } from "@/lib/world";
+import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlock, isRedstoneBlock, isRedstoneOverlay, voxelRaycast } from "@/lib/world";
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
@@ -10,6 +10,7 @@ import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
 import { hasteMultiplier } from "./statusEffects";
+import { trackRedstoneCell } from "./redstone";
 import type { InventorySlot } from "@/lib/game/types";
 
 const scratchEye = new THREE.Vector3();
@@ -193,6 +194,13 @@ export function tickMining(
     }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
+    // A redstone overlay (wire, lever, …) standing on the broken block pops
+    // off with it and drops its item to the miner (the kelp-cascade rule).
+    const above = world.get(bx, by + 1, bz) as BlockId;
+    if (isRedstoneOverlay(above)) {
+      state.blockChanges.set(bx, by + 1, bz, BlockId.Air);
+      if (!creative && !predict) addBlockDrop(player, above, rng, tool);
+    }
   }
   // Creative breaks for free: no tool wear, no drops, no XP. A predicted
   // break skips them too — the server owns them and its deltas deliver.
@@ -245,6 +253,15 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
     state.blockChanges.set(tx, ty, tz, doorBlock(facing, false, false));
     state.blockChanges.set(tx, ty + 1, tz, doorBlock(facing, false, true));
   } else {
+    // Redstone overlays are floor-mounted: they need a solid, full-cube block
+    // under them (the door support rule) or the placement refunds.
+    if (isRedstoneOverlay(slot.blockId)) {
+      const support = world.get(tx, ty - 1, tz);
+      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support)) {
+        if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
+        return;
+      }
+    }
     state.blockChanges.set(tx, ty, tz, slot.blockId);
   }
   if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
@@ -261,6 +278,9 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
   }
+  // A placed redstone component (lamp included) joins the tracked set so the
+  // power pass sees it; removals self-heal, so placement is the only seam.
+  if (isRedstoneBlock(slot.blockId)) trackRedstoneCell(state, tx, ty, tz);
 
   state.worldMeshDirty = true;
   emit({ type: "blockPlaced", blockId: slot.blockId, x: tx, y: ty, z: tz });

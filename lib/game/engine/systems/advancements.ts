@@ -103,6 +103,9 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
     case "treasureUnearthed":
       bump(player, "treasure_unearthed");
       break;
+    case "leverToggled":
+      bump(player, "levers_flipped");
+      break;
     case "died":
     case "gameOver": // hardcore permadeath emits gameOver instead of died — still a death
       bump(player, "deaths");
@@ -229,6 +232,15 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "treasure_map",
     category: "Adventure",
     stat: "treasure_unearthed",
+    threshold: 1
+  },
+  {
+    id: "circuit_breaker",
+    title: "Circuit Breaker",
+    description: "Flip a lever.",
+    icon: "lever",
+    category: "Adventure",
+    stat: "levers_flipped",
     threshold: 1
   }
 ];
