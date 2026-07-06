@@ -1681,6 +1681,41 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
+  test("serialize stamps the worldgen version, and a mismatched stamp reboots the world half but keeps the player", () => {
+    const engine = makeEngine();
+    engine.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    engine.state.player.xp = 57;
+    const save = engine.serialize();
+    expect(save.worldgenVersion).toBeDefined();
+
+    // Same stamp: the edit survives the reload.
+    const same = makeEngine(save);
+    expect(same.state.world.get(10, 40, 10)).toBe(BlockId.Brick);
+    expect(same.state.player.xp).toBe(57);
+
+    // A stale stamp: the guard discards the diff, the player slice survives.
+    const stale = makeEngine({ ...save, worldgenVersion: save.worldgenVersion! + 1 });
+    expect(stale.state.world.get(10, 40, 10)).not.toBe(BlockId.Brick);
+    expect(stale.state.blockChanges.changes()).toEqual([]);
+    expect(stale.state.player.xp).toBe(57);
+  });
+
+  test("a foreign dimension section rides through serialize untouched (the server-room pass-through)", () => {
+    const nether = { changes: [[7, 90]] as Array<[number, number]>, lootedChests: [9] };
+    const engine = makeEngine();
+    const withNether = { ...engine.serialize(), dimensions: { nether } };
+
+    // An (overworld) engine booted from that save — the server room's exact path —
+    // must re-emit the section byte-for-byte even after unrelated world edits.
+    const room = makeEngine(withNether);
+    room.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    const persisted = room.serialize();
+    expect(persisted.dimensions).toEqual({ nether });
+
+    // And a save with no dimensions never grows one.
+    expect(makeEngine(engine.serialize()).serialize().dimensions).toBeUndefined();
+  });
+
   test("save format is current and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
@@ -1688,7 +1723,7 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(17);
+    expect(save.version).toBe(18);
     expect(save.players[0].gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 

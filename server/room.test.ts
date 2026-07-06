@@ -307,7 +307,7 @@ describe("room lifecycle", () => {
     const blob = persistence.blobs.get("w1");
     expect(blob).toBeTruthy();
     const save = await parseSaveBlob(blob!);
-    expect(save?.version).toBe(17);
+    expect(save?.version).toBe(18);
     expect(save?.players.find((p) => p.id === "alice")?.xp).toBe(77);
   });
 

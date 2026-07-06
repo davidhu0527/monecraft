@@ -46,7 +46,8 @@ import {
   SLEEP_FADE_SECONDS,
   SPRINT_SPEED,
   STUCK_RESET_SECONDS,
-  WAKE_DAY_PHASE
+  WAKE_DAY_PHASE,
+  WORLDGEN_VERSION
 } from "@/lib/game/config";
 import { bossTracking, trackTarget, type BossTracking } from "@/lib/game/bossTracking";
 import { createEmptyArmorEquipment, createEmptySlot, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
@@ -65,6 +66,7 @@ import { RECIPES } from "@/lib/game/recipes";
 import { tradeProfession } from "@/lib/game/trades";
 import * as inv from "@/lib/game/inventory";
 import {
+  applyWorldgenGuard,
   inventorySlotsSnapshot,
   serializeEquippedArmor,
   readContainers,
@@ -237,6 +239,13 @@ export class GameEngine {
   private readonly headless: boolean;
   private readonly rng: () => number;
   private readonly worldType: WorldType;
+  /**
+   * Dimension sections this engine does NOT simulate, re-emitted verbatim by
+   * serialize() so they survive a full save round-trip untouched. An overworld
+   * engine (every engine today, including the server room) carries the save's
+   * `dimensions` block here.
+   */
+  private readonly foreignDimensions: SaveData["dimensions"];
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
   private events: AttributedGameEvent[] = [];
@@ -260,7 +269,10 @@ export class GameEngine {
   private lastEffects: GameSnapshot["activeEffects"] = [];
 
   constructor(options: GameEngineOptions = {}) {
-    const save = options.save ?? null;
+    // The worldgen staleness guard runs before anything reads the save: a save
+    // stamped by a different generator version keeps its players but reboots
+    // the world from the seed (one seam covers SP, cloud, and the server room).
+    const save = options.save ? applyWorldgenGuard(options.save) : null;
     this.rng = options.rng ?? Math.random;
     this.authority = options.authority ?? "local";
     this.headless = options.headless ?? false;
@@ -270,6 +282,7 @@ export class GameEngine {
     // A restored save's own type wins (the block-diffs were recorded against it);
     // a fresh world takes the requested type, defaulting to "default".
     this.worldType = save?.worldType ?? options.worldType ?? "default";
+    this.foreignDimensions = save?.dimensions;
     const size = options.worldSize ?? { x: WORLD_SIZE_X, y: WORLD_SIZE_Y, z: WORLD_SIZE_Z };
     const world = new VoxelWorld(size.x, size.y, size.z, seed);
     generateWorld(world, this.worldType);
@@ -1187,8 +1200,11 @@ export class GameEngine {
 
   serialize(): SaveData {
     const state = this.state;
-    return {
-      version: 17,
+    const save: SaveData = {
+      version: 18,
+      // Stamps which generator produced these diffs; on mismatch a future boot
+      // discards the world half and reboots from the seed (applyWorldgenGuard).
+      worldgenVersion: WORLDGEN_VERSION,
       seed: state.world.seed,
       worldType: this.worldType,
       difficulty: state.difficulty,
@@ -1202,6 +1218,10 @@ export class GameEngine {
       vehicles: serializeVehicles(state.vehicles),
       villagesSeeded: true // this world's villages are populated — don't re-seed on reload
     };
+    // Dimensions this engine doesn't simulate ride through verbatim, so e.g.
+    // the server room (overworld) can never lose a world's nether builds.
+    if (this.foreignDimensions) save.dimensions = this.foreignDimensions;
+    return save;
   }
 
   /**
