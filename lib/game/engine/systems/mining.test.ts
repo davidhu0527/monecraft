@@ -111,3 +111,12 @@ describe("placeSelectedBlock — partial blocks", () => {
     expect(player.inventory[0]?.count).toBe(2);
   });
 });
+
+describe("nether block tool tiers", () => {
+  test("netherrack needs any pickaxe; blazite ore is diamond-gated like obsidian", () => {
+    expect(canMineBlock(BlockId.Netherrack, 0)).toBe(false);
+    expect(canMineBlock(BlockId.Netherrack, 1)).toBe(true);
+    expect(canMineBlock(BlockId.BlaziteOre, 6)).toBe(false);
+    expect(canMineBlock(BlockId.BlaziteOre, 7)).toBe(true);
+  });
+});

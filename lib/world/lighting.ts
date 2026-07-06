@@ -95,6 +95,9 @@ export function emission(block: BlockId): number {
     // active and to light its chamber, without washing out torch placement.
     case BlockId.NetherPortal:
       return 11;
+    // Glowstone matches the torch: the nether's natural (and portable) light.
+    case BlockId.Glowstone:
+      return 14;
     default:
       return 0;
   }

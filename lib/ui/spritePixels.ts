@@ -672,6 +672,8 @@ const CHARCOAL_PALETTE: PixelPalette = { c: [54, 50, 46], C: [30, 28, 26], h: [9
 const GUNPOWDER_PALETTE: PixelPalette = { c: [120, 120, 126], C: [78, 78, 84], h: [168, 168, 174] };
 const BONE_MEAL_PALETTE: PixelPalette = { c: [232, 228, 212], C: [196, 190, 170], h: [250, 248, 240] };
 const EMERALD_PALETTE: PixelPalette = { c: [46, 184, 110], C: [24, 120, 70], h: [150, 240, 180] };
+const GLOWSTONE_DUST_PALETTE: PixelPalette = { c: [244, 205, 92], C: [190, 140, 40], h: [255, 244, 190] };
+const BLAZITE_ORE_PALETTE: PixelPalette = { c: [235, 120, 40], C: [140, 55, 25], h: [255, 200, 110] };
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 // A weathered parchment chart with a red X where the treasure lies.
 const TREASURE_MAP_PALETTE: PixelPalette = { o: [110, 88, 55], p: [222, 205, 160], P: [186, 166, 122], x: [190, 50, 40] };
@@ -917,6 +919,8 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   gunpowder: { grid: COAL_GRID, palette: GUNPOWDER_PALETTE },
   bone_meal: { grid: COAL_GRID, palette: BONE_MEAL_PALETTE },
   emerald: { grid: COAL_GRID, palette: EMERALD_PALETTE },
+  glowstone_dust: { grid: COAL_GRID, palette: GLOWSTONE_DUST_PALETTE },
+  blazite_ore: { grid: COAL_GRID, palette: BLAZITE_ORE_PALETTE },
   raw_chicken: { grid: RAW_MEAT_GRID, palette: RAW_CHICKEN_PALETTE },
   raw_mutton: { grid: RAW_MEAT_GRID, palette: RAW_MUTTON_PALETTE },
   rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE },

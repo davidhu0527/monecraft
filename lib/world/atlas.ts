@@ -140,6 +140,23 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           c = ring > 0.35 ? tone([0.62, 0.3, 0.9], 0.85 + n * 0.3) : tone([0.28, 0.1, 0.45], 0.8 + n * 0.3);
           if (n > 0.93) c = tone([0.9, 0.75, 1], 1); // spark
         }
+        if (block === BlockId.Netherrack) {
+          // Crimson pitted rock: darker pocks over the red base, a rare pale wart.
+          if (n < 0.24) c = tone([0.3, 0.1, 0.09], 0.85 + n * 0.4);
+          if (n > 0.92) c = tone([0.68, 0.4, 0.36], 1);
+        }
+        if (block === BlockId.Glowstone) {
+          // A crystalline cluster: bright amber facets over a honey base, with
+          // near-white glints along the facet joints (the block emits light 14).
+          const facet = (x * 3 + y * 5) % 11 < 4;
+          c = facet ? tone([1, 0.87, 0.5], 0.9 + n * 0.2) : tone([0.82, 0.6, 0.24], 0.85 + n * 0.3);
+          if (n > 0.9) c = tone([1, 0.97, 0.85], 1);
+        }
+        if (block === BlockId.BlaziteOre) {
+          // Netherrack base carrying ember-orange ore flecks that read as hot.
+          if (n < 0.22) c = tone([0.3, 0.1, 0.09], 0.85 + n * 0.4);
+          if (n > 0.8) c = tone([1, 0.55, 0.12], 0.9 + n * 0.25);
+        }
         if (block === BlockId.Tnt) {
           // Classic TNT: a red block of "dynamite" with a white label band around
           // the sides and a darker cap on the top/bottom (the bundled fuse ends).

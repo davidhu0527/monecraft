@@ -51,6 +51,9 @@ export function canMineBlock(block: BlockId, toolTier: number): boolean {
   if (block === BlockId.DiamondOre) return toolTier >= 4;
   // Obsidian yields only to the top pickaxe tier (diamond, mineTier 7).
   if (block === BlockId.Obsidian) return toolTier >= 7;
+  // Nether rock needs any pickaxe; its deep ore is diamond-gated like obsidian.
+  if (block === BlockId.Netherrack) return toolTier >= 1;
+  if (block === BlockId.BlaziteOre) return toolTier >= 7;
   return true;
 }
 

@@ -629,6 +629,12 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "flint_and_steel", count: 1 }
   },
   {
+    id: "glowstone",
+    label: "4 Glowstone Dust -> Glowstone",
+    cost: [{ slotId: "glowstone_dust", count: 4 }],
+    result: { slotId: "glowstone", count: 1 }
+  },
+  {
     id: "raft",
     label: "4 Planks + 2 Wood -> Raft",
     cost: [

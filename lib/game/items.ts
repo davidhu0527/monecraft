@@ -117,7 +117,12 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.CobbleStairsWest]: 4,
   // The hardest mineable block — a long grind even for the diamond pickaxe
   // that its tier gate requires (see canMineBlock in mining.ts).
-  [BlockId.Obsidian]: 40
+  [BlockId.Obsidian]: 40,
+  // Soft nether rock — faster than stone even though a pickaxe is required.
+  [BlockId.Netherrack]: 4,
+  [BlockId.Glowstone]: 2,
+  // Deeper than diamond in spirit: slower than diamond ore, far from obsidian.
+  [BlockId.BlaziteOre]: 16
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -169,6 +174,10 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "cobble_stairs", label: "Cobble Stairs", kind: "block", blockId: BlockId.CobbleStairsNorth },
   // Created by quenching lava with a water bucket; the portal-frame material.
   { id: "obsidian", label: "Obsidian", kind: "block", blockId: BlockId.Obsidian },
+  // Nether blocks: the landmass rock and the glowing ceiling crystal (placing
+  // glowstone back down makes it a portable light source).
+  { id: "netherrack", label: "Netherrack", kind: "block", blockId: BlockId.Netherrack },
+  { id: "glowstone", label: "Glowstone", kind: "block", blockId: BlockId.Glowstone },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -187,6 +196,10 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "bucket", label: "Bucket", kind: "material", stackSize: 16 },
   { id: "water_bucket", label: "Water Bucket", kind: "material", stackSize: 1 },
   { id: "lava_bucket", label: "Lava Bucket", kind: "material", stackSize: 1 },
+  // Nether materials: glowstone dust recombines into the block (4 → 1); raw
+  // blazite ore smelts into ingots for the post-diamond gear tier.
+  { id: "glowstone_dust", label: "Glowstone Dust", kind: "material" },
+  { id: "blazite_ore", label: "Blazite Ore", kind: "material" },
   { id: "food", label: "Food", kind: "food", hunger: 7 },
   // Mob materials — craft ingredients with no direct use on their own yet.
   { id: "wool", label: "Wool", kind: "material" },
@@ -506,6 +519,10 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.CobbleStairsSouth]: "cobble_stairs",
   [BlockId.CobbleStairsWest]: "cobble_stairs",
   [BlockId.Obsidian]: "obsidian",
+  [BlockId.Netherrack]: "netherrack",
+  // Glowstone drops 2-4 dust — handled in rollBlockDrops, not here.
+  // Blazite ore drops the smeltable material item (the coal-ore pattern).
+  [BlockId.BlaziteOre]: "blazite_ore",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",
@@ -514,7 +531,15 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
 };
 
 /** Ores whose mined yield the Fortune enchantment multiplies (their `BLOCK_TO_SLOT` item is the drop). */
-const FORTUNE_ORE_BLOCKS = new Set<BlockId>([BlockId.CoalOre, BlockId.SliverOre, BlockId.RubyOre, BlockId.GoldOre, BlockId.SapphireOre, BlockId.DiamondOre]);
+const FORTUNE_ORE_BLOCKS = new Set<BlockId>([
+  BlockId.CoalOre,
+  BlockId.SliverOre,
+  BlockId.RubyOre,
+  BlockId.GoldOre,
+  BlockId.SapphireOre,
+  BlockId.DiamondOre,
+  BlockId.BlaziteOre
+]);
 
 /**
  * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
@@ -537,6 +562,11 @@ export function rollBlockDrops(block: BlockId, rng: () => number, fortuneLevel =
 
   if (block === BlockId.Leaves && rng() < LEAVES_SAPLING_DROP_CHANCE) {
     drops.push({ itemId: "sapling", count: 1 });
+  }
+  // Glowstone shatters into 2-4 dust (its only yield — 4 dust recombine into
+  // the block); Fortune adds its level, capped at a full block's worth.
+  if (block === BlockId.Glowstone) {
+    drops.push({ itemId: "glowstone_dust", count: Math.min(4, 2 + Math.floor(rng() * 3) + fortuneLevel) });
   }
   if (block === BlockId.Grass && rng() < GRASS_SEED_DROP_CHANCE) {
     drops.push({ itemId: "seeds", count: 1 });
