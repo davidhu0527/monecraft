@@ -69,7 +69,33 @@ function createShip(): VehicleVisual {
   return { group, materials, geometries };
 }
 
+const IRON = 0x8a8f96;
+const DARK_IRON = 0x35373c;
+const WHEEL = 0x26262b;
+
+function createMinecart(): VehicleVisual {
+  const group = new THREE.Group();
+  const materials: THREE.Material[] = [];
+  const geometries: THREE.BufferGeometry[] = [];
+  const hull = box(0.62, 0.3, 0.9, IRON, 0, 0.12, 0);
+  // A dark inset slab across the rim fakes the open cargo cavity.
+  const cavity = box(0.5, 0.06, 0.76, DARK_IRON, 0, 0.28, 0);
+  const parts = [hull, cavity];
+  for (const z of [-0.28, 0.28]) {
+    for (const x of [-0.28, 0.28]) {
+      parts.push(box(0.1, 0.16, 0.16, WHEEL, x, -0.05, z));
+    }
+  }
+  for (const part of parts) {
+    group.add(part.mesh);
+    materials.push(part.material);
+    geometries.push(part.geometry);
+  }
+  return { group, materials, geometries };
+}
+
 function createVisual(vehicle: VehicleState): VehicleVisual {
+  if (vehicle.kind === "minecart") return createMinecart();
   return vehicle.kind === "raft" ? createRaft() : createShip();
 }
 

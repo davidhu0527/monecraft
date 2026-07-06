@@ -1036,6 +1036,24 @@ export const SWITCH_CLICK_SOUND: SoundDef = {
   minRetriggerMs: 60
 };
 
+/** The wheel-on-rail clack while riding a minecart (distance-scheduled in sync). */
+export const MINECART_ROLL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.3,
+    randomness: 0.2,
+    frequency: 320,
+    attack: 0.001,
+    sustain: 0.02,
+    release: 0.05,
+    shape: 4,
+    shapeCurve: 1.4,
+    noise: 0.9,
+    decay: 0.02,
+    filter: -900
+  }),
+  minRetriggerMs: 90
+};
+
 export const HURT_SOUND: SoundDef = {
   params: zz({
     volume: 0.7,
