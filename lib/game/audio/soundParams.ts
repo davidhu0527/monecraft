@@ -1030,6 +1030,12 @@ export const LAND_SOUND: SoundDef = {
   minRetriggerMs: 150
 };
 
+/** A crisp mechanical click for redstone switches (lever, button, plate). */
+export const SWITCH_CLICK_SOUND: SoundDef = {
+  params: zz({ volume: 0.45, frequency: 900, attack: 0.001, sustain: 0.015, release: 0.04, shape: 1, shapeCurve: 2, slide: -20 }),
+  minRetriggerMs: 60
+};
+
 export const HURT_SOUND: SoundDef = {
   params: zz({
     volume: 0.7,

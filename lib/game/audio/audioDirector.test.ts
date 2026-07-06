@@ -13,6 +13,7 @@ import {
   LAND_SOUND,
   PLACE_SOUNDS,
   FOOTSTEP_SOUNDS,
+  SWITCH_CLICK_SOUND,
   VEHICLE_DENIED_SOUND,
   type SoundDef
 } from "./soundParams";
@@ -114,6 +115,19 @@ describe("audio director", () => {
     expect(played[2].def).toBe(PLACE_SOUNDS.wood);
     expect(played[2].opts.gain).toBe(0.8);
     expect(played[3].def).toBe(HURT_SOUND);
+  });
+
+  test("redstone switches click; lamp toggles stay silent", async () => {
+    const { director, played } = await createUnlockedDirector();
+    director.handleEvent({ type: "leverToggled", on: true });
+    director.handleEvent({ type: "buttonPressed" });
+    director.handleEvent({ type: "plateToggled", on: true });
+    director.handleEvent({ type: "lampToggled", on: true }); // the light IS the feedback
+    expect(played).toHaveLength(3);
+    expect(played[0].def).toBe(SWITCH_CLICK_SOUND);
+    expect(played[1].def).toBe(SWITCH_CLICK_SOUND);
+    expect(played[2].def).toBe(SWITCH_CLICK_SOUND);
+    expect(played[2].opts.gain).toBe(0.9);
   });
 
   test("placing a vehicle thunks like wood; a failed placement plays the denial cue", async () => {
