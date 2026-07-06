@@ -129,7 +129,11 @@ export const enum BlockId {
   CobbleStairsNorth = 86,
   CobbleStairsEast = 87,
   CobbleStairsSouth = 88,
-  CobbleStairsWest = 89
+  CobbleStairsWest = 89,
+  // Volcanic glass, created by quenching lava with a water bucket (interact.ts).
+  // The hardest mineable block — diamond-pickaxe-gated (mining.ts) — and the
+  // only material a nether portal frame can be built from (portal.ts).
+  Obsidian = 90
 }
 
 export enum BiomeId {
@@ -189,7 +193,8 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.CobbleSlab]: 0x787c82,
   [BlockId.PlankStairsNorth]: 0xbe965d,
   [BlockId.StoneStairsNorth]: 0x8f9296,
-  [BlockId.CobbleStairsNorth]: 0x787c82
+  [BlockId.CobbleStairsNorth]: 0x787c82,
+  [BlockId.Obsidian]: 0x241c38
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -300,5 +305,7 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.CobbleStairsNorth]: [0.42, 0.43, 0.45],
   [BlockId.CobbleStairsEast]: [0.42, 0.43, 0.45],
   [BlockId.CobbleStairsSouth]: [0.42, 0.43, 0.45],
-  [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45]
+  [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45],
+  // Near-black volcanic glass with violet flecks (painted in atlas.ts).
+  [BlockId.Obsidian]: [0.09, 0.07, 0.14]
 };

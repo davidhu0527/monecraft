@@ -48,6 +48,8 @@ export function canMineBlock(block: BlockId, toolTier: number): boolean {
   if (block === BlockId.GoldOre) return toolTier >= 3;
   if (block === BlockId.SapphireOre) return toolTier >= 4;
   if (block === BlockId.DiamondOre) return toolTier >= 4;
+  // Obsidian yields only to the top pickaxe tier (diamond, mineTier 7).
+  if (block === BlockId.Obsidian) return toolTier >= 7;
   return true;
 }
 

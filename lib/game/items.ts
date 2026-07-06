@@ -114,7 +114,10 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.CobbleStairsNorth]: 4,
   [BlockId.CobbleStairsEast]: 4,
   [BlockId.CobbleStairsSouth]: 4,
-  [BlockId.CobbleStairsWest]: 4
+  [BlockId.CobbleStairsWest]: 4,
+  // The hardest mineable block — a long grind even for the diamond pickaxe
+  // that its tier gate requires (see canMineBlock in mining.ts).
+  [BlockId.Obsidian]: 40
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -164,6 +167,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "plank_stairs", label: "Plank Stairs", kind: "block", blockId: BlockId.PlankStairsNorth },
   { id: "stone_stairs", label: "Stone Stairs", kind: "block", blockId: BlockId.StoneStairsNorth },
   { id: "cobble_stairs", label: "Cobble Stairs", kind: "block", blockId: BlockId.CobbleStairsNorth },
+  // Created by quenching lava with a water bucket; the portal-frame material.
+  { id: "obsidian", label: "Obsidian", kind: "block", blockId: BlockId.Obsidian },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -490,6 +495,7 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.CobbleStairsEast]: "cobble_stairs",
   [BlockId.CobbleStairsSouth]: "cobble_stairs",
   [BlockId.CobbleStairsWest]: "cobble_stairs",
+  [BlockId.Obsidian]: "obsidian",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",

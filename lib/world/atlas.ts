@@ -123,6 +123,13 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           const crust = n < 0.2;
           c = crack ? tone([1, 0.78, 0.2], 1) : crust ? tone([0.35, 0.1, 0.04], 1) : tone([0.92, 0.34, 0.08], 0.85 + n * 0.4);
         }
+        if (block === BlockId.Obsidian) {
+          // Volcanic glass: a near-black bed with faint violet sheen bands and
+          // the occasional bright fleck where the surface catches light.
+          const sheen = (x + y * 2) % 7 === 0;
+          c = sheen ? tone([0.24, 0.16, 0.4], 0.9 + n * 0.3) : tone([0.08, 0.06, 0.13], 0.85 + n * 0.35);
+          if (n > 0.94) c = tone([0.55, 0.42, 0.78], 1); // light-catching fleck
+        }
         if (block === BlockId.Tnt) {
           // Classic TNT: a red block of "dynamite" with a white label band around
           // the sides and a darker cap on the top/bottom (the bundled fuse ends).
