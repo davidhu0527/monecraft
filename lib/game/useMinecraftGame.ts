@@ -477,7 +477,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
           flashMessage("Not enough room to empty the chest");
         }
         if (event.type === "sleepDenied") {
-          flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
+          flashMessage(
+            event.reason === "daylight" ? "You can only sleep at night" : event.reason === "dimension" ? "You can't sleep here" : "Monsters are nearby"
+          );
         }
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));

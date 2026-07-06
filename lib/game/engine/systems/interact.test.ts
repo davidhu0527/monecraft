@@ -6,7 +6,7 @@ import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { countsById } from "@/lib/game/inventory";
 import { createBlockChangeTracker } from "@/lib/game/engine/blockChanges";
 import type { GameEvent, GameState, MobState, PlayerState } from "@/lib/game/engine/state";
-import { tryTameAimedMob, tryToggleSitPet, tryUseHeldItem } from "@/lib/game/engine/systems/interact";
+import { tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryUseHeldItem } from "@/lib/game/engine/systems/interact";
 import type { InventorySlot, MobKind } from "@/lib/game/types";
 
 function inventory(items: Array<[string, number]>): InventorySlot[] {
@@ -317,5 +317,44 @@ describe("tryUseHeldItem — quenching lava", () => {
     );
     expect(state.world.get(CELL.x, CELL.y, CELL.z)).toBe(BlockId.Lava); // untouched
     expect(events.some((e) => e.type === "lavaSolidified")).toBe(false);
+  });
+});
+
+describe("interactBed — dimension refusal", () => {
+  test("a bed in the nether refuses sleep with the dimension reason (spawn point untouched)", () => {
+    const FLOOR_Y = 10;
+    const world = new VoxelWorld(24, 24, 24, 1);
+    for (let x = 0; x < world.sizeX; x += 1) {
+      for (let z = 0; z < world.sizeZ; z += 1) world.set(x, FLOOR_Y, z, BlockId.Stone);
+    }
+    world.set(7, FLOOR_Y + 1, 5, BlockId.Bed);
+    const player = {
+      id: "local",
+      position: new THREE.Vector3(7.5, FLOOR_Y + 4, 5.5),
+      velocity: new THREE.Vector3(),
+      yaw: 0,
+      pitch: -Math.PI / 2,
+      onGround: false,
+      gameMode: "survival",
+      selectedSlot: 0,
+      inventory: inventory([["stone", 1]]),
+      spawnPoint: null,
+      sleeping: false
+    } as unknown as PlayerState;
+    const state = {
+      world,
+      dimension: "nether",
+      daylight: 0.22, // under the sleep threshold — only the dimension check refuses
+      blockChanges: createBlockChangeTracker(world),
+      players: new Map([["local", player]]),
+      mobs: [],
+      sleepTimer: 0
+    } as unknown as GameState;
+    const events: GameEvent[] = [];
+
+    expect(tryInteractBlock(state, player, (e) => events.push(e))).toBe(true); // click consumed
+    expect(events).toContainEqual({ type: "sleepDenied", reason: "dimension" });
+    expect(player.sleeping).toBe(false);
+    expect(player.spawnPoint).toBeNull();
   });
 });

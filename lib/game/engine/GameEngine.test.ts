@@ -29,7 +29,8 @@ import {
   ANVIL_REPAIR_COST_LEVELS,
   BOSS_HP,
   CHEST_SLOTS,
-  GRINDSTONE_REFUND_XP_PER_LEVEL
+  GRINDSTONE_REFUND_XP_PER_LEVEL,
+  NETHER_DAYLIGHT
 } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
@@ -3240,5 +3241,62 @@ describe("mob persistence (pets)", () => {
     expect(pet.faction).toBe("ally");
     expect(pet.hp).toBe(PET_TAMED_HP);
     expect(pet.detectRange).toBe(PET_FIGHT_RANGE); // re-armed so the pet still fights
+  });
+});
+
+describe("dimension-aware boot (the nether)", () => {
+  function makeNetherEngine(save: ReturnType<GameEngine["serialize"]> | null = null): GameEngine {
+    return new GameEngine({ save, dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+  }
+
+  test("a nether engine boots onto the cavern floor with daylight pinned, no sites, no weather", () => {
+    const e = makeNetherEngine();
+    expect(e.state.dimension).toBe("nether");
+    expect(e.state.daylight).toBe(NETHER_DAYLIGHT);
+    // The stub nether: bedrock caps + a stone mass — the spawn must sit on the
+    // floor pocket, not on the bedrock roof (the surfaceYAt ceiling landmine).
+    expect(e.state.player.position.y).toBeLessThan(e.state.world.sizeY - 5);
+    expect(e.state.player.position.y).toBeGreaterThan(2);
+    expect(e.state.dungeonChestIndices.size).toBe(0);
+    expect(e.state.villageSites).toHaveLength(0);
+    expect(e.state.weather.kind).toBe("clear");
+  });
+
+  test("daylight stays pinned through the day cycle (hostile gates never open or close)", () => {
+    const e = makeNetherEngine();
+    e.state.dayClock = 60; // overworld noon
+    run(e, 1);
+    expect(e.state.daylight).toBe(NETHER_DAYLIGHT);
+  });
+
+  test("a save round-trips overworld and nether world halves independently", () => {
+    // An overworld world with an edit…
+    const over = makeEngine();
+    over.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    const overSave = over.serialize();
+    expect(overSave.villagesSeeded).toBe(true);
+
+    // …travels to the nether (what serializeForTravel will write): same save,
+    // local player flipped into the nether.
+    const travelSave = { ...overSave, players: overSave.players.map((p) => ({ ...p, dimension: "nether" as const })) };
+    const nether = makeNetherEngine(travelSave);
+    expect(nether.state.dimension).toBe("nether");
+    expect(nether.state.blockChanges.changes()).toEqual([]); // fresh nether — no diffs yet
+
+    // A nether edit persists into dimensions.nether while the overworld half
+    // (including its villagesSeeded flag) rides through verbatim.
+    nether.state.blockChanges.set(5, 41, 5, BlockId.Obsidian);
+    const netherSave = nether.serialize();
+    expect(netherSave.changes).toEqual(overSave.changes);
+    expect(netherSave.villagesSeeded).toBe(true);
+    expect(netherSave.dimensions?.nether?.changes).toHaveLength(1);
+    expect(netherSave.players[0].dimension).toBe("nether");
+
+    // …and travelling home boots an overworld engine with both halves intact.
+    const homeSave = { ...netherSave, players: netherSave.players.map((p) => ({ ...p, dimension: "overworld" as const })) };
+    const home = makeEngine(homeSave);
+    expect(home.state.dimension).toBe("overworld");
+    expect(home.state.world.get(10, 40, 10)).toBe(BlockId.Brick); // the overworld edit survived the detour
+    expect(home.serialize().dimensions?.nether?.changes).toHaveLength(1); // the nether edit still rides along
   });
 });

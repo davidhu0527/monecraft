@@ -7,6 +7,7 @@ import {
   collectVillageSites,
   collidesAt,
   computeFullLight,
+  generateNetherWorld,
   generateWorld,
   voxelRaycast,
   VoxelWorld,
@@ -67,6 +68,7 @@ import { tradeProfession } from "@/lib/game/trades";
 import * as inv from "@/lib/game/inventory";
 import {
   applyWorldgenGuard,
+  dimensionSectionOf,
   inventorySlotsSnapshot,
   serializeEquippedArmor,
   readContainers,
@@ -77,6 +79,7 @@ import {
   restoreHungerLevel,
   restoreEffects,
   restoreInventorySlots,
+  restorePlayerDimension,
   restorePlayerPosition,
   restoreGameMode,
   restoreDifficulty,
@@ -98,10 +101,10 @@ import {
 } from "@/lib/game/save";
 import { canEditBlocks, canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
-import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
+import { createNetherFloorYAt, createSurfaceYAt, findNetherSpawn, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
-import type { InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/types";
+import type { DimensionId, DimensionSection, InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/types";
 import { createBlockChangeTracker, type DetailedEdit } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import {
@@ -119,7 +122,7 @@ import {
   type PlayerState
 } from "./state";
 import { allEligiblePlayersSleeping, installPlayerAliases, mustGetPlayer, nearestPlayerTo } from "./players";
-import { daylightAt, tickDayNight } from "./systems/dayNight";
+import { daylightAt, dimensionDaylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
 import { lookDirection, tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
@@ -175,6 +178,11 @@ export type GameEngineOptions = {
   difficulty?: Difficulty;
   /** Hardcore flag for a fresh world; the save's own wins when restoring. Forces Survival + Hard + permadeath. Defaults to false. */
   hardcore?: boolean;
+  /**
+   * Dimension for a fresh world (a test override); the save's own — the local
+   * player's `dimension` — wins when restoring. Defaults to "overworld".
+   */
+  dimension?: DimensionId;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -242,10 +250,13 @@ export class GameEngine {
   /**
    * Dimension sections this engine does NOT simulate, re-emitted verbatim by
    * serialize() so they survive a full save round-trip untouched. An overworld
-   * engine (every engine today, including the server room) carries the save's
-   * `dimensions` block here.
+   * engine (including the server room) carries the save's `dimensions` block
+   * here; a nether engine instead carries the OVERWORLD's top-level world half
+   * in `foreignOverworld` (plus its villagesSeeded flag) and re-emits that at
+   * the top level.
    */
   private readonly foreignDimensions: SaveData["dimensions"];
+  private readonly foreignOverworld: (DimensionSection & { villagesSeeded?: boolean }) | null;
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
   private events: AttributedGameEvent[] = [];
@@ -282,33 +293,60 @@ export class GameEngine {
     // A restored save's own type wins (the block-diffs were recorded against it);
     // a fresh world takes the requested type, defaulting to "default".
     this.worldType = save?.worldType ?? options.worldType ?? "default";
-    this.foreignDimensions = save?.dimensions;
+    // The local player's persisted record (v17+ saves hold one entry per player;
+    // a downloaded multiplayer world played solo falls back to any first entry).
+    const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
+    // Which dimension this engine simulates: where the save left the local
+    // player (swap-on-travel writes it before the remount), else the requested
+    // override, else the overworld.
+    const dimension: DimensionId = savedLocal ? restorePlayerDimension(savedLocal) : (options.dimension ?? "overworld");
+    // The world half this engine simulates; foreign halves ride through serialize().
+    const section = save ? dimensionSectionOf(save, dimension) : null;
+    this.foreignDimensions = dimension === "overworld" ? save?.dimensions : undefined;
+    this.foreignOverworld =
+      dimension === "nether"
+        ? save
+          ? {
+              changes: save.changes,
+              blockEntities: save.blockEntities,
+              lootedChests: save.lootedChests,
+              mobs: save.mobs,
+              vehicles: save.vehicles,
+              villagesSeeded: save.villagesSeeded
+            }
+          : { changes: [] }
+        : null;
     const size = options.worldSize ?? { x: WORLD_SIZE_X, y: WORLD_SIZE_Y, z: WORLD_SIZE_Z };
     const world = new VoxelWorld(size.x, size.y, size.z, seed);
-    generateWorld(world, this.worldType);
+    if (dimension === "nether") generateNetherWorld(world);
+    else generateWorld(world, this.worldType);
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
-    const dungeonSites = collectDungeonSites(world, this.worldType);
+    // Worldgen loot sites are an overworld concept — the nether has none.
+    const dungeonSites = dimension === "nether" ? { chestIndices: [] as number[], spawnerIndices: [] as number[] } : collectDungeonSites(world, this.worldType);
     // Likewise re-derive shipwreck and buried-treasure chests (they share the
     // lazy loot fill; treasure also feeds the map compass) and village centers,
     // so resident villagers can be seeded there.
-    const shipwreckSites = collectShipwreckSites(world, this.worldType);
-    const treasureSites = collectTreasureSites(world, this.worldType);
-    const villageSites = collectVillageSites(world, this.worldType);
+    const shipwreckSites = dimension === "nether" ? { chestIndices: [] as number[] } : collectShipwreckSites(world, this.worldType);
+    const treasureSites = dimension === "nether" ? { sites: [] } : collectTreasureSites(world, this.worldType);
+    const villageSites = dimension === "nether" ? { centers: [] } : collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
-    if (save) blockChanges.applySavedChanges(save.changes);
+    if (section) blockChanges.applySavedChanges(section.changes);
 
     // Bake per-voxel light now the block grid is final (worldgen + saved edits).
     // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
     world.light = computeFullLight(world);
 
-    this.surfaceYAt = createSurfaceYAt(world);
+    // The nether is roofed: its "surface" is the highest cavern-floor pocket,
+    // not highestSolidY (which would be the bedrock ceiling). One seam fixes
+    // every consumer — unstuck, respawn, and the spawn directors.
+    this.surfaceYAt = dimension === "nether" ? createNetherFloorYAt(world) : createSurfaceYAt(world);
 
-    const firstSpawn = findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
-    // The local player's persisted record (v17 saves hold one entry per player;
-    // a downloaded multiplayer world played solo falls back to any first entry).
-    const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
+    const firstSpawn =
+      dimension === "nether"
+        ? findNetherSpawn(world, this.surfaceYAt, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2))
+        : findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
     // Hardcore is resolved first because it OVERRIDES mode/difficulty: a hardcore
     // world is locked to Survival + Hard. A persisted gameOver (the run already
     // ended in death) boots straight into Spectator so the dead world is roamable,
@@ -361,6 +399,7 @@ export class GameEngine {
     this.state = installPlayerAliases({
       world,
       blockChanges,
+      dimension,
       players: bootPlayer ? new Map([[LOCAL_PLAYER_ID, localPlayer]]) : new Map(),
       primaryPlayerId: LOCAL_PLAYER_ID,
       difficulty,
@@ -388,8 +427,8 @@ export class GameEngine {
       vehicles: [],
       nextVehicleId: 1,
       dayClock: 0,
-      daylight: daylightAt(0),
-      daylightPercent: Math.round(daylightAt(0) * 100),
+      daylight: dimensionDaylightAt(dimension, 0),
+      daylightPercent: Math.round(dimensionDaylightAt(dimension, 0) * 100),
       weather: { kind: "clear", intensity: 0 },
       sleepTimer: 0,
       timers: createWorldTimers(),
@@ -403,26 +442,29 @@ export class GameEngine {
     // blocks are always player-placed, so the diff is a complete census).
     seedRedstoneCells(this.state);
 
-    if (save) {
+    if (save && section) {
       if (bootPlayer && savedLocal) this.restorePlayerFields(localPlayer, savedLocal);
-      this.state.lootedWorldgenChests = new Set(readLootedChests(save));
+      // The world half restores from THIS dimension's section (the overworld's
+      // is the top level, another dimension's lives under `dimensions`).
+      this.state.lootedWorldgenChests = new Set(readLootedChests(section));
       // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
       // fungible population, so the world stays alive and pets simply pre-exist.
-      this.restorePersistedMobs(restoreMobs(save));
-      for (const vehicle of restoreVehicles(save)) {
+      this.restorePersistedMobs(restoreMobs(section));
+      for (const vehicle of restoreVehicles(section)) {
         restoreVehicle(this.state, vehicle.kind, vehicle.x, vehicle.y, vehicle.z, vehicle.yaw);
       }
 
       // Restore chest contents only for indices that still hold a Chest block.
-      for (const { index, slots } of readContainers(save)) {
+      for (const { index, slots } of readContainers(section)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
           this.state.containers.set(index, slots);
         }
       }
+      // The day clock is shared world time — top-level regardless of dimension.
       const savedClock = restoreDayClock(save);
       if (savedClock !== null) {
         this.state.dayClock = savedClock;
-        this.state.daylight = daylightAt(savedClock);
+        this.state.daylight = dimensionDaylightAt(dimension, savedClock);
         this.state.daylightPercent = Math.round(this.state.daylight * 100);
       }
     }
@@ -442,8 +484,8 @@ export class GameEngine {
     // its villages yet: a fresh world (no save) or one upgraded from a pre-village
     // save (no `villagesSeeded` flag). A genuine v15 save's villagers are
     // authoritative — restored above — so we never re-seed (an emptied village
-    // stays empty, not repopulated on reload).
-    if (!save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
+    // stays empty, not repopulated on reload). Villages are an overworld thing.
+    if (dimension !== "nether" && !save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
       if (this.state.villageSites.length > 0) {
         spawnVillageResidents(this.state, this.state.villageSites, this.rng, this.surfaceYAt);
       } else {
@@ -1169,7 +1211,10 @@ export class GameEngine {
       xp: player.xp,
       stats: serializeStats(player.stats),
       advancements: [...player.advancements],
-      spawnPoint: player.spawnPoint ? { ...player.spawnPoint } : null
+      spawnPoint: player.spawnPoint ? { ...player.spawnPoint } : null,
+      // Where the player is — this engine's dimension (never portalArrival:
+      // that anchor is one-shot, written only by serializeForTravel).
+      dimension: this.state.dimension
     };
   }
 
@@ -1200,8 +1245,16 @@ export class GameEngine {
 
   serialize(): SaveData {
     const state = this.state;
-    const save: SaveData = {
-      version: 18,
+    // The live dimension's world half, straight from this engine's simulation.
+    const live: DimensionSection = {
+      changes: state.blockChanges.changes(),
+      blockEntities: serializeContainers(state.containers),
+      lootedChests: serializeLootedChests(state.lootedWorldgenChests),
+      mobs: serializeMobs(state.mobs),
+      vehicles: serializeVehicles(state.vehicles)
+    };
+    const base = {
+      version: 18 as const,
       // Stamps which generator produced these diffs; on mismatch a future boot
       // discards the world half and reboots from the seed (applyWorldgenGuard).
       worldgenVersion: WORLDGEN_VERSION,
@@ -1209,13 +1262,27 @@ export class GameEngine {
       worldType: this.worldType,
       difficulty: state.difficulty,
       hardcore: state.hardcore,
-      changes: state.blockChanges.changes(),
       players: [...state.players.values()].map((player) => this.serializePlayer(player)),
-      dayClock: state.dayClock,
-      blockEntities: serializeContainers(state.containers),
-      lootedChests: serializeLootedChests(state.lootedWorldgenChests),
-      mobs: serializeMobs(state.mobs),
-      vehicles: serializeVehicles(state.vehicles),
+      dayClock: state.dayClock
+    };
+    if (state.dimension === "nether") {
+      // A nether engine: the overworld's world half (held foreign since boot)
+      // stays at the top level VERBATIM; the live state goes under dimensions.
+      const over = this.foreignOverworld ?? { changes: [] };
+      return {
+        ...base,
+        changes: over.changes,
+        blockEntities: over.blockEntities,
+        lootedChests: over.lootedChests,
+        mobs: over.mobs,
+        vehicles: over.vehicles,
+        villagesSeeded: over.villagesSeeded,
+        dimensions: { nether: live }
+      };
+    }
+    const save: SaveData = {
+      ...base,
+      ...live,
       villagesSeeded: true // this world's villages are populated — don't re-seed on reload
     };
     // Dimensions this engine doesn't simulate ride through verbatim, so e.g.

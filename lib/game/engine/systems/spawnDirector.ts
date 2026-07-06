@@ -115,6 +115,9 @@ export function spawnAquaticGroup(
  * petting zoo; hostiles stay closer (the dawn-aggro behavior tests document).
  */
 export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
+  // The nether has its own (hostile-only) population, seeded by the content
+  // stage's nether branch — none of the overworld groups belong there.
+  if (state.dimension === "nether") return;
   // Day-one population centers on the booting player; a playerless world (a
   // fresh server room before the first join) seeds around the map center.
   const anchor = nearestPlayerTo(state, state.world.sizeX / 2, state.world.sizeZ / 2);
@@ -165,6 +168,7 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
  * DROWNED_CAP plus the shared difficulty-scaled hostile cap.
  */
 export function tickAquaticSpawnDirector(state: GameState, dt: number, rng: () => number): void {
+  if (state.dimension === "nether") return; // no water, no fish, no drowned
   state.timers.aquaticSpawnTimer += dt;
   if (state.timers.aquaticSpawnTimer < AQUATIC_SPAWN_INTERVAL_SECONDS) return;
   state.timers.aquaticSpawnTimer = 0;
@@ -249,6 +253,9 @@ function partyCapScale(state: GameState): number {
 
 /** Trickles hostile mobs in around the player at night, up to the cap. Difficulty scales the cadence and cap; Peaceful spawns none. */
 export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
+  // The nether gets its own hostile kinds from the content stage; until then
+  // the overworld roster must not materialize there.
+  if (state.dimension === "nether") return;
   if (!hostilesSpawn(state.difficulty)) return;
   state.timers.hostileSpawnTimer += dt;
   const interval = HOSTILE_SPAWN_INTERVAL_SECONDS * hostileSpawnIntervalScale(state.difficulty);

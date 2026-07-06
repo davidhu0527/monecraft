@@ -3,7 +3,18 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData, VehicleKind } from "@/lib/game/types";
+import type {
+  DimensionId,
+  EffectId,
+  EnchantmentId,
+  EquippedArmor,
+  InventorySlot,
+  MobFaction,
+  MobKind,
+  Profession,
+  SaveData,
+  VehicleKind
+} from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -283,6 +294,12 @@ export type RaidState = {
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
+  /**
+   * Which dimension this engine simulates (swap-on-travel: one live dimension
+   * per engine — `world` and every voxel-indexed collection are in ITS space).
+   * Fixed for the engine's life; portal travel boots a fresh engine.
+   */
+  dimension: DimensionId;
   /** Every player in the world, by id. Single-player is the one-entry case. */
   players: Map<PlayerId, PlayerState>;
   /**
@@ -572,7 +589,7 @@ export type GameEvent =
   | { type: "tntPrimed"; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
-  | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
+  | { type: "sleepDenied"; reason: "daylight" | "hostiles" | "dimension" }
   | { type: "wokeUp" }
   | { type: "playerJoined"; playerId: PlayerId }
   | { type: "playerLeft"; playerId: PlayerId }

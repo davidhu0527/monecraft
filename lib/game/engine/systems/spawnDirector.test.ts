@@ -303,3 +303,29 @@ describe("tickAquaticSpawnDirector", () => {
     expect(state.mobs).toHaveLength(0);
   });
 });
+
+describe("nether spawn gating", () => {
+  function makeNetherEngine(): GameEngine {
+    return new GameEngine({ dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+  }
+
+  test("a nether boot seeds no overworld population at all", () => {
+    const e = makeNetherEngine();
+    expect(e.state.mobs).toHaveLength(0); // no animals, no villagers, no night pack
+  });
+
+  test("the overworld hostile director stays silent in the nether (its roster doesn't belong there)", () => {
+    const e = makeNetherEngine();
+    e.state.daylight = 0.1;
+    e.state.timers.hostileSpawnTimer = 1000;
+    tickHostileSpawnDirector(e.state, 0.1, mulberry32(3), createSurfaceYAt(e.state.world));
+    expect(hostileCount(e)).toBe(0);
+  });
+
+  test("the aquatic director stays silent in the nether", () => {
+    const e = makeNetherEngine();
+    e.state.timers.aquaticSpawnTimer = 1000;
+    tickAquaticSpawnDirector(e.state, 0.1, mulberry32(3));
+    expect(e.state.mobs).toHaveLength(0);
+  });
+});

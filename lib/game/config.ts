@@ -233,6 +233,10 @@ export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
+// The nether has no sky: daylight is pinned to this constant — below the
+// hostile-spawn threshold (spawns never stop) and the burn threshold (nothing
+// combusts), while the day clock itself keeps ticking (it is shared world time).
+export const NETHER_DAYLIGHT = 0.22;
 
 // Weather (cosmetic, transient — never persisted, never touches spawn balance).
 // Time is split into fixed windows; a seeded hash of the window index decides

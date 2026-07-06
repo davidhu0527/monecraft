@@ -272,6 +272,12 @@ export function tryTradeAimedVillager(state: GameState, player: PlayerState, emi
 
 /** Sleep in a bed: only at night, only when no hostile is near. Sets the respawn point. */
 function interactBed(state: GameState, player: PlayerState, emit: EmitGameEvent, x: number, y: number, z: number): boolean {
+  // No sky, no morning: the nether's pinned daylight would otherwise slip
+  // under the sleep threshold and let a bed skip time that never dawns.
+  if (state.dimension === "nether") {
+    emit({ type: "sleepDenied", reason: "dimension" });
+    return true;
+  }
   if (state.daylight >= SLEEP_ALLOWED_BELOW_DAYLIGHT) {
     emit({ type: "sleepDenied", reason: "daylight" });
     return true;

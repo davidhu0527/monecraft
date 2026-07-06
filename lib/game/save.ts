@@ -432,10 +432,10 @@ export function serializeVehicles(vehicles: Array<{ kind: VehicleKind; position:
   return out;
 }
 
-export function restoreVehicles(save: SaveData): SavedVehicle[] {
-  if (!Array.isArray(save.vehicles)) return [];
+export function restoreVehicles(section: DimensionSection): SavedVehicle[] {
+  if (!Array.isArray(section.vehicles)) return [];
   const out: SavedVehicle[] = [];
-  for (const entry of save.vehicles) {
+  for (const entry of section.vehicles) {
     if (!entry || typeof entry.kind !== "string" || !Object.hasOwn(VALID_VEHICLE_KINDS, entry.kind)) continue;
     if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z) || !Number.isFinite(entry.yaw)) continue;
     out.push({ kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, yaw: entry.yaw });
@@ -540,10 +540,10 @@ export function serializeLootedChests(looted: Set<number>): number[] {
   return [...looted];
 }
 
-/** Reads the opened/broken dungeon chest indices from a save (finite numbers only). */
-export function readLootedChests(save: SaveData): number[] {
-  if (!Array.isArray(save.lootedChests)) return [];
-  return save.lootedChests.filter((value) => Number.isFinite(value));
+/** Reads the opened/broken dungeon chest indices from a save's world half (finite numbers only). A full SaveData is a valid section (the overworld's half IS the top level). */
+export function readLootedChests(section: DimensionSection): number[] {
+  if (!Array.isArray(section.lootedChests)) return [];
+  return section.lootedChests.filter((value) => Number.isFinite(value));
 }
 
 // Every known status-effect id, as a Record keyed by EffectId so adding an
@@ -652,10 +652,10 @@ export function serializeMobs(mobs: MobState[]): SavedMob[] {
  * The engine rebuilds the live MobState from these (re-grounding y onto current
  * terrain, assigning fresh ids), so this stays pure data — no THREE / no rng.
  */
-export function restoreMobs(save: SaveData): SavedMob[] {
-  if (!Array.isArray(save.mobs)) return [];
+export function restoreMobs(section: DimensionSection): SavedMob[] {
+  if (!Array.isArray(section.mobs)) return [];
   const out: SavedMob[] = [];
-  for (const entry of save.mobs) {
+  for (const entry of section.mobs) {
     if (!entry || typeof entry.kind !== "string" || !MOB_TEMPLATES[entry.kind]) continue;
     if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z)) continue;
     if (!Number.isFinite(entry.hp) || entry.hp <= 0) continue;
@@ -681,10 +681,10 @@ export function restoreMobs(save: SaveData): SavedMob[] {
  * arrays keyed by voxel index. Per-slot validation only — the engine still
  * confirms each index actually holds a Chest block before using it.
  */
-export function readContainers(save: SaveData): Array<{ index: number; slots: InventorySlot[] }> {
-  if (!Array.isArray(save.blockEntities)) return [];
+export function readContainers(section: DimensionSection): Array<{ index: number; slots: InventorySlot[] }> {
+  if (!Array.isArray(section.blockEntities)) return [];
   const out: Array<{ index: number; slots: InventorySlot[] }> = [];
-  for (const entry of save.blockEntities) {
+  for (const entry of section.blockEntities) {
     if (!entry || !Number.isFinite(entry.index) || !Array.isArray(entry.slots)) continue;
     const slots = Array.from({ length: CHEST_SLOTS }, (_, i) => restoreSlot(entry.slots[i]));
     out.push({ index: entry.index, slots });
