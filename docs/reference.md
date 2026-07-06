@@ -58,7 +58,7 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**80 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**86 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
 [brewing stand](#brewing--potions)).
@@ -71,30 +71,33 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 
 ### Building & materials
 
-| Result             | Ingredients               |
-| ------------------ | ------------------------- |
-| 4 Planks           | 2 Wood                    |
-| 2 Glass            | 4 Sand                    |
-| 2 Brick            | 2 Dirt + 2 Stone          |
-| 1 Furnace          | 8 Cobble                  |
-| 1 Chest            | 8 Planks                  |
-| 1 Brewing Stand    | 3 Cobble + 1 Gold Ore     |
-| 1 Enchanting Table | 2 Diamond Ore + 4 Cobble  |
-| 1 Anvil            | 3 Gold Ore + 4 Cobble     |
-| 1 Grindstone       | 2 Cobble + 2 Planks       |
-| 1 Wood Door        | 6 Planks                  |
-| 4 Torch            | 1 Coal + 1 Wood           |
-| 1 Bed              | 3 Wool + 3 Planks         |
-| 1 Wool             | 4 String                  |
-| 1 TNT              | 4 Gunpowder + 1 Sand      |
-| 3 Bone Meal        | 1 Bone                    |
-| 3 Glass Bottle     | 3 Glass                   |
-| 8 Redstone Dust    | 1 Gold Ore + 1 Coal       |
-| 1 Lever            | 1 Cobble + 1 Planks       |
-| 2 Stone Button     | 1 Cobble                  |
-| 1 Pressure Plate   | 2 Planks                  |
-| 2 Redstone Torch   | 1 Redstone Dust + 1 Wood  |
-| 1 Redstone Lamp    | 4 Redstone Dust + 2 Glass |
+| Result             | Ingredients                               |
+| ------------------ | ----------------------------------------- |
+| 4 Planks           | 2 Wood                                    |
+| 2 Glass            | 4 Sand                                    |
+| 2 Brick            | 2 Dirt + 2 Stone                          |
+| 1 Furnace          | 8 Cobble                                  |
+| 1 Chest            | 8 Planks                                  |
+| 1 Brewing Stand    | 3 Cobble + 1 Gold Ore                     |
+| 1 Enchanting Table | 2 Diamond Ore + 4 Cobble                  |
+| 1 Anvil            | 3 Gold Ore + 4 Cobble                     |
+| 1 Grindstone       | 2 Cobble + 2 Planks                       |
+| 1 Wood Door        | 6 Planks                                  |
+| 4 Torch            | 1 Coal + 1 Wood                           |
+| 1 Bed              | 3 Wool + 3 Planks                         |
+| 1 Wool             | 4 String                                  |
+| 1 TNT              | 4 Gunpowder + 1 Sand                      |
+| 3 Bone Meal        | 1 Bone                                    |
+| 3 Glass Bottle     | 3 Glass                                   |
+| 8 Redstone Dust    | 1 Gold Ore + 1 Coal                       |
+| 1 Lever            | 1 Cobble + 1 Planks                       |
+| 2 Stone Button     | 1 Cobble                                  |
+| 1 Pressure Plate   | 2 Planks                                  |
+| 2 Redstone Torch   | 1 Redstone Dust + 1 Wood                  |
+| 1 Redstone Lamp    | 4 Redstone Dust + 2 Glass                 |
+| 16 Rail            | 3 Sliver Ore + 3 Wood                     |
+| 4 Powered Rail     | 2 Gold Ore + 1 Redstone Dust + 2 Wood     |
+| 2 Detector Rail    | 1 Sliver Ore + 1 Redstone Dust + 1 Cobble |
 
 ### Tools
 
@@ -112,10 +115,11 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 
 ### Vehicles
 
-| Result | Ingredients                  |
-| ------ | ---------------------------- |
-| Raft   | 4 Planks + 2 Wood            |
-| Ship   | 8 Planks + 3 Wood + 2 String |
+| Result   | Ingredients                  |
+| -------- | ---------------------------- |
+| Raft     | 4 Planks + 2 Wood            |
+| Ship     | 8 Planks + 3 Wood + 2 String |
+| Minecart | 5 Sliver Ore                 |
 
 ### Weapons
 
@@ -245,7 +249,7 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
 ## Blocks
 
-**46 block types** (plus air). Hardness is relative break time — higher is slower.
+**49 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken.
 
@@ -294,6 +298,9 @@ hands or any tool. Bedrock, water, and lava cannot be broken.
 | Pressure Plate    | 1        | any             | Powers while a player **or mob** stands on it. Floor-mounted                                                                                                                                     |
 | Redstone Torch    | 1        | any             | Constant power source and **inverter**: turns off while its support block is powered (never powers its own support). Emits block light 7 while lit                                               |
 | Redstone Lamp     | 3        | any             | Lights up (block light 15) while powered — a switchable light source                                                                                                                             |
+| Rail              | 1        | any             | Flat track minecarts ride; corners derive from neighboring rails (no curve piece). Needs a solid block below; pops off (dropping itself) when the support breaks                                 |
+| Powered Rail      | 1        | any             | Redstone **consumer**: powered, it boosts carts past cruise speed (a parked cart launches the way it faces); **unpowered it stops carts dead**                                                   |
+| Detector Rail     | 1        | any             | Redstone **source**: powers its neighbors like a pressed plate while a minecart sits on it                                                                                                       |
 | Bedrock           | —        | unbreakable     | World floor and border                                                                                                                                                                           |
 | Water             | —        | —               | Liquid; place blocks into it to replace cells; 60 s continuous immersion starts 1.5-heart damage each second                                                                                     |
 

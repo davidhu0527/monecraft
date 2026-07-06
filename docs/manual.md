@@ -198,7 +198,8 @@ automatically. While aboard, steer with the movement keys; crouch dismounts when
 there is room beside the vehicle. Placing needs open water within reach — aim
 somewhere that can't hold a boat, or once the world hits its 64-vehicle cap, and
 you'll hear a dull "can't place here" thud instead. Rafts and ships appear in
-their own **Vehicles** crafting category.
+their own **Vehicles** crafting category — alongside the land-going
+[minecart](#rails-and-minecarts).
 
 ### Hunger
 
@@ -518,6 +519,38 @@ torch's base block, and the torch's output is the opposite of the lever. Feed a
 torch's output back to its own base through a wire loop and it blinks — a
 **clock** for flashing lamps. Circuits update on a fixed ~0.1 s tick, so signals
 ripple visibly through long contraptions.
+
+## Rails and minecarts
+
+Lay track and ride it. Craft **rails** (3 sliver ore + 3 wood → 16) and place
+them on solid ground — like wire, they mount on top of a block and pop off
+(dropping their item) if you break the block under them. A line of rails is a
+track; put two lines at a right angle and the corner just works (carts turn to
+follow the track — there is no special curve piece). Rails don't climb; keep a
+line on one level.
+
+Craft a **minecart** (5 sliver ore), aim at a rail, and right-click to set the
+cart on it. Right-click the cart to board. While riding, **forward**
+accelerates, **back** brakes (and then reverses), and **crouch** hops out —
+the track does the steering. Mining the rail out from under a cart strands it
+where the track ended.
+
+Two special rails hook into redstone:
+
+- A **powered rail** (2 gold ore + 1 redstone dust + 2 wood → 4) is a
+  **consumer**: powered (by wire, a lever beside it, a plate…), it glows and
+  drives carts up past cruise speed. **Unpowered, it's a brake** that stops
+  carts dead — so a lever next to one is a station switch: on = launch,
+  off = hold. A stationary cart parked on a lit powered rail launches the way
+  it faces, no rider needed.
+- A **detector rail** (1 sliver ore + 1 redstone dust + 1 cobble → 2) is a
+  **source**: it powers its neighbors like a pressed plate while a cart sits
+  on it — wire it to a lamp for an occupancy light, to a door for an automatic
+  gate, or to TNT for a very unwelcoming railway. (A parked cart also holds an
+  ordinary pressure plate down.)
+
+Riding a minecart for the first time unlocks the **On Rails** advancement, and
+the statistics tab counts your rides.
 
 ## Storage
 
