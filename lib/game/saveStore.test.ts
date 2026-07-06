@@ -106,7 +106,7 @@ describe("worldSaveStore", () => {
   test("a failed write keeps serving the newest state from memory and retries on the next write", async () => {
     const failing = createFakeKv({ failPuts: true });
     const store = createWorldSaveStore({ kv: failing.kv, storage: memoryStorage() });
-    expect(store.write("w1", sampleSave(1))).rejects.toThrow("put failed");
+    await expect(store.write("w1", sampleSave(1))).rejects.toThrow("put failed");
     await settle();
     expect(await store.read("w1")).toEqual(sampleSave(1)); // memory, despite the disk failure
   });
@@ -180,7 +180,7 @@ describe("worldSaveStore", () => {
         throw new Error("QuotaExceededError");
       };
       const store = createWorldSaveStore({ kv: off.kv, storage });
-      expect(store.write("w1", sampleSave(1))).rejects.toThrow("QuotaExceededError");
+      await expect(store.write("w1", sampleSave(1))).rejects.toThrow("QuotaExceededError");
     });
 
     test("flushWrite writes synchronously once the mode is known", async () => {

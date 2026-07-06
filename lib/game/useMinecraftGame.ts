@@ -404,7 +404,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const online = onlineRef.current;
     const worldId = worldIdRef.current;
     const autoSave = () => {
-      if (online) return;
+      // The skip flag also gates the interval and unload flushes: while a
+      // Load/Reset (or hardcore delete) awaits its remount, a save firing in
+      // that window would resurrect the blob being re-read or discarded.
+      if (online || skipUnmountSaveRef.current) return;
       persistGame(gameEngine, worldId, flashMessage);
       syncCloudSave(gameEngine, true);
     };
@@ -417,7 +420,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     // where beforeunload never did, and skipping beforeunload keeps the page
     // bfcache-eligible. Silent: a tab switch shouldn't toast "Saved".
     const flushSave = () => {
-      if (online) return;
+      if (online || skipUnmountSaveRef.current) return;
       worldSaves.flushWrite(worldId, gameEngine.serialize());
       syncCloudSave(gameEngine, true);
     };
@@ -692,6 +695,15 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       // Online: the unmount cleanup disposes the session; the server persists.
       if (engine && !onlineRef.current) persistGame(engine, worldIdRef.current, flashMessage);
       opts.onQuitToWorlds();
+    },
+    /**
+     * Arms the same skip flag Load/Reset use, for unmounts that must not
+     * persist — the hardcore-delete path, where the teardown save would
+     * recreate the blob the shell just removed. (The gameOver force-save
+     * already persisted the dead world; only spectator drift is dropped.)
+     */
+    suppressUnmountSave: () => {
+      skipUnmountSaveRef.current = true;
     }
   };
 }

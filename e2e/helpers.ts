@@ -121,12 +121,23 @@ export async function readWorldSave(page: Page): Promise<{ seed: number; version
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const db = open.result;
-        const request = db.transaction("worldSaves", "readonly").objectStore("worldSaves").get(session.worldId);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
+        // Settle on every path (incl. a missing store throwing from
+        // transaction()) so a broken DB fails the assertion instead of
+        // hanging the test until the Playwright timeout.
+        try {
+          const request = db.transaction("worldSaves", "readonly").objectStore("worldSaves").get(session.worldId);
+          request.onerror = () => {
+            db.close();
+            reject(request.error);
+          };
+          request.onsuccess = () => {
+            db.close();
+            resolve((request.result as { seed: number; version: number } | undefined) ?? null);
+          };
+        } catch (error) {
           db.close();
-          resolve((request.result as { seed: number; version: number } | undefined) ?? null);
-        };
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
       };
     });
   });

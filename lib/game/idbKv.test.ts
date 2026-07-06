@@ -43,7 +43,7 @@ describe("idbKv", () => {
     } as unknown as IDBFactory;
     const kv = createIdbKv("test-db", "test-store", broken);
     expect(await kv.ready()).toBe(false);
-    expect(kv.get("k")).rejects.toThrow("IndexedDB unavailable");
+    await expect(kv.get("k")).rejects.toThrow("IndexedDB unavailable");
   });
 
   test("ready() is false when no factory exists at all", async () => {

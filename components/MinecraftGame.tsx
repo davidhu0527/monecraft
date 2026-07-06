@@ -112,6 +112,7 @@ export default function MinecraftGame({ world, profile, initialSave, online, onQ
     loadNow,
     resetNow,
     quitToWorlds,
+    suppressUnmountSave,
     touchControls,
     engageControls,
     isFlying,
@@ -293,7 +294,15 @@ export default function MinecraftGame({ world, profile, initialSave, online, onQ
 
       <VictoryScreen show={victory} onDismiss={dismissVictory} />
 
-      <GameOverScreen show={gameOver} onQuitToWorlds={quitToWorlds} onDeleteWorld={onDeleteWorld} />
+      <GameOverScreen
+        show={gameOver}
+        onQuitToWorlds={quitToWorlds}
+        onDeleteWorld={() => {
+          // The shell deletes the world; the teardown save must not recreate it.
+          suppressUnmountSave();
+          onDeleteWorld();
+        }}
+      />
 
       <SleepOverlay sleeping={sleeping} />
 

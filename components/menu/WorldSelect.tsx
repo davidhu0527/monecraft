@@ -87,29 +87,33 @@ export default function WorldSelect({ profile, onPlay, onDownloadCloud, cloudEna
   const uploadToCloud = (world: WorldMeta) => {
     setUploadError((prev) => without(prev, world.id));
     setUploading((prev) => new Set(prev).add(world.id));
-    void Promise.all([
-      worldSaves.read(world.id).catch(() => null),
-      createOnlineWorld({
-        name: world.name,
-        seed: world.seed,
-        worldType: world.worldType,
-        gameMode: world.gameMode,
-        difficulty: world.difficulty,
-        hardcore: world.hardcore,
-        kind: "sp-cloud"
+    // Read first, create second: a failed read must surface as an upload
+    // error, not link an empty cloud row as "Synced" — and reading before
+    // creating means the failure leaves no orphaned server row behind.
+    void worldSaves
+      .read(world.id)
+      .then(async (save) => {
+        const cloud = await createOnlineWorld({
+          name: world.name,
+          seed: world.seed,
+          worldType: world.worldType,
+          gameMode: world.gameMode,
+          difficulty: world.difficulty,
+          hardcore: world.hardcore,
+          kind: "sp-cloud"
+        });
+        // A world with no local save yet has nothing to push — link it now and let
+        // the first play autosave upload the blob.
+        const pushed = cloud && save ? await pushSave(cloud.id, save) : "saved";
+        if (cloud && pushed === "saved") {
+          linkWorldCloud(world.id, cloud.id);
+          refreshCloud();
+        } else {
+          setUploadError((prev) => new Set(prev).add(world.id)); // keep the world local — surface the failure
+        }
       })
-    ]).then(async ([save, cloud]) => {
-      // A world with no local save yet has nothing to push — link it now and let
-      // the first play autosave upload the blob.
-      const pushed = cloud && save ? await pushSave(cloud.id, save) : "saved";
-      if (cloud && pushed === "saved") {
-        linkWorldCloud(world.id, cloud.id);
-        refreshCloud();
-      } else {
-        setUploadError((prev) => new Set(prev).add(world.id)); // keep the world local — surface the failure
-      }
-      setUploading((prev) => without(prev, world.id));
-    });
+      .catch(() => setUploadError((prev) => new Set(prev).add(world.id)))
+      .finally(() => setUploading((prev) => without(prev, world.id)));
   };
 
   // Online (mp) rooms live in the account menu; here only the account's
