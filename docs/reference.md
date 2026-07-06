@@ -61,7 +61,9 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 **92 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
-[brewing stand](#brewing--potions)).
+[brewing stand](#brewing--potions)). The tables below show 85 rows: each furnace
+"+ Fuel" row (and the torch) collapses its separate coal and charcoal recipes
+into one line.
 
 In-game, the recipe book groups recipes into the sections below (Tools, Vehicles,
 Weapons, Armor, Building, Food, Materials, then Smelting, Brewing, and Trades), listing the
@@ -83,7 +85,7 @@ for the missing ones (derived from the loot/recipe tables in `itemSources.ts`).
 | 1 Anvil            | 3 Gold Ore + 4 Cobble                     |
 | 1 Grindstone       | 2 Cobble + 2 Planks                       |
 | 1 Wood Door        | 6 Planks                                  |
-| 4 Torch            | 1 Coal + 1 Wood                           |
+| 4 Torch            | 1 Coal (or Charcoal) + 1 Wood             |
 | 1 Bed              | 3 Wool + 3 Planks                         |
 | 1 Wool             | 4 String                                  |
 | 1 TNT              | 4 Gunpowder + 1 Sand                      |

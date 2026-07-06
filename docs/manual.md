@@ -691,8 +691,9 @@ The sea is worth sailing (see [Rafts and ships](#rafts-and-ships)):
   teal-skinned zombies rise near you and pursue you through the water in all
   three dimensions — a wreck dive after dark is a fight, not a swim. They are
   strictly water-bound (they never walk ashore; knock one onto the beach and it
-  suffocates like a fish) and burn off no daylight, so a deep hoard stays
-  guarded until you deal with its keeper. They drop **rotten flesh**, often
+  suffocates like a fish), and unlike zombies they don't burn in daylight —
+  submersion shields them — so a deep hoard stays guarded until you deal with
+  its keeper. They drop **rotten flesh**, often
   **kelp**, and — rarely — a **sliver spear** torn from some other victim.
   Slaying your first unlocks **Revenge of the Tides**. On Peaceful none spawn.
 - **Kelp and coral.** The sandy ocean floor grows swaying **kelp stalks** and

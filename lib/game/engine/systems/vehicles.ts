@@ -232,6 +232,13 @@ function updateMinecartSpeed(state: GameState, vehicle: VehicleState, throttle: 
 }
 
 function moveMinecartAlongRails(state: GameState, vehicle: VehicleState, dt: number): void {
+  // Support check BEFORE the stationary early-return: a parked cart whose rail
+  // was mined must read as stranded (speed pinned to 0) the same tick, not
+  // only once something tries to move it.
+  if (!vehicleHasSupport(state, vehicle)) {
+    vehicle.speed = 0;
+    return;
+  }
   const signed = vehicle.speed ?? 0;
   let remaining = Math.abs(signed) * dt;
   if (remaining <= 0) return;

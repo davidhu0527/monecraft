@@ -88,8 +88,8 @@ export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () =>
  * water column at least 2 deep; a dry world (Superflat) or an inland center
  * simply yields fewer or zero — the sampler fails closed, never onto land.
  * pushMob expects ground-level feet, so the swim point converts to feet-y.
- * Hostiles (the drowned) keep a minimum standoff so nothing surfaces
- * point-blank under a swimming player.
+ * `minSpawnRadius` is the hostile standoff (per kind, chosen by the caller)
+ * so nothing surfaces point-blank under a swimming player.
  */
 export function spawnAquaticGroup(
   state: GameState,
@@ -99,10 +99,11 @@ export function spawnAquaticGroup(
   centerZ: number,
   radius: number,
   rng: () => number,
-  hostile = false
+  hostile = false,
+  minSpawnRadius = 0
 ): void {
   for (let i = 0; i < count; i += 1) {
-    const pos = randomWaterPointNear(state.world, centerX, centerZ, radius, rng, 2, hostile ? DROWNED_SPAWN_MIN_RADIUS : 0);
+    const pos = randomWaterPointNear(state.world, centerX, centerZ, radius, rng, 2, minSpawnRadius);
     if (!pos) return;
     pushMob(state, kind, hostile, pos.x, pos.y - mobHalfHeight(kind), pos.z, rng);
   }
@@ -192,7 +193,7 @@ export function tickAquaticSpawnDirector(state: GameState, dt: number, rng: () =
   if (drowned >= DROWNED_CAP || hostiles >= cap) return;
   const center = spawnCenterPlayer(state, rng);
   if (!center) return;
-  spawnAquaticGroup(state, "drowned", 1, center.position.x, center.position.z, RENDER_RADIUS * 0.85, rng, true);
+  spawnAquaticGroup(state, "drowned", 1, center.position.x, center.position.z, RENDER_RADIUS * 0.85, rng, true, DROWNED_SPAWN_MIN_RADIUS);
 }
 
 /**

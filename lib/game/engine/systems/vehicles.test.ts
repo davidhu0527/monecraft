@@ -85,7 +85,6 @@ describe("minecart placement", () => {
     const fx = makeFixture();
     layTrackX(fx.state.world, 4, 8, 2);
     fx.player.position.set(6.5, RAIL_Y, 5.5);
-    fx.player.yaw = Math.PI; // face +z? no — face the track at -z
     // Aim down-forward at the rail cell (6, RAIL_Y, 2): face -z and pitch down.
     fx.player.yaw = 0;
     fx.player.pitch = -Math.atan2(1.5, 3.5);
@@ -205,6 +204,18 @@ describe("coasting minecarts", () => {
     const cart = spawnCart(fx, 5.5, 6.5, YAW_EAST);
     for (let i = 0; i < 20; i += 1) tickCoastingMinecarts(fx.state, 0.1);
     expect(cart.position.x).toBeGreaterThan(6); // the launcher-track pattern
+  });
+
+  test("a parked cart whose rail is mined out reads as stranded, not launchable", () => {
+    const fx = makeFixture();
+    fx.state.world.set(5, RAIL_Y, 6, BlockId.PoweredRailOn);
+    layTrackX(fx.state.world, 6, 12, 6);
+    const cart = spawnCart(fx, 5.5, 6.5, YAW_EAST);
+    fx.state.world.set(5, RAIL_Y, 6, BlockId.Air); // the rail vanishes under the parked cart
+    // Even sitting on what WAS a lit launcher rail, the support check pins it.
+    for (let i = 0; i < 20; i += 1) tickCoastingMinecarts(fx.state, 0.1);
+    expect(cart.speed ?? 0).toBe(0);
+    expect(cart.position.x).toBeCloseTo(5.5);
   });
 
   test("the per-player vehicle tick never moves a riderless cart", () => {
