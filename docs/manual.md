@@ -201,9 +201,25 @@ you put it. Empty buckets stack to 16; a filled bucket rides alone in its slot.
 Pour **water directly onto a lava block** and it hisses into **obsidian** — the
 hardest mineable block in the game. Only a **diamond pickaxe** can dig it out,
 and slowly at that. The deep lava floods (below Y≈9, under the cave layer) are
-the natural quarry: bring water buckets down, quench, and mine. For now obsidian
-is a trophy building block — a very patient burglar's nightmare — but it is also
-the raw material of things to come.
+the natural quarry: bring water buckets down, quench, and mine. Obsidian is the
+portal-frame material — see [The nether portal](#the-nether-portal).
+
+### The nether portal
+
+Build a standing **obsidian rectangle** — corners included — around an open
+interior between **2×3** and **4×4**, then strike an inner face with **flint &
+steel** (1 sliver ore + 1 coal; 64 strikes). A valid frame fills with a glowing
+violet surface; an incomplete one tells you so. Step in and hold still for a
+few seconds and the world crossfades into **the Nether** — a roofed, skyless
+ember world. Your first arrival builds a return portal around you (or reuses
+one nearby); step out, and step back in whenever you want to go home. Portals
+come out at the **same coordinates** in the other world.
+
+Mind the frame: breaking any of its obsidian extinguishes the surface, and a
+portal that somehow lost its frame will refuse to carry you (it clears instead).
+Beds don't work in the Nether — there is no morning to skip to — and portals
+are **not yet available in online worlds** (the game will say so if you try to
+light one there).
 
 ### Rafts and ships
 
