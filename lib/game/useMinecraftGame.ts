@@ -15,6 +15,7 @@ import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 import { type Profile, setProfileSkin } from "@/lib/game/profiles";
 import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
+import { DIMENSION_PROFILES } from "@/lib/game/render/dimensionProfiles";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { worldSaves } from "@/lib/game/saveStore";
@@ -354,7 +355,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     if (!ctx) return;
     const { engine: gameEngine, node } = ctx;
 
-    const created = GameRenderer.create(node);
+    // The renderer is built for the engine's dimension (sky, fog, light floor);
+    // swap-on-travel remounts both together, so the pairing can never go stale.
+    const created = GameRenderer.create(node, DIMENSION_PROFILES[gameEngine.state.dimension]);
     if (!created.ok) {
       // Microtask: reporting an init failure from inside the effect body
       // would count as a cascading synchronous setState.
