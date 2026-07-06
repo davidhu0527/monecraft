@@ -39,6 +39,7 @@ export const STATS: readonly StatMeta[] = [
   { id: "treasure_unearthed", label: "Treasures Unearthed", format: "count" },
   { id: "arrows_fired", label: "Arrows Fired", format: "count" },
   { id: "villager_trades", label: "Villager Trades", format: "count" },
+  { id: "minecart_rides", label: "Minecart Rides", format: "count" },
   { id: "jumps", label: "Jumps", format: "count" },
   { id: "deaths", label: "Deaths", format: "count" }
 ];
@@ -78,6 +79,7 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
     }
     case "mobDied":
       if (HOSTILE_MOB_KINDS.has(event.kind)) bump(player, "hostiles_killed");
+      if (event.kind === "drowned") bump(player, "drowned_killed");
       break;
     case "mobBred":
       bump(player, "animals_bred");
@@ -105,6 +107,9 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
       break;
     case "leverToggled":
       bump(player, "levers_flipped");
+      break;
+    case "vehicleBoarded":
+      if (event.kind === "minecart") bump(player, "minecart_rides");
       break;
     case "died":
     case "gameOver": // hardcore permadeath emits gameOver instead of died — still a death
@@ -241,6 +246,24 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "lever",
     category: "Adventure",
     stat: "levers_flipped",
+    threshold: 1
+  },
+  {
+    id: "on_rails",
+    title: "On Rails",
+    description: "Ride a minecart.",
+    icon: "minecart",
+    category: "Adventure",
+    stat: "minecart_rides",
+    threshold: 1
+  },
+  {
+    id: "ocean_purge",
+    title: "Revenge of the Tides",
+    description: "Slay a drowned.",
+    icon: "sliver_spear",
+    category: "Combat",
+    stat: "drowned_killed",
     threshold: 1
   }
 ];

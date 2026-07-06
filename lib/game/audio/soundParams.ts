@@ -696,6 +696,25 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       filter: -400
     })
   },
+  drowned: {
+    // A waterlogged zombie groan: low and slow with a bubbling burble on top.
+    params: zz({
+      volume: 0.5,
+      randomness: 0.2,
+      frequency: 130,
+      attack: 0.03,
+      sustain: 0.12,
+      release: 0.2,
+      shape: 2,
+      shapeCurve: 1.3,
+      slide: -1,
+      noise: 0.35,
+      sustainVolume: 0.75,
+      decay: 0.1,
+      tremolo: 0.35,
+      filter: -320
+    })
+  },
   raider: {
     // A low, menacing grunt.
     params: zz({
@@ -947,6 +966,24 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
     }),
     minRetriggerMs: 120
   },
+  drowned: {
+    // A wet, muffled bite — the zombie strike heard through water.
+    params: zz({
+      volume: 0.65,
+      randomness: 0.15,
+      frequency: 110,
+      sustain: 0.03,
+      release: 0.14,
+      shape: 4,
+      shapeCurve: 1.3,
+      slide: -3,
+      noise: 0.55,
+      sustainVolume: 0.75,
+      decay: 0.06,
+      filter: -420
+    }),
+    minRetriggerMs: 110
+  },
   raider: {
     // A brutish thwack.
     params: zz({
@@ -1034,6 +1071,24 @@ export const LAND_SOUND: SoundDef = {
 export const SWITCH_CLICK_SOUND: SoundDef = {
   params: zz({ volume: 0.45, frequency: 900, attack: 0.001, sustain: 0.015, release: 0.04, shape: 1, shapeCurve: 2, slide: -20 }),
   minRetriggerMs: 60
+};
+
+/** The wheel-on-rail clack while riding a minecart (distance-scheduled in sync). */
+export const MINECART_ROLL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.3,
+    randomness: 0.2,
+    frequency: 320,
+    attack: 0.001,
+    sustain: 0.02,
+    release: 0.05,
+    shape: 4,
+    shapeCurve: 1.4,
+    noise: 0.9,
+    decay: 0.02,
+    filter: -900
+  }),
+  minRetriggerMs: 90
 };
 
 export const HURT_SOUND: SoundDef = {

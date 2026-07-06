@@ -139,7 +139,7 @@ import {
 import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach, type MobPositionOf } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
-import { restoreVehicle, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
+import { restoreVehicle, tickCoastingMinecarts, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
 import { tickMobs } from "./systems/mobAI";
 import { tickPrimedTnt } from "./systems/explosion";
 import { createRedstoneState, seedRedstoneCells, tickRedstone } from "./systems/redstone";
@@ -622,6 +622,10 @@ export class GameEngine {
     tickAquaticSpawnDirector(state, dt, this.rng);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    // Riderless carts coast once per frame (world-scoped — the per-player
+    // tickVehicles path would integrate them N× in co-op), and before the
+    // power pass so detector rails read this frame's cart positions.
+    tickCoastingMinecarts(state, dt);
     // After the player loop (this frame's lever/button clicks are visible) and
     // before the TNT countdown (wire-lit fuses start ticking the same frame).
     // Replicas never reach here — redstone runs server-side only online.
@@ -935,7 +939,7 @@ export class GameEngine {
         // cmd). While mounted the server owns the rider's position and streams it
         // via the SelfDelta — the replica never dispatches placeBlock locally
         // (routeDispatch sends it up), so no client-owned pose fights it.
-        if (tryBoardAimedVehicle(state, player)) break;
+        if (tryBoardAimedVehicle(state, player, this.emit)) break;
         if (tryInteractBlock(state, player, this.emit)) break;
         if (this.trySummonBoss(player)) break;
         if (this.tryStartRaid(player)) break;

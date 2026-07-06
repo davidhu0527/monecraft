@@ -155,6 +155,15 @@ describe("recordEvent — system events & accumulation", () => {
     expect(state.stats.get("deaths")).toBe(1);
   });
 
+  test("only a minecart boarding counts as a ride — boats do not", () => {
+    const state = freshState();
+    record(state, { type: "vehicleBoarded", kind: "raft" }, { type: "vehicleBoarded", kind: "ship" });
+    expect(state.stats.get("minecart_rides")).toBeUndefined();
+    record(state, { type: "vehicleBoarded", kind: "minecart" });
+    expect(state.stats.get("minecart_rides")).toBe(1);
+    expect(evaluateAdvancements(state)).toContain("on_rails");
+  });
+
   test("irrelevant events record nothing", () => {
     const state = freshState();
     record(state, { type: "blockPlaced", blockId: BlockId.Dirt, x: 0, y: 0, z: 0 }, { type: "attackSwung" });
@@ -230,7 +239,9 @@ describe("evaluateAdvancements", () => {
       { type: "drankPotion" },
       { type: "sleepStarted" },
       { type: "treasureUnearthed" },
-      { type: "leverToggled", on: true }
+      { type: "leverToggled", on: true },
+      { type: "vehicleBoarded", kind: "minecart" },
+      { type: "mobDied", kind: "drowned", x: 0, y: 0, z: 0 }
     );
     const unlocked = new Set(evaluateAdvancements(state));
     for (const advancement of ADVANCEMENTS) expect(unlocked.has(advancement.id)).toBe(true);

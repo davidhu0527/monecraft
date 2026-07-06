@@ -1,5 +1,19 @@
 import * as THREE from "three";
-import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlock, isRedstoneBlock, isRedstoneOverlay, voxelRaycast } from "@/lib/world";
+import {
+  BlockId,
+  collidesAt,
+  doorBlock,
+  doorFacingFromYaw,
+  doorState,
+  isDoorBlock,
+  isPartialBlock,
+  isRailBlock,
+  isRedstoneBlock,
+  isRedstoneOverlay,
+  isStairBlock,
+  orientStair,
+  voxelRaycast
+} from "@/lib/world";
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
@@ -194,10 +208,10 @@ export function tickMining(
     }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
-    // A redstone overlay (wire, lever, …) standing on the broken block pops
-    // off with it and drops its item to the miner (the kelp-cascade rule).
+    // A redstone overlay (wire, lever, …) or rail standing on the broken block
+    // pops off with it and drops its item to the miner (the kelp-cascade rule).
     const above = world.get(bx, by + 1, bz) as BlockId;
-    if (isRedstoneOverlay(above)) {
+    if (isRedstoneOverlay(above) || isRailBlock(above)) {
       state.blockChanges.set(bx, by + 1, bz, BlockId.Air);
       if (!creative && !predict) addBlockDrop(player, above, rng, tool);
     }
@@ -245,7 +259,13 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
   if (slot.id === "door") {
     const support = world.get(tx, ty - 1, tz);
     replacedUpper = world.get(tx, ty + 1, tz) as BlockId;
-    if (ty + 1 >= world.sizeY || (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
+    if (
+      ty + 1 >= world.sizeY ||
+      (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) ||
+      !world.isSolid(tx, ty - 1, tz) ||
+      isDoorBlock(support) ||
+      isPartialBlock(support)
+    ) {
       if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
       return;
     }
@@ -253,16 +273,20 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
     state.blockChanges.set(tx, ty, tz, doorBlock(facing, false, false));
     state.blockChanges.set(tx, ty + 1, tz, doorBlock(facing, false, true));
   } else {
-    // Redstone overlays are floor-mounted: they need a solid, full-cube block
-    // under them (the door support rule) or the placement refunds.
-    if (isRedstoneOverlay(slot.blockId)) {
+    // Redstone overlays and rails are floor-mounted: they need a solid,
+    // FULL-cube block under them (the door support rule — a slab's half-height
+    // top or another overlay would leave them floating) or the placement refunds.
+    if (isRedstoneOverlay(slot.blockId) || isRailBlock(slot.blockId)) {
       const support = world.get(tx, ty - 1, tz);
-      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support)) {
+      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support) || isPartialBlock(support)) {
         if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
         return;
       }
     }
-    state.blockChanges.set(tx, ty, tz, slot.blockId);
+    // A stair item carries its north id; the placed block faces the way the
+    // player looks (raised back away from them — walk straight up it).
+    const placed = isStairBlock(slot.blockId) ? orientStair(slot.blockId, doorFacingFromYaw(player.yaw)) : slot.blockId;
+    state.blockChanges.set(tx, ty, tz, placed);
   }
   if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
     state.blockChanges.set(tx, ty, tz, replacedBlock as BlockId);
@@ -278,9 +302,9 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
       Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
     );
   }
-  // A placed redstone component (lamp included) joins the tracked set so the
-  // power pass sees it; removals self-heal, so placement is the only seam.
-  if (isRedstoneBlock(slot.blockId)) trackRedstoneCell(state, tx, ty, tz);
+  // A placed redstone component (lamp included) or rail joins the tracked set
+  // so the power pass sees it; removals self-heal, so placement is the only seam.
+  if (isRedstoneBlock(slot.blockId) || isRailBlock(slot.blockId)) trackRedstoneCell(state, tx, ty, tz);
 
   state.worldMeshDirty = true;
   emit({ type: "blockPlaced", blockId: slot.blockId, x: tx, y: ty, z: tz });

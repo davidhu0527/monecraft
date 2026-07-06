@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BiomeId, BlockId, VoxelWorld } from "@/lib/world";
+import { BiomeId, BlockId, isSlabBlock, VoxelWorld } from "@/lib/world";
 
 export type SurfaceYAtFn = (x: number, z: number) => number;
 
@@ -8,7 +8,12 @@ export function createSurfaceYAt(world: VoxelWorld): SurfaceYAtFn {
     const ix = Math.floor(x);
     const iz = Math.floor(z);
     if (ix < 0 || iz < 0 || ix >= world.sizeX || iz >= world.sizeZ) return 1;
-    return world.highestSolidY(ix, iz) + 1;
+    const top = world.highestSolidY(ix, iz);
+    // A slab-topped column's walkable surface is half a block down — without
+    // this, mobs ground-clamped by surfaceYAt hover above player-laid slabs.
+    // (Stairs use the full-cell top; feet sink slightly into the low half.)
+    if (isSlabBlock(world.get(ix, top, iz))) return top + 0.5;
+    return top + 1;
   };
 }
 
@@ -80,11 +85,15 @@ export function randomWaterPointNear(
   centerZ: number,
   radius: number,
   rng: () => number = Math.random,
-  minDepth = 2
+  minDepth = 2,
+  minRadius = 0
 ): THREE.Vector3 | null {
   for (let i = 0; i < 50; i += 1) {
     const x = Math.max(10, Math.min(world.sizeX - 10, centerX + (rng() * 2 - 1) * radius));
     const z = Math.max(10, Math.min(world.sizeZ - 10, centerZ + (rng() * 2 - 1) * radius));
+    // A standoff for hostile spawns (mirrors randomLandPointNear's minRadius):
+    // nothing should materialize point-blank under a swimming player.
+    if (minRadius > 0 && Math.hypot(x - centerX, z - centerZ) < minRadius) continue;
     const ix = Math.floor(x);
     const iz = Math.floor(z);
     const floor = world.highestSolidY(ix, iz);

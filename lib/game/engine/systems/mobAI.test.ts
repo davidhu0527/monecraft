@@ -469,3 +469,101 @@ describe("aquatic fish", () => {
     expect(removed).toContain(0); // dead and swept
   });
 });
+
+describe("the drowned (hostile aquatic)", () => {
+  /** Fills a water pool (x,z in 20..28, y in 18..22) into the state's empty world. */
+  function fillPool(state: GameState): void {
+    for (let x = 20; x <= 28; x += 1) {
+      for (let z = 20; z <= 28; z += 1) {
+        for (let y = 18; y <= 22; y += 1) state.world.set(x, y, z, BlockId.Water);
+      }
+    }
+  }
+
+  function makeDrowned(x: number, y: number, z: number, attackTimer = 0): MobState {
+    return makeMob("drowned", x, y, z, attackTimer);
+  }
+
+  test("pursues a player in the water and closes the distance in 3D", () => {
+    const drowned = makeDrowned(21.5, 19.5, 21.5);
+    const state = makeState([drowned]);
+    fillPool(state);
+    state.player.position.set(27.5, 21.0, 27.5); // in the pool, inside detectRange
+    const { deps } = makeDeps();
+
+    const start = drowned.position.distanceTo(state.player.position);
+    for (let i = 0; i < 30; i += 1) tickMobs(state, 0.1, deps);
+
+    expect(drowned.position.distanceTo(state.player.position)).toBeLessThan(start);
+    expect(drowned.moveSpeed).toBeGreaterThan(drowned.speed); // pursuit boost, not the flee boost
+  });
+
+  test("never leaves the water while pursuing a player on dry land", () => {
+    const drowned = makeDrowned(24.5, 20.5, 24.5);
+    const state = makeState([drowned]);
+    fillPool(state);
+    state.player.position.set(24.5, 30, 32.5); // ashore, just outside the pool
+    const { deps } = makeDeps();
+
+    for (let i = 0; i < 200; i += 1) {
+      tickMobs(state, 0.1, deps);
+      const cell = state.world.get(Math.floor(drowned.position.x), Math.floor(drowned.position.y), Math.floor(drowned.position.z));
+      expect(cell).toBe(BlockId.Water);
+    }
+  });
+
+  test("strikes within reach: damage is difficulty-scaled and knockback shoves the player", () => {
+    const drowned = makeDrowned(24.5, 20.5, 24.5);
+    const state = makeState([drowned]);
+    fillPool(state);
+    state.difficulty = "hard"; // 1.5× at the strike
+    state.player.position.set(24.5, 19.8, 25.6); // ~1.1 blocks away, inside reach
+    const { deps, events, getDamage } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(getDamage()).toBeCloseTo(3 * 1.5, 5);
+    expect(events).toContainEqual({ type: "mobAttacked", kind: "drowned" });
+    expect(drowned.attackTimer).toBeGreaterThan(0); // cooldown re-armed
+    expect(Math.hypot(state.player.velocity.x, state.player.velocity.z)).toBeGreaterThan(0); // shoved
+  });
+
+  test("ignores Creative players entirely (no pursuit, no strike)", () => {
+    const drowned = makeDrowned(24.5, 20.5, 24.5);
+    const state = makeState([drowned]);
+    fillPool(state);
+    state.player.position.set(24.5, 19.8, 25.6); // point-blank
+    (state.player as { gameMode: string }).gameMode = "creative";
+    const { deps, getDamage } = makeDeps();
+
+    for (let i = 0; i < 10; i += 1) tickMobs(state, 0.1, deps);
+
+    expect(getDamage()).toBe(0);
+    expect(drowned.moveSpeed).toBeCloseTo(drowned.speed, 5); // wandering, not pursuing
+  });
+
+  test("a wall blocks the bite (line of sight like the land strike)", () => {
+    const drowned = makeDrowned(24.5, 20.5, 24.5);
+    const state = makeState([drowned]);
+    fillPool(state);
+    // A glass pane between the drowned and the player, inside the pool.
+    for (let y = 18; y <= 22; y += 1) state.world.set(24, y, 25, BlockId.Glass);
+    state.player.position.set(24.5, 19.8, 25.9);
+    const { deps, getDamage } = makeDeps();
+
+    tickMobs(state, 0.05, deps);
+
+    expect(getDamage()).toBe(0);
+  });
+
+  test("beached, it suffocates like a fish", () => {
+    const drowned = makeDrowned(24, 30, 24); // dry cell
+    const state = makeState([drowned]);
+    const { deps } = makeDeps();
+
+    tickMobs(state, 1, deps);
+
+    expect(drowned.moveSpeed).toBe(0);
+    expect(drowned.hp).toBeCloseTo(9 - 2, 5);
+  });
+});

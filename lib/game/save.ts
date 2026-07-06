@@ -352,7 +352,7 @@ export function readSave(saveKey: string, storage: Storage = localStorage): Save
   }
 }
 
-const VALID_VEHICLE_KINDS: Record<VehicleKind, true> = { raft: true, ship: true };
+const VALID_VEHICLE_KINDS: Record<VehicleKind, true> = { raft: true, ship: true, minecart: true };
 
 export function serializeVehicles(vehicles: Array<{ kind: VehicleKind; position: { x: number; y: number; z: number }; yaw: number }>): SavedVehicle[] {
   const out: SavedVehicle[] = [];

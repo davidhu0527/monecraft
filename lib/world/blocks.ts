@@ -101,7 +101,35 @@ export const enum BlockId {
   RedstoneTorchOff = 66,
   RedstoneTorch = 67,
   RedstoneLamp = 68,
-  RedstoneLampOn = 69
+  RedstoneLampOn = 69,
+  // Rails (see rails.ts): flat floor overlays like wire, ridden by minecarts.
+  // The powered/detector pairs join the redstone family — power is id PARITY,
+  // so each pair MUST start on an even id. Plain Rail carries no power state
+  // and must never pass through the redstoneOn/redstoneOff parity math.
+  PoweredRail = 70,
+  PoweredRailOn = 71,
+  DetectorRail = 72,
+  DetectorRailOn = 73,
+  Rail = 74,
+  // Partial building blocks (see slabs.ts). Slabs fill the bottom half of the
+  // cell; stairs add a half-height back on the side they FACE, encoded as 4
+  // contiguous ids per material (the doors offset-math precedent) in
+  // north/east/south/west order — keep them contiguous and in order.
+  PlankSlab = 75,
+  StoneSlab = 76,
+  CobbleSlab = 77,
+  PlankStairsNorth = 78,
+  PlankStairsEast = 79,
+  PlankStairsSouth = 80,
+  PlankStairsWest = 81,
+  StoneStairsNorth = 82,
+  StoneStairsEast = 83,
+  StoneStairsSouth = 84,
+  StoneStairsWest = 85,
+  CobbleStairsNorth = 86,
+  CobbleStairsEast = 87,
+  CobbleStairsSouth = 88,
+  CobbleStairsWest = 89
 }
 
 export enum BiomeId {
@@ -152,7 +180,16 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.RedstoneButton]: 0x8f9296,
   [BlockId.PressurePlate]: 0xbe965d,
   [BlockId.RedstoneTorch]: 0xe0503a,
-  [BlockId.RedstoneLamp]: 0xc9a24a
+  [BlockId.RedstoneLamp]: 0xc9a24a,
+  [BlockId.Rail]: 0x8a8f96,
+  [BlockId.PoweredRail]: 0xc9a24a,
+  [BlockId.DetectorRail]: 0x9fa3aa,
+  [BlockId.PlankSlab]: 0xbe965d,
+  [BlockId.StoneSlab]: 0x8f9296,
+  [BlockId.CobbleSlab]: 0x787c82,
+  [BlockId.PlankStairsNorth]: 0xbe965d,
+  [BlockId.StoneStairsNorth]: 0x8f9296,
+  [BlockId.CobbleStairsNorth]: 0x787c82
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -239,5 +276,29 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.RedstoneTorchOff]: [0.3, 0.12, 0.1],
   [BlockId.RedstoneTorch]: [0.8, 0.22, 0.14],
   [BlockId.RedstoneLamp]: [0.45, 0.35, 0.2],
-  [BlockId.RedstoneLampOn]: [0.95, 0.78, 0.4]
+  [BlockId.RedstoneLampOn]: [0.95, 0.78, 0.4],
+  // Rails (painted in atlas.ts): steel strips over wooden ties; the powered
+  // pair glows warm when on, the detector carries a center sensor plate.
+  [BlockId.PoweredRail]: [0.4, 0.28, 0.16],
+  [BlockId.PoweredRailOn]: [0.5, 0.3, 0.15],
+  [BlockId.DetectorRail]: [0.38, 0.32, 0.24],
+  [BlockId.DetectorRailOn]: [0.42, 0.34, 0.24],
+  [BlockId.Rail]: [0.35, 0.28, 0.18],
+  // Slabs and stairs reuse their material's tone (atlas.ts extends the plank
+  // grain / stone speckle accents to them).
+  [BlockId.PlankSlab]: [0.76, 0.61, 0.38],
+  [BlockId.StoneSlab]: [0.54, 0.56, 0.58],
+  [BlockId.CobbleSlab]: [0.42, 0.43, 0.45],
+  [BlockId.PlankStairsNorth]: [0.76, 0.61, 0.38],
+  [BlockId.PlankStairsEast]: [0.76, 0.61, 0.38],
+  [BlockId.PlankStairsSouth]: [0.76, 0.61, 0.38],
+  [BlockId.PlankStairsWest]: [0.76, 0.61, 0.38],
+  [BlockId.StoneStairsNorth]: [0.54, 0.56, 0.58],
+  [BlockId.StoneStairsEast]: [0.54, 0.56, 0.58],
+  [BlockId.StoneStairsSouth]: [0.54, 0.56, 0.58],
+  [BlockId.StoneStairsWest]: [0.54, 0.56, 0.58],
+  [BlockId.CobbleStairsNorth]: [0.42, 0.43, 0.45],
+  [BlockId.CobbleStairsEast]: [0.42, 0.43, 0.45],
+  [BlockId.CobbleStairsSouth]: [0.42, 0.43, 0.45],
+  [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45]
 };

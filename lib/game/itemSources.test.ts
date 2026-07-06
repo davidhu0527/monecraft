@@ -39,3 +39,15 @@ describe("itemSourceHint", () => {
     expect(itemSourceHint("definitely_not_an_item")).toBeNull();
   });
 });
+
+describe("chance-gated drops never hint", () => {
+  test("the drowned's lucky extras keep their natural sources", () => {
+    // The drowned drops a sliver spear at 7% and kelp at 50% — lucky extras,
+    // not the items' repeatable sources. Craft/mine hints must win.
+    expect(itemSourceHint("sliver_spear")).toBe("Craft it");
+    expect(itemSourceHint("kelp")).not.toBe("Hunt a drowned");
+    // Its guaranteed drop hints normally (the drowned precedes the zombie in
+    // MOB_DROPS order, and the first source set for an item wins).
+    expect(itemSourceHint("rotten_flesh")).toBe("Hunt a drowned");
+  });
+});

@@ -1,5 +1,6 @@
 import { BiomeId, BlockId, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "./blocks";
 import { isDoorBlock } from "./doors";
+import { isRailBlock } from "./rails";
 import { isRedstoneOverlay } from "./redstone";
 import { portableSin } from "./noise";
 
@@ -72,7 +73,7 @@ export class VoxelWorld {
   highestSolidY(x: number, z: number): number {
     for (let y = this.sizeY - 1; y >= 0; y -= 1) {
       const block = this.get(x, y, z);
-      if (this.isSolid(x, y, z) && !isDoorBlock(block) && !isRedstoneOverlay(block)) return y;
+      if (this.isSolid(x, y, z) && !isDoorBlock(block) && !isRedstoneOverlay(block) && !isRailBlock(block)) return y;
     }
     return 0;
   }

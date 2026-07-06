@@ -202,6 +202,12 @@ export type VehicleState = {
   position: THREE.Vector3;
   yaw: number;
   rider: PlayerId | null;
+  /**
+   * Minecart travel speed along its yaw heading (blocks/sec, signed — negative
+   * is reversing). Session-only: never serialized, so a parked cart restores at
+   * rest, matching SavedVehicle's kind/pose-only shape. Absent on boats.
+   */
+  speed?: number;
 };
 
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
@@ -580,6 +586,8 @@ export type GameEvent =
   | { type: "fishingReeledEmpty" }
   | { type: "vehiclePlaced"; kind: VehicleKind }
   | { type: "vehiclePlaceFailed" }
+  | { type: "vehicleBoarded"; kind: VehicleKind }
+  | { type: "detectorToggled"; on: boolean }
   | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" }
   | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "anvilCombined" }

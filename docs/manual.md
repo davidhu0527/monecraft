@@ -198,7 +198,8 @@ automatically. While aboard, steer with the movement keys; crouch dismounts when
 there is room beside the vehicle. Placing needs open water within reach — aim
 somewhere that can't hold a boat, or once the world hits its 64-vehicle cap, and
 you'll hear a dull "can't place here" thud instead. Rafts and ships appear in
-their own **Vehicles** crafting category.
+their own **Vehicles** crafting category — alongside the land-going
+[minecart](#rails-and-minecarts).
 
 ### Hunger
 
@@ -337,6 +338,16 @@ to light the fuse — stand well back, because after a couple of seconds it blow
 crater and hurts anything close. TNT next to more TNT chains. It won't touch
 bedrock, and it mostly destroys rather than drops blocks, so it's for digging and
 demolition, not free resources.
+
+**Slabs and stairs.** Cut your materials into half-blocks for real architecture:
+**slabs** (3 planks/stone/cobble → 6) fill the bottom half of a block, and
+**stairs** (6 → 4) add a raised back that faces **away from you** when placed —
+walk straight up what you just laid. You **step up** half-height rises
+automatically (no jumping up your own staircase; a full block still needs the
+jump — and that auto-step works on any half-high lip, not just cut blocks).
+Half-blocks are solid to walk on but can't support floor-mounted fittings: doors,
+redstone parts, and rails all need a full block under them. A slab roof still
+casts full shade.
 
 ## Dungeons and loot
 
@@ -519,6 +530,38 @@ torch's output back to its own base through a wire loop and it blinks — a
 **clock** for flashing lamps. Circuits update on a fixed ~0.1 s tick, so signals
 ripple visibly through long contraptions.
 
+## Rails and minecarts
+
+Lay track and ride it. Craft **rails** (3 sliver ore + 3 wood → 16) and place
+them on solid ground — like wire, they mount on top of a block and pop off
+(dropping their item) if you break the block under them. A line of rails is a
+track; put two lines at a right angle and the corner just works (carts turn to
+follow the track — there is no special curve piece). Rails don't climb; keep a
+line on one level.
+
+Craft a **minecart** (5 sliver ore), aim at a rail, and right-click to set the
+cart on it. Right-click the cart to board. While riding, **forward**
+accelerates, **back** brakes (and then reverses), and **crouch** hops out —
+the track does the steering. Mining the rail out from under a cart strands it
+where the track ended.
+
+Two special rails hook into redstone:
+
+- A **powered rail** (2 gold ore + 1 redstone dust + 2 wood → 4) is a
+  **consumer**: powered (by wire, a lever beside it, a plate…), it glows and
+  drives carts up past cruise speed. **Unpowered, it's a brake** that stops
+  carts dead — so a lever next to one is a station switch: on = launch,
+  off = hold. A stationary cart parked on a lit powered rail launches the way
+  it faces, no rider needed.
+- A **detector rail** (1 sliver ore + 1 redstone dust + 1 cobble → 2) is a
+  **source**: it powers its neighbors like a pressed plate while a cart sits
+  on it — wire it to a lamp for an occupancy light, to a door for an automatic
+  gate, or to TNT for a very unwelcoming railway. (A parked cart also holds an
+  ordinary pressure plate down.)
+
+Riding a minecart for the first time unlocks the **On Rails** advancement, and
+the statistics tab counts your rides.
+
 ## Storage
 
 Your pack only holds 36 slots, so build **chests** to stash the overflow. Craft a
@@ -644,6 +687,15 @@ The sea is worth sailing (see [Rafts and ships](#rafts-and-ships)):
 - **Fish.** Schools of **cod and salmon** swim the open water. They flee when you
   get close and drop **raw fish** when killed — the same fish the rod catches and
   cats are tamed with. A fish knocked onto land flops helplessly and suffocates.
+- **The drowned.** At **night** the water itself turns dangerous: sunken,
+  teal-skinned zombies rise near you and pursue you through the water in all
+  three dimensions — a wreck dive after dark is a fight, not a swim. They are
+  strictly water-bound (they never walk ashore; knock one onto the beach and it
+  suffocates like a fish), and unlike zombies they don't burn in daylight —
+  submersion shields them — so a deep hoard stays guarded until you deal with
+  its keeper. They drop **rotten flesh**, often
+  **kelp**, and — rarely — a **sliver spear** torn from some other victim.
+  Slaying your first unlocks **Revenge of the Tides**. On Peaceful none spawn.
 - **Kelp and coral.** The sandy ocean floor grows swaying **kelp stalks** and
   scattered pink/blue **coral**. Kelp breaks instantly (breaking one cell takes
   the whole stalk above it, and the water fills back in), regrows over time, and

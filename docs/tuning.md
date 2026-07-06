@@ -15,14 +15,18 @@ Worldgen constants live in the frozen `GEN` object in
 ## Player feel — physics & movement
 
 `GRAVITY`, `JUMP_VELOCITY`, `WALK_SPEED`, `SPRINT_SPEED`, `CROUCH_SPEED`,
-`PLAYER_HEIGHT`, `PLAYER_HALF_WIDTH`, `EYE_HEIGHT`, `WORLD_BORDER_PADDING`.
+`STEP_UP_HEIGHT`, `PLAYER_HEIGHT`, `PLAYER_HALF_WIDTH`, `EYE_HEIGHT`,
+`WORLD_BORDER_PADDING`.
 
 Read by `systems/playerMotion.ts`. These set the moment-to-moment feel.
 `JUMP_VELOCITY` vs `GRAVITY` together fix jump height (currently a ~1-block hop);
 raise gravity for a snappier, heavier fall. `SPRINT_SPEED` is deliberately far
 above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what burns
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
-changing them affects which gaps the player fits through.
+changing them affects which gaps the player fits through. `STEP_UP_HEIGHT` (0.55)
+is how tall a rise grounded walking climbs without a jump — 0.5 shapes (slabs,
+stairs) step, full blocks don't; push it to 1.0+ and jumping stops mattering on
+land at all, which changes the whole terrain game.
 
 ## Touch feel
 
@@ -41,11 +45,14 @@ deliberately equals `TOUCH_TAP_MAX_MS` (220) so there is no ambiguous gap where
 a lift is neither tap nor mine. `TOUCH_JOYSTICK_DEADZONE` (0.18) absorbs resting
 thumb tremor; too high and small corrections stop registering.
 
-## Water vehicles
+## Vehicles
 
 `VEHICLE_BOARD_REACH`, `VEHICLE_TURN_RATE`, `VEHICLE_DISMOUNT_RADIUS`,
 `RAFT_SPEED`, `RAFT_HALF_WIDTH`, `RAFT_HALF_LENGTH`, `SHIP_SPEED`,
-`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`, `MAX_VEHICLES`.
+`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`, `MINECART_SPEED`, `MINECART_BOOST_SPEED`,
+`MINECART_ACCEL`, `MINECART_FRICTION`, `MINECART_BRAKE_DECEL`,
+`MINECART_HALF_WIDTH`, `MINECART_HALF_LENGTH`, `MINECART_RIDE_HEIGHT`,
+`MAX_VEHICLES`.
 
 Read by `systems/vehicles.ts`. Rafts are intentionally compact and slow; ships
 are larger and faster. The half-width/half-length values are both gameplay
@@ -53,9 +60,20 @@ footprints and water-support checks, so raising them makes a vehicle feel larger
 but also requires more open water to place and move. `VEHICLE_TURN_RATE` controls
 steering responsiveness while mounted, and `VEHICLE_DISMOUNT_RADIUS` is the search
 radius for a safe crouch dismount beside the vehicle. `MAX_VEHICLES` (64) caps how
-many placed rafts/ships a world can hold — placement is refused (with a denial
+many placed vehicles a world can hold — placement is refused (with a denial
 cue) at the cap, which bounds save size since creative placement never consumes
 the item.
+
+The minecart is rail-guided, so its dials shape acceleration, not steering.
+`MINECART_SPEED` (6) is the rider-throttled cruise cap on plain rail and
+`MINECART_BOOST_SPEED` (11) the cap while a lit powered rail drives the cart —
+widening that gap makes powered track feel more worth building. `MINECART_ACCEL`
+(8/s²) is how fast either cap is approached, `MINECART_FRICTION` (1.5/s²) how
+quickly a coasting cart bleeds off (lower = longer unpowered launcher runs), and
+`MINECART_BRAKE_DECEL` (14/s²) both the rider's brake and the unpowered
+powered-rail stopper — keep it well above `MINECART_ACCEL` or "brakes" feel
+mushy. `MINECART_RIDE_HEIGHT` (0.1) floats the cart just above the 0.09-tall
+rail shape.
 
 ## Game modes — flight
 
@@ -433,7 +451,9 @@ not here.
 ## Fish & the ocean
 
 `FISH_FLEE_RANGE`, `FISH_SUFFOCATION_HP_PER_SECOND`, `AQUATIC_CAP`,
-`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`.
+`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`, `DROWNED_CAP`,
+`DROWNED_MELEE_REACH`, `DROWNED_PURSUE_SPEED_MULTIPLIER`,
+`DROWNED_SPAWN_MIN_RADIUS`.
 
 Read by the aquatic branch in `systems/mobAI.ts` and the aquatic spawn director
 in `systems/spawnDirector.ts`. `FISH_FLEE_RANGE` (5) is the 3D radius inside
@@ -447,6 +467,15 @@ without nearby deep water, so these cost nothing on dry worlds).
 `KELP_GROWTH_CHANCE` (0.2) is the per-sampled-tick odds a kelp stalk grows one
 block (the same sampler as crops — see Farming above); height and surface
 clearance are worldgen invariants in `GEN.oceanFlora`, not tunables here.
+
+The drowned dials shape how dangerous night water feels. `DROWNED_CAP` (6)
+bounds the population separately from the fish budget (and inside the shared
+difficulty-scaled hostile cap) — raise it and night diving becomes a running
+battle. `DROWNED_PURSUE_SPEED_MULTIPLIER` (1.6) is its chase boost over
+template speed; players outswim it in open water, so it threatens confined
+dives (wrecks, kelp forests), not surface crossings. `DROWNED_MELEE_REACH`
+(1.9) is the 3D strike distance and `DROWNED_SPAWN_MIN_RADIUS` (10) the
+standoff that stops one materializing directly under a swimmer.
 
 ## Beds & sleep
 

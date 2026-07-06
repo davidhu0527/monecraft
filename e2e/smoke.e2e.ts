@@ -301,3 +301,76 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   expect(Math.abs(positionAfter.x - positionBefore.x)).toBeLessThan(2);
   expect(Math.abs(positionAfter.z - positionBefore.z)).toBeLessThan(2);
 });
+
+test("a minecart places onto rails and a lit powered rail launches it", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
+
+  const placed = await page.evaluate(() => {
+    const engine = window.__monecraft!.engine;
+    const state = engine.state;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const groundY = Math.round(state.player.position.y) - 1;
+    // A stone shelf carrying a rail line east of the player, headroom cleared:
+    // a lit powered rail first (71 = PoweredRailOn), plain rail beyond (74),
+    // stone underneath (3) so nothing pops for lack of support.
+    for (let i = 1; i <= 8; i += 1) {
+      state.blockChanges.set(x + i, groundY, z, 3);
+      state.blockChanges.set(x + i, groundY + 1, z, i === 1 ? 71 : 74);
+      state.blockChanges.set(x + i, groundY + 2, z, 0);
+      state.blockChanges.set(x + i, groundY + 3, z, 0);
+    }
+    // Hold a minecart (creative palette) and place it on the aimed powered rail.
+    engine.dispatch({ type: "setGameMode", mode: "creative" });
+    engine.dispatch({ type: "creativeGiveItem", itemId: "minecart" });
+    state.player.selectedSlot = state.player.inventory.findIndex((slot) => slot?.id === "minecart");
+    state.player.position.set(x + 0.5, groundY + 1, z + 0.5);
+    state.player.velocity.set(0, 0, 0);
+    state.player.yaw = -Math.PI / 2; // face east, along the line
+    state.player.pitch = -1.0; // aim down at the first rail cell
+    engine.dispatch({ type: "placeBlock" });
+    const cart = state.vehicles[0];
+    return { kind: cart?.kind ?? null, x0: cart?.position.x ?? 0 };
+  });
+  expect(placed.kind).toBe("minecart");
+
+  // The lit powered rail launches the riderless cart down the line (the
+  // world-scoped coasting tick), and the renderer keeps drawing its visual.
+  await expect
+    .poll(async () => page.evaluate(() => window.__monecraft!.engine.state.vehicles[0]?.position.x ?? 0), { timeout: 30000 })
+    .toBeGreaterThan(placed.x0 + 1.5);
+  expect(await page.evaluate(() => window.__monecraft!.renderer.renderedTriangles())).toBeGreaterThan(0);
+});
+
+test("auto step-up climbs a stair mid-walk without a jump", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle
+
+  const feetY = await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const groundY = Math.round(state.player.position.y) - 1;
+    // A stair one block east (79 = PlankStairsEast — its low half greets the
+    // walker) rising onto a stone plateau (3), with the lane's headroom cleared.
+    for (let i = 1; i <= 6; i += 1) {
+      state.blockChanges.set(x + i, groundY, z, 3);
+      state.blockChanges.set(x + i, groundY + 1, z, i === 1 ? 79 : 3);
+      for (let dy = 2; dy <= 4; dy += 1) state.blockChanges.set(x + i, groundY + dy, z, 0);
+    }
+    state.player.position.set(x + 0.5, groundY + 1, z + 0.5);
+    state.player.velocity.set(0, 0, 0);
+    state.player.yaw = -Math.PI / 2; // face east, into the stair
+    state.player.pitch = 0;
+    return groundY + 1;
+  });
+
+  // Hold W: the walk climbs the stair's two half-steps onto the plateau —
+  // a full block gained with no jump ever pressed.
+  await page.keyboard.down("w");
+  await expect.poll(async () => page.evaluate(() => window.__monecraft!.engine.state.player.position.y), { timeout: 30000 }).toBeGreaterThan(feetY + 0.8);
+  await page.keyboard.up("w");
+});

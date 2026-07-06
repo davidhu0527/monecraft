@@ -92,7 +92,29 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.RedstoneTorchOff]: 1,
   [BlockId.RedstoneTorch]: 1,
   [BlockId.RedstoneLamp]: 3,
-  [BlockId.RedstoneLampOn]: 3
+  [BlockId.RedstoneLampOn]: 3,
+  // Rails snap off like the other floor overlays.
+  [BlockId.Rail]: 1,
+  [BlockId.PoweredRail]: 1,
+  [BlockId.PoweredRailOn]: 1,
+  [BlockId.DetectorRail]: 1,
+  [BlockId.DetectorRailOn]: 1,
+  // Half-blocks break a touch faster than their full material.
+  [BlockId.PlankSlab]: 2,
+  [BlockId.StoneSlab]: 4,
+  [BlockId.CobbleSlab]: 4,
+  [BlockId.PlankStairsNorth]: 2,
+  [BlockId.PlankStairsEast]: 2,
+  [BlockId.PlankStairsSouth]: 2,
+  [BlockId.PlankStairsWest]: 2,
+  [BlockId.StoneStairsNorth]: 4,
+  [BlockId.StoneStairsEast]: 4,
+  [BlockId.StoneStairsSouth]: 4,
+  [BlockId.StoneStairsWest]: 4,
+  [BlockId.CobbleStairsNorth]: 4,
+  [BlockId.CobbleStairsEast]: 4,
+  [BlockId.CobbleStairsSouth]: 4,
+  [BlockId.CobbleStairsWest]: 4
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -130,6 +152,18 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "pressure_plate", label: "Pressure Plate", kind: "block", blockId: BlockId.PressurePlate },
   { id: "redstone_torch", label: "Redstone Torch", kind: "block", blockId: BlockId.RedstoneTorch },
   { id: "redstone_lamp", label: "Redstone Lamp", kind: "block", blockId: BlockId.RedstoneLamp },
+  // Rails place only on solid ground (see mining.ts); minecarts ride them.
+  { id: "rail", label: "Rail", kind: "block", blockId: BlockId.Rail },
+  { id: "powered_rail", label: "Powered Rail", kind: "block", blockId: BlockId.PoweredRail },
+  { id: "detector_rail", label: "Detector Rail", kind: "block", blockId: BlockId.DetectorRail },
+  // Half-blocks. A stair item carries its north id; placement re-orients it by
+  // player yaw (orientStair in mining.ts, the door-facing pattern).
+  { id: "plank_slab", label: "Plank Slab", kind: "block", blockId: BlockId.PlankSlab },
+  { id: "stone_slab", label: "Stone Slab", kind: "block", blockId: BlockId.StoneSlab },
+  { id: "cobble_slab", label: "Cobble Slab", kind: "block", blockId: BlockId.CobbleSlab },
+  { id: "plank_stairs", label: "Plank Stairs", kind: "block", blockId: BlockId.PlankStairsNorth },
+  { id: "stone_stairs", label: "Stone Stairs", kind: "block", blockId: BlockId.StoneStairsNorth },
+  { id: "cobble_stairs", label: "Cobble Stairs", kind: "block", blockId: BlockId.CobbleStairsNorth },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -283,6 +317,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "arrow", label: "Arrow", kind: "material" },
   { id: "raft", label: "Raft", kind: "vehicle" },
   { id: "ship", label: "Ship", kind: "vehicle" },
+  // Places onto a rail block and is ridden along the track (vehicles.ts).
+  { id: "minecart", label: "Minecart", kind: "vehicle" },
   // Looted from shipwrecks (and rarely fished up): while held, a compass HUD
   // points to the nearest unearthed buried-treasure chest (see bossTracking.ts).
   { id: "treasure_map", label: "Treasure Map", kind: "material" },
@@ -433,6 +469,27 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.RedstoneTorch]: "redstone_torch",
   [BlockId.RedstoneLamp]: "redstone_lamp",
   [BlockId.RedstoneLampOn]: "redstone_lamp",
+  [BlockId.Rail]: "rail",
+  [BlockId.PoweredRail]: "powered_rail",
+  [BlockId.PoweredRailOn]: "powered_rail",
+  [BlockId.DetectorRail]: "detector_rail",
+  [BlockId.DetectorRailOn]: "detector_rail",
+  // Every stair facing drops the one item (the doors precedent).
+  [BlockId.PlankSlab]: "plank_slab",
+  [BlockId.StoneSlab]: "stone_slab",
+  [BlockId.CobbleSlab]: "cobble_slab",
+  [BlockId.PlankStairsNorth]: "plank_stairs",
+  [BlockId.PlankStairsEast]: "plank_stairs",
+  [BlockId.PlankStairsSouth]: "plank_stairs",
+  [BlockId.PlankStairsWest]: "plank_stairs",
+  [BlockId.StoneStairsNorth]: "stone_stairs",
+  [BlockId.StoneStairsEast]: "stone_stairs",
+  [BlockId.StoneStairsSouth]: "stone_stairs",
+  [BlockId.StoneStairsWest]: "stone_stairs",
+  [BlockId.CobbleStairsNorth]: "cobble_stairs",
+  [BlockId.CobbleStairsEast]: "cobble_stairs",
+  [BlockId.CobbleStairsSouth]: "cobble_stairs",
+  [BlockId.CobbleStairsWest]: "cobble_stairs",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",

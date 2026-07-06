@@ -1,4 +1,5 @@
 import { BlockId } from "./blocks";
+import { isDetectorRail, isPoweredRail } from "./rails";
 
 /**
  * Redstone-lite block-id math (the doors.ts sibling — pure id helpers, no
@@ -14,8 +15,11 @@ const OVERLAY_LAST = BlockId.RedstoneTorch; // 58..67 are floor overlays; the la
 
 export type RedstoneBounds = { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
 
+// The powered/detector rail pairs (rails.ts) live outside the contiguous
+// 58..69 range but toggle by the same id parity, so they join the family here.
+// Plain Rail (74) is deliberately NOT a member — it has no power state.
 export function isRedstoneBlock(block: number): block is BlockId {
-  return block >= REDSTONE_FIRST && block <= REDSTONE_LAST;
+  return (block >= REDSTONE_FIRST && block <= REDSTONE_LAST) || isPoweredRail(block) || isDetectorRail(block);
 }
 
 /** Floor-mounted, non-cube, non-colliding components (everything but the lamp). */

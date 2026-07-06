@@ -101,6 +101,20 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     // Red-pink body with darker back fins; longer than the cod.
     modelArgs: [0xb35a4a, 0xc06a56, 0x7a3a30, 0x101010, 0x8f4438, [0.38, 0.34, 0.92], [0.32, 0.4, 0.44], "fish"]
   },
+  drowned: {
+    // The first hostile of the deep: a sunken zombie that swims in 3D and
+    // pursues players through water (the hostile branch of tickAquaticMob).
+    // Strictly water-bound — the aquatic destination gate keeps it submerged,
+    // and beaching suffocates it like a fish.
+    speed: 1.15,
+    hp: HOSTILE_MOB_HP,
+    detectRange: 10,
+    attackDamage: 3,
+    attackCooldown: 1.4,
+    aquatic: true,
+    // The zombie silhouette gone teal from the deep, with pale cyan eyes.
+    modelArgs: [0x3f8a7a, 0x2f6f63, 0x27584f, 0x66ffd9, 0x1f4a42, [0.78, 1.1, 0.52], [0.52, 0.52, 0.52]]
+  },
   zombie: {
     speed: 1.05,
     hp: HOSTILE_MOB_HP,
@@ -176,7 +190,7 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
  * source of truth for "is this kind a monster" — used by the statistics /
  * advancements system to count hostile kills.
  */
-export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "raider", "boss"]);
+export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "raider", "boss", "drowned"]);
 
 /**
  * The allegiance each kind spawns with (see MobFaction). The targeting axis, set
@@ -194,6 +208,7 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
   cat: "wild",
   cod: "wild",
   salmon: "wild",
+  drowned: "hostile",
   villager: "villager",
   zombie: "hostile",
   skeleton: "hostile",
