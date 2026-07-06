@@ -6,6 +6,7 @@ import {
   isDetectorRail,
   isDoorBlock,
   isLever,
+  isPartialBlock,
   isPoweredRail,
   isPressurePlate,
   isRailBlock,
@@ -169,7 +170,7 @@ export function tickRedstone(state: GameState, dt: number, emit: EmitGameEvent):
     // component too; direct mining cascades the drop in mining.ts before this).
     if (isRedstoneOverlay(block) || isRailBlock(block)) {
       const support = world.get(x, y - 1, z);
-      if (!world.isSolid(x, y - 1, z) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support)) {
+      if (!world.isSolid(x, y - 1, z) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support) || isPartialBlock(support)) {
         write(x, y, z, BlockId.Air);
         rs.cells.delete(index);
         rs.buttonTimers.delete(index);

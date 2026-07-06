@@ -3,7 +3,18 @@ export { BLOCK_COLORS, BiomeId, BlockId, HELD_BLOCK_COLORS, HELD_BLOCK_FALLBACK_
 export { VoxelWorld } from "./voxelWorld";
 export { DOOR_BLOCK_IDS, doorBlock, doorBounds, doorFacingFromYaw, doorState, isDoorBlock, type DoorFacing, type DoorState } from "./doors";
 export { isDetectorRail, isPoweredRail, isRailBlock, railAxis, railBounds, type RailAxis } from "./rails";
-export { isPartialBlock, isSlabBlock, isStairBlock, shapeBoxes, stairBlock, stairFacing, type ShapeBox, type SlabMaterial, type StairFacing } from "./slabs";
+export {
+  isPartialBlock,
+  isSlabBlock,
+  isStairBlock,
+  orientStair,
+  shapeBoxes,
+  stairBlock,
+  stairFacing,
+  type ShapeBox,
+  type SlabMaterial,
+  type StairFacing
+} from "./slabs";
 export {
   isLever,
   isPressurePlate,

@@ -143,6 +143,13 @@ const CRAFTING_RECIPES: Recipe[] = [
     ],
     result: { slotId: "detector_rail", count: 2 }
   },
+  // Half-blocks: the classic 3-material-to-6-slabs and 6-to-4-stairs ratios.
+  { id: "plank_slab", label: "3 Planks -> 6 Plank Slab", cost: [{ slotId: "planks", count: 3 }], result: { slotId: "plank_slab", count: 6 } },
+  { id: "stone_slab", label: "3 Stone -> 6 Stone Slab", cost: [{ slotId: "stone", count: 3 }], result: { slotId: "stone_slab", count: 6 } },
+  { id: "cobble_slab", label: "3 Cobble -> 6 Cobble Slab", cost: [{ slotId: "cobble", count: 3 }], result: { slotId: "cobble_slab", count: 6 } },
+  { id: "plank_stairs", label: "6 Planks -> 4 Plank Stairs", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "plank_stairs", count: 4 } },
+  { id: "stone_stairs", label: "6 Stone -> 4 Stone Stairs", cost: [{ slotId: "stone", count: 6 }], result: { slotId: "stone_stairs", count: 4 } },
+  { id: "cobble_stairs", label: "6 Cobble -> 4 Cobble Stairs", cost: [{ slotId: "cobble", count: 6 }], result: { slotId: "cobble_stairs", count: 4 } },
   {
     id: "torch",
     label: "1 Coal + 1 Wood -> 4 Torch",

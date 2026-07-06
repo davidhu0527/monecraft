@@ -53,6 +53,12 @@ export function stairBlock(material: SlabMaterial, facing: StairFacing): BlockId
   return (STAIR_FIRST_BY_MATERIAL[material] + FACING_ORDER.indexOf(facing)) as BlockId;
 }
 
+/** The same stair re-oriented — placement turns the item's base (north) id by player yaw. */
+export function orientStair(block: BlockId, facing: StairFacing): BlockId {
+  if (!isStairBlock(block)) return block;
+  return (block - ((block - STAIR_FIRST) % 4) + FACING_ORDER.indexOf(facing)) as BlockId;
+}
+
 const BOTTOM_HALF: ShapeBox = Object.freeze({ minX: 0, maxX: 1, minY: 0, maxY: 0.5, minZ: 0, maxZ: 1 });
 
 // The stair's raised back occupies the half-cell on the side it faces

@@ -6,9 +6,12 @@ import {
   doorFacingFromYaw,
   doorState,
   isDoorBlock,
+  isPartialBlock,
   isRailBlock,
   isRedstoneBlock,
   isRedstoneOverlay,
+  isStairBlock,
+  orientStair,
   voxelRaycast
 } from "@/lib/world";
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
@@ -256,7 +259,13 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
   if (slot.id === "door") {
     const support = world.get(tx, ty - 1, tz);
     replacedUpper = world.get(tx, ty + 1, tz) as BlockId;
-    if (ty + 1 >= world.sizeY || (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) || !world.isSolid(tx, ty - 1, tz) || isDoorBlock(support)) {
+    if (
+      ty + 1 >= world.sizeY ||
+      (replacedUpper !== BlockId.Air && replacedUpper !== BlockId.Water) ||
+      !world.isSolid(tx, ty - 1, tz) ||
+      isDoorBlock(support) ||
+      isPartialBlock(support)
+    ) {
       if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
       return;
     }
@@ -265,15 +274,19 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
     state.blockChanges.set(tx, ty + 1, tz, doorBlock(facing, false, true));
   } else {
     // Redstone overlays and rails are floor-mounted: they need a solid,
-    // full-cube block under them (the door support rule) or the placement refunds.
+    // FULL-cube block under them (the door support rule — a slab's half-height
+    // top or another overlay would leave them floating) or the placement refunds.
     if (isRedstoneOverlay(slot.blockId) || isRailBlock(slot.blockId)) {
       const support = world.get(tx, ty - 1, tz);
-      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support)) {
+      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support) || isPartialBlock(support)) {
         if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
         return;
       }
     }
-    state.blockChanges.set(tx, ty, tz, slot.blockId);
+    // A stair item carries its north id; the placed block faces the way the
+    // player looks (raised back away from them — walk straight up it).
+    const placed = isStairBlock(slot.blockId) ? orientStair(slot.blockId, doorFacingFromYaw(player.yaw)) : slot.blockId;
+    state.blockChanges.set(tx, ty, tz, placed);
   }
   if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
     state.blockChanges.set(tx, ty, tz, replacedBlock as BlockId);
