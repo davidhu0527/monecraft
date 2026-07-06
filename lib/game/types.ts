@@ -48,6 +48,8 @@ export type ItemDef = {
   hunger?: number;
   /** The status effect this potion applies when drunk (potion items only). */
   effect?: ItemEffect;
+  /** Per-item stack cap; defaults to MAX_STACK_SIZE (durable gear always stacks to 1). */
+  stackSize?: number;
 };
 
 export type InventorySlot = {

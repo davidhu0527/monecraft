@@ -842,6 +842,31 @@ const BOTTLE_GRID = [
   ".....oLLLLo.....",
   "......oooo......"
 ];
+// A metal pail: handle arc (o), bright rim (r), body (m), and an `L`/`h`
+// fill surface recolored per fluid. The empty bucket shows its dark interior.
+const BUCKET_GRID = [
+  "................",
+  ".....oooooo.....",
+  "....oo....oo....",
+  "....o......o....",
+  "...ro......or...",
+  "...rrrrrrrrrr...",
+  "...rLLLLLLLLr...",
+  "...rLLhLLLLLr...",
+  "....mmmmmmmm....",
+  "....mmmmmmmm....",
+  "....mmmmmmmm....",
+  ".....mmmmmm.....",
+  ".....mmmmmm.....",
+  ".....mmmmmm.....",
+  "......mmmm......",
+  "................"
+];
+const BUCKET_METAL: PixelPalette = { o: [70, 74, 84], r: [180, 184, 192], m: [140, 144, 152] };
+const BUCKET_EMPTY_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [96, 100, 110], h: [120, 124, 134] };
+const BUCKET_WATER_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [58, 110, 200], h: [140, 190, 240] };
+const BUCKET_LAVA_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [235, 110, 30], h: [255, 200, 80] };
+
 const POTION_GLASS: PixelPalette = { o: [40, 40, 52], C: [120, 80, 46], g: [176, 210, 224] };
 const POTION_SPEED_PALETTE: PixelPalette = { ...POTION_GLASS, L: [124, 205, 238], h: [190, 235, 250] };
 const POTION_STRENGTH_PALETTE: PixelPalette = { ...POTION_GLASS, L: [209, 72, 72], h: [240, 140, 140] };
@@ -896,6 +921,9 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
   ominous_horn: { grid: BONE_GRID, palette: OMINOUS_HORN_PALETTE },
   dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },
+  bucket: { grid: BUCKET_GRID, palette: BUCKET_EMPTY_PALETTE },
+  water_bucket: { grid: BUCKET_GRID, palette: BUCKET_WATER_PALETTE },
+  lava_bucket: { grid: BUCKET_GRID, palette: BUCKET_LAVA_PALETTE },
   empty_bottle: { grid: BOTTLE_GRID, palette: EMPTY_BOTTLE_PALETTE },
   potion_speed: { grid: BOTTLE_GRID, palette: POTION_SPEED_PALETTE },
   potion_strength: { grid: BOTTLE_GRID, palette: POTION_STRENGTH_PALETTE },

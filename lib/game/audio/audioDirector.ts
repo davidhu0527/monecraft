@@ -9,6 +9,8 @@ import {
   BOSS_ROAR_SOUND,
   BOW_FIRE_SOUND,
   BREAK_SOUNDS,
+  BUCKET_FILL_SOUND,
+  BUCKET_POUR_SOUND,
   FISHING_BITE_SOUND,
   FISHING_CAST_SOUND,
   FISHING_CATCH_SOUND,
@@ -312,6 +314,12 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "usedBoneMeal":
           backend.play(BONE_MEAL_SOUND);
+          break;
+        case "bucketFilled":
+          backend.play(BUCKET_FILL_SOUND);
+          break;
+        case "bucketEmptied":
+          backend.play(BUCKET_POUR_SOUND);
           break;
         case "fishingCast":
           backend.play(FISHING_CAST_SOUND);

@@ -179,6 +179,11 @@ export const ITEM_DEFS: ItemDef[] = [
   // A durable tool used (via the right-click held-item path) to fish, not to mine —
   // minePower 0 means it breaks no blocks; it renders from a custom sprite grid.
   { id: "fishing_rod", label: "Fishing Rod", kind: "tool", minePower: 0, mineTier: 0, maxDurability: FISHING_ROD_DURABILITY },
+  // Buckets carry one fluid block (right-click use — see interact.ts). Empties
+  // stack in bundles; a filled bucket is a single sloshing payload.
+  { id: "bucket", label: "Bucket", kind: "material", stackSize: 16 },
+  { id: "water_bucket", label: "Water Bucket", kind: "material", stackSize: 1 },
+  { id: "lava_bucket", label: "Lava Bucket", kind: "material", stackSize: 1 },
   { id: "food", label: "Food", kind: "food", hunger: 7 },
   // Mob materials — craft ingredients with no direct use on their own yet.
   { id: "wool", label: "Wool", kind: "material" },
@@ -345,7 +350,9 @@ export const ITEM_DEFS: ItemDef[] = [
 export const ITEM_DEF_BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEM_DEFS.map((item) => [item.id, item]));
 
 export function maxStackSizeForItem(itemId: string): number {
-  return ITEM_DEF_BY_ID[itemId]?.maxDurability ? 1 : MAX_STACK_SIZE;
+  const def = ITEM_DEF_BY_ID[itemId];
+  if (def?.maxDurability) return 1;
+  return def?.stackSize ?? MAX_STACK_SIZE;
 }
 
 export function createEmptySlot(): InventorySlot {

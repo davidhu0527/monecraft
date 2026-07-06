@@ -614,6 +614,12 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "fishing_rod", count: 1 }
   },
   {
+    id: "bucket",
+    label: "3 Sliver Ore -> Bucket",
+    cost: [{ slotId: "sliver_ore", count: 3 }],
+    result: { slotId: "bucket", count: 1 }
+  },
+  {
     id: "raft",
     label: "4 Planks + 2 Wood -> Raft",
     cost: [

@@ -1306,6 +1306,44 @@ export const BONE_MEAL_SOUND: SoundDef = {
   minRetriggerMs: 120
 };
 
+/** A deep wet gulp as a bucket scoops a fluid block up. */
+export const BUCKET_FILL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.25,
+    frequency: 240,
+    sustain: 0.03,
+    release: 0.14,
+    shape: 0,
+    slide: 2,
+    noise: 0.5,
+    pitchJump: -120,
+    pitchJumpTime: 0.05,
+    sustainVolume: 0.5,
+    decay: 0.04,
+    filter: -260
+  }),
+  minRetriggerMs: 120
+};
+
+/** A sloshing splash as a bucket pours its fluid out. */
+export const BUCKET_POUR_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.3,
+    frequency: 320,
+    sustain: 0.04,
+    release: 0.18,
+    shape: 0,
+    slide: -2,
+    noise: 0.7,
+    sustainVolume: 0.55,
+    decay: 0.05,
+    filter: -220
+  }),
+  minRetriggerMs: 120
+};
+
 /** A whoosh into a soft plop as the bobber lands on the water. */
 export const FISHING_CAST_SOUND: SoundDef = {
   params: zz({

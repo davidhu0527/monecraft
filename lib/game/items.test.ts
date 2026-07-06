@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BlockId } from "@/lib/world";
-import { FORTUNE_BONUS_PER_LEVEL } from "@/lib/game/config";
-import { rollBlockDrops } from "@/lib/game/items";
+import { FORTUNE_BONUS_PER_LEVEL, MAX_STACK_SIZE } from "@/lib/game/config";
+import { maxStackSizeForItem, rollBlockDrops } from "@/lib/game/items";
 
 /** Count of `itemId` across a drop list (0 if absent). */
 function dropCount(drops: Array<{ itemId: string; count: number }>, itemId: string): number {
@@ -32,5 +32,18 @@ describe("rollBlockDrops Fortune", () => {
     const rng = () => 0.999;
     expect(dropCount(rollBlockDrops(BlockId.GoldOre, rng, 0), "gold_ore")).toBe(1);
     expect(dropCount(rollBlockDrops(BlockId.GoldOre, rng), "gold_ore")).toBe(1);
+  });
+});
+
+describe("maxStackSizeForItem", () => {
+  test("honors a per-item stackSize: empty buckets bundle, filled buckets don't", () => {
+    expect(maxStackSizeForItem("bucket")).toBe(16);
+    expect(maxStackSizeForItem("water_bucket")).toBe(1);
+    expect(maxStackSizeForItem("lava_bucket")).toBe(1);
+  });
+
+  test("durable gear still stacks to 1 and plain items to the global cap", () => {
+    expect(maxStackSizeForItem("diamond_pickaxe")).toBe(1);
+    expect(maxStackSizeForItem("stone")).toBe(MAX_STACK_SIZE);
   });
 });
