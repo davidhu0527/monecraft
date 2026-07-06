@@ -96,6 +96,7 @@ export type MobKind =
   | "cat"
   | "cod"
   | "salmon"
+  | "drowned"
   | "zombie"
   | "skeleton"
   | "spider"

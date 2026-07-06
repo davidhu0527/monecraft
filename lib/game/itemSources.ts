@@ -33,6 +33,7 @@ const MOB_LABELS: Record<MobKind, string> = {
   cat: "a cat",
   cod: "a cod",
   salmon: "a salmon",
+  drowned: "a drowned",
   zombie: "a zombie",
   skeleton: "a skeleton",
   spider: "a spider",
@@ -71,10 +72,15 @@ const SOURCE_HINTS: Map<string, string> = (() => {
     if (!hints.has(itemId)) hints.set(itemId, hint);
   };
 
-  // 1. Hunt (every mob except the boss — it isn't a farmable source).
+  // 1. Hunt (every mob except the boss — it isn't a farmable source). Entries
+  // behind a `chance` gate are lucky extras, not the item's natural source
+  // (the drowned's rare spear shouldn't beat "Craft it"), so they don't hint.
   for (const [kind, drops] of Object.entries(MOB_DROPS)) {
     if (kind === "boss") continue;
-    for (const drop of drops) set(drop.itemId, `Hunt ${MOB_LABELS[kind as MobKind]}`);
+    for (const drop of drops) {
+      if (drop.chance !== undefined) continue;
+      set(drop.itemId, `Hunt ${MOB_LABELS[kind as MobKind]}`);
+    }
   }
   // 2. Craft (incl. smelt/trade/brew). The first recipe producing the item wins.
   for (const recipe of RECIPES) set(recipe.result.slotId, CRAFT_VERB[recipe.station ?? "none"]);
