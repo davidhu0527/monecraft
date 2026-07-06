@@ -354,7 +354,7 @@ export async function connectNetworkSession(
   };
 
   function upsertReplicaVehicle(pose: VehiclePose): void {
-    const kind = (pose.kind === "ship" ? "ship" : "raft") as VehicleKind;
+    const kind = (pose.kind === "ship" || pose.kind === "minecart" ? pose.kind : "raft") as VehicleKind;
     let vehicle = state.vehicles.find((v) => v.id === pose.id);
     if (!vehicle) {
       vehicle = { id: pose.id, kind, position: new THREE.Vector3(pose.x, pose.y, pose.z), yaw: pose.yaw, rider: pose.riderId };

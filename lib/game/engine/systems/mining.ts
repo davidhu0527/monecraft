@@ -1,5 +1,16 @@
 import * as THREE from "three";
-import { BlockId, collidesAt, doorBlock, doorFacingFromYaw, doorState, isDoorBlock, isRedstoneBlock, isRedstoneOverlay, voxelRaycast } from "@/lib/world";
+import {
+  BlockId,
+  collidesAt,
+  doorBlock,
+  doorFacingFromYaw,
+  doorState,
+  isDoorBlock,
+  isRailBlock,
+  isRedstoneBlock,
+  isRedstoneOverlay,
+  voxelRaycast
+} from "@/lib/world";
 import { BARE_HAND_MINE_POWER, CHEST_SLOTS, EYE_HEIGHT, MINE_REACH, MINING_RATE, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from "@/lib/game/config";
 import { BREAK_HARDNESS, createEmptySlot, rollBlockDrops } from "@/lib/game/items";
 import { adjustSlotCount, consumeToolDurability, tryInsertSlots } from "@/lib/game/inventory";
@@ -194,10 +205,10 @@ export function tickMining(
     }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
-    // A redstone overlay (wire, lever, …) standing on the broken block pops
-    // off with it and drops its item to the miner (the kelp-cascade rule).
+    // A redstone overlay (wire, lever, …) or rail standing on the broken block
+    // pops off with it and drops its item to the miner (the kelp-cascade rule).
     const above = world.get(bx, by + 1, bz) as BlockId;
-    if (isRedstoneOverlay(above)) {
+    if (isRedstoneOverlay(above) || isRailBlock(above)) {
       state.blockChanges.set(bx, by + 1, bz, BlockId.Air);
       if (!creative && !predict) addBlockDrop(player, above, rng, tool);
     }
@@ -253,11 +264,11 @@ export function placeSelectedBlock(state: GameState, player: PlayerState, emit: 
     state.blockChanges.set(tx, ty, tz, doorBlock(facing, false, false));
     state.blockChanges.set(tx, ty + 1, tz, doorBlock(facing, false, true));
   } else {
-    // Redstone overlays are floor-mounted: they need a solid, full-cube block
-    // under them (the door support rule) or the placement refunds.
-    if (isRedstoneOverlay(slot.blockId)) {
+    // Redstone overlays and rails are floor-mounted: they need a solid,
+    // full-cube block under them (the door support rule) or the placement refunds.
+    if (isRedstoneOverlay(slot.blockId) || isRailBlock(slot.blockId)) {
       const support = world.get(tx, ty - 1, tz);
-      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support)) {
+      if (!world.isSolid(tx, ty - 1, tz) || isRedstoneOverlay(support) || isDoorBlock(support) || isRailBlock(support)) {
         if (consume) player.inventory = adjustSlotCount(player.inventory, slot.id, 1, player.selectedSlot) ?? player.inventory;
         return;
       }

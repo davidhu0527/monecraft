@@ -1,10 +1,18 @@
 import * as THREE from "three";
-import { BlockId, collidesAt, waterSurfaceRaycast } from "@/lib/world";
+import { BlockId, collidesAt, isRailBlock, railAxis, voxelRaycast, waterSurfaceRaycast } from "@/lib/world";
 import {
   EYE_HEIGHT,
   PLAYER_HALF_WIDTH,
   PLAYER_HEIGHT,
   MAX_VEHICLES,
+  MINECART_ACCEL,
+  MINECART_BOOST_SPEED,
+  MINECART_BRAKE_DECEL,
+  MINECART_FRICTION,
+  MINECART_HALF_LENGTH,
+  MINECART_HALF_WIDTH,
+  MINECART_RIDE_HEIGHT,
+  MINECART_SPEED,
   RAFT_HALF_LENGTH,
   RAFT_HALF_WIDTH,
   RAFT_SPEED,
@@ -35,7 +43,8 @@ type VehicleSpec = {
 
 const VEHICLE_SPECS: Record<VehicleKind, VehicleSpec> = {
   raft: { speed: RAFT_SPEED, halfWidth: RAFT_HALF_WIDTH, halfLength: RAFT_HALF_LENGTH },
-  ship: { speed: SHIP_SPEED, halfWidth: SHIP_HALF_WIDTH, halfLength: SHIP_HALF_LENGTH }
+  ship: { speed: SHIP_SPEED, halfWidth: SHIP_HALF_WIDTH, halfLength: SHIP_HALF_LENGTH },
+  minecart: { speed: MINECART_SPEED, halfWidth: MINECART_HALF_WIDTH, halfLength: MINECART_HALF_LENGTH }
 };
 
 function specFor(kind: VehicleKind): VehicleSpec {
@@ -106,6 +115,21 @@ function vehicleHasWaterSupport(state: GameState, vehicle: VehicleState): boolea
   return true;
 }
 
+/** The rail cell a minecart rides on (the cart floats RIDE_HEIGHT above its base). */
+function cartRailY(vehicle: VehicleState): number {
+  return Math.floor(vehicle.position.y - 0.05);
+}
+
+function railBlockUnder(state: GameState, vehicle: VehicleState): number {
+  return state.world.get(Math.floor(vehicle.position.x), cartRailY(vehicle), Math.floor(vehicle.position.z));
+}
+
+/** Per-kind ground truth: boats float on water, carts sit on a rail. */
+function vehicleHasSupport(state: GameState, vehicle: VehicleState): boolean {
+  if (vehicle.kind === "minecart") return isRailBlock(railBlockUnder(state, vehicle));
+  return vehicleHasWaterSupport(state, vehicle);
+}
+
 function vehicleOverlaps(a: VehicleState, b: VehicleState): boolean {
   const as = specFor(a.kind);
   const bs = specFor(b.kind);
@@ -129,7 +153,163 @@ function canOccupy(state: GameState, vehicle: VehicleState): boolean {
   ) {
     return false;
   }
-  return vehicleHasWaterSupport(state, vehicle) && !vehicleOverlapsAny(state, vehicle);
+  return vehicleHasSupport(state, vehicle) && !vehicleOverlapsAny(state, vehicle);
+}
+
+// --- Minecart rail-following -------------------------------------------------
+//
+// A cart's pose is (position snapped to the track centerline, yaw snapped to an
+// axis, signed speed along that yaw). Movement hops cell centers: advance along
+// the heading; at a center, prefer the straight-ahead rail, else a perpendicular
+// neighbor (that IS the corner support — an L of plain rails just works), else
+// stop dead on the center (end of track). There are no slopes and no cart-vs-cart
+// collision (deferred); a rail mined out from under a cart parks it in place, the
+// beached-boat philosophy.
+
+const CART_EPS = 1e-4;
+
+/** Snap a yaw to its dominant axis direction. */
+function cartHeading(yaw: number): [number, number] {
+  const fx = -Math.sin(yaw);
+  const fz = -Math.cos(yaw);
+  if (Math.abs(fx) >= Math.abs(fz)) return [fx >= 0 ? 1 : -1, 0];
+  return [0, fz >= 0 ? 1 : -1];
+}
+
+/** Inverse of the forward vector (-sin yaw, -cos yaw) for an axis direction. */
+function yawFor(dx: number, dz: number): number {
+  return Math.atan2(-dx, -dz);
+}
+
+function railAt(state: GameState, x: number, y: number, z: number): boolean {
+  return isRailBlock(state.world.get(x, y, z));
+}
+
+/** Straight-ahead rail first, else a perpendicular turn (deterministic order). */
+function pickNextRailCell(state: GameState, cx: number, cy: number, cz: number, dx: number, dz: number): [number, number] | null {
+  if (railAt(state, cx + dx, cy, cz + dz)) return [dx, dz];
+  const candidates: Array<[number, number]> =
+    dx !== 0
+      ? [
+          [0, 1],
+          [0, -1]
+        ]
+      : [
+          [1, 0],
+          [-1, 0]
+        ];
+  for (const [px, pz] of candidates) {
+    if (railAt(state, cx + px, cy, cz + pz)) return [px, pz];
+  }
+  return null;
+}
+
+/**
+ * Throttle is the rider's forward/back intent (0 while coasting). An unpowered
+ * PoweredRail is a hard stopper; a lit one drives the cart toward the boost cap
+ * (a stationary cart launches the way it faces — the button-powered launcher
+ * track); otherwise the rider's throttle steers toward ±cruise speed and plain
+ * rail bleeds speed off as friction.
+ */
+function updateMinecartSpeed(state: GameState, vehicle: VehicleState, throttle: number, dt: number): void {
+  const approach = (value: number, target: number, maxDelta: number): number => {
+    if (value < target) return Math.min(target, value + maxDelta);
+    return Math.max(target, value - maxDelta);
+  };
+  const rail = railBlockUnder(state, vehicle);
+  let speed = vehicle.speed ?? 0;
+  if (rail === BlockId.PoweredRail) {
+    speed = approach(speed, 0, MINECART_BRAKE_DECEL * dt);
+  } else if (rail === BlockId.PoweredRailOn) {
+    const dir = throttle !== 0 ? throttle : speed !== 0 ? Math.sign(speed) : 1;
+    speed = approach(speed, dir * MINECART_BOOST_SPEED, MINECART_ACCEL * dt);
+  } else if (throttle !== 0) {
+    speed = approach(speed, throttle * MINECART_SPEED, MINECART_ACCEL * dt);
+  } else {
+    speed = approach(speed, 0, MINECART_FRICTION * dt);
+  }
+  vehicle.speed = speed;
+}
+
+function moveMinecartAlongRails(state: GameState, vehicle: VehicleState, dt: number): void {
+  const signed = vehicle.speed ?? 0;
+  let remaining = Math.abs(signed) * dt;
+  if (remaining <= 0) return;
+  let travelSign = Math.sign(signed);
+  // Hard bound on cells per frame — protects against a huge dt (tab catch-up).
+  let guard = 32;
+  while (remaining > CART_EPS && guard-- > 0) {
+    const cx = Math.floor(vehicle.position.x);
+    const cy = cartRailY(vehicle);
+    const cz = Math.floor(vehicle.position.z);
+    if (!railAt(state, cx, cy, cz)) {
+      vehicle.speed = 0; // track mined out from under a moving cart: park in place
+      return;
+    }
+    const [hx, hz] = cartHeading(vehicle.yaw);
+    const dx = hx * travelSign;
+    const dz = hz * travelSign;
+    const centerX = cx + 0.5;
+    const centerZ = cz + 0.5;
+    vehicle.position.y = cy + MINECART_RIDE_HEIGHT;
+    // Approach the current cell's center first (also re-rails the cross axis).
+    const toCenter = dx !== 0 ? (centerX - vehicle.position.x) * dx : (centerZ - vehicle.position.z) * dz;
+    if (toCenter > CART_EPS) {
+      const step = Math.min(remaining, toCenter);
+      vehicle.position.x += dx * step;
+      vehicle.position.z += dz * step;
+      if (dx !== 0) vehicle.position.z = centerZ;
+      else vehicle.position.x = centerX;
+      remaining -= step;
+      continue;
+    }
+    // At (or past) the center: pick where the track goes next.
+    const next = pickNextRailCell(state, cx, cy, cz, dx, dz);
+    if (!next) {
+      vehicle.position.x = centerX;
+      vehicle.position.z = centerZ;
+      vehicle.speed = 0; // end of track: settle on the last rail
+      return;
+    }
+    const [nx, nz] = next;
+    if (nx !== dx || nz !== dz) {
+      // The track turns: face the cart along the new travel direction. Speed
+      // becomes positive-forward in the new frame (a reversing cart reorients).
+      vehicle.yaw = yawFor(nx, nz);
+      vehicle.speed = Math.abs(vehicle.speed ?? 0);
+      travelSign = 1;
+    }
+    const targetX = cx + nx + 0.5;
+    const targetZ = cz + nz + 0.5;
+    const dist = nx !== 0 ? (targetX - vehicle.position.x) * nx : (targetZ - vehicle.position.z) * nz;
+    const step = Math.min(remaining, dist);
+    vehicle.position.x += nx * step;
+    vehicle.position.z += nz * step;
+    if (nx !== 0) vehicle.position.z = centerZ;
+    else vehicle.position.x = centerX;
+    remaining -= step;
+  }
+}
+
+function tickMountedMinecart(state: GameState, player: PlayerState, vehicle: VehicleState, input: FrameInput, dt: number): void {
+  const throttle = (input.move.forward ? 1 : 0) - (input.move.back ? 1 : 0);
+  updateMinecartSpeed(state, vehicle, throttle, dt);
+  moveMinecartAlongRails(state, vehicle, dt);
+  syncPlayerToVehicle(player, vehicle);
+}
+
+/**
+ * Riderless carts coast under the same friction/boost rules, so a lever-powered
+ * launcher track works with nobody aboard. World-scoped and called exactly once
+ * per frame from GameEngine.step — NOT the per-player tickVehicles path, which
+ * runs once per player and would integrate a coasting cart N× in co-op.
+ */
+export function tickCoastingMinecarts(state: GameState, dt: number): void {
+  for (const vehicle of state.vehicles) {
+    if (vehicle.kind !== "minecart" || vehicle.rider !== null) continue;
+    updateMinecartSpeed(state, vehicle, 0, dt);
+    moveMinecartAlongRails(state, vehicle, dt);
+  }
 }
 
 function mountVehicle(state: GameState, player: PlayerState, vehicle: VehicleState): void {
@@ -202,16 +382,17 @@ function aimedVehicle(state: GameState, player: PlayerState): VehicleState | nul
   return best;
 }
 
-export function tryBoardAimedVehicle(state: GameState, player: PlayerState): boolean {
+export function tryBoardAimedVehicle(state: GameState, player: PlayerState, emit: EmitGameEvent): boolean {
   const vehicle = aimedVehicle(state, player);
   if (!vehicle || vehicle.rider !== null) return false;
   mountVehicle(state, player, vehicle);
+  emit({ type: "vehicleBoarded", kind: vehicle.kind });
   return true;
 }
 
 export function tryPlaceVehicle(state: GameState, player: PlayerState, emit: EmitGameEvent): boolean {
   const slot = player.inventory[player.selectedSlot];
-  if (slot?.id !== "raft" && slot?.id !== "ship") return false;
+  if (slot?.id !== "raft" && slot?.id !== "ship" && slot?.id !== "minecart") return false;
   const kind = slot.id;
   if (state.vehicles.length >= MAX_VEHICLES) {
     emit({ type: "vehiclePlaceFailed" }); // world is at the vehicle cap — refuse to keep saves bounded
@@ -219,14 +400,31 @@ export function tryPlaceVehicle(state: GameState, player: PlayerState, emit: Emi
   }
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
   lookDirection(player.yaw, player.pitch, scratchDir);
-  const water = waterSurfaceRaycast(state.world, scratchEye, scratchDir, VEHICLE_BOARD_REACH);
-  if (!water) {
-    emit({ type: "vehiclePlaceFailed" }); // no water in reach — cue the "can't place here" thud
-    return true;
+  let vehicle: VehicleState;
+  if (kind === "minecart") {
+    // A cart places onto the rail block you aim at (rails are raycast-solid),
+    // facing along the track's axis toward wherever the player is looking.
+    const hit = voxelRaycast(state.world, scratchEye, scratchDir, VEHICLE_BOARD_REACH);
+    const rail = hit ? state.world.get(hit.hit.x, hit.hit.y, hit.hit.z) : BlockId.Air;
+    if (!hit || !isRailBlock(rail)) {
+      emit({ type: "vehiclePlaceFailed" }); // not aiming at a rail — cue the "can't place here" thud
+      return true;
+    }
+    const axis = railAxis(state.world, hit.hit.x, hit.hit.y, hit.hit.z);
+    const fx = -Math.sin(player.yaw);
+    const fz = -Math.cos(player.yaw);
+    const yaw = axis === "x" ? yawFor(fx >= 0 ? 1 : -1, 0) : yawFor(0, fz >= 0 ? 1 : -1);
+    vehicle = makeVehicle(state, kind, hit.hit.x + 0.5, hit.hit.y + MINECART_RIDE_HEIGHT, hit.hit.z + 0.5, yaw);
+  } else {
+    const water = waterSurfaceRaycast(state.world, scratchEye, scratchDir, VEHICLE_BOARD_REACH);
+    if (!water) {
+      emit({ type: "vehiclePlaceFailed" }); // no water in reach — cue the "can't place here" thud
+      return true;
+    }
+    vehicle = makeVehicle(state, kind, water.x + 0.5, water.y + 1, water.z + 0.5, player.yaw);
   }
-  const vehicle = makeVehicle(state, kind, water.x + 0.5, water.y + 1, water.z + 0.5, player.yaw);
   if (!canOccupy(state, vehicle)) {
-    emit({ type: "vehiclePlaceFailed" }); // spot is blocked, out of bounds, or overlaps another boat
+    emit({ type: "vehiclePlaceFailed" }); // spot is blocked, out of bounds, or overlaps another vehicle
     return true;
   }
   state.vehicles.push(vehicle);
@@ -239,6 +437,11 @@ export function tickVehicles(state: GameState, player: PlayerState, input: Frame
   const mounted = player.mountedVehicleId === null ? null : (state.vehicles.find((vehicle) => vehicle.id === player.mountedVehicleId) ?? null);
   if (mounted) {
     if (input.move.crouch && dismountVehicle(state, player, mounted)) return;
+    if (mounted.kind === "minecart") {
+      // Rail-guided: the track steers, the rider only throttles and brakes.
+      tickMountedMinecart(state, player, mounted, input, dt);
+      return;
+    }
     const forwardInput = (input.move.forward ? 1 : 0) - (input.move.back ? 1 : 0);
     const turnInput = (input.move.right ? 1 : 0) - (input.move.left ? 1 : 0);
     mounted.yaw -= turnInput * VEHICLE_TURN_RATE * dt;

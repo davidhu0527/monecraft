@@ -119,7 +119,7 @@ export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
  */
 export type Profession = "farmer" | "blacksmith" | "librarian" | "cleric";
 
-export type VehicleKind = "raft" | "ship";
+export type VehicleKind = "raft" | "ship" | "minecart";
 
 export type MobModel = {
   group: THREE.Group;

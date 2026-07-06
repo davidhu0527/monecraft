@@ -11,7 +11,8 @@ export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
 export const WORLD_BORDER_PADDING = 1.2;
 
-// Water vehicles. Rafts are compact and slower; ships are larger and faster.
+// Vehicles. Rafts are compact and slower; ships are larger and faster; the
+// minecart is rail-guided (steered by the track, not the rider).
 export const VEHICLE_BOARD_REACH = 4.5;
 export const VEHICLE_TURN_RATE = 2.8; // radians/sec at full turn input
 export const VEHICLE_DISMOUNT_RADIUS = 1.7;
@@ -21,7 +22,15 @@ export const RAFT_HALF_LENGTH = 0.8;
 export const SHIP_SPEED = 5.4;
 export const SHIP_HALF_WIDTH = 1.0;
 export const SHIP_HALF_LENGTH = 1.6;
-export const MAX_VEHICLES = 64; // cap on persisted rafts+ships per world — bounds save size (creative placement never consumes)
+export const MINECART_SPEED = 6; // rider-driven cruise cap on plain rail
+export const MINECART_BOOST_SPEED = 11; // cap while a PoweredRailOn drives the cart
+export const MINECART_ACCEL = 8; // blocks/s² toward the current cap (rider throttle and boost alike)
+export const MINECART_FRICTION = 1.5; // blocks/s² coasting decay on plain rail
+export const MINECART_BRAKE_DECEL = 14; // blocks/s² rider brake AND the unpowered powered-rail stopper
+export const MINECART_HALF_WIDTH = 0.35;
+export const MINECART_HALF_LENGTH = 0.45;
+export const MINECART_RIDE_HEIGHT = 0.1; // cart floor above the rail cell's base (rails are 0.09 tall)
+export const MAX_VEHICLES = 64; // cap on persisted vehicles per world — bounds save size (creative placement never consumes)
 
 // Online accounts. An account owns server-side profiles (its cross-device
 // identities); each profile owns online worlds. Both are capped to bound

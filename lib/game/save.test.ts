@@ -1123,8 +1123,14 @@ describe("v15 to v16 migration & vehicles", () => {
   });
 
   test("serializeVehicles / restoreVehicles round-trip placed vehicles", () => {
-    const saved = serializeVehicles([{ kind: "raft", position: new THREE.Vector3(4.5, 10, 7.5), yaw: 1.2 }]);
-    expect(saved).toEqual([{ kind: "raft", x: 4.5, y: 10, z: 7.5, yaw: 1.2 }]);
+    const saved = serializeVehicles([
+      { kind: "raft", position: new THREE.Vector3(4.5, 10, 7.5), yaw: 1.2 },
+      { kind: "minecart", position: new THREE.Vector3(8.5, 12.1, 3.5), yaw: 0 }
+    ]);
+    expect(saved).toEqual([
+      { kind: "raft", x: 4.5, y: 10, z: 7.5, yaw: 1.2 },
+      { kind: "minecart", x: 8.5, y: 12.1, z: 3.5, yaw: 0 }
+    ]);
     expect(restoreVehicles({ ...sampleSave(), vehicles: saved })).toEqual(saved);
   });
 
