@@ -318,3 +318,24 @@ describe("ensureArrivalPortal", () => {
     expect(changes.changes()).toHaveLength(0); // …and nothing was built
   });
 });
+
+describe("tryIgnitePortal — game-mode gate", () => {
+  test("Adventure can't ignite: lighting writes blocks, and Adventure can't edit blocks", () => {
+    const world = makeWorld();
+    buildFrame(world, "x", 8, 8, 2, 3);
+    const { state, player, events } = makeState(world, [createSlot("flint_and_steel", 1)], new THREE.Vector3(8.5, FLOOR_Y + 1, 8.5));
+    (player as { gameMode: string }).gameMode = "adventure";
+    aimAt(player, 8.5, FLOOR_Y + 0.5, 8.5);
+    expect(
+      tryIgnitePortal(
+        state,
+        player,
+        (e) => events.push(e),
+        true,
+        () => 0.5
+      )
+    ).toBe(false); // falls through silently, like placeSelectedBlock's own gate
+    expect(state.world.get(8, FLOOR_Y + 1, 8)).toBe(BlockId.Air);
+    expect(events).toHaveLength(0);
+  });
+});

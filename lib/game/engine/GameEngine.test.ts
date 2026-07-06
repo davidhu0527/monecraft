@@ -3350,3 +3350,25 @@ describe("portal travel (swap-on-travel)", () => {
     expect(home.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
   });
 });
+
+describe("nether unstuck", () => {
+  test("forceUnstuck in the nether relocates to a cavern-floor pocket, never the bedrock roof", () => {
+    const nether = new GameEngine({ dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    const player = nether.state.player;
+    // Wedge the player inside the solid netherrack mass, then ask for rescue.
+    player.position.set(20.5, 20, 20.5);
+    nether.dispatch({ type: "unstuck" });
+
+    const fx = Math.floor(player.position.x);
+    const fy = Math.floor(player.position.y);
+    const fz = Math.floor(player.position.z);
+    // Below the roof, above the guards' floor, standing in open interior cells…
+    expect(fy).toBeLessThan(nether.state.world.sizeY - 5);
+    expect(fy).toBeGreaterThan(2);
+    expect(nether.state.world.get(fx, fy, fz)).toBe(BlockId.Air);
+    expect(nether.state.world.get(fx, fy + 1, fz)).toBe(BlockId.Air);
+    // …on solid, non-lava footing (the whole point of the nether floor walker).
+    expect(nether.state.world.isSolid(fx, fy - 1, fz)).toBe(true);
+    expect(nether.state.world.get(fx, fy - 1, fz)).not.toBe(BlockId.Lava);
+  });
+});

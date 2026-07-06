@@ -603,12 +603,12 @@ surfaces a friendly "limit reached"); they don't affect single-player.
 
 Change these only with care:
 
-- **`WORLDGEN_VERSION`** (`10`) is the worldgen baseline each world records at
+- **`WORLDGEN_VERSION`** (`11`) is the worldgen baseline each world records at
   creation. When a deliberate terrain change invalidates old block-diffs, bump this:
   every world whose recorded version differs discards its stale diffs and reboots from
   its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
   This replaced the old whole-store `SAVE_KEY` bump, which reset _every_ world at once.
-  It's versioned independently of the save **schema** (currently v16); don't bump it to
+  It's versioned independently of the save **schema** (currently v18); don't bump it to
   express a schema change — add a migration instead.
 - **`SAVE_KEY`** (`"minecraft_save_v7"`) is now **legacy**: each world has its own
   `minecraft_world_save_<id>` key, and `SAVE_KEY` is read only once by the one-time

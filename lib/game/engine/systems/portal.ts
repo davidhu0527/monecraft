@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BlockId, voxelRaycast, type VoxelWorld } from "@/lib/world";
 import { EYE_HEIGHT, MINE_REACH, PORTAL_DWELL_SECONDS, PORTAL_MAX_INTERIOR, PORTAL_MIN_INTERIOR, PORTAL_SEARCH_RADIUS } from "@/lib/game/config";
+import { canEditBlocks } from "@/lib/game/gameModes";
 import { consumeToolDurability } from "@/lib/game/inventory";
 import type { SurfaceYAtFn } from "@/lib/game/spawn";
 import type { BlockChangeTracker } from "../blockChanges";
@@ -105,6 +106,10 @@ export function fillPortalFrame(state: GameState, frame: PortalFrame): void {
 export function tryIgnitePortal(state: GameState, player: PlayerState, emit: EmitGameEvent, allowed: boolean, rng: () => number): boolean {
   const slot = player.inventory[player.selectedSlot];
   if (slot?.id !== "flint_and_steel" || slot.count <= 0) return false;
+  // Lighting a portal writes the frame-interior blocks — a world edit, so
+  // Adventure (which can't edit blocks) can't ignite. Falls through silently,
+  // mirroring placeSelectedBlock's own canEditBlocks gate.
+  if (!canEditBlocks(player.gameMode)) return false;
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
   lookDirection(player.yaw, player.pitch, scratchDir);
   const result = voxelRaycast(state.world, scratchEye, scratchDir, MINE_REACH);

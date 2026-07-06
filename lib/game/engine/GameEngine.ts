@@ -1737,7 +1737,14 @@ export class GameEngine {
 
   private forceUnstuck(player: PlayerState): void {
     const state = this.state;
-    const safe = findSpawnOnLand(state.world, player.position.x, player.position.z, true);
+    // The nether needs its own relocation: findSpawnOnLand reads highestSolidY,
+    // which in a roofed world is the bedrock ceiling — and out-of-bounds cells
+    // read as air, so the roof PASSES its safety checks. Target a cavern-floor
+    // pocket via the dimension's surfaceYAt instead.
+    const safe =
+      state.dimension === "nether"
+        ? findNetherSpawn(state.world, this.surfaceYAt, Math.floor(player.position.x), Math.floor(player.position.z))
+        : findSpawnOnLand(state.world, player.position.x, player.position.z, true);
     player.position.set(safe.x, safe.y, safe.z);
     player.velocity.set(0, 0, 0);
     player.onGround = false;
