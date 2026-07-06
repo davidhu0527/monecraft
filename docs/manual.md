@@ -30,7 +30,7 @@ The game opens to a menu rather than dropping you straight into a world:
    Quit to Worlds** takes you back to the list, and reloading the page resumes the
    world you were in.
 
-Everything is saved in your browser (localStorage). Deleting a world removes its save;
+Everything is saved in your browser (world saves in IndexedDB, so big builds don't hit localStorage's small quota). Deleting a world removes its save;
 deleting a profile removes all of its worlds.
 
 ## Getting started: your first day
