@@ -120,13 +120,13 @@ curl https://monecraft-server.fly.dev/health   # → {"ok":true,"rooms":0}
 Import the repo in the Vercel dashboard (or `vercel --prod` from the repo root),
 then set these environment variables (see `.env.example` for the full list):
 
-| Variable                      | Value                                                    |
-| ----------------------------- | -------------------------------------------------------- |
-| `DATABASE_URL`                | the **same** Neon string as the game server              |
-| `BETTER_AUTH_SECRET`          | your `openssl rand` output                               |
-| `BETTER_AUTH_URL`             | the deployed origin, e.g. `https://monecraft.vercel.app` |
-| `GAME_TICKET_SECRET`          | the **same** shared secret as the game server            |
-| `NEXT_PUBLIC_GAME_SERVER_URL` | `wss://monecraft-server.fly.dev` (note **wss**, not ws)  |
+| Variable                      | Value                                                   |
+| ----------------------------- | ------------------------------------------------------- |
+| `DATABASE_URL`                | the **same** Neon string as the game server             |
+| `BETTER_AUTH_SECRET`          | your `openssl rand` output                              |
+| `BETTER_AUTH_URL`             | the deployed origin, e.g. `https://mc.ainaive.com`      |
+| `GAME_TICKET_SECRET`          | the **same** shared secret as the game server           |
+| `NEXT_PUBLIC_GAME_SERVER_URL` | `wss://monecraft-server.fly.dev` (note **wss**, not ws) |
 
 `next build` won't _fail_ on a missing var (the auth mount and DB connection are
 both lazy — a missing server-side var surfaces at runtime instead). But
@@ -142,6 +142,30 @@ Set all five in Vercel before the first deploy, then double-check them.
 > var to the final URL and redeploy the web app once DNS is live. `NEXT_PUBLIC_*`
 > vars are inlined at build time — changing one needs a **redeploy**, not just an
 > env edit.
+
+### Custom domain
+
+The production app runs at **`mc.ainaive.com`**. To point a custom domain at the
+Vercel project:
+
+1. **Vercel → Settings → Domains** → add `mc.ainaive.com` and mark it the
+   **primary / production** domain.
+2. **DNS** at the domain's provider: add a `CNAME` record `mc` →
+   `cname.vercel-dns.com` (use the exact target the dashboard shows). Vercel
+   auto-issues the TLS certificate once the record resolves.
+3. **Redirect the old domain**: set the previous `<project>.vercel.app` domain to
+   **Redirect to** `mc.ainaive.com` (308, path-preserving) so a single canonical
+   origin matches `BETTER_AUTH_URL` and already-shared `.../join/<token>` invite
+   links keep working.
+4. Set **Production** `BETTER_AUTH_URL` to `https://mc.ainaive.com` and **redeploy**
+   (it's read at runtime, but a redeploy is the clean path — see the note above).
+   Sign-in hangs if this doesn't match the serving origin.
+
+`NEXT_PUBLIC_GAME_SERVER_URL` is **unchanged** by a web-domain switch — it points at
+the Fly game server (`wss://…fly.dev`), which does no Origin/CORS check (admission is
+the signed join ticket), so nothing on the server side needs updating. Invite links,
+the auth client, and the service-worker cache scope all derive their origin from the
+browser at runtime, so they follow the new domain automatically.
 
 ## Verify the whole thing
 
