@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+> Cutting a release? Follow [docs/releasing.md](docs/releasing.md) — bump
+> `package.json`, roll `## [Unreleased]` to a dated `## [X.Y.Z]`, then tag `vX.Y.Z`
+> (all three must match).
+
 ## [Unreleased]
 
 ### Added
