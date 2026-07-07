@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import VersionBadge from "@/components/menu/VersionBadge";
 
 type MenuScreenProps = {
   title: string;
@@ -14,6 +15,7 @@ export default function MenuScreen({ title, children }: MenuScreenProps) {
         <div className="menu-title">{title}</div>
         {children}
       </div>
+      <VersionBadge />
     </div>
   );
 }

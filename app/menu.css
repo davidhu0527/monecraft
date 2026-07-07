@@ -78,6 +78,23 @@
   opacity: 1;
 }
 
+/* Build-identity badge pinned to the corner of the menu (see VersionBadge.tsx).
+   .menu-screen is position: fixed, so this anchors to the viewport corner. */
+.menu-version {
+  position: absolute;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  font-size: 12px;
+  opacity: 0.6;
+  color: var(--mc-text-light);
+  text-shadow: var(--mc-text-shadow);
+  text-decoration: none;
+}
+
+.menu-version:hover {
+  opacity: 0.9;
+}
+
 .menu-list {
   display: flex;
   flex-direction: column;
