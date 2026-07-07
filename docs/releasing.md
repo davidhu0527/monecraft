@@ -5,7 +5,7 @@ is a single `chore(release): vX.Y.Z` commit on `main` plus a matching git tag.
 
 ## The invariant: three things stay in lockstep
 
-```
+```text
 package.json "version"   ⇔   newest  git tag vX.Y.Z   ⇔   top dated ## [X.Y.Z] in CHANGELOG.md
 ```
 
