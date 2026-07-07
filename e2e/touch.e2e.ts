@@ -8,14 +8,27 @@ import { calmDaytime, expect, playerPosition, test } from "./helpers";
  * windows) are pinned in touchInputController.test.ts; this is the journey
  * through the real DOM.
  *
- * Sustained gestures (joystick hold, look drag, hold-to-mine) are driven by
- * dispatching PointerEvents straight to the overlay element rather than via
- * page.mouse: on the headless software-GL CI runner, page.mouse's down+move+hold
- * sequences have their coalesced pointermoves dropped and their hit-tests race
- * the compositor, so the gesture silently never engages (discrete taps/clicks
- * are fine — those tests use page click). dispatchEvent invokes the React
- * handler directly with exact coords, so the input deterministically lands.
+ * Input driving, by reliability on the headless software-GL CI runner:
+ *   - discrete taps/clicks (tap-to-play, buttons): page click — fine.
+ *   - press-and-hold (hold-to-mine): a single dispatched pointerdown — fine.
+ *   - sustained MOVE gestures (joystick push, look drag): neither page.mouse nor
+ *     dispatchEvent can deliver a pointermove to the overlay's React handler in
+ *     CI (proven: the move intent stayed all-false, yaw stayed 0), so these are
+ *     driven at the controller API the overlay itself calls
+ *     (window.__monecraft.input.controls). The DOM pointer→controls wiring is
+ *     covered by TouchControls.test.tsx; here we still exercise the real
+ *     controller→engine→movement/look integration in the running app.
  */
+
+type TouchPoint = { pointerId: number; x: number; y: number };
+type TouchControls = {
+  joystickDown(p: TouchPoint): void;
+  joystickMove(p: TouchPoint): void;
+  joystickUp(id: number): void;
+  lookDown(p: TouchPoint): void;
+  lookMove(p: TouchPoint): void;
+  lookUp(id: number): void;
+};
 
 test.use({ touchMode: "on", hasTouch: true, viewport: { width: 812, height: 375 } });
 
@@ -72,24 +85,18 @@ test("pushing the joystick forward walks the player", async ({ gamePage: page })
   await page.waitForTimeout(1000); // settle (slow CI renderers)
 
   const before = await playerPosition(page);
-  const joystick = page.getByTestId("touch-joystick");
-  const stick = await joystick.boundingBox();
-  const cx = stick!.x + stick!.width / 2;
-  const cy = stick!.y + stick!.height / 2;
-  // Push and hold the stick fully forward (well past the deadzone); the engine
-  // accumulates the walk while the offset stays set.
-  await pointer(joystick, "pointerdown", cx, cy);
-  await pointer(joystick, "pointermove", cx, cy - 70);
-  await page.waitForTimeout(1500); // hold forward
-  await pointer(joystick, "pointerup", cx, cy - 70);
+  // Push and hold the stick forward via the controls API (see the file header).
+  // Coords are stick-center-relative; y < 0 is forward, well past the deadzone.
+  await page.evaluate(() => {
+    const c = (window.__monecraft!.input as unknown as { controls: TouchControls }).controls;
+    c.joystickDown({ pointerId: 1, x: 0, y: 0 });
+    c.joystickMove({ pointerId: 1, x: 0, y: -70 });
+  });
+  await page.waitForTimeout(1500); // hold forward; the engine accumulates the walk
+  await page.evaluate(() => (window.__monecraft!.input as unknown as { controls: TouchControls }).controls.joystickUp(1));
 
   const after = await playerPosition(page);
   const moved = Math.hypot(after.x - before.x, after.z - before.z);
-  if (moved <= 0.5) {
-    // On a still-failing CI run, show whether the forward intent even registered.
-    const move = await page.evaluate(() => (window.__monecraft!.input.input as { move?: unknown }).move ?? null);
-    console.log(`JOYSTICK-DEBUG moved=${moved.toFixed(3)} move=${JSON.stringify(move)}`);
-  }
   expect(moved).toBeGreaterThan(0.5);
 });
 
@@ -98,24 +105,17 @@ test("dragging on the world turns the camera", async ({ gamePage: page }) => {
   await tapToPlay(page);
   await page.waitForTimeout(1000); // settle: the first seconds mesh chunks, and main-thread jank can swallow synthetic pointer moves
 
-  const readYaw = () => page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
-  const yawBefore = await readYaw();
-  const lookpad = page.getByTestId("touch-lookpad");
-  await pointer(lookpad, "pointerdown", 400, 180);
-  // Read yaw after each move: a tight dispatch loop applied nothing in CI (yaw
-  // stayed put), so the round-trip read between moves also gives the look
-  // handler a beat to run before the next dispatch. Dragging right looks right:
-  // applyLook(-dx * sensitivity) decreases yaw, synchronously per move.
-  const yaws: number[] = [];
-  for (let x = 440; x <= 680; x += 40) {
-    await pointer(lookpad, "pointermove", x, 180);
-    yaws.push(await readYaw());
-  }
-  await pointer(lookpad, "pointerup", 680, 180);
-  const yawAfter = await readYaw();
-  if (!(yawAfter - yawBefore < -0.15)) {
-    console.log(`DRAG-DEBUG before=${yawBefore.toFixed(4)} after=${yawAfter.toFixed(4)} yaws=${JSON.stringify(yaws.map((y) => +y.toFixed(4)))}`);
-  }
+  const yawBefore = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
+  // Sweep the look gesture via the controls API (see the file header). lookMove
+  // takes viewport px; only deltas matter, and dragging right decreases yaw
+  // (applyLook(-dx * sensitivity)).
+  await page.evaluate(() => {
+    const c = (window.__monecraft!.input as unknown as { controls: TouchControls }).controls;
+    c.lookDown({ pointerId: 1, x: 400, y: 180 });
+    for (let x = 440; x <= 680; x += 40) c.lookMove({ pointerId: 1, x, y: 180 });
+    c.lookUp(1);
+  });
+  const yawAfter = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
   expect(yawAfter - yawBefore).toBeLessThan(-0.15);
 });
 
