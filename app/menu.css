@@ -347,6 +347,8 @@
   margin: 0 0 8px;
   font-size: 14px;
   opacity: 0.9;
+  color: var(--mc-text-light);
+  text-shadow: var(--mc-text-shadow);
 }
 
 .join-page {
