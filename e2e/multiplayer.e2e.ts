@@ -198,6 +198,11 @@ test("two accounts share an online world via an invite link", async ({ browser }
     window.__monecraft!.net!.setSimulatedLatency(400, 100);
   });
   const friendEdits = await friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length);
+  // Baseline the host's OWN journal length before the friend digs: the host
+  // already has edits from its shaft, so the propagation check must prove the
+  // host grew past *its* count — comparing against friendEdits could pass on a
+  // pre-existing host edit rather than the friend's.
+  const hostEditsBefore = await host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length);
   await forceDigStraightDown(friend);
   await friend.waitForTimeout(1000); // settle (slow CI renderers need the margin — same as the host break)
   await friend.mouse.down();
@@ -208,7 +213,9 @@ test("two accounts share an online world via an invite link", async ({ browser }
     .toBeGreaterThan(friendEdits);
   await friend.mouse.up();
   // …and still crosses the deliberately lagged link to the host.
-  await expect.poll(() => host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 45000 }).toBeGreaterThan(friendEdits);
+  await expect
+    .poll(() => host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 45000 })
+    .toBeGreaterThan(hostEditsBefore);
   await friend.evaluate(() => window.__monecraft!.net!.setSimulatedLatency(0));
 
   // ── the owner kicks the friend, who drops to the disconnect modal (LAST: it
