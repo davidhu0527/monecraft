@@ -32,10 +32,7 @@ jobs:
     # to main (the push event), not every PR iteration — PRs still run the
     # full verify job, and renderer/input/shell work runs e2e locally per
     # AGENTS.md before landing.
-    # TEMPORARY (fix/e2e-ci-flakes): also run on PRs so the CI-only touch flake
-    # fixes can be validated in the real ubuntu/software-GL runner before merge.
-    # REVERT to `if: github.event_name == 'push'` before this branch merges.
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
