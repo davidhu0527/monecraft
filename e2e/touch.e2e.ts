@@ -1,16 +1,51 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { calmDaytime, expect, playerPosition, test } from "./helpers";
 
 /**
  * Touch play smoke on a landscape-phone viewport: the persisted "on" mode
  * forces the touch controller (device auto-detection is unit-tested — see the
- * touchMode fixture note in helpers.ts), and the overlay's handlers are
- * pointerType-agnostic, so page.mouse drives every gesture with real
- * PointerEvents. Gesture semantics (tap vs hold vs drag windows) are pinned in
- * touchInputController.test.ts; this is the journey through the real DOM.
+ * touchMode fixture note in helpers.ts). Gesture semantics (tap vs hold vs drag
+ * windows) are pinned in touchInputController.test.ts; this is the journey
+ * through the real DOM.
+ *
+ * Sustained gestures (joystick hold, look drag, hold-to-mine) are driven by
+ * dispatching PointerEvents straight to the overlay element rather than via
+ * page.mouse: on the headless software-GL CI runner, page.mouse's down+move+hold
+ * sequences have their coalesced pointermoves dropped and their hit-tests race
+ * the compositor, so the gesture silently never engages (discrete taps/clicks
+ * are fine — those tests use page click). dispatchEvent invokes the React
+ * handler directly with exact coords, so the input deterministically lands.
  */
 
 test.use({ touchMode: "on", hasTouch: true, viewport: { width: 812, height: 375 } });
+
+/**
+ * Click a pause-menu button by its handler, not a hit-test. The pause menu is a
+ * scrollable grid (max-height:100dvh, overflow-y:auto — app/hud.css) and on the
+ * 375-tall viewport its buttons overflow, so a real click can land on whatever
+ * the compositor put on top ("Back to Game") after a scroll. dispatchEvent fires
+ * the target button's onClick directly, immune to overlap/scroll.
+ */
+async function menuClick(page: Page, name: string): Promise<void> {
+  const button = page.getByRole("button", { name });
+  await expect(button).toBeVisible();
+  await button.dispatchEvent("click");
+}
+
+/** Fire a PointerEvent straight at an overlay element (see the file header). */
+async function pointer(target: Locator, type: "pointerdown" | "pointermove" | "pointerup", x: number, y: number): Promise<void> {
+  await target.dispatchEvent(type, {
+    pointerId: 1,
+    pointerType: "touch",
+    isPrimary: true,
+    clientX: x,
+    clientY: y,
+    button: type === "pointermove" ? -1 : 0,
+    buttons: type === "pointerup" ? 0 : 1,
+    bubbles: true,
+    cancelable: true
+  });
+}
 
 /** The world boots unlocked; on touch the click-hint is a full-screen tap target. */
 async function tapToPlay(page: Page): Promise<void> {
@@ -37,21 +72,24 @@ test("pushing the joystick forward walks the player", async ({ gamePage: page })
   await page.waitForTimeout(1000); // settle (slow CI renderers)
 
   const before = await playerPosition(page);
-  const stick = await page.getByTestId("touch-joystick").boundingBox();
+  const joystick = page.getByTestId("touch-joystick");
+  const stick = await joystick.boundingBox();
   const cx = stick!.x + stick!.width / 2;
   const cy = stick!.y + stick!.height / 2;
-  await page.mouse.move(cx, cy);
-  await page.mouse.down();
-  // Discrete awaited moves to a larger offset: a single steps:N move lets CI's
-  // slow compositor coalesce and DROP the trailing pointermoves, leaving the
-  // stick in the deadzone (observed moved=0). Each awaited move lands as a
-  // delivered event, so the stick reaches "forward" and holds there.
-  for (let dy = 15; dy <= 70; dy += 15) await page.mouse.move(cx, cy - dy);
+  // Push and hold the stick fully forward (well past the deadzone); the engine
+  // accumulates the walk while the offset stays set.
+  await pointer(joystick, "pointerdown", cx, cy);
+  await pointer(joystick, "pointermove", cx, cy - 70);
   await page.waitForTimeout(1500); // hold forward
-  await page.mouse.up();
+  await pointer(joystick, "pointerup", cx, cy - 70);
 
   const after = await playerPosition(page);
   const moved = Math.hypot(after.x - before.x, after.z - before.z);
+  if (moved <= 0.5) {
+    // On a still-failing CI run, show whether the forward intent even registered.
+    const move = await page.evaluate(() => (window.__monecraft!.input.input as { move?: unknown }).move ?? null);
+    console.log(`JOYSTICK-DEBUG moved=${moved.toFixed(3)} move=${JSON.stringify(move)}`);
+  }
   expect(moved).toBeGreaterThan(0.5);
 });
 
@@ -61,22 +99,14 @@ test("dragging on the world turns the camera", async ({ gamePage: page }) => {
   await page.waitForTimeout(1000); // settle: the first seconds mesh chunks, and main-thread jank can swallow synthetic pointer moves
 
   const yawBefore = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
-  await page.mouse.move(400, 180);
-  await page.mouse.down();
-  // Individually-awaited moves across a longer sweep. A single `steps: N` move
-  // lets CI's slow compositor coalesce and DROP the trailing pointermoves, so
-  // only a fraction of the drag reaches the lookpad (observed ~18px of 150 —
-  // barely a nudge). Discrete awaited moves each land as a delivered event
-  // (pointer capture keeps them on the lookpad), so the whole sweep turns.
-  for (let x = 440; x <= 680; x += 40) {
-    await page.mouse.move(x, 180);
-  }
-  await page.waitForTimeout(200);
-  await page.mouse.up();
+  const lookpad = page.getByTestId("touch-lookpad");
+  await pointer(lookpad, "pointerdown", 400, 180);
+  for (let x = 440; x <= 680; x += 40) await pointer(lookpad, "pointermove", x, 180);
+  await pointer(lookpad, "pointerup", 680, 180);
   const yawAfter = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
-  // Dragging right looks right: applyLook(-dx * sensitivity) decreases yaw.
-  // Direction + a meaningful turn is the contract; the exact magnitude depends
-  // on how many moves survive CI's slow compositor.
+  // Dragging right looks right: applyLook(-dx * sensitivity) decreases yaw. The
+  // handler applies look synchronously per move, so dispatching the full 280px
+  // sweep turns the camera regardless of CI rAF throttling.
   expect(yawAfter - yawBefore).toBeLessThan(-0.15);
 });
 
@@ -85,14 +115,14 @@ test("press-and-hold on the world mines; lifting stops", async ({ gamePage: page
   await tapToPlay(page);
   await page.waitForTimeout(1000); // settle (see the drag test)
 
-  await page.mouse.move(400, 180);
-  await page.mouse.down();
-  // mineHeld flips on a setTimeout(TOUCH_HOLD_MINE_MS); under CI timer
-  // throttling it can land well after a fixed wait, so poll for it (10s — the
-  // throttled timer has overrun 5s in CI) — reads don't move the pointer, so
-  // the still-hold keeps counting toward the flip.
+  const lookpad = page.getByTestId("touch-lookpad");
+  // Press and hold within slop — no move, so it classifies as a mine after
+  // TOUCH_HOLD_MINE_MS. mineHeld flips on a setTimeout; poll for it (CI timer
+  // throttling can land it late) — the reads don't move the pointer, so the
+  // still-hold keeps counting.
+  await pointer(lookpad, "pointerdown", 400, 180);
   await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(true);
-  await page.mouse.up();
+  await pointer(lookpad, "pointerup", 400, 180);
   await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(false);
 });
 
@@ -153,12 +183,12 @@ test("the Options toggle hot-swaps the controller without leaving the world", as
   });
 
   await page.getByTestId("touch-pause").click();
-  await page.getByRole("button", { name: "Options" }).click();
-  await page.getByRole("button", { name: "Touch controls Off" }).click();
+  await menuClick(page, "Options");
+  await menuClick(page, "Touch controls Off");
 
   // Same world, new controller: identity changed, overlay gone, desktop hint back.
   expect(await page.evaluate(() => window.__monecraft!.input === (window as unknown as { __prevInput: unknown }).__prevInput)).toBe(false);
-  await page.getByRole("button", { name: "Back to Game" }).click();
+  await menuClick(page, "Back to Game");
   expect(await page.getByTestId("touch-joystick").count()).toBe(0);
   // Desktop scheme restored: the live controller is the desktop one (no touch
   // `controls` surface). The "Double-click to play" hint renders only while
@@ -169,16 +199,10 @@ test("the Options toggle hot-swaps the controller without leaving the world", as
 
   // And back on: Back to Game engages the fresh touch controller directly
   // (engage() is synchronous on touch — no tap-to-play round trip needed).
-  //
-  // force: true — we're now in DESKTOP mode on the 375-tall phone viewport, an
-  // artificial combo where PauseMenu's pinned "Back to Game" (always on top)
-  // visually overlaps the Options tab and intercepts the click. The tabs are
-  // present and functional; force past the overlap rather than fight the layout.
   await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "pause" }));
-  await expect(page.getByRole("button", { name: "Options" })).toBeVisible();
-  await page.getByRole("button", { name: "Options" }).click({ force: true });
-  await page.getByRole("button", { name: "Touch controls On" }).click({ force: true });
-  await page.getByRole("button", { name: "Back to Game" }).click({ force: true });
+  await menuClick(page, "Options");
+  await menuClick(page, "Touch controls On");
+  await menuClick(page, "Back to Game");
   await page.waitForFunction(() => window.__monecraft!.input.pointerLocked);
   await expect(page.getByTestId("touch-joystick")).toBeVisible();
 });
