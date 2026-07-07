@@ -59,8 +59,15 @@ test("dragging on the world turns the camera", async ({ gamePage: page }) => {
   const yawBefore = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
   await page.mouse.move(400, 180);
   await page.mouse.down();
-  await page.mouse.move(550, 180, { steps: 8 });
-  await page.waitForTimeout(200); // let the last coalesced pointermove land (software-GL frames run slow)
+  // Individually-awaited moves across a longer sweep. A single `steps: N` move
+  // lets CI's slow compositor coalesce and DROP the trailing pointermoves, so
+  // only a fraction of the drag reaches the lookpad (observed ~18px of 150 —
+  // barely a nudge). Discrete awaited moves each land as a delivered event
+  // (pointer capture keeps them on the lookpad), so the whole sweep turns.
+  for (let x = 440; x <= 680; x += 40) {
+    await page.mouse.move(x, 180);
+  }
+  await page.waitForTimeout(200);
   await page.mouse.up();
   const yawAfter = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
   // Dragging right looks right: applyLook(-dx * sensitivity) decreases yaw.
@@ -76,10 +83,12 @@ test("press-and-hold on the world mines; lifting stops", async ({ gamePage: page
 
   await page.mouse.move(400, 180);
   await page.mouse.down();
-  await page.waitForTimeout(450); // past TOUCH_HOLD_MINE_MS, well within a still hold
-  expect(await page.evaluate(() => window.__monecraft!.input.input.mineHeld)).toBe(true);
+  // mineHeld flips on a setTimeout(TOUCH_HOLD_MINE_MS); under CI timer
+  // throttling it can land well after a fixed wait, so poll for it — reads
+  // don't move the pointer, so the still-hold keeps counting toward the flip.
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 5000 }).toBe(true);
   await page.mouse.up();
-  expect(await page.evaluate(() => window.__monecraft!.input.input.mineHeld)).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 5000 }).toBe(false);
 });
 
 test("the Place button places a block through the touch path", async ({ gamePage: page }) => {
@@ -146,7 +155,12 @@ test("the Options toggle hot-swaps the controller without leaving the world", as
   expect(await page.evaluate(() => window.__monecraft!.input === (window as unknown as { __prevInput: unknown }).__prevInput)).toBe(false);
   await page.getByRole("button", { name: "Back to Game" }).click();
   expect(await page.getByTestId("touch-joystick").count()).toBe(0);
-  await expect(page.getByText("Double-click to play")).toBeVisible();
+  // Desktop scheme restored: the live controller is the desktop one (no touch
+  // `controls` surface). The "Double-click to play" hint renders only while
+  // unlocked (showClickHint = !locked), and CI's new-headless can grab pointer
+  // lock on the resume click — hiding it — so assert the controller swap
+  // directly rather than the lock-dependent hint.
+  expect(await page.evaluate(() => "controls" in window.__monecraft!.input)).toBe(false);
 
   // And back on: Back to Game engages the fresh touch controller directly
   // (engage() is synchronous on touch — no tap-to-play round trip needed).
