@@ -142,6 +142,9 @@ test("right-click still places a block when not aimed at an interactive one", as
 });
 
 test("a chest opens, stores an item, and keeps it across a reload", async ({ gamePage: page }) => {
+  // A lot of steps end to end — build, open, move, IndexedDB save, reload, reboot,
+  // read — and a slammed CI runner has overrun the default 60s on the reboot.
+  test.setTimeout(120000);
   await calmDaytime(page);
   await acquirePointerLock(page);
   await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
