@@ -98,15 +98,24 @@ test("dragging on the world turns the camera", async ({ gamePage: page }) => {
   await tapToPlay(page);
   await page.waitForTimeout(1000); // settle: the first seconds mesh chunks, and main-thread jank can swallow synthetic pointer moves
 
-  const yawBefore = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
+  const readYaw = () => page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
+  const yawBefore = await readYaw();
   const lookpad = page.getByTestId("touch-lookpad");
   await pointer(lookpad, "pointerdown", 400, 180);
-  for (let x = 440; x <= 680; x += 40) await pointer(lookpad, "pointermove", x, 180);
+  // Read yaw after each move: a tight dispatch loop applied nothing in CI (yaw
+  // stayed put), so the round-trip read between moves also gives the look
+  // handler a beat to run before the next dispatch. Dragging right looks right:
+  // applyLook(-dx * sensitivity) decreases yaw, synchronously per move.
+  const yaws: number[] = [];
+  for (let x = 440; x <= 680; x += 40) {
+    await pointer(lookpad, "pointermove", x, 180);
+    yaws.push(await readYaw());
+  }
   await pointer(lookpad, "pointerup", 680, 180);
-  const yawAfter = await page.evaluate(() => window.__monecraft!.engine.state.player.yaw);
-  // Dragging right looks right: applyLook(-dx * sensitivity) decreases yaw. The
-  // handler applies look synchronously per move, so dispatching the full 280px
-  // sweep turns the camera regardless of CI rAF throttling.
+  const yawAfter = await readYaw();
+  if (!(yawAfter - yawBefore < -0.15)) {
+    console.log(`DRAG-DEBUG before=${yawBefore.toFixed(4)} after=${yawAfter.toFixed(4)} yaws=${JSON.stringify(yaws.map((y) => +y.toFixed(4)))}`);
+  }
   expect(yawAfter - yawBefore).toBeLessThan(-0.15);
 });
 
