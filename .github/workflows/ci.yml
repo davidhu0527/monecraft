@@ -50,3 +50,49 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # ── Deploy only after the whole gate is green (verify AND e2e), and only on a
+  # push to main. A red CI never ships. Platform on-push auto-deploys are OFF
+  # (Vercel via vercel.json git.deploymentEnabled; Fly in its dashboard), so
+  # these jobs are the sole deploy trigger. Each serializes across pushes on its
+  # own concurrency group so overlapping merges release in order, not on top of
+  # each other. See docs/deploy.md.
+  deploy-web:
+    needs: [verify, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # a hung deploy must not squat the (never-cancelled) slot
+    permissions: {} # only curls an external hook — no repo-scoped token needed
+    concurrency:
+      group: deploy-web-main
+      cancel-in-progress: false
+    steps:
+      # Fire the Vercel Deploy Hook. Hook-triggered builds stay Git-connected, so
+      # VERCEL_GIT_COMMIT_SHA (the menu version badge) is still populated. -f
+      # fails the job on a non-2xx; --max-time caps a hung request.
+      - run: curl -fsS --max-time 30 -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
+
+  deploy-server:
+    needs: [verify, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # remote Fly build + rollout; bounds a hung deploy
+    permissions:
+      contents: read # checkout only; the deploy authenticates with FLY_API_TOKEN
+    concurrency:
+      group: deploy-server-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # flyctl uses FLY_API_TOKEN, not the git credential
+      # Pinned to an immutable SHA (not @master): this job holds FLY_API_TOKEN,
+      # so a mutable ref would be a supply-chain risk.
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
+      # The exact config the manual deploy uses — NEVER a bare `flyctl deploy`:
+      # the repo root has no Dockerfile, so flyctl's scanner would ship the
+      # Next.js web image to the game-server app and crash-loop it (deploy.md).
+      # --remote-only builds on Fly's builders (no Docker daemon in the runner).
+      - run: flyctl deploy --config server/fly.toml --dockerfile server/Dockerfile --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

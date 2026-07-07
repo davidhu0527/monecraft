@@ -10,6 +10,13 @@ export default defineConfig([
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Root ESM config files run in Node (next.config.mjs reads process.env for
+    // the build-time version/SHA it inlines into the client bundle). TS config
+    // files escape no-undef via typescript-eslint; .mjs ones need the global.
+    files: ["*.mjs"],
+    languageOptions: { globals: { process: "readonly" } }
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     ...react.configs["recommended-typescript"]
   },

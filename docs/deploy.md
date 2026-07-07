@@ -184,19 +184,42 @@ If step 3 fails, it's the web/DB side (auth or `DATABASE_URL`). If step 4 connec
 as far as "Joining…" then errors, it's almost always the ticket secret or the
 game-server URL — see below.
 
+## Continuous deployment (gated on CI)
+
+Both prod deploys are **gated on a green CI run of `main`** — a red CI never ships.
+Platform on-push auto-deploys are **off** on purpose (Vercel via `vercel.json`'s
+`git.deploymentEnabled: { "main": false }`; Fly's GitHub auto-deploy disabled in its
+dashboard), so the only trigger is the `deploy-web` / `deploy-server` jobs in
+`.github/workflows/ci.yml`. They `needs: [verify, e2e]` and run only on a push to
+`main`, so a merge deploys **after** lint/typecheck/test/build **and** the browser
+e2e all pass (≈30 min; an e2e flake blocks the deploy — re-run the failed job to
+release). `deploy-web` fires a **Vercel Deploy Hook** (the build stays Git-connected,
+so `VERCEL_GIT_COMMIT_SHA` — the menu version badge — is still set); `deploy-server`
+runs `flyctl deploy` with the correct config.
+
+Two repo secrets drive it (GitHub → Settings → Secrets and variables → Actions):
+
+| Secret                   | From                                                              |
+| ------------------------ | ----------------------------------------------------------------- |
+| `VERCEL_DEPLOY_HOOK_URL` | `vercel deploy-hooks create prod --ref main` (or dashboard → Git) |
+| `FLY_API_TOKEN`          | `fly tokens create deploy`                                        |
+
 ## Updating a running deployment
 
-- **Web app:** push to the branch Vercel tracks (or `vercel --prod`). Changing a
-  `NEXT_PUBLIC_*` value requires a redeploy, not just an env edit.
-- **Game server:** `bun run deploy:server` (from the repo root — it wraps
-  `fly deploy --config server/fly.toml --dockerfile server/Dockerfile`).
-  Rooms drain to Postgres on the rollout; connected clients reconnect on their
-  back-off ladder and re-sync (they'll see a brief "Reconnecting…" badge).
-  **Never run a bare `fly deploy`**: there is no Dockerfile at the repo root, so
-  flyctl's framework scanner generates a Next.js web-app image (`bun run start`,
-  port 3000) and ships _that_ to the game-server app — it crash-loops with
-  exit 127 (`next` needs `node`, absent from the `oven/bun` base) and takes
-  online play down until a correct redeploy.
+- **Normal path:** merge to `main`. CI's `verify` + `e2e` gate the automatic deploy
+  above. Changing a `NEXT_PUBLIC_*` value requires a redeploy (a re-run), not just an
+  env edit — it's inlined at build time.
+- **Manual escape hatch (web):** `vercel --prod` from the repo root deploys
+  immediately, bypassing the CI gate — for emergencies only.
+- **Manual escape hatch (game server):** `bun run deploy:server` (from the repo root —
+  it wraps `fly deploy --config server/fly.toml --dockerfile server/Dockerfile`); the
+  same command the `deploy-server` job runs. Rooms drain to Postgres on the rollout;
+  connected clients reconnect on their back-off ladder and re-sync (they'll see a
+  brief "Reconnecting…" badge). **Never run a bare `fly deploy`**: there is no
+  Dockerfile at the repo root, so flyctl's framework scanner generates a Next.js
+  web-app image (`bun run start`, port 3000) and ships _that_ to the game-server
+  app — it crash-loops with exit 127 (`next` needs `node`, absent from the `oven/bun`
+  base) and takes online play down until a correct redeploy.
 - **Schema change:** land the new migration, then run `bun run db:migrate`
   against production **before** deploying the code that depends on it —
   **unless the migration removes something the old code reads** (a dropped
