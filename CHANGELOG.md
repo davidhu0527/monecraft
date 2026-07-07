@@ -8,6 +8,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-08
+
 ### Added
 
 - **Version badge on the menu**: a muted `v0.15.0 · <sha>` badge sits in the bottom-right corner of every menu screen (the welcome gate, account home, world select), so any deployed build is identifiable at a glance; with a commit SHA present it links to that commit on GitHub. The version comes from `package.json` and the short SHA from Vercel's `VERCEL_GIT_COMMIT_SHA`, both injected into the client bundle at build time via `next.config.mjs` (locally, with no SHA, it reads `… · dev`). Along the way this corrected a release-hygiene bug: `package.json`'s `version` had been left at `0.14.0` when `0.15.0` was cut (the release commit only edited the changelog) — it's now `0.15.0`, matching the tag, and [docs/releasing.md](docs/releasing.md) documents the release steps so the three stay in lockstep.
