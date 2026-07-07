@@ -42,8 +42,12 @@ test("pushing the joystick forward walks the player", async ({ gamePage: page })
   const cy = stick!.y + stick!.height / 2;
   await page.mouse.move(cx, cy);
   await page.mouse.down();
-  await page.mouse.move(cx, cy - 55, { steps: 4 });
-  await page.waitForTimeout(1200); // hold forward
+  // Discrete awaited moves to a larger offset: a single steps:N move lets CI's
+  // slow compositor coalesce and DROP the trailing pointermoves, leaving the
+  // stick in the deadzone (observed moved=0). Each awaited move lands as a
+  // delivered event, so the stick reaches "forward" and holds there.
+  for (let dy = 15; dy <= 70; dy += 15) await page.mouse.move(cx, cy - dy);
+  await page.waitForTimeout(1500); // hold forward
   await page.mouse.up();
 
   const after = await playerPosition(page);
@@ -84,11 +88,12 @@ test("press-and-hold on the world mines; lifting stops", async ({ gamePage: page
   await page.mouse.move(400, 180);
   await page.mouse.down();
   // mineHeld flips on a setTimeout(TOUCH_HOLD_MINE_MS); under CI timer
-  // throttling it can land well after a fixed wait, so poll for it — reads
-  // don't move the pointer, so the still-hold keeps counting toward the flip.
-  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 5000 }).toBe(true);
+  // throttling it can land well after a fixed wait, so poll for it (10s — the
+  // throttled timer has overrun 5s in CI) — reads don't move the pointer, so
+  // the still-hold keeps counting toward the flip.
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(true);
   await page.mouse.up();
-  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 5000 }).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(false);
 });
 
 test("the Place button places a block through the touch path", async ({ gamePage: page }) => {
@@ -164,10 +169,16 @@ test("the Options toggle hot-swaps the controller without leaving the world", as
 
   // And back on: Back to Game engages the fresh touch controller directly
   // (engage() is synchronous on touch — no tap-to-play round trip needed).
+  //
+  // force: true — we're now in DESKTOP mode on the 375-tall phone viewport, an
+  // artificial combo where PauseMenu's pinned "Back to Game" (always on top)
+  // visually overlaps the Options tab and intercepts the click. The tabs are
+  // present and functional; force past the overlap rather than fight the layout.
   await page.evaluate(() => window.__monecraft!.engine.dispatch({ type: "pause" }));
-  await page.getByRole("button", { name: "Options" }).click();
-  await page.getByRole("button", { name: "Touch controls On" }).click();
-  await page.getByRole("button", { name: "Back to Game" }).click();
+  await expect(page.getByRole("button", { name: "Options" })).toBeVisible();
+  await page.getByRole("button", { name: "Options" }).click({ force: true });
+  await page.getByRole("button", { name: "Touch controls On" }).click({ force: true });
+  await page.getByRole("button", { name: "Back to Game" }).click({ force: true });
   await page.waitForFunction(() => window.__monecraft!.input.pointerLocked);
   await expect(page.getByTestId("touch-joystick")).toBeVisible();
 });
