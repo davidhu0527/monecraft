@@ -40,7 +40,9 @@ const MOB_LABELS: Record<MobKind, string> = {
   creeper: "a creeper",
   raider: "a raider",
   villager: "a villager",
-  boss: "the boss"
+  boss: "the boss",
+  imp: "an imp",
+  scorcher: "a scorcher"
 };
 
 /**
@@ -84,6 +86,9 @@ const SOURCE_HINTS: Map<string, string> = (() => {
   }
   // 2. Craft (incl. smelt/trade/brew). The first recipe producing the item wins.
   for (const recipe of RECIPES) set(recipe.result.slotId, CRAFT_VERB[recipe.station ?? "none"]);
+  // 2b. Fluids: filled buckets come from using an empty bucket on the world.
+  set("water_bucket", "Scoop up water with a bucket");
+  set("lava_bucket", "Scoop up lava with a bucket");
   // 3. Mine (direct block drops, then chance-drop overrides not in BLOCK_TO_SLOT).
   for (const itemId of Object.values(BLOCK_TO_SLOT)) {
     if (itemId) set(itemId, MINE_OVERRIDES[itemId] ?? `Mine ${labelFor(itemId)}`);

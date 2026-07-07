@@ -18,9 +18,9 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
   };
 }
 
-/** Minimal valid v17 blob; the seed makes instances distinguishable. */
+/** Minimal valid current-version blob (reads parse in place - a stale version would migrate and break the round-trip equality asserts); the seed makes instances distinguishable. */
 function sampleSave(seed: number): SaveData {
-  return { version: 17, seed, changes: [], players: [] } as unknown as SaveData;
+  return { version: 18, seed, changes: [], players: [] } as unknown as SaveData;
 }
 
 /**

@@ -25,7 +25,10 @@ export const MOB_XP: Record<MobKind, number> = {
   spider: 5,
   creeper: 5,
   raider: 6,
-  boss: 200
+  boss: 200,
+  // The imp's toughness earns a premium; the scorcher matches the skeleton.
+  imp: 8,
+  scorcher: 5
 };
 
 export function xpForMob(kind: MobKind): number {

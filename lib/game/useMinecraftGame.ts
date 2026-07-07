@@ -15,6 +15,7 @@ import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 import { type Profile, setProfileSkin } from "@/lib/game/profiles";
 import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
+import { DIMENSION_PROFILES } from "@/lib/game/render/dimensionProfiles";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { worldSaves } from "@/lib/game/saveStore";
@@ -168,6 +169,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // discard) the on-disk save, so the unmount must NOT persist the live state
   // over it. Consumed once by the cleanup; every other unmount saves.
   const skipUnmountSaveRef = useRef(false);
+  // The shell's remount trigger, fixed for the mount's life (like the world id);
+  // a ref so the rAF event drain can fire portal travel without an opts dep.
+  const onReloadWorldRef = useRef(opts.onReloadWorld);
 
   // Audio is a global preference loaded after mount: render never touches
   // localStorage (SSR), and the setState hops a microtask like the
@@ -351,7 +355,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     if (!ctx) return;
     const { engine: gameEngine, node } = ctx;
 
-    const created = GameRenderer.create(node);
+    // The renderer is built for the engine's dimension (sky, fog, light floor);
+    // swap-on-travel remounts both together, so the pairing can never go stale.
+    const created = GameRenderer.create(node, DIMENSION_PROFILES[gameEngine.state.dimension]);
     if (!created.ok) {
       // Microtask: reporting an init failure from inside the effect body
       // would count as a cascading synchronous setState.
@@ -465,6 +471,26 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
           persistGame(gameEngine, worldId, () => {});
           syncCloudSave(gameEngine, false);
         }
+        // Portal travel = swap-on-travel: write the travel save (the local player
+        // flipped into the target dimension with a one-shot arrival anchor), then
+        // remount so the engine reboots there. The skip flag MUST be armed before
+        // the write — it gates the autosave interval and the unload flush, either
+        // of which would otherwise overwrite the travel save with pre-travel state.
+        // Cloud sync is deliberately skipped here; the next autosave pushes both
+        // dimension sections together.
+        if (event.type === "dimensionTravel" && !online) {
+          skipUnmountSaveRef.current = true;
+          const data = gameEngine.serializeForTravel(event.target, event.anchor);
+          void worldSaves.write(worldId, data).then(
+            () => scheduleTimeout(() => onReloadWorldRef.current(), 60),
+            () => {
+              // The travel save failed: stay put rather than strand the player.
+              skipUnmountSaveRef.current = false;
+              flashMessage("Travel failed — save error");
+            }
+          );
+          flashMessage(event.target === "nether" ? "Entering the Nether…" : "Returning home…", 2000);
+        }
         if (event.type === "respawned") liveInput().clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
@@ -477,7 +503,12 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
           flashMessage("Not enough room to empty the chest");
         }
         if (event.type === "sleepDenied") {
-          flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
+          flashMessage(
+            event.reason === "daylight" ? "You can only sleep at night" : event.reason === "dimension" ? "You can't sleep here" : "Monsters are nearby"
+          );
+        }
+        if (event.type === "portalDenied") {
+          flashMessage(event.reason === "online" ? "Portals aren't available in online worlds yet" : "The frame is incomplete");
         }
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
@@ -558,7 +589,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       setTouchControls(null);
       renderer.dispose();
     };
-  }, [ctx, flashMessage, syncCloudSave]);
+  }, [ctx, flashMessage, scheduleTimeout, syncCloudSave]);
 
   // Re-entering play goes through the controller's engage() — pointer lock on
   // desktop (which can legitimately reject, e.g. Chrome's cooldown right after

@@ -308,7 +308,7 @@ function buildGeometryBuffers(
           const ny = face.dir[1];
           const nz = face.dir[2];
           const neighbor = world.get(x + nx, y + ny, z + nz);
-          if (block === BlockId.Water || block === BlockId.Glass) {
+          if (block === BlockId.Water || block === BlockId.Glass || block === BlockId.NetherPortal) {
             if (neighbor === block) continue;
           } else if (
             neighbor !== BlockId.Glass &&

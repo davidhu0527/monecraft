@@ -173,6 +173,10 @@ export const SKELETON_STANDOFF_MIN = 5; // back away when the player is closer t
 export const SKELETON_STANDOFF_MAX = 9; // approach when farther; hold in the band
 export const SKELETON_ARROW_DAMAGE = 4;
 export const SKELETON_ARROW_SPEED = 27; // a touch slower than the player's bow (34)
+// The scorcher's fireball: slower than an arrow (dodgeable by strafing) but
+// harder-hitting — the nether's ranged pressure. Flies/hits like an arrow.
+export const FIREBALL_DAMAGE = 6;
+export const FIREBALL_SPEED = 16;
 export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
 export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
 export const MOB_ARROW_KNOCKBACK = 0.35;
@@ -233,6 +237,19 @@ export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
+// The nether has no sky: daylight is pinned to this constant — below the
+// hostile-spawn threshold (spawns never stop) and the burn threshold (nothing
+// combusts), while the day clock itself keeps ticking (it is shared world time).
+export const NETHER_DAYLIGHT = 0.22;
+
+// Nether portal frame limits (the INTERIOR the obsidian border encloses,
+// corners required) and travel pacing. See lib/game/engine/systems/portal.ts.
+export const PORTAL_MIN_INTERIOR = { w: 2, h: 3 } as const;
+export const PORTAL_MAX_INTERIOR = { w: 4, h: 4 } as const;
+// Seconds a player must stand in the portal surface before travel fires.
+export const PORTAL_DWELL_SECONDS = 3;
+// How far around the mapped arrival point an existing portal is reused.
+export const PORTAL_SEARCH_RADIUS = 24;
 
 // Weather (cosmetic, transient — never persisted, never touches spawn balance).
 // Time is split into fixed windows; a seeded hash of the window index decides

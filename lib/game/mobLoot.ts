@@ -62,7 +62,14 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
   boss: [
     { itemId: "dragon_heart", min: 1, max: 1 },
     { itemId: "diamond_ore", min: 2, max: 4 }
-  ]
+  ],
+  // Nether hostiles pay out in glowstone dust — the dimension's farmable
+  // export — with the imp's occasional gold nugget-in-spirit.
+  imp: [
+    { itemId: "glowstone_dust", min: 0, max: 1 },
+    { itemId: "gold_ore", min: 1, max: 1, chance: 0.15 }
+  ],
+  scorcher: [{ itemId: "glowstone_dust", min: 0, max: 2 }]
 };
 
 /** Clamps an rng sample into [0, 1) so a pathological injected rng can't over-roll. */

@@ -9,12 +9,16 @@ import {
   BOSS_ROAR_SOUND,
   BOW_FIRE_SOUND,
   BREAK_SOUNDS,
+  BUCKET_FILL_SOUND,
+  BUCKET_POUR_SOUND,
   FISHING_BITE_SOUND,
   FISHING_CAST_SOUND,
   FISHING_CATCH_SOUND,
   FISHING_REEL_EMPTY_SOUND,
   DEATH_SOUND,
   DRINK_SOUND,
+  LAVA_QUENCH_SOUND,
+  PORTAL_LIT_SOUND,
   EAT_SOUND,
   XP_SOUND,
   ENCHANT_SOUND,
@@ -312,6 +316,18 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "usedBoneMeal":
           backend.play(BONE_MEAL_SOUND);
+          break;
+        case "bucketFilled":
+          backend.play(BUCKET_FILL_SOUND);
+          break;
+        case "bucketEmptied":
+          backend.play(BUCKET_POUR_SOUND);
+          break;
+        case "lavaSolidified":
+          backend.play(LAVA_QUENCH_SOUND);
+          break;
+        case "portalLit":
+          backend.play(PORTAL_LIT_SOUND);
           break;
         case "fishingCast":
           backend.play(FISHING_CAST_SOUND);

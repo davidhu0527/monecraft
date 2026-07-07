@@ -129,7 +129,24 @@ export const enum BlockId {
   CobbleStairsNorth = 86,
   CobbleStairsEast = 87,
   CobbleStairsSouth = 88,
-  CobbleStairsWest = 89
+  CobbleStairsWest = 89,
+  // Volcanic glass, created by quenching lava with a water bucket (interact.ts).
+  // The hardest mineable block — diamond-pickaxe-gated (mining.ts) — and the
+  // only material a nether portal frame can be built from (portal.ts).
+  Obsidian = 90,
+  // The lit portal surface filling an obsidian frame (portal.ts). Non-solid
+  // (walked into, never collided with), unmineable (the solid raycast passes
+  // through it — break the frame instead), emits light, and has no item.
+  NetherPortal = 91,
+  // The nether's landmass (netherGeneration.ts): a crimson rock, soft and
+  // fast to mine — the dimension's building staple.
+  Netherrack = 92,
+  // Hanging crystal clusters on nether cavern ceilings: a strong natural
+  // light source (see lighting.ts) that drops glowstone dust.
+  Glowstone = 93,
+  // The nether's deep ore, the post-diamond tier: diamond-pickaxe-gated,
+  // smelts into blazite ingots (see recipes.ts).
+  BlaziteOre = 94
 }
 
 export enum BiomeId {
@@ -189,7 +206,10 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.CobbleSlab]: 0x787c82,
   [BlockId.PlankStairsNorth]: 0xbe965d,
   [BlockId.StoneStairsNorth]: 0x8f9296,
-  [BlockId.CobbleStairsNorth]: 0x787c82
+  [BlockId.CobbleStairsNorth]: 0x787c82,
+  [BlockId.Obsidian]: 0x241c38,
+  [BlockId.Netherrack]: 0x8a3d34,
+  [BlockId.Glowstone]: 0xf2c957
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -300,5 +320,15 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.CobbleStairsNorth]: [0.42, 0.43, 0.45],
   [BlockId.CobbleStairsEast]: [0.42, 0.43, 0.45],
   [BlockId.CobbleStairsSouth]: [0.42, 0.43, 0.45],
-  [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45]
+  [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45],
+  // Near-black volcanic glass with violet flecks (painted in atlas.ts).
+  [BlockId.Obsidian]: [0.09, 0.07, 0.14],
+  // A swirling violet portal surface (painted in atlas.ts; emits block light).
+  [BlockId.NetherPortal]: [0.45, 0.18, 0.68],
+  // Crimson nether rock, pitted (painted in atlas.ts).
+  [BlockId.Netherrack]: [0.48, 0.2, 0.17],
+  // A glowing amber crystal cluster (painted in atlas.ts; emits block light).
+  [BlockId.Glowstone]: [0.9, 0.72, 0.32],
+  // Netherrack-toned rock with ember speckles (painted in atlas.ts).
+  [BlockId.BlaziteOre]: [0.48, 0.2, 0.17]
 };

@@ -1,7 +1,9 @@
-import { CHEST_SLOTS, CUSTOM_NAME_MAX_LEN, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE } from "@/lib/game/config";
+import { CHEST_SLOTS, CUSTOM_NAME_MAX_LEN, HOTBAR_SLOTS, INVENTORY_SLOTS, MAX_HEARTS, MAX_HUNGER, MAX_STACK_SIZE, WORLDGEN_VERSION } from "@/lib/game/config";
 import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
 import { ARMOR_SLOTS, createEmptyArmorEquipment, createEmptySlot, createSlot, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
 import type {
+  DimensionId,
+  DimensionSection,
   EffectId,
   Enchantment,
   EnchantmentId,
@@ -23,6 +25,7 @@ import type {
   SaveDataV14,
   SaveDataV15,
   SaveDataV16,
+  SaveDataV17,
   SavedPlayer,
   SavedContainer,
   SavedEffect,
@@ -231,7 +234,7 @@ export function migrateSaveV15toV16(save: SaveDataV15): SaveDataV16 {
  * the same names, with `player` renamed to `position`), and legacy pet owners
  * (the literal "player") rewrite to the local player's id.
  */
-export function migrateSaveV16toV17(save: SaveDataV16): SaveData {
+export function migrateSaveV16toV17(save: SaveDataV16): SaveDataV17 {
   const {
     gameMode,
     gameOver,
@@ -275,6 +278,70 @@ export function migrateSaveV16toV17(save: SaveDataV16): SaveData {
 }
 
 /**
+ * Migrates a v17 save to v18 — a pure version bump. The new fields are all
+ * additive: `dimensions` absent means the world has never had a nether visit,
+ * `SavedPlayer.dimension` absent means overworld, and `worldgenVersion` absent
+ * marks a pre-v18 save the worldgen guard must GRANDFATHER (see
+ * applyWorldgenGuard — discarding those diffs blind would wipe every migrated
+ * world's builds).
+ */
+export function migrateSaveV17toV18(save: SaveDataV17): SaveData {
+  return { ...save, version: 18 };
+}
+
+/**
+ * The documented worldgen staleness rule, enforced: a save stamped by a
+ * DIFFERENT worldgen version has every dimension's world half discarded —
+ * block diffs, chest contents, looted-chest memory, persistent mobs, vehicles,
+ * and the villages-seeded flag (so villages repopulate) — and the world reboots
+ * from its seed. Players are kept: the boot unstuck check and the bed-block
+ * respawn re-check already absorb stale positions/spawn points. A save with NO
+ * stamp (anything migrated from ≤v17) is grandfathered untouched — the guard
+ * only ever acts on a stamp `serialize()` itself wrote.
+ */
+export function applyWorldgenGuard(save: SaveData): SaveData {
+  if (typeof save.worldgenVersion !== "number" || !Number.isFinite(save.worldgenVersion)) return save;
+  if (save.worldgenVersion === WORLDGEN_VERSION) return save;
+  return {
+    ...save,
+    changes: [],
+    blockEntities: undefined,
+    lootedChests: undefined,
+    mobs: undefined,
+    vehicles: undefined,
+    dimensions: undefined,
+    villagesSeeded: undefined
+  };
+}
+
+/**
+ * One dimension's world half of a save, dimension-agnostically: the overworld
+ * IS the top level (compatibility — no data moved at v18), other dimensions
+ * live under `dimensions`. A never-visited dimension reads as an empty section.
+ */
+export function dimensionSectionOf(save: SaveData, dimension: DimensionId): DimensionSection {
+  if (dimension === "overworld") {
+    return { changes: save.changes, blockEntities: save.blockEntities, lootedChests: save.lootedChests, mobs: save.mobs, vehicles: save.vehicles };
+  }
+  return save.dimensions?.[dimension] ?? { changes: [] };
+}
+
+// Every known dimension, keyed so a new DimensionId is a compile error here.
+const VALID_DIMENSIONS: Record<DimensionId, true> = { overworld: true, nether: true };
+
+/** Restores which dimension a player is in; "overworld" when absent or unknown. */
+export function restorePlayerDimension(saved: SavedPlayer): DimensionId {
+  return typeof saved.dimension === "string" && Object.hasOwn(VALID_DIMENSIONS, saved.dimension) ? saved.dimension : "overworld";
+}
+
+/** Restores the one-shot portal-arrival anchor; null when absent or non-finite. */
+export function restorePortalArrival(saved: SavedPlayer): { x: number; y: number; z: number } | null {
+  const a = saved.portalArrival;
+  if (!a || !Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(a.z)) return null;
+  return { x: Math.floor(a.x), y: Math.floor(a.y), z: Math.floor(a.z) };
+}
+
+/**
  * Validates a decoded save of any historical version and migrates it to the
  * current SaveData. Total: unknown shapes, future versions, and migration
  * throws all yield null. Shared by the JSON string path (readSave) and
@@ -284,6 +351,7 @@ export function parseSave(value: unknown): SaveData | null {
   try {
     const parsed = value as
       | SaveData
+      | SaveDataV17
       | SaveDataV16
       | SaveDataV15
       | SaveDataV14
@@ -317,6 +385,7 @@ export function parseSave(value: unknown): SaveData | null {
       | SaveDataV14
       | SaveDataV15
       | SaveDataV16
+      | SaveDataV17
       | SaveData = parsed.version === 1 ? migrateSaveV1toV2(parsed) : parsed;
     if (migrated.version === 2) migrated = migrateSaveV2toV3(migrated);
     if (migrated.version === 3) migrated = migrateSaveV3toV4(migrated);
@@ -333,7 +402,8 @@ export function parseSave(value: unknown): SaveData | null {
     if (migrated.version === 14) migrated = migrateSaveV14toV15(migrated);
     if (migrated.version === 15) migrated = migrateSaveV15toV16(migrated);
     if (migrated.version === 16) migrated = migrateSaveV16toV17(migrated);
-    if (migrated.version !== 17) return null;
+    if (migrated.version === 17) migrated = migrateSaveV17toV18(migrated);
+    if (migrated.version !== 18) return null;
     if (!Array.isArray(migrated.players)) return null;
     return migrated;
   } catch {
@@ -362,10 +432,10 @@ export function serializeVehicles(vehicles: Array<{ kind: VehicleKind; position:
   return out;
 }
 
-export function restoreVehicles(save: SaveData): SavedVehicle[] {
-  if (!Array.isArray(save.vehicles)) return [];
+export function restoreVehicles(section: DimensionSection): SavedVehicle[] {
+  if (!Array.isArray(section.vehicles)) return [];
   const out: SavedVehicle[] = [];
-  for (const entry of save.vehicles) {
+  for (const entry of section.vehicles) {
     if (!entry || typeof entry.kind !== "string" || !Object.hasOwn(VALID_VEHICLE_KINDS, entry.kind)) continue;
     if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z) || !Number.isFinite(entry.yaw)) continue;
     out.push({ kind: entry.kind, x: entry.x, y: entry.y, z: entry.z, yaw: entry.yaw });
@@ -470,10 +540,10 @@ export function serializeLootedChests(looted: Set<number>): number[] {
   return [...looted];
 }
 
-/** Reads the opened/broken dungeon chest indices from a save (finite numbers only). */
-export function readLootedChests(save: SaveData): number[] {
-  if (!Array.isArray(save.lootedChests)) return [];
-  return save.lootedChests.filter((value) => Number.isFinite(value));
+/** Reads the opened/broken dungeon chest indices from a save's world half (finite numbers only). A full SaveData is a valid section (the overworld's half IS the top level). */
+export function readLootedChests(section: DimensionSection): number[] {
+  if (!Array.isArray(section.lootedChests)) return [];
+  return section.lootedChests.filter((value) => Number.isFinite(value));
 }
 
 // Every known status-effect id, as a Record keyed by EffectId so adding an
@@ -582,10 +652,10 @@ export function serializeMobs(mobs: MobState[]): SavedMob[] {
  * The engine rebuilds the live MobState from these (re-grounding y onto current
  * terrain, assigning fresh ids), so this stays pure data — no THREE / no rng.
  */
-export function restoreMobs(save: SaveData): SavedMob[] {
-  if (!Array.isArray(save.mobs)) return [];
+export function restoreMobs(section: DimensionSection): SavedMob[] {
+  if (!Array.isArray(section.mobs)) return [];
   const out: SavedMob[] = [];
-  for (const entry of save.mobs) {
+  for (const entry of section.mobs) {
     if (!entry || typeof entry.kind !== "string" || !MOB_TEMPLATES[entry.kind]) continue;
     if (!Number.isFinite(entry.x) || !Number.isFinite(entry.y) || !Number.isFinite(entry.z)) continue;
     if (!Number.isFinite(entry.hp) || entry.hp <= 0) continue;
@@ -611,10 +681,10 @@ export function restoreMobs(save: SaveData): SavedMob[] {
  * arrays keyed by voxel index. Per-slot validation only — the engine still
  * confirms each index actually holds a Chest block before using it.
  */
-export function readContainers(save: SaveData): Array<{ index: number; slots: InventorySlot[] }> {
-  if (!Array.isArray(save.blockEntities)) return [];
+export function readContainers(section: DimensionSection): Array<{ index: number; slots: InventorySlot[] }> {
+  if (!Array.isArray(section.blockEntities)) return [];
   const out: Array<{ index: number; slots: InventorySlot[] }> = [];
-  for (const entry of save.blockEntities) {
+  for (const entry of section.blockEntities) {
     if (!entry || !Number.isFinite(entry.index) || !Array.isArray(entry.slots)) continue;
     const slots = Array.from({ length: CHEST_SLOTS }, (_, i) => restoreSlot(entry.slots[i]));
     out.push({ index: entry.index, slots });

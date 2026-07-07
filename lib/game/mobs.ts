@@ -10,6 +10,8 @@ export type MobTemplate = {
   attackCooldown: number;
   /** Fires arrows and kites instead of meleeing (skeletons, boss). */
   ranged?: boolean;
+  /** What a ranged kind shoots; absent = an ordinary arrow (the scorcher's fireball). */
+  projectileKind?: "fireball";
   /** Lives in water: swims in 3D via the aquatic branch in mobAI, suffocates on land. */
   aquatic?: boolean;
   modelArgs: Parameters<typeof createMobModel>;
@@ -181,6 +183,31 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
     ranged: true,
     // A towering dark figure with red eyes — body height drives a tall hitbox.
     modelArgs: [0x3a1f4d, 0x2a1638, 0x1f1029, 0xff2a2a, 0x6a2fa0, [1.7, 2.6, 1.2], [1.0, 0.95, 0.95]]
+  },
+  imp: {
+    // The nether's melee brute: faster and harder-hitting than a zombie, and
+    // half again as tough — the price of mining next to perpetual spawns.
+    speed: 1.25,
+    hp: 150,
+    detectRange: 12,
+    attackDamage: 5,
+    attackCooldown: 1.1,
+    // A stocky crimson figure with ember eyes and charcoal legs.
+    modelArgs: [0x8a3428, 0x9c4030, 0x3a201a, 0xffb03a, 0x571f18, [0.85, 1.05, 0.6], [0.55, 0.5, 0.55]]
+  },
+  scorcher: {
+    // The nether's ranged threat: hovers (a legless "fish" silhouette floated
+    // above the ground — see mobHalfHeight) and lobs fireballs, kiting like a
+    // skeleton on the ordinary land-AI path (NOT aquatic).
+    speed: 1.0,
+    hp: HOSTILE_MOB_HP,
+    detectRange: 14,
+    attackDamage: 4,
+    attackCooldown: 2.2,
+    ranged: true,
+    projectileKind: "fireball",
+    // A smouldering golden core with white-hot eyes and a charcoal shell.
+    modelArgs: [0xd98a2a, 0xf0b04a, 0x3a2a1a, 0xfff2c0, 0x8a4a14, [0.6, 0.6, 0.6], [0.46, 0.44, 0.46], "fish"]
   }
 };
 
@@ -190,7 +217,17 @@ export const MOB_TEMPLATES: Record<MobKind, MobTemplate> = {
  * source of truth for "is this kind a monster" — used by the statistics /
  * advancements system to count hostile kills.
  */
-export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>(["zombie", "skeleton", "spider", "creeper", "raider", "boss", "drowned"]);
+export const HOSTILE_MOB_KINDS: ReadonlySet<MobKind> = new Set<MobKind>([
+  "zombie",
+  "skeleton",
+  "spider",
+  "creeper",
+  "raider",
+  "boss",
+  "drowned",
+  "imp",
+  "scorcher"
+]);
 
 /**
  * The allegiance each kind spawns with (see MobFaction). The targeting axis, set
@@ -215,7 +252,9 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
   spider: "hostile",
   creeper: "hostile",
   raider: "raider",
-  boss: "hostile"
+  boss: "hostile",
+  imp: "hostile",
+  scorcher: "hostile"
 };
 
 /**
@@ -223,9 +262,13 @@ export const FACTION_BY_KIND: Record<MobKind, MobFaction> = {
  * math in createMobModel so the headless simulation needs no Three.js meshes.
  */
 export function mobHalfHeight(kind: MobKind): number {
-  const bodyHeight = MOB_TEMPLATES[kind].modelArgs[5][1];
-  // Fish have no legs — their model is centered on the body (createFishModel).
-  if (MOB_TEMPLATES[kind].aquatic) return bodyHeight * 0.5 + 0.05;
+  const template = MOB_TEMPLATES[kind];
+  const bodyHeight = template.modelArgs[5][1];
+  // The scorcher's legless body floats well off the ground — a hoverer, not a
+  // walker — so its ground clamp holds it airborne.
+  if (kind === "scorcher") return bodyHeight * 0.5 + 0.6;
+  // Legless "fish"-variant models are centered on the body (createFishModel).
+  if (template.modelArgs[7] === "fish") return bodyHeight * 0.5 + 0.05;
   const legHeight = Math.max(0.3, bodyHeight * 0.56);
   return Math.max(bodyHeight, legHeight) * 0.5 + 0.2;
 }

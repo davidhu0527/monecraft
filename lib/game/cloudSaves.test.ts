@@ -44,7 +44,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     globalThis.fetch = originalFetch;
   });
 
-  const save = { version: 17, seed: 1, changes: [] } as unknown as SaveData;
+  const save = { version: 18, seed: 1, changes: [] } as unknown as SaveData;
 
   /** Stub fetch to answer the cloud GET with a gzipped save + an x-updated-at header. */
   function stubCloud(updatedAt: string | null, ok = true): void {
@@ -63,7 +63,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     stubCloud("2026-01-01T00:00:00Z");
     const decision = await pullCloudSaveIfNewer("c1", storage);
     expect(decision.adopt).toBe(true);
-    if (decision.adopt) expect(decision.save.version).toBe(17);
+    if (decision.adopt) expect(decision.save.version).toBe(18);
     expect(JSON.parse(storage.getItem(STAMPS_KEY)!).c1).toBe("2026-01-01T00:00:00Z");
   });
 

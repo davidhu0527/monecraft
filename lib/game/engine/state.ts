@@ -3,7 +3,18 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData, VehicleKind } from "@/lib/game/types";
+import type {
+  DimensionId,
+  EffectId,
+  EnchantmentId,
+  EquippedArmor,
+  InventorySlot,
+  MobFaction,
+  MobKind,
+  Profession,
+  SaveData,
+  VehicleKind
+} from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -164,6 +175,13 @@ export type ProjectileState = {
   owner?: PlayerId;
   /** Seconds remaining before the arrow despawns mid-air. */
   ttl: number;
+  /**
+   * Visual/audio family; absent = an ordinary arrow. The scorcher's fireball
+   * flies and hits exactly like an arrow — only its look differs. SP-only
+   * today (nether mobs never exist in an online world), so it never crosses
+   * the wire.
+   */
+  kind?: "arrow" | "fireball";
 };
 
 export type MiningState = {
@@ -242,6 +260,10 @@ export type PlayerTimers = {
   spearThrowCooldown: number;
   /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
   bowCooldownTimer: number;
+  /** Seconds spent standing in a portal surface; travel fires at PORTAL_DWELL_SECONDS. */
+  portalDwellSeconds: number;
+  /** Travel fired (or the player arrived inside a portal) — no re-fire until they step out. */
+  portalLatched: boolean;
 };
 
 /** World-scoped director/sampler timers — live on GameState.timers. */
@@ -283,6 +305,12 @@ export type RaidState = {
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
+  /**
+   * Which dimension this engine simulates (swap-on-travel: one live dimension
+   * per engine — `world` and every voxel-indexed collection are in ITS space).
+   * Fixed for the engine's life; portal travel boots a fresh engine.
+   */
+  dimension: DimensionId;
   /** Every player in the world, by id. Single-player is the one-entry case. */
   players: Map<PlayerId, PlayerState>;
   /**
@@ -422,7 +450,9 @@ export function createPlayerTimers(): PlayerTimers {
     effectPoisonTimer: 0,
     stuckTimer: 0,
     spearThrowCooldown: 0,
-    bowCooldownTimer: 0
+    bowCooldownTimer: 0,
+    portalDwellSeconds: 0,
+    portalLatched: false
   };
 }
 
@@ -572,7 +602,7 @@ export type GameEvent =
   | { type: "tntPrimed"; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
-  | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
+  | { type: "sleepDenied"; reason: "daylight" | "hostiles" | "dimension" }
   | { type: "wokeUp" }
   | { type: "playerJoined"; playerId: PlayerId }
   | { type: "playerLeft"; playerId: PlayerId }
@@ -580,6 +610,12 @@ export type GameEvent =
   | { type: "plantedSeed" }
   | { type: "plantedSapling" }
   | { type: "usedBoneMeal" }
+  | { type: "bucketFilled"; fluid: "water" | "lava" }
+  | { type: "bucketEmptied"; fluid: "water" | "lava" }
+  | { type: "lavaSolidified" }
+  | { type: "portalLit" }
+  | { type: "portalDenied"; reason: "online" | "invalidFrame" }
+  | { type: "dimensionTravel"; target: DimensionId; anchor: { x: number; y: number; z: number } }
   | { type: "fishingCast"; x: number; y: number; z: number }
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }

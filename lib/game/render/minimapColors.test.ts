@@ -50,3 +50,16 @@ describe("columnColor", () => {
     expect(columnColor(world, 1, 1)).not.toEqual(columnColor(world, 5, 5));
   });
 });
+
+describe("roofed (nether) column sampling", () => {
+  test("skips the ceiling mass and reports the cavern floor beneath", () => {
+    const world = new VoxelWorld(8, 20, 8, 1);
+    // Column: bedrock cap, 3 of netherrack ceiling, open air, netherrack floor.
+    world.set(4, 19, 4, BlockId.Bedrock);
+    for (let y = 16; y <= 18; y += 1) world.set(4, y, 4, BlockId.Netherrack);
+    world.set(4, 6, 4, BlockId.Netherrack);
+    expect(topBlockAt(world, 4, 4, true)).toEqual({ block: BlockId.Netherrack, y: 6 });
+    // The unroofed scan would have reported the bedrock cap.
+    expect(topBlockAt(world, 4, 4)).toEqual({ block: BlockId.Bedrock, y: 19 });
+  });
+});

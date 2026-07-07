@@ -53,7 +53,9 @@ export const MATERIAL_PALETTES: Record<string, { m: Rgb; M: Rgb; l: Rgb }> = {
   gold: { m: [240, 190, 60], M: [180, 128, 32], l: [252, 228, 130] },
   diamond: { m: [110, 228, 235], M: [52, 160, 170], l: [190, 248, 250] },
   // Endgame Dragon gear: a smouldering violet/magenta ramp, unlike any tier.
-  dragon: { m: [168, 58, 196], M: [104, 30, 128], l: [226, 138, 244] }
+  dragon: { m: [168, 58, 196], M: [104, 30, 128], l: [226, 138, 244] },
+  // The post-diamond nether tier: ember orange over charcoal.
+  blazite: { m: [232, 116, 40], M: [130, 52, 22], l: [255, 190, 110] }
 };
 
 const STEEL: { m: Rgb; M: Rgb; l: Rgb } = { m: [192, 197, 207], M: [124, 131, 144], l: [236, 239, 246] };
@@ -672,6 +674,29 @@ const CHARCOAL_PALETTE: PixelPalette = { c: [54, 50, 46], C: [30, 28, 26], h: [9
 const GUNPOWDER_PALETTE: PixelPalette = { c: [120, 120, 126], C: [78, 78, 84], h: [168, 168, 174] };
 const BONE_MEAL_PALETTE: PixelPalette = { c: [232, 228, 212], C: [196, 190, 170], h: [250, 248, 240] };
 const EMERALD_PALETTE: PixelPalette = { c: [46, 184, 110], C: [24, 120, 70], h: [150, 240, 180] };
+const GLOWSTONE_DUST_PALETTE: PixelPalette = { c: [244, 205, 92], C: [190, 140, 40], h: [255, 244, 190] };
+const BLAZITE_ORE_PALETTE: PixelPalette = { c: [235, 120, 40], C: [140, 55, 25], h: [255, 200, 110] };
+
+// A cast metal bar in the blazite ramp: top face light, front face main, dark edge.
+const INGOT_GRID = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "......llll......",
+  "....llmmmmll....",
+  "..llmmmmmmmmll..",
+  ".cmmmmmmmmmmmmc.",
+  ".cmmmmmmmmmmmmc.",
+  ".ccmmmmmmmmmmcc.",
+  "..ccmmmmmmmmcc..",
+  "....ccmmmmcc....",
+  "......cccc......",
+  "................",
+  "................",
+  "................"
+];
+const BLAZITE_INGOT_PALETTE: PixelPalette = { m: [232, 116, 40], c: [130, 52, 22], l: [255, 190, 110] };
 const SEEDS_PALETTE: PixelPalette = { s: [201, 178, 110], d: [150, 128, 70] };
 // A weathered parchment chart with a red X where the treasure lies.
 const TREASURE_MAP_PALETTE: PixelPalette = { o: [110, 88, 55], p: [222, 205, 160], P: [186, 166, 122], x: [190, 50, 40] };
@@ -842,6 +867,53 @@ const BOTTLE_GRID = [
   ".....oLLLLo.....",
   "......oooo......"
 ];
+// A metal pail: handle arc (o), bright rim (r), body (m), and an `L`/`h`
+// fill surface recolored per fluid. The empty bucket shows its dark interior.
+const BUCKET_GRID = [
+  "................",
+  ".....oooooo.....",
+  "....oo....oo....",
+  "....o......o....",
+  "...ro......or...",
+  "...rrrrrrrrrr...",
+  "...rLLLLLLLLr...",
+  "...rLLhLLLLLr...",
+  "....mmmmmmmm....",
+  "....mmmmmmmm....",
+  "....mmmmmmmm....",
+  ".....mmmmmm.....",
+  ".....mmmmmm.....",
+  ".....mmmmmm.....",
+  "......mmmm......",
+  "................"
+];
+// A steel striker arc (m/l) over a dark flint chunk (f), with a spark (s)
+// flying where they meet — reads as the classic fire-starter.
+const FLINT_STEEL_GRID = [
+  "................",
+  "..........s.....",
+  ".........s.s....",
+  "......mm..s.....",
+  ".....mllm.......",
+  "....ml..lm......",
+  "....ml...m......",
+  "....ml..........",
+  "....ml..........",
+  "....ml...m......",
+  ".....mllm.......",
+  "..ff..mm........",
+  ".ffff...........",
+  ".fffff..........",
+  "..fff...........",
+  "................"
+];
+const FLINT_STEEL_PALETTE: PixelPalette = { m: [130, 134, 142], l: [190, 194, 202], f: [52, 50, 56], s: [255, 200, 90] };
+
+const BUCKET_METAL: PixelPalette = { o: [70, 74, 84], r: [180, 184, 192], m: [140, 144, 152] };
+const BUCKET_EMPTY_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [96, 100, 110], h: [120, 124, 134] };
+const BUCKET_WATER_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [58, 110, 200], h: [140, 190, 240] };
+const BUCKET_LAVA_PALETTE: PixelPalette = { ...BUCKET_METAL, L: [235, 110, 30], h: [255, 200, 80] };
+
 const POTION_GLASS: PixelPalette = { o: [40, 40, 52], C: [120, 80, 46], g: [176, 210, 224] };
 const POTION_SPEED_PALETTE: PixelPalette = { ...POTION_GLASS, L: [124, 205, 238], h: [190, 235, 250] };
 const POTION_STRENGTH_PALETTE: PixelPalette = { ...POTION_GLASS, L: [209, 72, 72], h: [240, 140, 140] };
@@ -870,6 +942,9 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   gunpowder: { grid: COAL_GRID, palette: GUNPOWDER_PALETTE },
   bone_meal: { grid: COAL_GRID, palette: BONE_MEAL_PALETTE },
   emerald: { grid: COAL_GRID, palette: EMERALD_PALETTE },
+  glowstone_dust: { grid: COAL_GRID, palette: GLOWSTONE_DUST_PALETTE },
+  blazite_ore: { grid: COAL_GRID, palette: BLAZITE_ORE_PALETTE },
+  blazite_ingot: { grid: INGOT_GRID, palette: BLAZITE_INGOT_PALETTE },
   raw_chicken: { grid: RAW_MEAT_GRID, palette: RAW_CHICKEN_PALETTE },
   raw_mutton: { grid: RAW_MEAT_GRID, palette: RAW_MUTTON_PALETTE },
   rotten_flesh: { grid: RAW_MEAT_GRID, palette: ROTTEN_FLESH_PALETTE },
@@ -896,6 +971,10 @@ const ITEM_SPRITE_GRIDS: Record<string, { grid: string[]; palette: PixelPalette 
   boss_summoner: { grid: SUMMONER_GRID, palette: SUMMONER_PALETTE },
   ominous_horn: { grid: BONE_GRID, palette: OMINOUS_HORN_PALETTE },
   dragon_heart: { grid: DRAGON_HEART_GRID, palette: DRAGON_HEART_PALETTE },
+  flint_and_steel: { grid: FLINT_STEEL_GRID, palette: FLINT_STEEL_PALETTE },
+  bucket: { grid: BUCKET_GRID, palette: BUCKET_EMPTY_PALETTE },
+  water_bucket: { grid: BUCKET_GRID, palette: BUCKET_WATER_PALETTE },
+  lava_bucket: { grid: BUCKET_GRID, palette: BUCKET_LAVA_PALETTE },
   empty_bottle: { grid: BOTTLE_GRID, palette: EMPTY_BOTTLE_PALETTE },
   potion_speed: { grid: BOTTLE_GRID, palette: POTION_SPEED_PALETTE },
   potion_strength: { grid: BOTTLE_GRID, palette: POTION_STRENGTH_PALETTE },

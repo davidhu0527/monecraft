@@ -155,6 +155,19 @@ One module per concern, behind an `index.ts` barrel — consumers always import 
 - `atlas.ts` — runtime canvas block atlas (`createBlockAtlasTexture`); tiles are generated from `BLOCK_COLORS`, no image assets. The only world module that touches the DOM.
 - `queries.ts` — `voxelRaycast` (DDA), `collidesAt`, `hasSupportUnderPlayer`.
 
+## Dimensions (swap-on-travel)
+
+The game has two world spaces — the overworld and the nether — but the engine only ever simulates **one at a time**: `GameState.dimension` is fixed for an engine's life, and portal travel boots a fresh engine (no dual-live-worlds state, no cross-dimension ticking). Everything voxel-indexed on `GameState` (containers, TNT, redstone, worldgen site sets) is therefore always in the live dimension's coordinate space.
+
+The travel sequence (single-player only — the server engine and every replica refuse ignition, so an online world can never enter a dimension the room doesn't simulate):
+
+1. **Ignition** — flint & steel on an obsidian frame's inner face (`tryIgnitePortal`, in the `placeBlock` precedence). `findPortalFrame` (`systems/portal.ts`) validates a full obsidian border (corners required) around a 2×3..4×4 interior, then fills it with `NetherPortal` blocks — non-solid, unmineable (the solid raycast passes through; break the frame instead), light-emitting, riding the ordinary block diff.
+2. **Dwell** — standing in the surface for `PORTAL_DWELL_SECONDS` fires ONE `dimensionTravel` event, latched until the player steps out. Travel time **re-validates the frame** (the lazy backstop for frames broken behind the mining hook's flood-clear — e.g. TNT): a de-framed surface clears instead of traveling.
+3. **The swap is save-shaped** — the shell (`useMinecraftGame`'s event drain) hears the event, arms `skipUnmountSaveRef` **before** enqueuing `serializeForTravel(target, anchor)` (the flag gates the autosave interval and the unload flush, either of which would clobber the travel save with pre-travel state), writes it, and remounts via the same `reloadNonce` path Load/Reset use. The travel save is an ordinary save with the local player flipped to the target dimension at the portal anchor (1:1 coordinates) plus a one-shot `portalArrival`.
+4. **Arrival** — the fresh engine boots into the player's saved dimension: the dimension picks the generator (`generateWorld` vs `generateNetherWorld`) and the save section (`dimensionSectionOf`), and `ensureArrivalPortal` consumes `portalArrival` before the light bake — reusing the nearest portal within `PORTAL_SEARCH_RADIUS` or building one (stone pad, lit 2×3 frame) through `blockChanges`, so it persists as ordinary diff. The player lands inside the portal, latched.
+
+Dimension-dependent behavior, each at one seam: `surfaceYAt` (the nether is **roofed** — `createNetherFloorYAt` walks columns down to the highest cavern-floor pocket, else every consumer would target the bedrock ceiling), daylight (`dimensionDaylightAt` pins the nether to `NETHER_DAYLIGHT`, under both the hostile-spawn and burn thresholds), weather (clear), beds (`sleepDenied "dimension"` — the pinned dusk would otherwise permit sleep), the spawn rosters (overworld groups/directors early-return in the nether), and the renderer's `DimensionProfile` (`render/dimensionProfiles.ts`: sky, fog, sky-light floor, celestials/precipitation existence) chosen at the one `GameRenderer.create` call site. Serialization inverts by dimension: an engine re-emits the world halves it does not simulate **verbatim** (see [save-format.md](save-format.md)).
+
 ## Offline / PWA (`app/manifest.ts`, `public/sw.js`)
 
 The app installs as a desktop PWA and boots single-player offline after one online visit. `app/manifest.ts` plus the programmatic icons (shell section above) are the identity; `public/sw.js` — hand-rolled plain JS, no workbox/serwist dependency — owns offline caching:

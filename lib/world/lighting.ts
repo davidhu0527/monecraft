@@ -57,6 +57,7 @@ export function opacity(block: BlockId): number {
   switch (block) {
     case BlockId.Air:
     case BlockId.Glass:
+    case BlockId.NetherPortal:
       return 0;
     case BlockId.Leaves:
     case BlockId.Water:
@@ -90,6 +91,13 @@ export function emission(block: BlockId): number {
       return 7;
     case BlockId.RedstoneLampOn:
       return MAX_LIGHT;
+    // The lit portal surface glows a shade under a torch — enough to read as
+    // active and to light its chamber, without washing out torch placement.
+    case BlockId.NetherPortal:
+      return 11;
+    // Glowstone matches the torch: the nether's natural (and portable) light.
+    case BlockId.Glowstone:
+      return 14;
     default:
       return 0;
   }

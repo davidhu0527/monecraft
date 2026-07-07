@@ -23,7 +23,9 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   creeper: [6, 13],
   raider: [5, 11],
   villager: [7, 15],
-  boss: [6, 12]
+  boss: [6, 12],
+  imp: [4, 9],
+  scorcher: [5, 11]
 };
 
 /** Structural subset of the engine's MobState — state.mobs passes directly. */

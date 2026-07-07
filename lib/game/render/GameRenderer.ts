@@ -6,6 +6,7 @@ import type { GameEvent, GameState } from "@/lib/game/engine/state";
 import { MOB_TEMPLATES } from "@/lib/game/mobs";
 import type { PlayerPalette } from "@/lib/game/playerSkins";
 import { cameraOffsetDirection, computeCameraPose } from "./cameraView";
+import { DIMENSION_PROFILES, type DimensionProfile } from "./dimensionProfiles";
 import { createCrackOverlay, type CrackOverlayView } from "./crackOverlay";
 import { createHeldItemView, type HeldItemView } from "./heldItem";
 import { createMobVisuals, type MobVisuals } from "./mobVisuals";
@@ -30,9 +31,7 @@ const ROD_TIP_OFFSET = new THREE.Vector3(0.34, -0.18, -0.95);
 
 export type CreateRendererResult = { ok: true; renderer: GameRenderer } | { ok: false; error: string };
 
-// Caves keep this faint floor of visibility instead of going pure black, and
-// block light is emitted with this warm tint.
-const SKY_LIGHT_FLOOR = 0.05;
+// Block light is emitted with this warm tint.
 const TORCH_TINT = "vec3(1.35, 1.06, 0.62)";
 
 /**
@@ -42,10 +41,12 @@ const TORCH_TINT = "vec3(1.35, 1.06, 0.62)";
  * the scene-lit color by sky exposure — caves go dark while the surface stays
  * lit and dims at night with the scene lights — then adds block light back as an
  * albedo-tinted glow that survives the gate, so a torch lights a pitch-black
- * cave. Anchored on stable ShaderChunk includes; the e2e triangle check guards
- * against a future Three.js bump breaking the string replace.
+ * cave. `skyLightFloor` (the dimension's minimum visibility) bakes into the
+ * shader string — fine, because swap-on-travel rebuilds the whole renderer per
+ * dimension. Anchored on stable ShaderChunk includes; the e2e triangle check
+ * guards against a future Three.js bump breaking the string replace.
  */
-function patchVoxelLighting(material: THREE.MeshStandardMaterial): void {
+function patchVoxelLighting(material: THREE.MeshStandardMaterial, skyLightFloor: number): void {
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = "attribute vec2 aLight;\nvarying vec2 vLight;\n" + shader.vertexShader.replace("void main() {", "void main() {\n  vLight = aLight;");
     shader.fragmentShader =
@@ -54,7 +55,7 @@ function patchVoxelLighting(material: THREE.MeshStandardMaterial): void {
         .replace("#include <color_fragment>", "#include <color_fragment>\n  vec3 mcAlbedo = diffuseColor.rgb;")
         .replace(
           "#include <opaque_fragment>",
-          `#include <opaque_fragment>\n  gl_FragColor.rgb = gl_FragColor.rgb * max(vLight.x, ${SKY_LIGHT_FLOOR.toFixed(3)}) + mcAlbedo * vLight.y * ${TORCH_TINT};`
+          `#include <opaque_fragment>\n  gl_FragColor.rgb = gl_FragColor.rgb * max(vLight.x, ${skyLightFloor.toFixed(3)}) + mcAlbedo * vLight.y * ${TORCH_TINT};`
         );
   };
 }
@@ -73,9 +74,10 @@ export class GameRenderer {
   private readonly webgl: THREE.WebGLRenderer;
   private readonly sun: THREE.DirectionalLight;
   private readonly hemiLight: THREE.HemisphereLight;
-  private readonly daySky = new THREE.Color(0x8bc2ff);
-  private readonly nightSky = new THREE.Color(0x06111f);
-  private readonly liveSky = new THREE.Color(0x8bc2ff);
+  private readonly profile: DimensionProfile;
+  private readonly daySky: THREE.Color;
+  private readonly nightSky: THREE.Color;
+  private readonly liveSky: THREE.Color;
   private readonly worldMaterial: THREE.MeshStandardMaterial;
   private readonly glassMaterial: THREE.MeshStandardMaterial;
   // Solid + glass terrain share one block atlas; held as a field so dispose() can
@@ -100,8 +102,9 @@ export class GameRenderer {
   /** Names/skins for remote avatars (a NetworkSession provides it; SP renders none). */
   remotePlayerInfo: (id: string) => RemotePlayerInfo = () => ({ name: "player", skinId: null });
   private readonly particles: ParticleSystem;
-  private readonly sky: SkyView;
-  private readonly precip: PrecipitationView;
+  /** Null in a skyless dimension (the profile's celestials/precipitation flags). */
+  private readonly sky: SkyView | null;
+  private readonly precip: PrecipitationView | null;
   private readonly overcastGray = new THREE.Color(0x6b7480);
   private lastSyncMs = Number.NaN;
   private dustDistance = 0;
@@ -109,19 +112,23 @@ export class GameRenderer {
   private lastFootZ = Number.NaN;
 
   /** WebGL context creation can fail (blocked, unsupported) — surface it instead of throwing. */
-  static create(mount: HTMLElement): CreateRendererResult {
+  static create(mount: HTMLElement, profile: DimensionProfile = DIMENSION_PROFILES.overworld): CreateRendererResult {
     try {
-      return { ok: true, renderer: new GameRenderer(mount) };
+      return { ok: true, renderer: new GameRenderer(mount, profile) };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Failed to initialize WebGL renderer" };
     }
   }
 
-  private constructor(mount: HTMLElement) {
+  private constructor(mount: HTMLElement, profile: DimensionProfile) {
     this.mount = mount;
+    this.profile = profile;
+    this.daySky = new THREE.Color(profile.daySky);
+    this.nightSky = new THREE.Color(profile.nightSky);
+    this.liveSky = new THREE.Color(profile.daySky);
     this.scene = new THREE.Scene();
     this.scene.background = this.liveSky;
-    this.scene.fog = new THREE.Fog(this.liveSky, 30, 200);
+    this.scene.fog = new THREE.Fog(this.liveSky, profile.fogNear, profile.fogFar);
 
     this.camera = new THREE.PerspectiveCamera(75, mount.clientWidth / mount.clientHeight, 0.1, 2000);
     this.webgl = new THREE.WebGLRenderer({ antialias: true });
@@ -156,8 +163,8 @@ export class GameRenderer {
     });
     // Per-voxel lighting: gate scene-lit terrain by baked sky exposure and add
     // torch/lava block light back as a glow (see patchVoxelLighting).
-    patchVoxelLighting(this.worldMaterial);
-    patchVoxelLighting(this.glassMaterial);
+    patchVoxelLighting(this.worldMaterial, profile.skyLightFloor);
+    patchVoxelLighting(this.glassMaterial, profile.skyLightFloor);
     this.worldMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.worldMaterial);
     this.glassMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.glassMaterial);
     this.scene.add(this.worldMesh);
@@ -175,8 +182,8 @@ export class GameRenderer {
     this.playerVisuals = createPlayerVisuals(this.scene);
     this.remotePlayerVisuals = createRemotePlayerVisuals(this.scene);
     this.particles = createParticleSystem(this.scene);
-    this.sky = createSkyView(this.scene, this.camera);
-    this.precip = createPrecipitation(this.scene);
+    this.sky = profile.celestials ? createSkyView(this.scene, this.camera) : null;
+    this.precip = profile.precipitation ? createPrecipitation(this.scene) : null;
   }
 
   get domElement(): HTMLCanvasElement {
@@ -200,7 +207,7 @@ export class GameRenderer {
     // Flush the camera's world matrix now so the first-person rod-tip anchor
     // (camera.localToWorld below) reads this frame's pose, not the last frame's.
     this.camera.updateMatrixWorld();
-    if (!state.paused) this.precip.sync(state, dtMs, this.camera.position);
+    if (!state.paused) this.precip?.sync(state, dtMs, this.camera.position);
     this.syncWorldMesh(state);
     this.heldItem.update(state.inventory[state.selectedSlot], {
       timeMs,
@@ -221,7 +228,7 @@ export class GameRenderer {
     const rodTip = state.cameraMode === "first" ? this.camera.localToWorld(this.bobberTip.copy(ROD_TIP_OFFSET)) : this.playerVisuals.getRodTip(this.bobberTip);
     this.bobberVisuals.sync(state.fishing, rodTip, dtMs);
     this.caughtItems.sync(timeMs, this.catchTarget.set(state.player.position.x, state.player.position.y + EYE_HEIGHT, state.player.position.z));
-    this.sky.sync(state, timeMs);
+    this.sky?.sync(state, timeMs);
     this.syncDayNight(state);
   }
 
@@ -563,8 +570,8 @@ export class GameRenderer {
   }
 
   dispose(): void {
-    this.precip.dispose();
-    this.sky.dispose();
+    this.precip?.dispose();
+    this.sky?.dispose();
     this.particles.dispose();
     this.playerVisuals.dispose();
     this.remotePlayerVisuals.dispose();
@@ -649,6 +656,6 @@ export class GameRenderer {
       this.hemiLight.intensity *= 1 - overcast * 0.35;
     }
     this.scene.fog?.color.copy(this.liveSky);
-    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.far = 200 - overcast * 90;
+    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.far = this.profile.fogFar - overcast * 90;
   }
 }

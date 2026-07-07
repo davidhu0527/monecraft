@@ -241,7 +241,11 @@ describe("evaluateAdvancements", () => {
       { type: "treasureUnearthed" },
       { type: "leverToggled", on: true },
       { type: "vehicleBoarded", kind: "minecart" },
-      { type: "mobDied", kind: "drowned", x: 0, y: 0, z: 0 }
+      { type: "mobDied", kind: "drowned", x: 0, y: 0, z: 0 },
+      { type: "dimensionTravel", target: "nether", anchor: { x: 0, y: 0, z: 0 } },
+      { type: "blockBroken", blockId: BlockId.Glowstone, x: 0, y: 0, z: 0 },
+      { type: "mobDied", kind: "scorcher", x: 0, y: 0, z: 0 },
+      { type: "crafted", recipeId: "blazite_sword" }
     );
     const unlocked = new Set(evaluateAdvancements(state));
     for (const advancement of ADVANCEMENTS) expect(unlocked.has(advancement.id)).toBe(true);
@@ -264,5 +268,40 @@ describe("ADVANCEMENTS registry integrity", () => {
 
   test("ADVANCEMENTS_BY_ID resolves every id to its entry", () => {
     for (const advancement of ADVANCEMENTS) expect(ADVANCEMENTS_BY_ID[advancement.id]).toBe(advancement);
+  });
+});
+
+describe("nether advancements", () => {
+  test("travel to the nether bumps the trip stat and unlocks We Need to Go Deeper; the trip home doesn't", () => {
+    const player = freshState();
+    record(player, { type: "dimensionTravel", target: "nether", anchor: { x: 1, y: 2, z: 3 } });
+    expect(player.stats.get("nether_entered")).toBe(1);
+    expect(evaluateAdvancements(player)).toContain("hot_tourist");
+    record(player, { type: "dimensionTravel", target: "overworld", anchor: { x: 1, y: 2, z: 3 } });
+    expect(player.stats.get("nether_entered")).toBe(1); // coming home is not a trip in
+  });
+
+  test("mining glowstone and slaying a scorcher unlock their advancements", () => {
+    const player = freshState();
+    record(player, { type: "blockBroken", blockId: BlockId.Glowstone, x: 0, y: 0, z: 0 });
+    record(player, { type: "mobDied", kind: "scorcher", x: 0, y: 0, z: 0 });
+    expect(player.stats.get("glowstone_mined")).toBe(1);
+    expect(player.stats.get("scorcher_killed")).toBe(1);
+    expect(player.stats.get("hostiles_killed")).toBe(1); // a scorcher is a hostile too
+    const unlocked = evaluateAdvancements(player);
+    expect(unlocked).toContain("let_there_be_light");
+    expect(unlocked).toContain("fire_fighter");
+  });
+
+  test("forging blazite gear unlocks Blazing Edge (the ingot smelt alone doesn't)", () => {
+    const player = freshState();
+    record(player, { type: "crafted", recipeId: "smelt_blazite" });
+    expect(player.stats.get("blazite_gear_crafted")).toBeUndefined();
+    record(player, { type: "crafted", recipeId: "blazite_sword" });
+    expect(player.stats.get("blazite_gear_crafted")).toBe(1);
+    expect(evaluateAdvancements(player)).toContain("blazing_edge");
+    // The blazite pickaxe also counts toward the shared pickaxe aggregate.
+    record(player, { type: "crafted", recipeId: "blazite_pickaxe" });
+    expect(player.stats.get("pickaxes_crafted")).toBe(1);
   });
 });

@@ -104,7 +104,7 @@ describe("players map", () => {
     const second = engine.addPlayer({ id: "acct-2" });
     second.hearts = 7;
     const save = engine.serialize();
-    expect(save.version).toBe(17);
+    expect(save.version).toBe(18);
     expect(save.players.map((p) => p.id).sort()).toEqual(["acct-2", "local"]);
     expect(save.players.find((p) => p.id === "acct-2")?.hearts).toBe(7);
   });

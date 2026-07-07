@@ -4,7 +4,7 @@ import { AQUATIC_CAP, AQUATIC_SPAWN_INTERVAL_SECONDS, DROWNED_CAP, DROWNED_SPAWN
 import { BlockId, VoxelWorld, generateWorld } from "@/lib/world";
 import { GEN } from "@/lib/world/generation";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
-import { createSurfaceYAt } from "@/lib/game/spawn";
+import { createNetherFloorYAt, createSurfaceYAt } from "@/lib/game/spawn";
 import {
   assignVillagerProfessions,
   pushMob,
@@ -301,5 +301,41 @@ describe("tickAquaticSpawnDirector", () => {
     } as unknown as GameState;
     tickAquaticSpawnDirector(state, AQUATIC_SPAWN_INTERVAL_SECONDS, mulberry32(7));
     expect(state.mobs).toHaveLength(0);
+  });
+});
+
+describe("nether spawning", () => {
+  function makeNetherEngine(difficulty: Difficulty = "normal"): GameEngine {
+    return new GameEngine({ dimension: "nether", difficulty, seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+  }
+
+  test("a nether boot seeds imps and scorchers only — no animals, fish, or villagers", () => {
+    const e = makeNetherEngine();
+    expect(e.state.mobs.length).toBeGreaterThan(0);
+    for (const mob of e.state.mobs) {
+      expect(["imp", "scorcher"]).toContain(mob.kind);
+      expect(mob.hostile).toBe(true);
+    }
+  });
+
+  test("Peaceful keeps the nether empty", () => {
+    expect(makeNetherEngine("peaceful").state.mobs).toHaveLength(0);
+  });
+
+  test("the hostile director trickles nether kinds — perpetually, since the pinned dusk never lifts", () => {
+    const e = makeNetherEngine();
+    e.state.mobs = [];
+    e.state.timers.hostileSpawnTimer = 1000; // daylight is already pinned under the threshold
+    tickHostileSpawnDirector(e.state, 0.1, mulberry32(3), createNetherFloorYAt(e.state.world));
+    expect(hostileCount(e)).toBeGreaterThan(0);
+    for (const mob of e.state.mobs) expect(["imp", "scorcher"]).toContain(mob.kind);
+  });
+
+  test("the aquatic director stays silent in the nether", () => {
+    const e = makeNetherEngine();
+    e.state.mobs = [];
+    e.state.timers.aquaticSpawnTimer = 1000;
+    tickAquaticSpawnDirector(e.state, 0.1, mulberry32(3));
+    expect(e.state.mobs).toHaveLength(0);
   });
 });

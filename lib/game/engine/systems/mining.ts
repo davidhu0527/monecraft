@@ -21,6 +21,7 @@ import { canEditBlocks, freeBuild } from "@/lib/game/gameModes";
 import type { EmitGameEvent, FrameInput, GameState, PlayerState } from "../state";
 import { efficiencyMultiplier, fortuneLevel } from "@/lib/game/enchantments";
 import { fillWorldgenChestIfUnlooted } from "./dungeon";
+import { clearAttachedPortal } from "./portal";
 import { lookDirection } from "./playerMotion";
 import { awardXp, xpForBlock } from "./xp";
 import { hasteMultiplier } from "./statusEffects";
@@ -48,6 +49,11 @@ export function canMineBlock(block: BlockId, toolTier: number): boolean {
   if (block === BlockId.GoldOre) return toolTier >= 3;
   if (block === BlockId.SapphireOre) return toolTier >= 4;
   if (block === BlockId.DiamondOre) return toolTier >= 4;
+  // Obsidian yields only to the top pickaxe tier (diamond, mineTier 7).
+  if (block === BlockId.Obsidian) return toolTier >= 7;
+  // Nether rock needs any pickaxe; its deep ore is diamond-gated like obsidian.
+  if (block === BlockId.Netherrack) return toolTier >= 1;
+  if (block === BlockId.BlaziteOre) return toolTier >= 7;
   return true;
 }
 
@@ -208,6 +214,9 @@ export function tickMining(
     }
   } else {
     state.blockChanges.set(bx, by, bz, BlockId.Air);
+    // Breaking a frame block de-frames its portal: the attached surface
+    // flood-clears so a lit portal can never outlive its obsidian.
+    if (targetBlock === BlockId.Obsidian) clearAttachedPortal(state, bx, by, bz);
     // A redstone overlay (wire, lever, …) or rail standing on the broken block
     // pops off with it and drops its item to the miner (the kelp-cascade rule).
     const above = world.get(bx, by + 1, bz) as BlockId;

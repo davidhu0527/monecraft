@@ -30,5 +30,21 @@ export const WORLDGEN_BASELINES = {
     flat: "9e463186e6b5797c80a1d0b50b0f40e93c2ef2f353aadfab27e2171fc246d5d1",
     amplified: "9361234c1907d43d1551f79e3c35a8c7942419f57b66038feec6e5b2772259d8",
     islands: "ff1381ffa159aaf02491b55770e0ea513809e8c44b42f8505d5bd0cd7d6d4f1c"
-  } satisfies Partial<Record<WorldType, string>>
+  } satisfies Partial<Record<WorldType, string>>,
+  /**
+   * The nether (lib/world/netherGeneration.ts) — its own byte contract under
+   * the SAME WORLDGEN_VERSION stamp (a bump discards both dimensions' diffs).
+   * The generator scales carve/vein counts by area, so each size is its own
+   * surface. Baselined at introduction (worldgen v11 era).
+   */
+  nether: {
+    /** Full-size 512×150×512, seed 1337 — the real save-compat surface. */
+    full512Seed1337: "3d5e084e0fae1d071c8728f6a49b72698184bd304c504141ab6302841b4bd8a4",
+    /** 128×150×128 per seed. */
+    small128: {
+      1337: "93ecfdda32cc1f6ec517bc7f887b6b8ebba3cb7e93058fbf79f34b5e2b11bd7d",
+      1: "87df8fafea2055299a7749484bee80186d05e7b778ad59a9d28db3e3db027e2f",
+      999999937: "1fb377479c14951aec785122b8fcaf64460abf783ec1ecb02089725390e24fdc"
+    }
+  }
 } as const;

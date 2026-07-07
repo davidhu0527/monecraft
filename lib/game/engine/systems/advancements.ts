@@ -40,6 +40,7 @@ export const STATS: readonly StatMeta[] = [
   { id: "arrows_fired", label: "Arrows Fired", format: "count" },
   { id: "villager_trades", label: "Villager Trades", format: "count" },
   { id: "minecart_rides", label: "Minecart Rides", format: "count" },
+  { id: "nether_entered", label: "Nether Trips", format: "count" },
   { id: "jumps", label: "Jumps", format: "count" },
   { id: "deaths", label: "Deaths", format: "count" }
 ];
@@ -55,7 +56,9 @@ const MINED_STAT_BY_BLOCK: Partial<Record<BlockId, string>> = {
   [BlockId.RubyOre]: "ruby_ore_mined",
   [BlockId.SapphireOre]: "sapphire_ore_mined",
   [BlockId.DiamondOre]: "diamond_ore_mined",
-  [BlockId.WheatStage3]: "wheat_harvested"
+  [BlockId.WheatStage3]: "wheat_harvested",
+  [BlockId.Glowstone]: "glowstone_mined",
+  [BlockId.BlaziteOre]: "blazite_ore_mined"
 };
 
 const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
@@ -80,6 +83,12 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
     case "mobDied":
       if (HOSTILE_MOB_KINDS.has(event.kind)) bump(player, "hostiles_killed");
       if (event.kind === "drowned") bump(player, "drowned_killed");
+      if (event.kind === "scorcher") bump(player, "scorcher_killed");
+      break;
+    // Counted at emit time — before the shell writes the travel save — so the
+    // stat (and any unlock) rides the very save that performs the trip.
+    case "dimensionTravel":
+      if (event.target === "nether") bump(player, "nether_entered");
       break;
     case "mobBred":
       bump(player, "animals_bred");
@@ -127,6 +136,8 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
       if (!recipe.station) bump(player, "items_crafted");
       // "Tool Up" wants any pickaxe (7 tiers, 7 recipes), so aggregate them.
       if (recipe.result.slotId.endsWith("_pickaxe")) bump(player, "pickaxes_crafted");
+      // Any blazite gear counts for the post-diamond forging advancement.
+      if (recipe.result.slotId.startsWith("blazite_") && recipe.result.slotId !== "blazite_ingot") bump(player, "blazite_gear_crafted");
       // A villager trade is a station-gated recipe — drive the trade advancement.
       if (recipe.station === "villager") bump(player, "villager_trades");
       break;
@@ -264,6 +275,42 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "sliver_spear",
     category: "Combat",
     stat: "drowned_killed",
+    threshold: 1
+  },
+  {
+    id: "hot_tourist",
+    title: "We Need to Go Deeper",
+    description: "Step through a nether portal.",
+    icon: "obsidian",
+    category: "Adventure",
+    stat: "nether_entered",
+    threshold: 1
+  },
+  {
+    id: "let_there_be_light",
+    title: "Let There Be Light",
+    description: "Mine a glowstone cluster.",
+    icon: "glowstone",
+    category: "Mining",
+    stat: "glowstone_mined",
+    threshold: 1
+  },
+  {
+    id: "fire_fighter",
+    title: "Fire Fighter",
+    description: "Slay a scorcher.",
+    icon: "glowstone_dust",
+    category: "Combat",
+    stat: "scorcher_killed",
+    threshold: 1
+  },
+  {
+    id: "blazing_edge",
+    title: "Blazing Edge",
+    description: "Forge any blazite gear.",
+    icon: "blazite_sword",
+    category: "Crafting",
+    stat: "blazite_gear_crafted",
     threshold: 1
   }
 ];

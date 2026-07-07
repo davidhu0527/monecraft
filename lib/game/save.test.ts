@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, INVENTORY_SLOTS } from "@/lib/game/config";
+import { CUSTOM_NAME_MAX_LEN, ENCHANT_MAX_LEVEL, INVENTORY_SLOTS, WORLDGEN_VERSION } from "@/lib/game/config";
 import { MAX_HEARTS, MAX_HUNGER } from "@/lib/game/config";
 import {
   inventorySlotsSnapshot,
@@ -20,6 +20,11 @@ import {
   migrateSaveV14toV15,
   migrateSaveV15toV16,
   migrateSaveV16toV17,
+  migrateSaveV17toV18,
+  applyWorldgenGuard,
+  dimensionSectionOf,
+  restorePlayerDimension,
+  restorePortalArrival,
   isPersistentMob,
   parseSave,
   readContainers,
@@ -52,6 +57,7 @@ import {
 } from "@/lib/game/save";
 import { createSlot, createEmptySlot } from "@/lib/game/items";
 import type {
+  DimensionSection,
   InventorySlot,
   SaveData,
   SaveDataV1,
@@ -147,10 +153,10 @@ function samplePlayer(): SavedPlayer {
   };
 }
 
-/** The current (v17) shape — exactly what sampleSaveV16 migrates to. */
+/** The current (v18) shape - what sampleSaveV16 migrates to, one version stamp later. */
 function sampleSave(): SaveData {
   return {
-    version: 17,
+    version: 18,
     difficulty: "hard",
     seed: 1337,
     changes: [
@@ -175,7 +181,7 @@ describe("save round-trip", () => {
     expect(readSave(KEY, storage)).toEqual(sampleSave());
   });
 
-  test("a stored flat v16 save reads back as the migrated v17 shape", () => {
+  test("a stored flat v16 save reads back as the migrated current shape", () => {
     const storage = memoryStorage();
     writeSaveV16(storage, sampleSaveV16());
     expect(readSave(KEY, storage)).toEqual(sampleSave());
@@ -193,7 +199,7 @@ describe("save round-trip", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(legacy) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(17);
+    expect(parsed!.version).toBe(18);
     expect(parsed!.inventoryCounts).toEqual({ dirt: 30, stone: 5 });
     expect(parsed!.players[0].inventorySlots).toBeUndefined();
   });
@@ -215,7 +221,7 @@ describe("v1 to v2 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v1Save({ selectedSlot: 9 })) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(17); // chained v1 -> v2 -> … -> v16 -> v17
+    expect(parsed!.version).toBe(18); // chained v1 -> v2 -> … -> v17 -> v18
     expect(parsed!.players[0].selectedSlot).toBe(8); // hotbar shrank from 10 to 9 slots
     expect(parsed!.seed).toBe(1337);
     expect(parsed!.changes).toEqual([[42, 0]]);
@@ -308,7 +314,7 @@ describe("v2 to v3 migration", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v2Save()) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(17);
+    expect(parsed!.version).toBe(18);
   });
 
   test("a v3 round-trip preserves the new stat/clock/spawn fields", () => {
@@ -345,7 +351,7 @@ describe("v3 to v4 migration & chest containers", () => {
   test("a pre-chest (v3) save loads with no containers", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v3Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(readContainers(parsed)).toEqual([]);
   });
 
@@ -420,7 +426,7 @@ describe("v4 to v5 migration & dungeon looted chests", () => {
   test("a pre-dungeon (v4) save loads with no looted chests", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v4Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(readLootedChests(parsed)).toEqual([]);
   });
 
@@ -465,7 +471,7 @@ describe("v5 to v6 migration & status effects", () => {
   test("a pre-effect (v5) save loads with no active effects", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v5Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(restoreEffects(parsed.players[0])).toEqual([]);
   });
 
@@ -487,7 +493,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v7: SaveDataV7 = { ...v5Save(), version: 7 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v7) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(restoreGameMode(parsed.players[0])).toBe("survival");
   });
 
@@ -514,7 +520,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v8: SaveDataV8 = { ...v5Save(), version: 8 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v8) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(restoreDifficulty(parsed)).toBe("normal");
   });
 
@@ -542,7 +548,7 @@ describe("v5 to v6 migration & status effects", () => {
     const v9: SaveDataV9 = { ...v5Save(), version: 9 };
     const storage = memoryStorage({ [KEY]: JSON.stringify(v9) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(restoreHardcore(parsed)).toBe(false);
     expect(restoreGameOver(parsed, parsed.players[0])).toBe(false);
   });
@@ -774,7 +780,7 @@ describe("v12 to v13 migration & statistics", () => {
   test("a pre-progression (v12) save loads with no statistics", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v12Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(restoreStats(parsed.players[0])).toEqual([]);
   });
 
@@ -878,7 +884,7 @@ describe("readSave rejects corrupt data", () => {
   });
 
   test("unknown future version", () => {
-    const save = { ...sampleSave(), version: 18 };
+    const save = { ...sampleSave(), version: 19 };
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(save) }))).toBeNull();
   });
 
@@ -923,7 +929,7 @@ describe("parseSave on decoded objects", () => {
   });
 
   test("unknown future version yields null", () => {
-    expect(parseSave({ ...sampleSave(), version: 18 })).toBeNull();
+    expect(parseSave({ ...sampleSave(), version: 19 })).toBeNull();
   });
 });
 
@@ -992,7 +998,7 @@ describe("v13 to v14 migration & mob persistence", () => {
   test("a pre-mob (v13) save loads with no persisted mobs", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v13Save()) });
     const parsed = readSave(KEY, storage)!;
-    expect(parsed.version).toBe(17);
+    expect(parsed.version).toBe(18);
     expect(restoreMobs(parsed)).toEqual([]);
   });
 
@@ -1226,7 +1232,7 @@ describe("v16 to v17 migration & the players array", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(v15) });
     const parsed = readSave(KEY, storage);
     expect(parsed).not.toBeNull();
-    expect(parsed!.version).toBe(17);
+    expect(parsed!.version).toBe(18);
     expect(parsed!.players).toHaveLength(1);
     expect(parsed!.players[0].id).toBe("local");
     expect(parsed!.players[0].position).toEqual({ x: 1, y: 2, z: 3 });
@@ -1237,5 +1243,82 @@ describe("v16 to v17 migration & the players array", () => {
   test("readSave rejects a v17 save missing its players array", () => {
     const noPlayers = { ...sampleSave(), players: undefined }; // JSON.stringify drops the key entirely
     expect(readSave(KEY, memoryStorage({ [KEY]: JSON.stringify(noPlayers) }))).toBeNull();
+  });
+});
+
+describe("save v18 — dimensions & the worldgen guard", () => {
+  test("migrateSaveV17toV18 is a pure version bump: no stamp, no dimensions", () => {
+    const v17 = { ...sampleSave(), version: 17 } as unknown as Parameters<typeof migrateSaveV17toV18>[0];
+    const migrated = migrateSaveV17toV18(v17);
+    expect(migrated.version).toBe(18);
+    expect(migrated.worldgenVersion).toBeUndefined(); // grandfathered — the guard stays inert
+    expect(migrated.dimensions).toBeUndefined();
+    expect(migrated.seed).toBe(1337);
+    expect(migrated.players).toEqual(v17.players);
+  });
+
+  test("applyWorldgenGuard is a no-op without a stamp and with a matching stamp", () => {
+    const unstamped = sampleSave();
+    expect(applyWorldgenGuard(unstamped)).toBe(unstamped); // same reference — untouched
+
+    const stamped = { ...sampleSave(), worldgenVersion: WORLDGEN_VERSION };
+    expect(applyWorldgenGuard(stamped)).toBe(stamped);
+  });
+
+  test("applyWorldgenGuard on a mismatched stamp discards every dimension's world half but keeps the players", () => {
+    const stale: SaveData = {
+      ...sampleSave(),
+      worldgenVersion: WORLDGEN_VERSION + 1,
+      blockEntities: [{ index: 42, slots: [{ id: "dirt", count: 3 }] }],
+      mobs: [{ kind: "wolf", x: 1, y: 2, z: 3, hp: 5, faction: "ally", owner: "local" }],
+      vehicles: [{ kind: "raft", x: 1, y: 2, z: 3, yaw: 0 }],
+      villagesSeeded: true,
+      dimensions: { nether: { changes: [[7, 90]] } }
+    };
+    const guarded = applyWorldgenGuard(stale);
+    expect(guarded.changes).toEqual([]);
+    expect(guarded.blockEntities).toBeUndefined();
+    expect(guarded.lootedChests).toBeUndefined();
+    expect(guarded.mobs).toBeUndefined();
+    expect(guarded.vehicles).toBeUndefined();
+    expect(guarded.dimensions).toBeUndefined();
+    expect(guarded.villagesSeeded).toBeUndefined(); // villages repopulate on the regenerated terrain
+    expect(guarded.players).toEqual(stale.players); // inventory/xp/advancements survive
+    expect(guarded.seed).toBe(stale.seed); // the world reboots from its own seed
+  });
+
+  test("dimensionSectionOf maps the overworld to the top level and other dimensions to their section", () => {
+    const nether: DimensionSection = { changes: [[7, 92]], lootedChests: [9] };
+    const save: SaveData = { ...sampleSave(), dimensions: { nether } };
+    const over = dimensionSectionOf(save, "overworld");
+    expect(over.changes).toBe(save.changes);
+    expect(over.lootedChests).toBe(save.lootedChests);
+    expect(dimensionSectionOf(save, "nether")).toBe(nether);
+    // A never-visited dimension reads as an empty section.
+    expect(dimensionSectionOf(sampleSave(), "nether")).toEqual({ changes: [] });
+  });
+
+  test("restorePlayerDimension defaults to overworld and rejects unknown ids", () => {
+    expect(restorePlayerDimension({ id: "local" })).toBe("overworld");
+    expect(restorePlayerDimension({ id: "local", dimension: "nether" })).toBe("nether");
+    expect(restorePlayerDimension({ id: "local", dimension: "the_end" as never })).toBe("overworld");
+  });
+
+  test("restorePortalArrival floors finite coords and rejects garbage", () => {
+    expect(restorePortalArrival({ id: "local" })).toBeNull();
+    expect(restorePortalArrival({ id: "local", portalArrival: { x: 1.9, y: 40.2, z: -3.5 } })).toEqual({ x: 1, y: 40, z: -4 });
+    expect(restorePortalArrival({ id: "local", portalArrival: { x: NaN, y: 1, z: 1 } })).toBeNull();
+  });
+
+  test("a v18 save with dimensions round-trips writeSave/readSave verbatim", () => {
+    const save: SaveData = {
+      ...sampleSave(),
+      worldgenVersion: WORLDGEN_VERSION,
+      dimensions: { nether: { changes: [[7, 92]], lootedChests: [9] } },
+      players: [{ ...samplePlayer(), dimension: "nether", portalArrival: { x: 10, y: 40, z: 12 } }]
+    };
+    const storage = memoryStorage();
+    writeSave(KEY, save, storage);
+    expect(readSave(KEY, storage)).toEqual(save);
   });
 });
