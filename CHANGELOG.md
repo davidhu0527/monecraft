@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Deflaked the worldgen-determinism e2e**: the spec paused the engine from its test body, but the game had already been simulating live through the whole boot window (menus → first rendered frames) — and a fresh seed-1337 world is _not_ free of random-tickable blocks (worldgen leaves ~31 cave-exposed dirt columns beside grass and ~23 growable kelp stalks within random-tick range of spawn), so on a slow CI runner a `Math.random` grass-spread or kelp-growth roll could land one block edit before the hash and trip the `changes.length === 0` guard (the digest itself was never wrong — the guard fired exactly as designed). The `gamePage` fixture gains a `pauseOnBoot` option that traps the `window.__monecraft` assignment and pauses synchronously **before the engine's first step**, so the hashed bytes are provably untouched by simulation; the determinism spec opts in. Test-only — no product code, save-format, worldgen, or protocol change.
+
 ## [0.16.0] - 2026-07-08
 
 ### Added

@@ -6,16 +6,24 @@ import { WORLDGEN_VERSION } from "@/lib/game/config";
  * window.__monecraft debug handle rather than pixels — see docs/testing.md.
  */
 
-export const test = base.extend<{ gamePage: Page; touchMode: "on" | "off" }>({
+export const test = base.extend<{ gamePage: Page; touchMode: "on" | "off"; pauseOnBoot: boolean }>({
   // Seeds the persisted touch preference before boot: "on" forces the touch
   // controller regardless of device detection (Playwright's hasTouch does not
   // flip `pointer: coarse`, so auto-detection can't be exercised here — it's
   // unit-tested in touchSettings.test.ts instead).
   touchMode: ["off", { option: true }],
+  // Pauses the engine before its very first step. Worldgen legitimately leaves
+  // random-tickable blocks near spawn (growable kelp, cave-exposed dirt), and
+  // tickRandomBlocks rides Math.random — so any unpaused boot frame can write a
+  // block edit. Tests that need the world byte-identical to fresh generation
+  // (determinism.e2e.ts) opt in. The pause menu overlays the scene, but the
+  // canvas keeps rendering beneath it, so the fixture's triangle wait still
+  // passes and __monecraft evaluates work as usual.
+  pauseOnBoot: [false, { option: true }],
   // A page that has booted the game, with console errors treated as failures.
   // (The fixture continuation is named `runTest`, not Playwright's
   // conventional `use`, to avoid colliding with React's rules-of-hooks lint.)
-  gamePage: async ({ page, touchMode }, runTest) => {
+  gamePage: async ({ page, touchMode, pauseOnBoot }, runTest) => {
     const errors: string[] = [];
     page.on("console", (message) => {
       if (message.type() !== "error") return;
@@ -27,7 +35,22 @@ export const test = base.extend<{ gamePage: Page; touchMode: "on" | "off" }>({
     // every navigation (including reloads), but only fills the manifests when
     // absent so a test's own writes survive a reload.
     await page.addInitScript(
-      ({ worldgenVersion, touch }) => {
+      ({ worldgenVersion, touch, pause }) => {
+        // Trap the debug-handle assignment so the pause lands synchronously,
+        // before useMinecraftGame registers the rAF loop — i.e. before the
+        // engine can step even once. Pausing from the test body instead would
+        // leave the whole menu-to-first-frame boot window simulating live.
+        if (pause) {
+          let handle: typeof window.__monecraft;
+          Object.defineProperty(window, "__monecraft", {
+            configurable: true,
+            get: () => handle,
+            set: (value: typeof window.__monecraft) => {
+              handle = value;
+              value?.engine.dispatch({ type: "pause" });
+            }
+          });
+        }
         if (!localStorage.getItem("minecraft_profiles_v1")) {
           localStorage.setItem(
             "minecraft_profiles_v1",
@@ -45,7 +68,7 @@ export const test = base.extend<{ gamePage: Page; touchMode: "on" | "off" }>({
         }
         if (touch) localStorage.setItem("minecraft_touch_v1", JSON.stringify({ mode: "on" }));
       },
-      { worldgenVersion: WORLDGEN_VERSION, touch: touchMode === "on" }
+      { worldgenVersion: WORLDGEN_VERSION, touch: touchMode === "on", pause: pauseOnBoot }
     );
 
     await page.goto("/");
