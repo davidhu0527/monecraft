@@ -30,6 +30,13 @@ function precipKindFor(biome: BiomeId): WeatherKind {
 }
 
 export function tickWeather(state: GameState): void {
+  // No sky, no weather: the nether stays clear (the renderer also disables
+  // its precipitation layer per the dimension profile).
+  if (state.dimension === "nether") {
+    state.weather.kind = "clear";
+    state.weather.intensity = 0;
+    return;
+  }
   const { active, intensity } = weatherAt(state.dayClock, state.world.seed);
   // Weather is presentation: the precip kind follows the PRIMARY player's biome
   // (each client derives its own locally; a playerless server room stays clear).

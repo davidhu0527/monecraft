@@ -7,7 +7,9 @@ import {
   collectVillageSites,
   collidesAt,
   computeFullLight,
+  generateNetherWorld,
   generateWorld,
+  voxelRaycast,
   VoxelWorld,
   WORLD_SIZE_X,
   WORLD_SIZE_Y,
@@ -22,6 +24,7 @@ import {
   BOSS_HP,
   BOSS_SUMMON_RADIUS,
   DAY_CYCLE_SECONDS,
+  EYE_HEIGHT,
   FLY_SPEED,
   GRAVITY,
   JUMP_VELOCITY,
@@ -30,6 +33,7 @@ import {
   MAX_HUNGER,
   MAX_HEARTS,
   MAX_OXYGEN,
+  MINE_REACH,
   PET_FIGHT_RANGE,
   PET_TAMED_HP,
   POISON_DURATION,
@@ -43,7 +47,8 @@ import {
   SLEEP_FADE_SECONDS,
   SPRINT_SPEED,
   STUCK_RESET_SECONDS,
-  WAKE_DAY_PHASE
+  WAKE_DAY_PHASE,
+  WORLDGEN_VERSION
 } from "@/lib/game/config";
 import { bossTracking, trackTarget, type BossTracking } from "@/lib/game/bossTracking";
 import { createEmptyArmorEquipment, createEmptySlot, createInitialInventory, ITEM_DEF_BY_ID, maxStackSizeForItem } from "@/lib/game/items";
@@ -62,6 +67,8 @@ import { RECIPES } from "@/lib/game/recipes";
 import { tradeProfession } from "@/lib/game/trades";
 import * as inv from "@/lib/game/inventory";
 import {
+  applyWorldgenGuard,
+  dimensionSectionOf,
   inventorySlotsSnapshot,
   serializeEquippedArmor,
   readContainers,
@@ -72,7 +79,9 @@ import {
   restoreHungerLevel,
   restoreEffects,
   restoreInventorySlots,
+  restorePlayerDimension,
   restorePlayerPosition,
+  restorePortalArrival,
   restoreGameMode,
   restoreDifficulty,
   restoreHardcore,
@@ -91,13 +100,13 @@ import {
   serializeStats,
   serializeVehicles
 } from "@/lib/game/save";
-import { canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
+import { canEditBlocks, canInteract, isGameMode, isNoclip, type GameMode } from "@/lib/game/gameModes";
 import { hostilesSpawn, isDifficulty, type Difficulty } from "@/lib/game/difficulties";
-import { createSurfaceYAt, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
+import { createNetherFloorYAt, createSurfaceYAt, findNetherSpawn, findSpawnOnLand, randomLandPointNear, type SurfaceYAtFn } from "@/lib/game/spawn";
 import { rollMobDrops } from "@/lib/game/mobLoot";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
-import type { InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/types";
-import { createBlockChangeTracker } from "./blockChanges";
+import type { DimensionId, DimensionSection, InventorySlot, SaveData, SavedMob, SavedPlayer } from "@/lib/game/types";
+import { createBlockChangeTracker, type DetailedEdit } from "./blockChanges";
 import { CONTAINER_SLOT_BASE, type Command } from "./commands";
 import {
   createIdleInput,
@@ -106,6 +115,7 @@ import {
   LOCAL_PLAYER_ID,
   nextCameraMode,
   type FrameInput,
+  type AttributedGameEvent,
   type GameEvent,
   type GameSnapshot,
   type GameState,
@@ -113,23 +123,33 @@ import {
   type PlayerState
 } from "./state";
 import { allEligiblePlayersSleeping, installPlayerAliases, mustGetPlayer, nearestPlayerTo } from "./players";
-import { daylightAt, tickDayNight } from "./systems/dayNight";
+import { daylightAt, dimensionDaylightAt, tickDayNight } from "./systems/dayNight";
 import { tickWeather } from "./systems/weather";
 import { applyDamageWithArmor, applyNonLethalDamage, applyUnmitigatedDamage, tickRespawnTimer } from "./systems/playerLife";
-import { tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
+import { lookDirection, tickPlayerMotion, type MoveTickResult } from "./systems/playerMotion";
 import { restoreHunger, tickHungerDrain, tickHealthRegen, tickLavaExposure, tickOxygen, tickStarvation, tickWaterExposure } from "./systems/playerStats";
 import { addEffect, clearEffects, EFFECT_ORDER, hasEffect, jumpBoostBonus, speedMultiplier, strengthBonus, tickStatusEffects } from "./systems/statusEffects";
 import { awardXp, spendXpLevels, xpLevel, xpProgress } from "./systems/xp";
 import { xpForMob } from "@/lib/game/mobXp";
 import { applyEnchant, canEnchant, featherFallingReduction, knockbackBonus, lootingLevel, sharpnessBonus } from "@/lib/game/enchantments";
 import { placeSelectedBlock, resetMining, tickMining } from "./systems/mining";
-import { tryFeedAimedMob, tryInteractBlock, tryTameAimedMob, tryToggleSitPet, tryTradeAimedVillager, tryUseHeldItem } from "./systems/interact";
-import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach } from "./systems/combat";
+import {
+  INTERACTIVE_BLOCKS,
+  tryFeedAimedMob,
+  tryInteractBlock,
+  tryTameAimedMob,
+  tryToggleSitPet,
+  tryTradeAimedVillager,
+  tryUseHeldItem
+} from "./systems/interact";
+import { ensureArrivalPortal, tickPortalDwell, tryIgnitePortal } from "./systems/portal";
+import { isBow, tryAttackMob, tryFireBow, weaponDamage, weaponReach, type MobPositionOf } from "./systems/combat";
 import { tickThrownSpears, tryThrowSelectedSpear } from "./systems/spears";
 import { tickFishing, tryFish } from "./systems/fishing";
-import { restoreVehicle, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
+import { restoreVehicle, tickCoastingMinecarts, tickVehicles, tryBoardAimedVehicle, tryPlaceVehicle } from "./systems/vehicles";
 import { tickMobs } from "./systems/mobAI";
 import { tickPrimedTnt } from "./systems/explosion";
+import { createRedstoneState, seedRedstoneCells, tickRedstone } from "./systems/redstone";
 import { tickProjectiles } from "./systems/projectileAI";
 import { tickRandomBlocks } from "./systems/randomTicks";
 import { tickBreeding } from "./systems/breeding";
@@ -160,6 +180,11 @@ export type GameEngineOptions = {
   difficulty?: Difficulty;
   /** Hardcore flag for a fresh world; the save's own wins when restoring. Forces Survival + Hard + permadeath. Defaults to false. */
   hardcore?: boolean;
+  /**
+   * Dimension for a fresh world (a test override); the save's own — the local
+   * player's `dimension` — wins when restoring. Defaults to "overworld".
+   */
+  dimension?: DimensionId;
   /** Randomness source for mob spawning/AI — injectable for deterministic tests. */
   rng?: () => number;
   /** World dimensions override for fast headless tests. */
@@ -193,6 +218,16 @@ export type GameEngineOptions = {
 const MAX_REMOTE_POSE_ELAPSED = 0.5;
 
 /**
+ * Per-dispatch server-side context. `mobPosOf` rewinds melee TARGET SELECTION
+ * to where the attacker saw each mob (lag compensation) — damage, knockback,
+ * and kill credit still act on the live mob. The server room is the sole
+ * producer; a local engine never rewinds, and options never travel through
+ * `routeDispatch` (a replica's rerouted command reaches the server as a plain
+ * wire cmd — the server derives its own rewind from the cmd's view stamp).
+ */
+export type DispatchOptions = { mobPosOf?: MobPositionOf };
+
+/**
  * The framework-agnostic game core. Owns all simulation state, advances it in
  * step(), and accepts player intents through dispatch(). No React, no DOM, no
  * rendering — the renderer reads state, the React shell subscribes to
@@ -214,9 +249,19 @@ export class GameEngine {
   private readonly headless: boolean;
   private readonly rng: () => number;
   private readonly worldType: WorldType;
+  /**
+   * Dimension sections this engine does NOT simulate, re-emitted verbatim by
+   * serialize() so they survive a full save round-trip untouched. An overworld
+   * engine (including the server room) carries the save's `dimensions` block
+   * here; a nether engine instead carries the OVERWORLD's top-level world half
+   * in `foreignOverworld` (plus its villagesSeeded flag) and re-emits that at
+   * the top level.
+   */
+  private readonly foreignDimensions: SaveData["dimensions"];
+  private readonly foreignOverworld: (DimensionSection & { villagesSeeded?: boolean }) | null;
   private readonly surfaceYAt: SurfaceYAtFn;
   private readonly listeners = new Set<() => void>();
-  private events: GameEvent[] = [];
+  private events: AttributedGameEvent[] = [];
   /**
    * The player whose per-player step or dispatch is currently running. It scopes
    * emitted events for progression attribution (`observeProgress`) without
@@ -237,7 +282,10 @@ export class GameEngine {
   private lastEffects: GameSnapshot["activeEffects"] = [];
 
   constructor(options: GameEngineOptions = {}) {
-    const save = options.save ?? null;
+    // The worldgen staleness guard runs before anything reads the save: a save
+    // stamped by a different generator version keeps its players but reboots
+    // the world from the seed (one seam covers SP, cloud, and the server room).
+    const save = options.save ? applyWorldgenGuard(options.save) : null;
     this.rng = options.rng ?? Math.random;
     this.authority = options.authority ?? "local";
     this.headless = options.headless ?? false;
@@ -247,32 +295,68 @@ export class GameEngine {
     // A restored save's own type wins (the block-diffs were recorded against it);
     // a fresh world takes the requested type, defaulting to "default".
     this.worldType = save?.worldType ?? options.worldType ?? "default";
+    // The local player's persisted record (v17+ saves hold one entry per player;
+    // a downloaded multiplayer world played solo falls back to any first entry).
+    const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
+    // Which dimension this engine simulates: where the save left the local
+    // player (swap-on-travel writes it before the remount), else the requested
+    // override, else the overworld.
+    const dimension: DimensionId = savedLocal ? restorePlayerDimension(savedLocal) : (options.dimension ?? "overworld");
+    // The world half this engine simulates; foreign halves ride through serialize().
+    const section = save ? dimensionSectionOf(save, dimension) : null;
+    this.foreignDimensions = dimension === "overworld" ? save?.dimensions : undefined;
+    this.foreignOverworld =
+      dimension === "nether"
+        ? save
+          ? {
+              changes: save.changes,
+              blockEntities: save.blockEntities,
+              lootedChests: save.lootedChests,
+              mobs: save.mobs,
+              vehicles: save.vehicles,
+              villagesSeeded: save.villagesSeeded
+            }
+          : { changes: [] }
+        : null;
     const size = options.worldSize ?? { x: WORLD_SIZE_X, y: WORLD_SIZE_Y, z: WORLD_SIZE_Z };
     const world = new VoxelWorld(size.x, size.y, size.z, seed);
-    generateWorld(world, this.worldType);
+    if (dimension === "nether") generateNetherWorld(world);
+    else generateWorld(world, this.worldType);
     // Re-derive the dungeon chest/spawner positions from the seed (the world is
     // regenerated deterministically each load, so these match generation).
-    const dungeonSites = collectDungeonSites(world, this.worldType);
+    // Worldgen loot sites are an overworld concept — the nether has none.
+    const dungeonSites = dimension === "nether" ? { chestIndices: [] as number[], spawnerIndices: [] as number[] } : collectDungeonSites(world, this.worldType);
     // Likewise re-derive shipwreck and buried-treasure chests (they share the
     // lazy loot fill; treasure also feeds the map compass) and village centers,
     // so resident villagers can be seeded there.
-    const shipwreckSites = collectShipwreckSites(world, this.worldType);
-    const treasureSites = collectTreasureSites(world, this.worldType);
-    const villageSites = collectVillageSites(world, this.worldType);
+    const shipwreckSites = dimension === "nether" ? { chestIndices: [] as number[] } : collectShipwreckSites(world, this.worldType);
+    const treasureSites = dimension === "nether" ? { sites: [] } : collectTreasureSites(world, this.worldType);
+    const villageSites = dimension === "nether" ? { centers: [] } : collectVillageSites(world, this.worldType);
 
     const blockChanges = createBlockChangeTracker(world);
-    if (save) blockChanges.applySavedChanges(save.changes);
+    if (section) blockChanges.applySavedChanges(section.changes);
+
+    // The nether is roofed: its "surface" is the highest cavern-floor pocket,
+    // not highestSolidY (which would be the bedrock ceiling). One seam fixes
+    // every consumer — unstuck, respawn, and the spawn directors.
+    this.surfaceYAt = dimension === "nether" ? createNetherFloorYAt(world) : createSurfaceYAt(world);
+
+    const bootPlayer = options.bootPlayer ?? true;
+    // A portal travel wrote a one-shot arrival anchor: find (or build) the
+    // arrival portal now, BEFORE the light bake, so its blocks ride the one
+    // full bake and persist as ordinary diff. Idempotent — a crash before the
+    // next save just re-finds the same portal on the next boot.
+    const arrival = bootPlayer && savedLocal ? restorePortalArrival(savedLocal) : null;
+    const arrivalPos = arrival ? ensureArrivalPortal(world, blockChanges, this.surfaceYAt, arrival) : null;
 
     // Bake per-voxel light now the block grid is final (worldgen + saved edits).
     // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
     world.light = computeFullLight(world);
 
-    this.surfaceYAt = createSurfaceYAt(world);
-
-    const firstSpawn = findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
-    // The local player's persisted record (v17 saves hold one entry per player;
-    // a downloaded multiplayer world played solo falls back to any first entry).
-    const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
+    const firstSpawn =
+      dimension === "nether"
+        ? findNetherSpawn(world, this.surfaceYAt, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2))
+        : findSpawnOnLand(world, Math.floor(world.sizeX / 2), Math.floor(world.sizeZ / 2));
     // Hardcore is resolved first because it OVERRIDES mode/difficulty: a hardcore
     // world is locked to Survival + Hard. A persisted gameOver (the run already
     // ended in death) boots straight into Spectator so the dead world is roamable,
@@ -284,7 +368,6 @@ export class GameEngine {
     // A restored save's own (possibly switched) mode wins; hardcore forces Survival,
     // except after game-over, where the player spectates their dead world.
     const gameMode = gameOver ? "spectator" : hardcore ? "survival" : savedLocal ? restoreGameMode(savedLocal) : (options.gameMode ?? "survival");
-    const bootPlayer = options.bootPlayer ?? true;
     const localPlayer: PlayerState = {
       id: LOCAL_PLAYER_ID,
       position: new THREE.Vector3(firstSpawn.x, firstSpawn.y, firstSpawn.z),
@@ -325,6 +408,7 @@ export class GameEngine {
     this.state = installPlayerAliases({
       world,
       blockChanges,
+      dimension,
       players: bootPlayer ? new Map([[LOCAL_PLAYER_ID, localPlayer]]) : new Map(),
       primaryPlayerId: LOCAL_PLAYER_ID,
       difficulty,
@@ -352,38 +436,54 @@ export class GameEngine {
       vehicles: [],
       nextVehicleId: 1,
       dayClock: 0,
-      daylight: daylightAt(0),
-      daylightPercent: Math.round(daylightAt(0) * 100),
+      daylight: dimensionDaylightAt(dimension, 0),
+      daylightPercent: Math.round(dimensionDaylightAt(dimension, 0) * 100),
       weather: { kind: "clear", intensity: 0 },
       sleepTimer: 0,
       timers: createWorldTimers(),
       worldMeshDirty: true,
       victory: false,
-      raid: null
+      raid: null,
+      redstone: createRedstoneState()
     });
 
-    if (save) {
+    // Recover the redstone component set from the block diff (craft-only
+    // blocks are always player-placed, so the diff is a complete census).
+    seedRedstoneCells(this.state);
+
+    if (save && section) {
       if (bootPlayer && savedLocal) this.restorePlayerFields(localPlayer, savedLocal);
-      this.state.lootedWorldgenChests = new Set(readLootedChests(save));
+      // The world half restores from THIS dimension's section (the overworld's
+      // is the top level, another dimension's lives under `dimensions`).
+      this.state.lootedWorldgenChests = new Set(readLootedChests(section));
       // Restore persisted mobs (tamed pets) BEFORE spawnInitialMobs seeds the
       // fungible population, so the world stays alive and pets simply pre-exist.
-      this.restorePersistedMobs(restoreMobs(save));
-      for (const vehicle of restoreVehicles(save)) {
+      this.restorePersistedMobs(restoreMobs(section));
+      for (const vehicle of restoreVehicles(section)) {
         restoreVehicle(this.state, vehicle.kind, vehicle.x, vehicle.y, vehicle.z, vehicle.yaw);
       }
 
       // Restore chest contents only for indices that still hold a Chest block.
-      for (const { index, slots } of readContainers(save)) {
+      for (const { index, slots } of readContainers(section)) {
         if (index >= 0 && index < world.blocks.length && world.blocks[index] === BlockId.Chest) {
           this.state.containers.set(index, slots);
         }
       }
+      // The day clock is shared world time — top-level regardless of dimension.
       const savedClock = restoreDayClock(save);
       if (savedClock !== null) {
         this.state.dayClock = savedClock;
-        this.state.daylight = daylightAt(savedClock);
+        this.state.daylight = dimensionDaylightAt(dimension, savedClock);
         this.state.daylightPercent = Math.round(this.state.daylight * 100);
       }
+    }
+
+    // A travel boot lands the player inside the arrival portal — overriding the
+    // saved position — latched so the dwell can't re-fire until they step out.
+    if (bootPlayer && arrivalPos) {
+      localPlayer.position.set(arrivalPos.x + 0.5, arrivalPos.y, arrivalPos.z + 0.5);
+      localPlayer.velocity.set(0, 0, 0);
+      localPlayer.timers.portalLatched = true;
     }
 
     // Safety check: if stuck after load, relocate to a plain — but never for a
@@ -401,8 +501,8 @@ export class GameEngine {
     // its villages yet: a fresh world (no save) or one upgraded from a pre-village
     // save (no `villagesSeeded` flag). A genuine v15 save's villagers are
     // authoritative — restored above — so we never re-seed (an emptied village
-    // stays empty, not repopulated on reload).
-    if (!save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
+    // stays empty, not repopulated on reload). Villages are an overworld thing.
+    if (dimension !== "nether" && !save?.villagesSeeded && !this.state.mobs.some((mob) => mob.faction === "villager")) {
       if (this.state.villageSites.length > 0) {
         spawnVillageResidents(this.state, this.state.villageSites, this.rng, this.surfaceYAt);
       } else {
@@ -425,6 +525,15 @@ export class GameEngine {
     // dereference the missing primary player's aliases. The replica gets its
     // real snapshot the moment addPlayer seats the primary.
     this.snapshot = this.headless || !this.state.players.has(this.state.primaryPlayerId) ? ({} as GameSnapshot) : this.buildSnapshot();
+  }
+
+  /**
+   * Portals work in local single-player only (for now): the server engine and
+   * every replica refuse ignition, so an online world can never strand a
+   * player in a dimension the room doesn't simulate.
+   */
+  private get portalsEnabled(): boolean {
+    return this.authority === "local" && !this.replica;
   }
 
   /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
@@ -530,7 +639,11 @@ export class GameEngine {
         // tick); predicting motion here would rubber-band against that stream.
         let walked = 0;
         if (primary.mountedVehicleId === null) walked = tickPlayerMotion(state, primary, primary.input, dt, () => {}).horizontalDistance;
-        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { cosmetic: true });
+        // Predictive mining: the break commits locally the moment the crack
+        // completes (chests excepted). NetworkSession captures the written
+        // cells from the detailed journal each frame and reconciles them
+        // against the server's own break via the prediction ledger.
+        tickMining(state, primary, primary.input, dt, this.emit, this.rng, { authority: "predict" });
         // Accumulate the two continuously-ticking display stats locally — they're
         // excluded from the SelfDelta (which syncs only the event-driven counters
         // the replica can't derive), so the Statistics tab stays roughly right.
@@ -590,6 +703,14 @@ export class GameEngine {
     tickAquaticSpawnDirector(state, dt, this.rng);
     tickSpawnerDirector(state, dt, this.rng, this.emit);
     tickMobs(state, dt, this.mobTickDeps);
+    // Riderless carts coast once per frame (world-scoped — the per-player
+    // tickVehicles path would integrate them N× in co-op), and before the
+    // power pass so detector rails read this frame's cart positions.
+    tickCoastingMinecarts(state, dt);
+    // After the player loop (this frame's lever/button clicks are visible) and
+    // before the TNT countdown (wire-lit fuses start ticking the same frame).
+    // Replicas never reach here — redstone runs server-side only online.
+    tickRedstone(state, dt, this.emit);
     tickPrimedTnt(state, dt, this.mobTickDeps);
     tickProjectiles(state, dt, this.mobTickDeps);
     tickThrownSpears(state, dt, this.removeMobAt, this.emit);
@@ -675,6 +796,9 @@ export class GameEngine {
     tickWaterExposure(state, player, dt, damageEnv);
     tickLavaExposure(state, player, dt, damageEnv, hasEffect(player, "fire_resistance"));
     tickOxygen(state, player, dt, damageEnv, hasEffect(player, "water_breathing"));
+    // Dimension travel is single-player only (like ignition): the shell hears
+    // the event and performs the save + remount swap.
+    if (this.portalsEnabled) tickPortalDwell(state, player, dt, this.emit);
     player.timers.bowCooldownTimer = Math.max(0, player.timers.bowCooldownTimer - dt);
     player.timers.spearThrowCooldown = Math.max(0, player.timers.spearThrowCooldown - dt);
     tickMining(state, player, input, dt, this.emit, this.rng);
@@ -685,8 +809,13 @@ export class GameEngine {
    * Applies a discrete player intent. `playerId` says whose intent it is —
    * the single-player shell omits it (primary); a server passes the sender's
    * id, so every mutation in here acts on the commanding player.
+   *
+   * `opts` is server-only lag compensation: the room is the sole producer
+   * (a local engine never rewinds), and opts do NOT travel through
+   * `routeDispatch` — a replica's rerouted command reaches the server as a
+   * plain wire cmd whose rewind the server derives itself.
    */
-  dispatch(command: Command, playerId?: PlayerId): void {
+  dispatch(command: Command, playerId?: PlayerId, opts?: DispatchOptions): void {
     if (this.routeDispatch && playerId === undefined) {
       this.routeDispatch(command);
       return;
@@ -698,13 +827,13 @@ export class GameEngine {
     const priorActor = this.actingPlayer;
     this.actingPlayer = player.id;
     try {
-      this.dispatchCommand(state, player, command);
+      this.dispatchCommand(state, player, command, opts);
     } finally {
       this.actingPlayer = priorActor;
     }
   }
 
-  private dispatchCommand(state: GameState, player: PlayerState, command: Command): void {
+  private dispatchCommand(state: GameState, player: PlayerState, command: Command, opts?: DispatchOptions): void {
     switch (command.type) {
       case "selectSlot": {
         if (command.index >= 0 && command.index < Math.min(HOTBAR_SLOTS, player.inventory.length)) {
@@ -894,12 +1023,16 @@ export class GameEngine {
         // cmd). While mounted the server owns the rider's position and streams it
         // via the SelfDelta — the replica never dispatches placeBlock locally
         // (routeDispatch sends it up), so no client-owned pose fights it.
-        if (tryBoardAimedVehicle(state, player)) break;
+        if (tryBoardAimedVehicle(state, player, this.emit)) break;
         if (tryInteractBlock(state, player, this.emit)) break;
         if (this.trySummonBoss(player)) break;
         if (this.tryStartRaid(player)) break;
         if (tryFish(state, player, this.emit, this.rng)) break;
         if (tryPlaceVehicle(state, player, this.emit)) break;
+        // Portal ignition is single-player only for now: a replica routes this
+        // cmd to the server, whose engine (authority "server") denies with the
+        // "online" reason — the event replicates back and the shell explains.
+        if (tryIgnitePortal(state, player, this.emit, this.portalsEnabled, this.rng)) break;
         if (tryUseHeldItem(state, player, this.emit, this.rng)) break;
         placeSelectedBlock(state, player, this.emit);
         break;
@@ -921,7 +1054,8 @@ export class GameEngine {
           this.removeMobAt,
           weaponReach(player),
           knockbackBonus(heldWeapon),
-          lootingLevel(heldWeapon)
+          lootingLevel(heldWeapon),
+          opts?.mobPosOf
         );
         if (hitKind) {
           this.emit({ type: "mobHit", kind: hitKind });
@@ -1110,7 +1244,10 @@ export class GameEngine {
       xp: player.xp,
       stats: serializeStats(player.stats),
       advancements: [...player.advancements],
-      spawnPoint: player.spawnPoint ? { ...player.spawnPoint } : null
+      spawnPoint: player.spawnPoint ? { ...player.spawnPoint } : null,
+      // Where the player is — this engine's dimension (never portalArrival:
+      // that anchor is one-shot, written only by serializeForTravel).
+      dimension: this.state.dimension
     };
   }
 
@@ -1141,20 +1278,65 @@ export class GameEngine {
 
   serialize(): SaveData {
     const state = this.state;
-    return {
-      version: 17,
+    // The live dimension's world half, straight from this engine's simulation.
+    const live: DimensionSection = {
+      changes: state.blockChanges.changes(),
+      blockEntities: serializeContainers(state.containers),
+      lootedChests: serializeLootedChests(state.lootedWorldgenChests),
+      mobs: serializeMobs(state.mobs),
+      vehicles: serializeVehicles(state.vehicles)
+    };
+    const base = {
+      version: 18 as const,
+      // Stamps which generator produced these diffs; on mismatch a future boot
+      // discards the world half and reboots from the seed (applyWorldgenGuard).
+      worldgenVersion: WORLDGEN_VERSION,
       seed: state.world.seed,
       worldType: this.worldType,
       difficulty: state.difficulty,
       hardcore: state.hardcore,
-      changes: state.blockChanges.changes(),
       players: [...state.players.values()].map((player) => this.serializePlayer(player)),
-      dayClock: state.dayClock,
-      blockEntities: serializeContainers(state.containers),
-      lootedChests: serializeLootedChests(state.lootedWorldgenChests),
-      mobs: serializeMobs(state.mobs),
-      vehicles: serializeVehicles(state.vehicles),
+      dayClock: state.dayClock
+    };
+    if (state.dimension === "nether") {
+      // A nether engine: the overworld's world half (held foreign since boot)
+      // stays at the top level VERBATIM; the live state goes under dimensions.
+      const over = this.foreignOverworld ?? { changes: [] };
+      return {
+        ...base,
+        changes: over.changes,
+        blockEntities: over.blockEntities,
+        lootedChests: over.lootedChests,
+        mobs: over.mobs,
+        vehicles: over.vehicles,
+        villagesSeeded: over.villagesSeeded,
+        dimensions: { nether: live }
+      };
+    }
+    const save: SaveData = {
+      ...base,
+      ...live,
       villagesSeeded: true // this world's villages are populated — don't re-seed on reload
+    };
+    // Dimensions this engine doesn't simulate ride through verbatim, so e.g.
+    // the server room (overworld) can never lose a world's nether builds.
+    if (this.foreignDimensions) save.dimensions = this.foreignDimensions;
+    return save;
+  }
+
+  /**
+   * The travel save: an ordinary serialize with the local player rewritten to
+   * the target dimension at the portal anchor, plus the one-shot portalArrival
+   * the next boot consumes (finds or builds the arrival portal there). The
+   * shell writes this and remounts; no live state crosses the swap.
+   */
+  serializeForTravel(target: DimensionId, anchor: { x: number; y: number; z: number }): SaveData {
+    const save = this.serialize();
+    return {
+      ...save,
+      players: save.players.map((p) =>
+        p.id === this.state.primaryPlayerId ? { ...p, dimension: target, position: { ...anchor }, portalArrival: { ...anchor } } : p
+      )
     };
   }
 
@@ -1177,8 +1359,58 @@ export class GameEngine {
 
   getSnapshot = (): GameSnapshot => this.snapshot;
 
+  /**
+   * Replica-only: locally applies a right-click IFF it would fall through the
+   * whole placeBlock precedence chain to pure block placement, so the block
+   * appears at click time instead of a round-trip later. Conservative gates —
+   * any branch the server might take instead (spear/feed/sit/trade/board/
+   * interact/use-item, all either held-item- or aim-target-driven) bails to
+   * null, which is simply the status quo: the cmd still travels and the world
+   * updates when the journal echoes back. Returns the cells written (with
+   * pre-values, for the prediction ledger's revert) and what to refund if the
+   * server rejects the place; null means "predicted nothing".
+   */
+  predictPlaceBlock(): { edits: DetailedEdit[]; refund: { itemId: string; count: number } | null } | null {
+    if (!this.replica) return null;
+    const state = this.state;
+    const player = state.players.get(state.primaryPlayerId);
+    if (!player) return null;
+    if (player.isDead || player.inventoryOpen || state.sleepTimer > 0 || !canInteract(player.gameMode) || !canEditBlocks(player.gameMode)) return null;
+    // Only a plain placeable block in hand: every item-driven branch of the
+    // right-click chain (spear, boat, hoe, seeds, food, rod, totem, horn) is
+    // excluded by kind alone.
+    const slot = player.inventory[player.selectedSlot];
+    if (!slot || !slot.id || slot.kind !== "block" || slot.count <= 0 || slot.blockId === undefined || slot.blockId === BlockId.Bedrock) return null;
+
+    const origin = new THREE.Vector3(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
+    const direction = lookDirection(player.yaw, player.pitch, new THREE.Vector3());
+    const hit = voxelRaycast(state.world, origin, direction, MINE_REACH);
+    if (!hit) return null;
+    if (INTERACTIVE_BLOCKS[state.world.get(hit.hit.x, hit.hit.y, hit.hit.z) as BlockId] !== undefined) return null;
+    // Any mob or vehicle near the aim ray could consume the click server-side
+    // (sit, trade, feed, board) — a false "don't predict" costs nothing.
+    const toEntity = new THREE.Vector3();
+    const nearRay = (p: THREE.Vector3, radius: number): boolean => {
+      toEntity.copy(p).sub(origin);
+      const along = toEntity.dot(direction);
+      if (along < -radius || along > MINE_REACH + radius) return false;
+      return toEntity.lengthSq() - Math.max(0, along) ** 2 < radius * radius;
+    };
+    for (const mob of state.mobs) if (nearRay(mob.position, 2)) return null;
+    for (const vehicle of state.vehicles) if (nearRay(vehicle.position, 3)) return null;
+
+    // Run the REAL placement (same validation, stack take, emit — the emit is
+    // the instant local sound/particles) and capture exactly what it wrote.
+    state.blockChanges.drainEditsDetailed(); // defensive flush — predictions must not adopt stale writes
+    const inventoryBefore = player.inventory;
+    placeSelectedBlock(state, player, this.emit);
+    const edits = state.blockChanges.drainEditsDetailed().filter((e) => e.block !== e.prev);
+    if (edits.length === 0) return null;
+    return { edits, refund: player.inventory !== inventoryBefore ? { itemId: slot.id, count: 1 } : null };
+  }
+
   /** Drains queued one-shot gameplay events for the shell (death screen, audio). */
-  consumeEvents(): GameEvent[] {
+  consumeEvents(): AttributedGameEvent[] {
     if (this.events.length === 0) return this.events;
     const drained = this.events;
     this.events = [];
@@ -1186,7 +1418,14 @@ export class GameEngine {
   }
 
   private emit = (event: GameEvent, actorId?: PlayerId): void => {
-    this.events.push(event);
+    // Server rooms stamp the acting player onto every event that has one
+    // (explicit ids — advancements, join/leave — win; shared-system events
+    // like mob AI or TNT stay unattributed). Wire-compatible: the tick's `ev`
+    // already carries an optional playerId. A predicting client relies on the
+    // stamp to tell its own echoes from other players' actions; a local
+    // engine leaves events untouched.
+    const actor = (event as AttributedGameEvent).playerId ?? actorId ?? this.actingPlayer;
+    this.events.push(this.authority === "server" && actor !== undefined ? { ...event, playerId: actor } : event);
     // Observe progress at the one chokepoint every system already emits through —
     // but guard against recursion (observing an unlock re-enters emit), and skip
     // it on a replica: the server owns progression and streams each player's
@@ -1498,7 +1737,14 @@ export class GameEngine {
 
   private forceUnstuck(player: PlayerState): void {
     const state = this.state;
-    const safe = findSpawnOnLand(state.world, player.position.x, player.position.z, true);
+    // The nether needs its own relocation: findSpawnOnLand reads highestSolidY,
+    // which in a roofed world is the bedrock ceiling — and out-of-bounds cells
+    // read as air, so the roof PASSES its safety checks. Target a cavern-floor
+    // pocket via the dimension's surfaceYAt instead.
+    const safe =
+      state.dimension === "nether"
+        ? findNetherSpawn(state.world, this.surfaceYAt, Math.floor(player.position.x), Math.floor(player.position.z))
+        : findSpawnOnLand(state.world, player.position.x, player.position.z, true);
     player.position.set(safe.x, safe.y, safe.z);
     player.velocity.set(0, 0, 0);
     player.onGround = false;

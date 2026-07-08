@@ -8,19 +8,22 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { GameApi, GameSnapshot } from "@/lib/game/engine/state";
 import { createAccumulator } from "@/lib/game/engine/tickDriver";
 import { createInputController, type InputController } from "@/lib/game/input/inputController";
+import { createTouchInputController, type TouchControlsApi } from "@/lib/game/input/touchInputController";
+import { DEFAULT_TOUCH_SETTINGS, readTouchSettings, resolveTouchEnabled, writeTouchSettings, type TouchSettings } from "@/lib/game/input/touchSettings";
 import * as inv from "@/lib/game/inventory";
 import { getSkinPreset, type SkinId } from "@/lib/game/playerSkins";
 import { type Profile, setProfileSkin } from "@/lib/game/profiles";
 import { createEmptyArmorEquipment, createInitialInventory, ITEM_DEF_BY_ID } from "@/lib/game/items";
 import { RECIPES } from "@/lib/game/recipes";
+import { DIMENSION_PROFILES } from "@/lib/game/render/dimensionProfiles";
 import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
-import { readSave, writeSave } from "@/lib/game/save";
+import { worldSaves } from "@/lib/game/saveStore";
 import { pushSave } from "@/lib/game/cloudSaves";
-import type { ArmorSlot, EnchantmentId, Recipe } from "@/lib/game/types";
+import type { ArmorSlot, EnchantmentId, Recipe, SaveData } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import { type WorldMeta, worldSaveKey } from "@/lib/game/worlds";
+import type { WorldMeta } from "@/lib/game/worlds";
 import type { NetworkSession } from "@/lib/net/NetworkSession";
 
 /**
@@ -83,13 +86,20 @@ declare global {
   }
 }
 
-function persistGame(api: GameApi, saveKey: string, onMessage: (text: string) => void): void {
+function persistGame(api: GameApi, worldId: string, onMessage: (text: string) => void): void {
+  let data: SaveData;
   try {
-    writeSave(saveKey, api.serialize());
-    onMessage("Saved");
+    data = api.serialize();
   } catch {
     onMessage("Save failed");
+    return;
   }
+  // Queued latest-wins write; the toast fires when the data (or newer) is
+  // durably committed, and a remount read is ordered after it by the store.
+  void worldSaves.write(worldId, data).then(
+    () => onMessage("Saved"),
+    () => onMessage("Save failed")
+  );
 }
 
 /**
@@ -101,9 +111,14 @@ export type UseMinecraftGameOptions = {
   world: WorldMeta;
   profile: Profile;
   /**
+   * The world's SaveData preloaded by the shell (WorldSaveGate) so the engine
+   * boot in the mount callback stays synchronous. Null = fresh world from seed.
+   */
+  initialSave: SaveData | null;
+  /**
    * A connected multiplayer session: its replica engine is mounted instead of
    * constructing one, dispatch routes through it (GameEngine.routeDispatch),
-   * localStorage persistence is skipped (the server owns the world), and its
+   * local persistence is skipped (the server owns the world), and its
    * pose stream flushes each frame. Absent = classic offline single-player.
    */
   online?: NetworkSession;
@@ -116,8 +131,9 @@ export type UseMinecraftGameOptions = {
 export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // The owning shell keys this hook by world id, so the world is fixed for the
   // mount's life; capturing it once in refs lets the long-lived rAF/autosave
-  // effect read the save key and seed without re-subscribing.
-  const saveKeyRef = useRef(worldSaveKey(opts.world.id));
+  // effect read the world id and seed without re-subscribing.
+  const worldIdRef = useRef(opts.world.id);
+  const initialSaveRef = useRef(opts.initialSave);
   const worldSeedRef = useRef(opts.world.seed);
   const worldTypeRef = useRef(opts.world.worldType);
   const worldModeRef = useRef(opts.world.gameMode);
@@ -128,7 +144,14 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   const [saveMessage, setSaveMessage] = useState("");
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The live input controller — a ref (not a closure capture) so the rAF loop
+  // and event drain always act on the current one, which lets a touch/desktop
+  // controller swap happen without tearing down the whole renderer effect.
+  const inputRef = useRef<InputController | null>(null);
+  const [touchSettings, setTouchSettings] = useState<TouchSettings>(DEFAULT_TOUCH_SETTINGS);
+  const touchSettingsRef = useRef(touchSettings);
+  /** Non-null exactly while a touch controller drives play (the overlay's api). */
+  const [touchControls, setTouchControls] = useState<TouchControlsApi | null>(null);
   const minimapNodeRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<AudioDirector | null>(null);
   // The rAF effect must not re-run on volume tweaks — it reads through a ref.
@@ -146,6 +169,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // discard) the on-disk save, so the unmount must NOT persist the live state
   // over it. Consumed once by the cleanup; every other unmount saves.
   const skipUnmountSaveRef = useRef(false);
+  // The shell's remount trigger, fixed for the mount's life (like the world id);
+  // a ref so the rAF event drain can fire portal travel without an opts dep.
+  const onReloadWorldRef = useRef(opts.onReloadWorld);
 
   // Audio is a global preference loaded after mount: render never touches
   // localStorage (SSR), and the setState hops a microtask like the
@@ -158,6 +184,53 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     audioRef.current?.setSettings(stored);
     queueMicrotask(() => setAudioSettings(stored));
   }, []);
+
+  // Same deal as audio: a global preference read after mount, through a ref so
+  // the renderer effect (which builds the controller) needs no dependency.
+  useEffect(() => {
+    const stored = readTouchSettings();
+    touchSettingsRef.current = stored;
+    queueMicrotask(() => setTouchSettings(stored));
+  }, []);
+
+  /**
+   * Hot-swaps the live input controller when the resolved touch mode flips —
+   * no renderer teardown: the rAF loop and event drain read through inputRef.
+   * Drops back to the "tap/double-click to play" gate (setLocked false via
+   * release), which is also the honest UX for an input-method change.
+   */
+  const swapController = useCallback(() => {
+    const renderer = rendererRef.current;
+    const audio = audioRef.current;
+    const engine = ctx?.engine;
+    const current = inputRef.current;
+    if (!renderer || !audio || !engine || !current) return;
+    const enabled = resolveTouchEnabled(touchSettingsRef.current.mode);
+    if (enabled === "controls" in current) return; // already the right kind
+    current.release();
+    current.dispose();
+    const onLockChange = (isLocked: boolean) => {
+      if (isLocked) audio.unlock();
+      setLocked(isLocked);
+    };
+    const touchInput = enabled ? createTouchInputController({ engine, onLockChange }) : null;
+    const next: InputController =
+      touchInput ?? createInputController({ canvas: renderer.domElement, engine, onResize: () => renderer.handleResize(), onLockChange });
+    inputRef.current = next;
+    setTouchControls(touchInput?.controls ?? null);
+    if (window.__monecraft) window.__monecraft.input = next;
+  }, [ctx]);
+
+  const updateTouchSettings = useCallback(
+    (partial: Partial<TouchSettings>) => {
+      const next = { ...touchSettingsRef.current, ...partial };
+      touchSettingsRef.current = next;
+      setTouchSettings(next);
+      writeTouchSettings(next);
+      swapController();
+    },
+    [swapController]
+  );
 
   const updateAudioSettings = useCallback((partial: Partial<AudioSettings>) => {
     const next = { ...audioSettingsRef.current, ...partial };
@@ -194,12 +267,14 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     }
     // Online: the session already holds the synced replica engine. Offline: a
     // saved blob carries its own seed + type + mode + difficulty (engine
-    // prefers them); a fresh world boots from the world's stored values.
+    // prefers them); a fresh world boots from the world's stored values. The
+    // blob was preloaded by the shell — IndexedDB reads are async, so they
+    // can't happen here in the commit-phase callback.
     setCtx({
       engine:
         onlineRef.current?.engine ??
         new GameEngine({
-          save: readSave(saveKeyRef.current),
+          save: initialSaveRef.current,
           seed: worldSeedRef.current,
           worldType: worldTypeRef.current,
           gameMode: worldModeRef.current,
@@ -280,7 +355,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     if (!ctx) return;
     const { engine: gameEngine, node } = ctx;
 
-    const created = GameRenderer.create(node);
+    // The renderer is built for the engine's dimension (sky, fog, light floor);
+    // swap-on-travel remounts both together, so the pairing can never go stale.
+    const created = GameRenderer.create(node, DIMENSION_PROFILES[gameEngine.state.dimension]);
     if (!created.ok) {
       // Microtask: reporting an init failure from inside the effect body
       // would count as a cascading synchronous setState.
@@ -288,7 +365,6 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
       return;
     }
     const renderer = created.renderer;
-    canvasRef.current = renderer.domElement;
     rendererRef.current = renderer;
     // Before the first rAF, so no frame can ever show the default palette.
     renderer.setPlayerSkin(getSkinPreset(skinIdRef.current).palette);
@@ -298,37 +374,73 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const audio = createAudioDirector();
     audio.setSettings(audioSettingsRef.current);
     audioRef.current = audio;
-    const input = createInputController({
-      canvas: renderer.domElement,
-      engine: gameEngine,
-      onResize: () => renderer.handleResize(),
-      onLockChange: (isLocked) => {
-        // Pointer-lock acquisition is itself a user gesture — a safe unlock
-        // point, and it re-resumes a context suspended by the browser.
-        if (isLocked) audio.unlock();
-        setLocked(isLocked);
-      }
-    });
+    const onLockChange = (isLocked: boolean) => {
+      // Engaging play is itself a user gesture (pointer-lock click / tap) — a
+      // safe unlock point, and it re-resumes a context the browser suspended.
+      if (isLocked) audio.unlock();
+      setLocked(isLocked);
+    };
+    const touchEnabled = resolveTouchEnabled(touchSettingsRef.current.mode);
+    const touchInput = touchEnabled ? createTouchInputController({ engine: gameEngine, onLockChange }) : null;
+    const input: InputController =
+      touchInput ?? createInputController({ canvas: renderer.domElement, engine: gameEngine, onResize: () => renderer.handleResize(), onLockChange });
+    inputRef.current = input;
+    queueMicrotask(() => setTouchControls(touchInput?.controls ?? null));
+    // Everything below must reach the controller through the ref, never the
+    // `input` closure — after a hot swap the closure points at a disposed one.
+    const liveInput = () => inputRef.current ?? input;
+    // The touch controller is DOM-free, so the shell covers resize + rotation.
+    // Registered unconditionally (a redundant handleResize is idempotent on
+    // desktop) so a mid-game controller hot-swap never orphans the listeners.
+    const onViewportChange = () => renderer.handleResize();
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("orientationchange", onViewportChange);
 
     // Autoplay policy: the AudioContext may only start inside a user gesture.
+    // pointerdown matters on touch: touch-action none can suppress the
+    // synthetic mousedown the desktop path relies on.
     const unlockAudio = () => audio.unlock();
     document.addEventListener("mousedown", unlockAudio);
     document.addEventListener("keydown", unlockAudio);
+    document.addEventListener("pointerdown", unlockAudio);
 
-    // The save key is fixed for the mount's life (the shell keys this hook by
+    // The world id is fixed for the mount's life (the shell keys this hook by
     // world id), so capture it once — also keeps it out of the cleanup's ref read.
-    // Online worlds never touch localStorage: the SERVER persists them.
+    // Online worlds never persist locally: the SERVER persists them.
     const online = onlineRef.current;
-    const saveKey = saveKeyRef.current;
+    const worldId = worldIdRef.current;
     const autoSave = () => {
-      if (online) return;
-      persistGame(gameEngine, saveKey, flashMessage);
+      // The skip flag also gates the interval and unload flushes: while a
+      // Load/Reset (or hardcore delete) awaits its remount, a save firing in
+      // that window would resurrect the blob being re-read or discarded.
+      if (online || skipUnmountSaveRef.current) return;
+      persistGame(gameEngine, worldId, flashMessage);
       syncCloudSave(gameEngine, true);
     };
     const autoSaveId = window.setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
-    window.addEventListener("beforeunload", autoSave);
+    // The unload flush rides beforeunload + visibilitychange(hidden) +
+    // pagehide. flushWrite starts the put synchronously on the warm connection
+    // and commits it explicitly (a same-tab reload's boot read then queues
+    // behind it). beforeunload matters: it fires before the navigation commits,
+    // so its transaction has the most teardown headroom — measured in headless
+    // Chromium, the visibilitychange/pagehide flushes alone lose the commit
+    // race a large fraction of reloads. Its cost is back/forward-cache
+    // eligibility in Firefox/Safari — save durability wins. The other two
+    // cover mobile app-switch/close, where beforeunload never fired reliably.
+    // Silent: a tab switch shouldn't toast "Saved".
+    const flushSave = () => {
+      if (online || skipUnmountSaveRef.current) return;
+      worldSaves.flushWrite(worldId, gameEngine.serialize());
+      syncCloudSave(gameEngine, true);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushSave();
+    };
+    window.addEventListener("beforeunload", flushSave);
+    window.addEventListener("pagehide", flushSave);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
-    window.__monecraft = { engine: gameEngine, renderer, input, audio, net: online ?? undefined };
+    window.__monecraft = { engine: gameEngine, renderer, input: liveInput(), audio, net: online ?? undefined };
 
     let minimap: MinimapRenderer | null = null;
     let animationFrame = 0;
@@ -337,7 +449,7 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     const accumulator = createAccumulator({ startMs: performance.now() });
     const clock = () => {
       const now = performance.now();
-      const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, input.input));
+      const frameSeconds = accumulator.advance(now, (dt) => gameEngine.step(dt, liveInput().input));
 
       // Online: replicated server events (mob deaths, other players' block
       // edits, …) join the local drain so toasts/audio/particles treat them
@@ -350,28 +462,53 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         if (event.type === "died" || event.type === "bossDefeated" || event.type === "gameOver") {
           // Free the cursor so the death/victory/game-over button is clickable; the
           // pause command ignores those states, so the lock-loss won't open the menu too.
-          input.clearKeys();
-          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+          liveInput().clearKeys();
+          liveInput().release();
         }
         // Hardcore permadeath is permanent — persist it now so closing the tab right
         // after death still reloads the dead world spectating (not a fresh run).
         if (event.type === "gameOver" && !online) {
-          persistGame(gameEngine, saveKey, () => {});
+          persistGame(gameEngine, worldId, () => {});
           syncCloudSave(gameEngine, false);
         }
-        if (event.type === "respawned") input.clearKeys();
+        // Portal travel = swap-on-travel: write the travel save (the local player
+        // flipped into the target dimension with a one-shot arrival anchor), then
+        // remount so the engine reboots there. The skip flag MUST be armed before
+        // the write — it gates the autosave interval and the unload flush, either
+        // of which would otherwise overwrite the travel save with pre-travel state.
+        // Cloud sync is deliberately skipped here; the next autosave pushes both
+        // dimension sections together.
+        if (event.type === "dimensionTravel" && !online) {
+          skipUnmountSaveRef.current = true;
+          const data = gameEngine.serializeForTravel(event.target, event.anchor);
+          void worldSaves.write(worldId, data).then(
+            () => scheduleTimeout(() => onReloadWorldRef.current(), 60),
+            () => {
+              // The travel save failed: stay put rather than strand the player.
+              skipUnmountSaveRef.current = false;
+              flashMessage("Travel failed — save error");
+            }
+          );
+          flashMessage(event.target === "nether" ? "Entering the Nether…" : "Returning home…", 2000);
+        }
+        if (event.type === "respawned") liveInput().clearKeys();
         if (event.type === "attackSwung") renderer.triggerSwing();
         if (event.type === "openedStation" || event.type === "openedContainer") {
           // A furnace/chest opened the inventory from a mouse click — release the
           // keys and pointer lock the same way KeyI does on the DOM side.
-          input.clearKeys();
-          if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+          liveInput().clearKeys();
+          liveInput().release();
         }
         if (event.type === "breakBlocked") {
           flashMessage("Not enough room to empty the chest");
         }
         if (event.type === "sleepDenied") {
-          flashMessage(event.reason === "daylight" ? "You can only sleep at night" : "Monsters are nearby");
+          flashMessage(
+            event.reason === "daylight" ? "You can only sleep at night" : event.reason === "dimension" ? "You can't sleep here" : "Monsters are nearby"
+          );
+        }
+        if (event.type === "portalDenied") {
+          flashMessage(event.reason === "online" ? "Portals aren't available in online worlds yet" : "The frame is incomplete");
         }
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
@@ -419,38 +556,46 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
 
     return () => {
       // Persist on teardown so progress survives an unmount that fires no
-      // `beforeunload` — most importantly dev Fast Refresh, which remounts the
-      // component (losing everything since the last 15s autosave) without a page
-      // reload. Silent (no "Saved" toast) and skipped for Load/Reset, which
-      // intentionally re-read or discard the on-disk save.
+      // page-lifecycle event — most importantly dev Fast Refresh, which remounts
+      // the component (losing everything since the last 15s autosave) without a
+      // page reload. The write is enqueued, and the remount's gate read is
+      // ordered after it by the save store. Silent (no "Saved" toast) and
+      // skipped for Load/Reset, which intentionally re-read or discard the
+      // on-disk save.
       if (skipUnmountSaveRef.current) skipUnmountSaveRef.current = false;
       else if (!online) {
-        persistGame(gameEngine, saveKey, () => {});
+        persistGame(gameEngine, worldId, () => {});
         syncCloudSave(gameEngine, false); // flush to cloud on leave/unmount (covers Save & Quit)
       }
       online?.dispose();
       delete window.__monecraft;
-      canvasRef.current = null;
       rendererRef.current = null;
       minimap?.dispose();
       cancelAnimationFrame(animationFrame);
       window.clearInterval(autoSaveId);
-      window.removeEventListener("beforeunload", autoSave);
+      window.removeEventListener("beforeunload", flushSave);
+      window.removeEventListener("pagehide", flushSave);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("mousedown", unlockAudio);
       document.removeEventListener("keydown", unlockAudio);
+      document.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("orientationchange", onViewportChange);
       audioRef.current = null;
       audio.dispose();
-      input.dispose();
-      document.exitPointerLock();
+      liveInput().release();
+      liveInput().dispose();
+      inputRef.current = null;
+      setTouchControls(null);
       renderer.dispose();
     };
-  }, [ctx, flashMessage, syncCloudSave]);
+  }, [ctx, flashMessage, scheduleTimeout, syncCloudSave]);
 
-  // Re-locking can legitimately reject (e.g. Chrome's cooldown right after
-  // Escape); the player just clicks the canvas to lock again.
-  const requestPointerLock = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (canvas) Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  // Re-entering play goes through the controller's engage() — pointer lock on
+  // desktop (which can legitimately reject, e.g. Chrome's cooldown right after
+  // Escape; the player just clicks the canvas again), a virtual flag on touch.
+  const engageControls = useCallback(() => {
+    inputRef.current?.engage();
   }, []);
 
   return {
@@ -475,6 +620,28 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     // play never churns the snapshot with stat values the HUD doesn't show.
     advancementState: () => snapshot.api?.advancementState() ?? { stats: [], unlocked: [] },
     toggleAdvancements: () => engine?.dispatch({ type: "toggleAdvancements" }),
+    // Touch play: non-null exactly while the touch controller drives input.
+    touchControls,
+    engageControls,
+    isFlying: snapshot.isFlying,
+    pauseNow: () => {
+      // Order matters: release() alone must not auto-pause (that chain is
+      // desktop pointer-lock-loss behavior), so the explicit dispatch follows.
+      inputRef.current?.release();
+      engine?.dispatch({ type: "pause" });
+    },
+    toggleInventory: () => {
+      // Mirrors KeyI's DOM-side behavior: drop held intents and leave gameplay
+      // capture before the panel opens (both are idempotent no-ops on close).
+      inputRef.current?.clearKeys();
+      inputRef.current?.release();
+      engine?.dispatch({ type: "toggleInventory" });
+    },
+    toggleCameraView: () => engine?.dispatch({ type: "toggleCameraView" }),
+    clearControlKeys: () => inputRef.current?.clearKeys(),
+    touchMode: touchSettings.mode,
+    updateTouchSettings,
+    unstuckNow: () => engine?.dispatch({ type: "unstuck" }),
     inventory: snapshot.inventory,
     equippedArmor: snapshot.equippedArmor,
     armorPoints: snapshot.armorPoints,
@@ -521,46 +688,58 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     unequipArmor: (slot: ArmorSlot) => engine?.dispatch({ type: "unequipArmor", slot }),
     resumeNow: () => {
       engine?.dispatch({ type: "resume" });
-      requestPointerLock();
+      engageControls();
     },
     respawnNow: () => engine?.dispatch({ type: "respawn" }),
     dismissVictory: () => engine?.dispatch({ type: "dismissVictory" }),
     saveNow: () => {
       if (onlineRef.current) flashMessage("The server saves online worlds");
       else if (engine) {
-        persistGame(engine, saveKeyRef.current, flashMessage);
+        persistGame(engine, worldIdRef.current, flashMessage);
         syncCloudSave(engine, true);
       }
     },
     loadNow: () => {
-      if (!readSave(saveKeyRef.current)) {
-        flashMessage("No save found", 1400);
-        return;
-      }
-      flashMessage("Loaded");
-      // Remount this world (no page reload) so the engine re-reads the saved blob.
-      // Suppress the unmount save so it can't overwrite the blob we're reloading.
-      skipUnmountSaveRef.current = true;
-      scheduleTimeout(() => opts.onReloadWorld(), 120);
+      void worldSaves.read(worldIdRef.current).then((save) => {
+        if (!save) {
+          flashMessage("No save found", 1400);
+          return;
+        }
+        flashMessage("Loaded");
+        // Remount this world (no page reload) so the engine re-reads the saved blob.
+        // Suppress the unmount save so it can't overwrite the blob we're reloading.
+        skipUnmountSaveRef.current = true;
+        scheduleTimeout(() => opts.onReloadWorld(), 120);
+      });
     },
     resetNow: () => {
-      try {
-        localStorage.removeItem(saveKeyRef.current);
-        setSaveMessage("Resetting...");
-        // Remount with no blob: the fresh engine regenerates from the stored seed.
-        // Suppress the unmount save so it can't rewrite the blob we just removed.
-        skipUnmountSaveRef.current = true;
-        scheduleTimeout(() => opts.onReloadWorld(), 500);
-      } catch {
-        flashMessage("Reset failed");
-      }
+      setSaveMessage("Resetting...");
+      void worldSaves.remove(worldIdRef.current).then(
+        () => {
+          // Remount with no blob: the fresh engine regenerates from the stored seed.
+          // Suppress the unmount save so it can't rewrite the blob we just removed.
+          skipUnmountSaveRef.current = true;
+          scheduleTimeout(() => opts.onReloadWorld(), 500);
+        },
+        () => flashMessage("Reset failed")
+      );
     },
     quitToWorlds: () => {
-      // The autosave interval is cleared on unmount and beforeunload won't fire
-      // on an in-app navigation, so persist synchronously before leaving.
+      // The autosave interval is cleared on unmount and no unload event fires
+      // on an in-app navigation, so persist before leaving. The write is only
+      // enqueued, but an immediate re-open reads through the store's queue.
       // Online: the unmount cleanup disposes the session; the server persists.
-      if (engine && !onlineRef.current) persistGame(engine, saveKeyRef.current, flashMessage);
+      if (engine && !onlineRef.current) persistGame(engine, worldIdRef.current, flashMessage);
       opts.onQuitToWorlds();
+    },
+    /**
+     * Arms the same skip flag Load/Reset use, for unmounts that must not
+     * persist — the hardcore-delete path, where the teardown save would
+     * recreate the blob the shell just removed. (The gameOver force-save
+     * already persisted the dead world; only spectator drift is dropped.)
+     */
+    suppressUnmountSave: () => {
+      skipUnmountSaveRef.current = true;
     }
   };
 }

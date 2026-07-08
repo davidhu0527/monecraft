@@ -64,7 +64,46 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.Grindstone]: "stone",
   [BlockId.Kelp]: "grass",
   [BlockId.CoralPink]: "stone",
-  [BlockId.CoralBlue]: "stone"
+  [BlockId.CoralBlue]: "stone",
+  [BlockId.RedstoneWire]: "sand", // dust
+  [BlockId.RedstoneWireOn]: "sand",
+  [BlockId.Lever]: "wood",
+  [BlockId.LeverOn]: "wood",
+  [BlockId.RedstoneButton]: "stone",
+  [BlockId.RedstoneButtonOn]: "stone",
+  [BlockId.PressurePlate]: "stone",
+  [BlockId.PressurePlateOn]: "stone",
+  [BlockId.RedstoneTorchOff]: "wood",
+  [BlockId.RedstoneTorch]: "wood",
+  [BlockId.RedstoneLamp]: "glass",
+  [BlockId.RedstoneLampOn]: "glass",
+  // Rails clank like stone (metal strips over ties).
+  [BlockId.PoweredRail]: "stone",
+  [BlockId.PoweredRailOn]: "stone",
+  [BlockId.DetectorRail]: "stone",
+  [BlockId.DetectorRailOn]: "stone",
+  [BlockId.Rail]: "stone",
+  // Slabs/stairs sound like their material.
+  [BlockId.PlankSlab]: "wood",
+  [BlockId.StoneSlab]: "stone",
+  [BlockId.CobbleSlab]: "stone",
+  [BlockId.PlankStairsNorth]: "wood",
+  [BlockId.PlankStairsEast]: "wood",
+  [BlockId.PlankStairsSouth]: "wood",
+  [BlockId.PlankStairsWest]: "wood",
+  [BlockId.StoneStairsNorth]: "stone",
+  [BlockId.StoneStairsEast]: "stone",
+  [BlockId.StoneStairsSouth]: "stone",
+  [BlockId.StoneStairsWest]: "stone",
+  [BlockId.CobbleStairsNorth]: "stone",
+  [BlockId.CobbleStairsEast]: "stone",
+  [BlockId.CobbleStairsSouth]: "stone",
+  [BlockId.CobbleStairsWest]: "stone",
+  [BlockId.Obsidian]: "stone",
+  [BlockId.NetherPortal]: "glass",
+  [BlockId.Netherrack]: "stone",
+  [BlockId.Glowstone]: "glass",
+  [BlockId.BlaziteOre]: "stone"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

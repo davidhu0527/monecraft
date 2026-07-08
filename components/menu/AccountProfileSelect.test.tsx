@@ -80,13 +80,18 @@ describe("AccountProfileSelect", () => {
     expect((screen.getByTestId("new-online-profile") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("the Play locally door notifies the parent", async () => {
+  test("the quiet local-worlds footer link notifies the parent", async () => {
     fake.profiles = [];
     const onPlayLocally = mock();
     render(<AccountProfileSelect user={user} onPlay={mock()} onPlayLocally={onPlayLocally} onSignedOut={mock()} />);
     await waitFor(() => expect(screen.getByText(/No profiles yet/)).toBeTruthy());
 
-    await userEvent.click(screen.getByTestId("play-locally"));
+    // A footer link, not a primary button — signed-in play should read as the
+    // profiles above; this door is for local worlds and their cloud sync.
+    const door = screen.getByTestId("play-locally");
+    expect(door.className).toContain("menu-footer-link");
+    expect(door.textContent).toBe("Local worlds on this browser");
+    await userEvent.click(door);
     expect(onPlayLocally).toHaveBeenCalled();
   });
 

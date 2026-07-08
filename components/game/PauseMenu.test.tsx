@@ -19,6 +19,10 @@ function renderMenu(overrides: Partial<Parameters<typeof PauseMenu>[0]> = {}) {
     hardcore: false,
     skinId: DEFAULT_SKIN_ID,
     onSkinChange: mock(),
+    touchMode: "auto" as const,
+    onTouchModeChange: mock(),
+    touchActive: false,
+    onUnstuck: mock(),
     onBack: mock(),
     onSave: mock(),
     onLoad: mock(),
@@ -133,6 +137,30 @@ describe("PauseMenu", () => {
     await user.click(screen.getByRole("button", { name: "Robot skin" }));
     expect(props.onSkinChange).toHaveBeenCalledTimes(1);
     expect(props.onSkinChange).toHaveBeenCalledWith("robot");
+  });
+
+  test("the touch-controls toggle reports the chosen mode", async () => {
+    const user = userEvent.setup();
+    const props = renderMenu({ touchMode: "auto" });
+    await user.click(screen.getByRole("button", { name: "Options" }));
+    expect(screen.getByRole("button", { name: "Touch controls Auto" }).getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Touch controls On" }));
+    expect(props.onTouchModeChange).toHaveBeenCalledWith("on");
+  });
+
+  test("Emergency Unstuck lives on the Game tab", async () => {
+    const user = userEvent.setup();
+    const props = renderMenu();
+    await user.click(screen.getByRole("button", { name: "Emergency Unstuck" }));
+    expect(props.onUnstuck).toHaveBeenCalledTimes(1);
+  });
+
+  test("the Controls tab shows gestures instead of keys while touch is active", async () => {
+    const user = userEvent.setup();
+    renderMenu({ touchActive: true });
+    await user.click(screen.getByRole("button", { name: "Controls" }));
+    expect(screen.getByText("Press and hold the world")).toBeTruthy();
+    expect(screen.queryByText("Shift + U")).toBeNull();
   });
 
   test("tabs switch the visible section", async () => {

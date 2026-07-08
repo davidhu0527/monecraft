@@ -15,6 +15,10 @@ import {
   CREEPER_EXPLOSION_POWER,
   CREEPER_FUSE_RANGE,
   CREEPER_FUSE_SECONDS,
+  DROWNED_MELEE_REACH,
+  DROWNED_PURSUE_SPEED_MULTIPLIER,
+  FIREBALL_DAMAGE,
+  FIREBALL_SPEED,
   HOSTILE_BURN_ABOVE_DAYLIGHT,
   HOSTILE_CAP,
   MOB_ARROW_KNOCKBACK,
@@ -148,8 +152,9 @@ function mobVsMobLineOfSight(world: GameState["world"], mob: MobState, dx: numbe
 }
 
 /**
- * A ranged mob looses an arrow from its eye toward the player's chest, leading a
- * moving target by a fraction of the arrow's travel time. The arrow is not
+ * A ranged mob looses an arrow (or the scorcher's fireball — same flight, its
+ * own look) from its eye toward the player's chest, leading a moving target by
+ * a fraction of the projectile's travel time. The projectile is not
  * player-owned, so it only ever hits the player (never the firer or other mobs).
  */
 function fireMobArrow(state: GameState, player: PlayerState, mob: MobState, damage: number, speed: number, emit: EmitGameEvent): void {
@@ -166,7 +171,8 @@ function fireMobArrow(state: GameState, player: PlayerState, mob: MobState, dama
     damage,
     knockback: MOB_ARROW_KNOCKBACK,
     fromPlayer: false,
-    ttl: ARROW_TTL
+    ttl: ARROW_TTL,
+    kind: MOB_TEMPLATES[mob.kind].projectileKind
   });
   emit({ type: "mobAttacked", kind: mob.kind });
 }
@@ -233,10 +239,13 @@ export type MobTickDeps = {
  * An aquatic mob's whole tick — it swims in 3D and bypasses every land
  * assumption in the main loop (the surfaceYAt ground clamp, border bounce, and
  * the collidesAt foot test): each move is instead gated on the destination cell
- * being water, so a fish can never swim into land, air, or out of bounds. It
- * flees the player in 3D within FISH_FLEE_RANGE, wanders with a gentle pitch
- * otherwise, and out of water it lies beached, suffocating until it dies (or a
- * knockback returns it to water).
+ * being water, so it can never swim into land, air, or out of bounds. Passives
+ * (fish) flee the player in 3D within FISH_FLEE_RANGE; a hostile (the drowned)
+ * instead pursues the nearest targetable player through the water and strikes
+ * within DROWNED_MELEE_REACH — the same destination gate keeps it strictly
+ * water-bound, so it menaces swimmers and divers but never walks ashore. All
+ * wander with a gentle pitch otherwise, and out of water they lie beached,
+ * suffocating until death (or a knockback returns them to water).
  */
 function tickAquaticMob(state: GameState, mob: MobState, dt: number, deps: MobTickDeps): void {
   const { world } = state;
@@ -249,18 +258,56 @@ function tickAquaticMob(state: GameState, mob: MobState, dt: number, deps: MobTi
     return;
   }
 
-  const anchor = nearestPlayerTo(state, mob.position.x, mob.position.z);
-  if (anchor) scratchToPlayer3D.copy(anchor.position).sub(mob.position);
-  const distanceToPlayer = anchor ? scratchToPlayer3D.length() : Infinity;
   let moveSpeed = mob.speed;
-  if (distanceToPlayer < FISH_FLEE_RANGE) {
-    if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer3D.normalize().multiplyScalar(-1), 0.25).normalize();
-    moveSpeed *= 1.6;
-  } else if (mob.turnTimer <= 0) {
-    const angle = deps.rng() * Math.PI * 2;
-    const pitch = (deps.rng() - 0.5) * 0.7;
-    mob.direction.set(Math.cos(angle) * Math.cos(pitch), Math.sin(pitch), Math.sin(angle) * Math.cos(pitch)).normalize();
-    mob.turnTimer = 1.5 + deps.rng() * 3;
+  let pursuing = false;
+  const hunted = mob.hostile ? nearestTargetablePlayer(state, mob.position.x, mob.position.z) : null;
+  if (hunted && !hunted.isDead) {
+    // Aim mid-body like the land strike (a player treading the surface has
+    // their feet a full block under their head).
+    scratchToHunted3D.copy(hunted.position).sub(mob.position);
+    scratchToHunted3D.y += 0.9;
+    const attackDistance = scratchToHunted3D.length();
+    if (attackDistance < mob.detectRange) {
+      pursuing = true;
+      moveSpeed *= DROWNED_PURSUE_SPEED_MULTIPLIER;
+      if (attackDistance > 0.001) mob.direction.lerp(scratchToHunted3D.normalize(), 0.25).normalize();
+      if (attackDistance < DROWNED_MELEE_REACH && mob.attackTimer <= 0) {
+        // The same LOS raycast as the land strike — no biting through a hull
+        // or a glass tunnel (voxelRaycast treats water as empty, so an open
+        // waterline never blocks it).
+        scratchMobEye.set(mob.position.x, mob.position.y + mob.halfHeight * 0.35, mob.position.z);
+        scratchPlayerAim.set(hunted.position.x, hunted.position.y + 0.9, hunted.position.z);
+        scratchRay.copy(scratchPlayerAim).sub(scratchMobEye);
+        const hasLineOfSight = scratchRay.lengthSq() <= 1e-6 || voxelRaycast(world, scratchMobEye, scratchRay.normalize(), attackDistance + 0.5) === null;
+        if (hasLineOfSight) {
+          deps.emit({ type: "mobAttacked", kind: mob.kind });
+          deps.damagePlayer(hunted, mob.attackDamage * mobDamageMultiplier(state.difficulty));
+          scratchToHunted.copy(hunted.position).sub(mob.position).setY(0);
+          if (scratchToHunted.length() > 0.001) {
+            scratchToHunted.normalize().multiplyScalar(4.2);
+            hunted.velocity.x += scratchToHunted.x;
+            hunted.velocity.z += scratchToHunted.z;
+            hunted.velocity.y = Math.max(hunted.velocity.y, 3.4);
+          }
+          mob.attackTimer = mob.attackCooldown;
+        }
+      }
+    }
+  }
+
+  if (!pursuing) {
+    const anchor = nearestPlayerTo(state, mob.position.x, mob.position.z);
+    if (anchor) scratchToPlayer3D.copy(anchor.position).sub(mob.position);
+    const distanceToPlayer = anchor ? scratchToPlayer3D.length() : Infinity;
+    if (!mob.hostile && distanceToPlayer < FISH_FLEE_RANGE) {
+      if (distanceToPlayer > 0.001) mob.direction.lerp(scratchToPlayer3D.normalize().multiplyScalar(-1), 0.25).normalize();
+      moveSpeed *= 1.6;
+    } else if (mob.turnTimer <= 0) {
+      const angle = deps.rng() * Math.PI * 2;
+      const pitch = (deps.rng() - 0.5) * 0.7;
+      mob.direction.set(Math.cos(angle) * Math.cos(pitch), Math.sin(pitch), Math.sin(angle) * Math.cos(pitch)).normalize();
+      mob.turnTimer = 1.5 + deps.rng() * 3;
+    }
   }
   mob.moveSpeed = moveSpeed;
 
@@ -452,6 +499,7 @@ export function tickMobs(state: GameState, dt: number, deps: MobTickDeps): void 
         }
       } else if (fireReady) {
         if (isBoss) fireBossSpread(state, hunted, mob, dmgScale, deps.emit);
+        else if (MOB_TEMPLATES[mob.kind].projectileKind === "fireball") fireMobArrow(state, hunted, mob, FIREBALL_DAMAGE * dmgScale, FIREBALL_SPEED, deps.emit);
         else fireMobArrow(state, hunted, mob, SKELETON_ARROW_DAMAGE * dmgScale, SKELETON_ARROW_SPEED, deps.emit);
       }
       mob.attackTimer = mob.attackCooldown;

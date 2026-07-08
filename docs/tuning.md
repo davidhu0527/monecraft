@@ -15,20 +15,44 @@ Worldgen constants live in the frozen `GEN` object in
 ## Player feel — physics & movement
 
 `GRAVITY`, `JUMP_VELOCITY`, `WALK_SPEED`, `SPRINT_SPEED`, `CROUCH_SPEED`,
-`PLAYER_HEIGHT`, `PLAYER_HALF_WIDTH`, `EYE_HEIGHT`, `WORLD_BORDER_PADDING`.
+`STEP_UP_HEIGHT`, `PLAYER_HEIGHT`, `PLAYER_HALF_WIDTH`, `EYE_HEIGHT`,
+`WORLD_BORDER_PADDING`.
 
 Read by `systems/playerMotion.ts`. These set the moment-to-moment feel.
 `JUMP_VELOCITY` vs `GRAVITY` together fix jump height (currently a ~1-block hop);
 raise gravity for a snappier, heavier fall. `SPRINT_SPEED` is deliberately far
 above `WALK_SPEED` so sprinting feels like a meaningful choice (and it's what burns
 hunger fastest). `PLAYER_HALF_WIDTH`/`PLAYER_HEIGHT` are also the collision box, so
-changing them affects which gaps the player fits through.
+changing them affects which gaps the player fits through. `STEP_UP_HEIGHT` (0.55)
+is how tall a rise grounded walking climbs without a jump — 0.5 shapes (slabs,
+stairs) step, full blocks don't; push it to 1.0+ and jumping stops mattering on
+land at all, which changes the whole terrain game.
 
-## Water vehicles
+## Touch feel
+
+`TOUCH_LOOK_SENSITIVITY`, `TOUCH_TAP_MAX_MS`, `TOUCH_TAP_SLOP_PX`,
+`TOUCH_HOLD_MINE_MS`, `TOUCH_JOYSTICK_RADIUS_PX`, `TOUCH_JOYSTICK_DEADZONE`,
+`TOUCH_SPRINT_DOUBLE_TAP_MS`, `TOUCH_LONGPRESS_TOOLTIP_MS`.
+
+Read by `lib/game/input/touchInputController.ts` (and the tooltip constant by
+`components/game/ItemTooltip.tsx`). These are deliberately config-side so
+on-device tuning is a one-line change with no system edits — they shipped as
+educated guesses pending the real-device pass. `TOUCH_LOOK_SENSITIVITY` (0.0042,
+~2× the mouse) trades thumb travel against precision. `TOUCH_TAP_SLOP_PX` (12)
+is the tap/drag boundary: raise it and camera nudges start counting as attacks;
+lower it and honest taps on a bumpy bus become drags. `TOUCH_HOLD_MINE_MS`
+deliberately equals `TOUCH_TAP_MAX_MS` (220) so there is no ambiguous gap where
+a lift is neither tap nor mine. `TOUCH_JOYSTICK_DEADZONE` (0.18) absorbs resting
+thumb tremor; too high and small corrections stop registering.
+
+## Vehicles
 
 `VEHICLE_BOARD_REACH`, `VEHICLE_TURN_RATE`, `VEHICLE_DISMOUNT_RADIUS`,
 `RAFT_SPEED`, `RAFT_HALF_WIDTH`, `RAFT_HALF_LENGTH`, `SHIP_SPEED`,
-`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`, `MAX_VEHICLES`.
+`SHIP_HALF_WIDTH`, `SHIP_HALF_LENGTH`, `MINECART_SPEED`, `MINECART_BOOST_SPEED`,
+`MINECART_ACCEL`, `MINECART_FRICTION`, `MINECART_BRAKE_DECEL`,
+`MINECART_HALF_WIDTH`, `MINECART_HALF_LENGTH`, `MINECART_RIDE_HEIGHT`,
+`MAX_VEHICLES`.
 
 Read by `systems/vehicles.ts`. Rafts are intentionally compact and slow; ships
 are larger and faster. The half-width/half-length values are both gameplay
@@ -36,9 +60,20 @@ footprints and water-support checks, so raising them makes a vehicle feel larger
 but also requires more open water to place and move. `VEHICLE_TURN_RATE` controls
 steering responsiveness while mounted, and `VEHICLE_DISMOUNT_RADIUS` is the search
 radius for a safe crouch dismount beside the vehicle. `MAX_VEHICLES` (64) caps how
-many placed rafts/ships a world can hold — placement is refused (with a denial
+many placed vehicles a world can hold — placement is refused (with a denial
 cue) at the cap, which bounds save size since creative placement never consumes
 the item.
+
+The minecart is rail-guided, so its dials shape acceleration, not steering.
+`MINECART_SPEED` (6) is the rider-throttled cruise cap on plain rail and
+`MINECART_BOOST_SPEED` (11) the cap while a lit powered rail drives the cart —
+widening that gap makes powered track feel more worth building. `MINECART_ACCEL`
+(8/s²) is how fast either cap is approached, `MINECART_FRICTION` (1.5/s²) how
+quickly a coasting cart bleeds off (lower = longer unpowered launcher runs), and
+`MINECART_BRAKE_DECEL` (14/s²) both the rider's brake and the unpowered
+powered-rail stopper — keep it well above `MINECART_ACCEL` or "brakes" feel
+mushy. `MINECART_RIDE_HEIGHT` (0.1) floats the cart just above the 0.09-tall
+rail shape.
 
 ## Game modes — flight
 
@@ -256,8 +291,8 @@ shorten the cycle for more frequent, briefer showers.
 ## Progression — mining & combat reach
 
 `MINE_REACH`, `MINING_RATE`, `BARE_HAND_MINE_POWER`, `FIST_DAMAGE`, `ATTACK_REACH`,
-`ATTACK_AIM_DOT`, `MELEE_KNOCKBACK_IMPULSE`, `SPEAR_MELEE_REACH`, `SPEAR_THROW_SPEED`,
-`SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
+`ATTACK_AIM_DOT`, `MELEE_KNOCKBACK_IMPULSE`, `MELEE_REWIND_MAX_MS`, `SPEAR_MELEE_REACH`,
+`SPEAR_THROW_SPEED`, `SPEAR_THROW_GRAVITY`, `SPEAR_THROW_LIFETIME_SECONDS`,
 `SPEAR_STUCK_SECONDS`, `SPEAR_THROW_COOLDOWN_SECONDS`, `SPEAR_HIT_RADIUS`.
 
 Read by `systems/mining.ts`, `systems/combat.ts`, and `systems/spears.ts`.
@@ -273,6 +308,16 @@ gate** itself lives in `systems/mining.ts` (`canMineBlock`), not config. Spears
 override only melee reach; their projectile speed, gravity, lifetime, cooldown,
 terrain embed duration, and collision radius are global, while tier
 damage/durability live in `items.ts`.
+
+`MELEE_REWIND_MAX_MS` (900, **online only**) is how far back the game server may
+rewind melee target selection toward a high-ping attacker's stamped view of the
+world — the max interpolation delay (450 ms) plus a generous half-RTT budget.
+Raising it forgives more lag; lowering it makes laggy players whiff on moving
+mobs again. The trade-off is the ghost-hit window: other players can see a mob
+struck up to this long after it visibly moved away. Single-player never rewinds.
+The server's history ring depth derives from it (`server/mobHistory.ts`), and a
+related room constant, `MELEE_ATTACKS_PER_SECOND` (12, `server/room.ts`), caps
+attack spam so the rewind window can't be trawled with varied stamps.
 
 ## Ranged combat & endgame
 
@@ -406,7 +451,9 @@ not here.
 ## Fish & the ocean
 
 `FISH_FLEE_RANGE`, `FISH_SUFFOCATION_HP_PER_SECOND`, `AQUATIC_CAP`,
-`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`.
+`AQUATIC_SPAWN_INTERVAL_SECONDS`, `KELP_GROWTH_CHANCE`, `DROWNED_CAP`,
+`DROWNED_MELEE_REACH`, `DROWNED_PURSUE_SPEED_MULTIPLIER`,
+`DROWNED_SPAWN_MIN_RADIUS`.
 
 Read by the aquatic branch in `systems/mobAI.ts` and the aquatic spawn director
 in `systems/spawnDirector.ts`. `FISH_FLEE_RANGE` (5) is the 3D radius inside
@@ -420,6 +467,15 @@ without nearby deep water, so these cost nothing on dry worlds).
 `KELP_GROWTH_CHANCE` (0.2) is the per-sampled-tick odds a kelp stalk grows one
 block (the same sampler as crops — see Farming above); height and surface
 clearance are worldgen invariants in `GEN.oceanFlora`, not tunables here.
+
+The drowned dials shape how dangerous night water feels. `DROWNED_CAP` (6)
+bounds the population separately from the fish budget (and inside the shared
+difficulty-scaled hostile cap) — raise it and night diving becomes a running
+battle. `DROWNED_PURSUE_SPEED_MULTIPLIER` (1.6) is its chase boost over
+template speed; players outswim it in open water, so it threatens confined
+dives (wrecks, kelp forests), not surface crossings. `DROWNED_MELEE_REACH`
+(1.9) is the 3D strike distance and `DROWNED_SPAWN_MIN_RADIUS` (10) the
+standoff that stops one materializing directly under a swimmer.
 
 ## Beds & sleep
 
@@ -446,6 +502,19 @@ those overflow slots on load (`readContainers` rebuilds a `CHEST_SLOTS`-length a
 `AUTOSAVE_INTERVAL_MS`, `WORLDGEN_VERSION`, `SAVE_KEY` (legacy), `STUCK_RESET_SECONDS`,
 `RENDER_RADIUS`, `RENDER_GRID`, `THIRD_PERSON_DISTANCE`, `THIRD_PERSON_MARGIN`.
 
+## Redstone
+
+`REDSTONE_TICK_SECONDS` (0.1), `REDSTONE_WIRE_RANGE` (15), `REDSTONE_BUTTON_PRESS_SECONDS` (1.0).
+
+`REDSTONE_TICK_SECONDS` is the fixed power-pass cadence and the main dial: lower
+makes circuits snappier but multiplies the remesh/relight (and, online, network
+delta) cost of oscillating contraptions — a torch clock blinks with a period of
+exactly 2x this value, and a stable circuit costs nothing regardless.
+`REDSTONE_WIRE_RANGE` is how many wire cells a signal survives ("the wire runs
+out"); raising it grows the per-pass BFS over large builds.
+`REDSTONE_BUTTON_PRESS_SECONDS` is the button's pulse width — long enough to
+walk through a button-driven door.
+
 `RENDER_RADIUS` is the biggest **performance** lever: the renderer meshes one region
 of this radius around the player, so larger values draw more terrain at higher cost;
 `RENDER_GRID` is how far the player moves before that mesh rebuilds (smaller = more
@@ -471,9 +540,34 @@ None affect single-player, and none are save-sensitive.
   keyframe / drift correction), mob delta frames at **10 Hz** (half tick rate)
   with `MOB_DEADBAND_SQ` (`0.05²` — smaller = more mob updates, more bandwidth),
   `DAY_INTERVAL_TICKS` (`20` = 1 s day-clock sync), `POSE_CHECKPOINT_TICKS`
-  (`20` = 1 s replay-log pose anchors). `INTERPOLATION_DELAY_MS` (`125`,
-  `lib/net/interpolation.ts`) is how far in the past remote entities render —
-  larger absorbs more jitter at the cost of visible lag.
+  (`20` = 1 s replay-log pose anchors).
+- **Interpolation delay (adaptive)** — how far in the past remote entities
+  render, sized from measured tick-arrival jitter (`lib/net/interpolation.ts`):
+  `INTERPOLATION_DELAY_MIN_MS` (`125`, the clean-link floor),
+  `INTERPOLATION_DELAY_MAX_MS` (`450`), `INTERPOLATION_JITTER_MULT` (`2` ×
+  the p90 arrival deviation), `DELAY_SLEW_MS_PER_SEC` (`60` — how fast the
+  delay may drift, so remote timelines never visibly warp). Larger delays
+  absorb more jitter at the cost of visible lag.
+- **Prediction** (`lib/net/prediction.ts`) — optimistic block edits revert if
+  the server's journal neither confirms nor overrides within
+  `max(2×RTT+200 ms, PREDICTION_TIMEOUT_MIN_MS)` capped at
+  `PREDICTION_TIMEOUT_MAX_MS` (`1000`/`5000`); own-echo suppression outlives
+  the entry by `ECHO_SUPPRESS_EXTRA_MS` (`3000`) because the echo rides the
+  confirming tick. Raising the floor hides slow-server rejects longer;
+  lowering it flickers honest placements on RTT spikes. Breaking predicts
+  too (`tickMining` `authority: "predict"` — chests excepted); drops/XP
+  stay server-owned, so pickup feedback is delta-bound (~RTT).
+- **Clock sync** (`lib/net/clock.ts`) — `OFFSET_WINDOW_SIZE` (`16` pongs
+  considered for the NTP-style min-RTT offset pick), `OFFSET_SLEW_MS_PER_SEC`
+  (`40`), `OFFSET_SNAP_MS` (`250` — bigger errors snap: first fix, reconnect).
+  The client pings at `PING_INTERVAL_MS` (`1000`, `NetworkSession.ts`).
+- **Wire size** — replicated poses quantize before serialization (`qPos` 2
+  decimals for positions/velocities, `qAng` 3 for angles — `lib/net/codec.ts`;
+  margins sit well inside every movement clamp and deadband) and the server offers **permessage-deflate**
+  (`server/index.ts`, dedicated 16 KB windows — ~1 MB across a full house).
+  Caveat: `/rooms`' `kbOutPerSec` counts pre-compression bytes, so it shows
+  the quantization win only; verify deflate via DevTools
+  (`Sec-WebSocket-Extensions` on the 101 response) or Fly egress metrics.
 - **Backpressure** — `BACKPRESSURE_SOFT_BYTES` (256 KB → shed `pp`/`mp`),
   `BACKPRESSURE_KICK_BYTES` (1 MB) + `BACKPRESSURE_KICK_STRIKES` (~5 s sustained
   → `4008` kick).
@@ -484,9 +578,11 @@ None affect single-player, and none are save-sensitive.
   `tickets.ts`).
 - **Replay log** — `COMMAND_LOG_SIZE` (env, default `4096`) bounds each room's
   in-memory command ring dumped by `/rooms/:id/log`.
-- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` (env, default `0`) seeds
-  the client's artificial one-way delay; `window.__monecraft.net.setSimulatedLatency(ms)`
-  overrides it live.
+- **Latency sim** — `NEXT_PUBLIC_NET_SIM_LATENCY_MS` / `NEXT_PUBLIC_NET_SIM_JITTER_MS`
+  (env, default `0`) seed the client's artificial one-way delay and per-message
+  jitter; `window.__monecraft.net.setSimulatedLatency(ms, jitterMs?)` overrides
+  both live (delivery stays FIFO, like TCP). The F3 overlay shows the live
+  RTT/jitter/interp-delay and in/out KB/s while online.
 
 ## Online accounts
 
@@ -507,12 +603,12 @@ surfaces a friendly "limit reached"); they don't affect single-player.
 
 Change these only with care:
 
-- **`WORLDGEN_VERSION`** (`10`) is the worldgen baseline each world records at
+- **`WORLDGEN_VERSION`** (`11`) is the worldgen baseline each world records at
   creation. When a deliberate terrain change invalidates old block-diffs, bump this:
   every world whose recorded version differs discards its stale diffs and reboots from
   its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
   This replaced the old whole-store `SAVE_KEY` bump, which reset _every_ world at once.
-  It's versioned independently of the save **schema** (currently v16); don't bump it to
+  It's versioned independently of the save **schema** (currently v18); don't bump it to
   express a schema change — add a migration instead.
 - **`SAVE_KEY`** (`"minecraft_save_v7"`) is now **legacy**: each world has its own
   `minecraft_world_save_<id>` key, and `SAVE_KEY` is read only once by the one-time
@@ -544,3 +640,35 @@ Change these only with care:
   and bumps `WORLDGEN_VERSION` (which discards stale worlds of every type). Islands
   values are constrained by spawn: keep land biomes gently sloped so
   `findSpawnOnLand` still lands the player on dry ground.
+
+## The Nether & portals
+
+- **`PORTAL_DWELL_SECONDS`** (3) — how long a player stands in a portal surface
+  before travel fires. Shorter feels snappier but makes an accidental brush
+  through a portal a trip; longer makes escaping into a portal under fire a
+  real gamble. The dwell latches after firing — no re-fire until you step out.
+- **`PORTAL_MIN_INTERIOR` / `PORTAL_MAX_INTERIOR`** (2×3 / 4×4) — the interior
+  sizes `findPortalFrame` accepts (obsidian border, corners required). Raising
+  the max makes grand gates possible but costs more obsidian and widens the
+  frame-validation scan bounds.
+- **`PORTAL_SEARCH_RADIUS`** (24) — how far around the mapped 1:1 arrival point
+  an existing portal is reused instead of building a new one. Too small and
+  paired portals drift apart into portal farms; too large and a deliberately
+  separate second portal gets hijacked as an arrival.
+- **`NETHER_DAYLIGHT`** (0.22) — the nether's pinned daylight. It must sit
+  below `HOSTILE_SPAWN_BELOW_DAYLIGHT` (0.28, keeps spawns perpetual) and below
+  `HOSTILE_BURN_ABOVE_DAYLIGHT` (0.72, nothing combusts); it also sits below
+  the sleep threshold, which is why beds carry an explicit dimension refusal.
+  Nudging it changes nothing visually (the renderer's nether profile drives the
+  look) — it is purely the gameplay-gates dial.
+- **`FIREBALL_DAMAGE` / `FIREBALL_SPEED`** (6 / 16) — the scorcher's shot:
+  slower than a skeleton arrow (27) so strafing dodges it, harder-hitting so
+  ignoring it doesn't pay. Difficulty scales the damage like every mob hit.
+- **Nether worldgen** lives in the frozen `NETHER_GEN` (`netherGeneration.ts`):
+  `lavaSeaLevel` (32), worm/sea-chamber/vein counts (scaled by world area), the
+  per-cell `glowstoneChance`, and `blaziteMaxY` (40). Any change is a deliberate
+  worldgen re-baseline: bump `WORLDGEN_VERSION` and re-pin the nether hashes —
+  the one stamp discards BOTH dimensions' saved diffs (see docs/save-format.md).
+- The nether's _look_ (sky, fog, the raised sky-light floor that is its ambient
+  glow) is the renderer's `DIMENSION_PROFILES.nether`
+  (`lib/game/render/dimensionProfiles.ts`) — visual-only, no save impact.

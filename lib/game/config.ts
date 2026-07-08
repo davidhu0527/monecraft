@@ -9,9 +9,13 @@ export const JUMP_VELOCITY = 8.2;
 export const WALK_SPEED = 4.8;
 export const SPRINT_SPEED = 12.8;
 export const CROUCH_SPEED = 2.1;
+// Grounded walking climbs rises up to this height without a jump (slabs and
+// stairs at 0.5). Deliberately under 1.0: full blocks still need the jump.
+export const STEP_UP_HEIGHT = 0.55;
 export const WORLD_BORDER_PADDING = 1.2;
 
-// Water vehicles. Rafts are compact and slower; ships are larger and faster.
+// Vehicles. Rafts are compact and slower; ships are larger and faster; the
+// minecart is rail-guided (steered by the track, not the rider).
 export const VEHICLE_BOARD_REACH = 4.5;
 export const VEHICLE_TURN_RATE = 2.8; // radians/sec at full turn input
 export const VEHICLE_DISMOUNT_RADIUS = 1.7;
@@ -21,7 +25,15 @@ export const RAFT_HALF_LENGTH = 0.8;
 export const SHIP_SPEED = 5.4;
 export const SHIP_HALF_WIDTH = 1.0;
 export const SHIP_HALF_LENGTH = 1.6;
-export const MAX_VEHICLES = 64; // cap on persisted rafts+ships per world — bounds save size (creative placement never consumes)
+export const MINECART_SPEED = 6; // rider-driven cruise cap on plain rail
+export const MINECART_BOOST_SPEED = 11; // cap while a PoweredRailOn drives the cart
+export const MINECART_ACCEL = 8; // blocks/s² toward the current cap (rider throttle and boost alike)
+export const MINECART_FRICTION = 1.5; // blocks/s² coasting decay on plain rail
+export const MINECART_BRAKE_DECEL = 14; // blocks/s² rider brake AND the unpowered powered-rail stopper
+export const MINECART_HALF_WIDTH = 0.35;
+export const MINECART_HALF_LENGTH = 0.45;
+export const MINECART_RIDE_HEIGHT = 0.1; // cart floor above the rail cell's base (rails are 0.09 tall)
+export const MAX_VEHICLES = 64; // cap on persisted vehicles per world — bounds save size (creative placement never consumes)
 
 // Online accounts. An account owns server-side profiles (its cross-device
 // identities); each profile owns online worlds. Both are capped to bound
@@ -34,6 +46,18 @@ export const MAX_WORLDS_PER_PROFILE = 10; // online worlds one profile may own
 // (Space ascends, crouch descends); a double-tap of Space toggles flight.
 export const FLY_SPEED = 11; // blocks/sec vertical while flying
 export const FLY_DOUBLE_TAP_WINDOW_SECONDS = 0.3; // max gap between Space taps to toggle flight
+
+// Touch controls (read by lib/game/input/touchInputController.ts). The feel
+// constants are deliberately config-side so on-device tuning is a one-line
+// change with no system edits — see docs/tuning.md "Touch feel".
+export const TOUCH_LOOK_SENSITIVITY = 0.0042; // radians per CSS px of look-drag (~2x mouse: thumb travel is short)
+export const TOUCH_TAP_MAX_MS = 220; // lift before this (within slop) = tap -> single attack
+export const TOUCH_TAP_SLOP_PX = 12; // drift beyond this = look drag, never a tap or a mine
+export const TOUCH_HOLD_MINE_MS = 220; // press held this long within slop -> mineHeld (equals TAP_MAX: no ambiguity gap)
+export const TOUCH_JOYSTICK_RADIUS_PX = 64; // knob travel radius (CSS px)
+export const TOUCH_JOYSTICK_DEADZONE = 0.18; // fraction of the radius before movement registers
+export const TOUCH_SPRINT_DOUBLE_TAP_MS = 300; // joystick re-engage gap that latches sprint (mirrors the fly double-tap)
+export const TOUCH_LONGPRESS_TOOLTIP_MS = 450; // long-press duration that shows item tooltips on touch
 
 // Player stats — Minecraft ranges: 20 HP shown as 10 hearts, 20 hunger as 10 drumsticks.
 export const MAX_HEARTS = 20;
@@ -112,6 +136,12 @@ export const FIST_DAMAGE = 6;
 export const ATTACK_REACH = 4.5;
 export const ATTACK_AIM_DOT = 0.89; // how precisely the camera must face a mob
 export const MELEE_KNOCKBACK_IMPULSE = 0.75; // base horizontal shove on a melee hit (Knockback enchant adds to it)
+// How far back (ms) the game server may rewind melee target selection toward a
+// high-ping attacker's stamped view of the world: covers the max interpolation
+// delay (450) plus a generous half-RTT budget. Server-only; single-player never
+// rewinds. Raising it forgives more lag but widens the ghost-hit window
+// (a mob visibly gone can still be struck by a laggy player).
+export const MELEE_REWIND_MAX_MS = 900;
 export const SPEAR_MELEE_REACH = 7;
 export const SPEAR_THROW_SPEED = 32;
 export const SPEAR_THROW_GRAVITY = 6;
@@ -143,6 +173,10 @@ export const SKELETON_STANDOFF_MIN = 5; // back away when the player is closer t
 export const SKELETON_STANDOFF_MAX = 9; // approach when farther; hold in the band
 export const SKELETON_ARROW_DAMAGE = 4;
 export const SKELETON_ARROW_SPEED = 27; // a touch slower than the player's bow (34)
+// The scorcher's fireball: slower than an arrow (dodgeable by strafing) but
+// harder-hitting — the nether's ranged pressure. Flies/hits like an arrow.
+export const FIREBALL_DAMAGE = 6;
+export const FIREBALL_SPEED = 16;
 export const SKELETON_FIRE_VGAP = 3; // max vertical gap to the player to shoot
 export const SKELETON_LEAD_FACTOR = 0.6; // fraction of travel-time lead on a moving target
 export const MOB_ARROW_KNOCKBACK = 0.35;
@@ -189,11 +223,33 @@ export const TNT_FUSE_SECONDS = 2.5; // delay between igniting and detonating
 export const TNT_CHAIN_FUSE_MIN_SECONDS = 0.1;
 export const TNT_CHAIN_FUSE_MAX_SECONDS = 0.35;
 
+// Redstone-lite (see engine/systems/redstone.ts)
+// The fixed power-pass cadence: lower = snappier circuits but more remesh/net
+// traffic from oscillators (a torch clock's period is 2x this).
+export const REDSTONE_TICK_SECONDS = 0.1;
+// Max wire cells a signal travels from a source ("the wire runs out").
+export const REDSTONE_WIRE_RANGE = 15;
+// How long a pressed button stays on before popping back.
+export const REDSTONE_BUTTON_PRESS_SECONDS = 1.0;
+
 // Day-night cycle (daylight ranges 0.04–1.0)
 export const DAY_CYCLE_SECONDS = 240;
 export const HOSTILE_SPAWN_BELOW_DAYLIGHT = 0.28;
 export const SPIDER_AGGRO_BELOW_DAYLIGHT = 0.42;
 export const HOSTILE_BURN_ABOVE_DAYLIGHT = 0.72;
+// The nether has no sky: daylight is pinned to this constant — below the
+// hostile-spawn threshold (spawns never stop) and the burn threshold (nothing
+// combusts), while the day clock itself keeps ticking (it is shared world time).
+export const NETHER_DAYLIGHT = 0.22;
+
+// Nether portal frame limits (the INTERIOR the obsidian border encloses,
+// corners required) and travel pacing. See lib/game/engine/systems/portal.ts.
+export const PORTAL_MIN_INTERIOR = { w: 2, h: 3 } as const;
+export const PORTAL_MAX_INTERIOR = { w: 4, h: 4 } as const;
+// Seconds a player must stand in the portal surface before travel fires.
+export const PORTAL_DWELL_SECONDS = 3;
+// How far around the mapped arrival point an existing portal is reused.
+export const PORTAL_SEARCH_RADIUS = 24;
 
 // Weather (cosmetic, transient — never persisted, never touches spawn balance).
 // Time is split into fixed windows; a seeded hash of the window index decides
@@ -293,6 +349,15 @@ export const FISH_FLEE_RANGE = 5;
 export const FISH_SUFFOCATION_HP_PER_SECOND = 2;
 export const AQUATIC_CAP = 24;
 export const AQUATIC_SPAWN_INTERVAL_SECONDS = 8;
+
+// The drowned — the hostile aquatic (night oceans). Strictly water-bound: it
+// pursues via the same destination-gated swim as fish, so it can never leave
+// the water. Its population has its own bound (inside the global hostile cap)
+// so drowned don't starve the fish population against AQUATIC_CAP.
+export const DROWNED_CAP = 6;
+export const DROWNED_MELEE_REACH = 1.9;
+export const DROWNED_PURSUE_SPEED_MULTIPLIER = 1.6; // over template speed while a target is in detect range
+export const DROWNED_SPAWN_MIN_RADIUS = 10; // never materializes point-blank under a swimmer
 
 // Fishing. Cast a bobber at water within FISHING_REACH; after a random wait in
 // [BITE_MIN, BITE_MAX] the bobber dips for FISHING_BITE_WINDOW_SECONDS — reel in

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { connectNetworkSession, type JoinGrant } from "./NetworkSession";
+import { connectNetworkSession, type JoinGrant, type NetworkSession } from "./NetworkSession";
+import { BlockId } from "@/lib/world";
+import { createSlot } from "@/lib/game/items";
+import { frameInput } from "@/lib/game/engine/testSupport";
 import { gzipWorldSync } from "./codec";
 import type { SelfDelta, WelcomeMessage, WorldSync } from "./protocol";
 
@@ -289,6 +292,51 @@ describe("connectNetworkSession", () => {
     session.dispose();
   });
 
+  test("jittered simulated latency never reorders sends (FIFO cursor)", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    // Jitter larger than the base delay: naive per-message timers would swap
+    // neighbors constantly; the monotonic delivery cursor must not.
+    session.setSimulatedLatency(10, 30);
+    expect(session.simulatedJitter()).toBe(30);
+    const before = instances[0].sent.length;
+    for (let i = 0; i < 20; i += 1) session.sendChat(`m${i}`);
+    const chatsSoFar = () =>
+      instances[0].sent
+        .slice(before)
+        .map((s) => JSON.parse(s) as { t: string; text?: string })
+        .filter((m) => m.t === "chat")
+        .map((m) => m.text);
+    // Poll for completeness rather than sleeping a fixed 300 ms — a loaded CI
+    // runner can starve the delivery timers past any fixed deadline, and this
+    // test is about ORDER, not delivery speed.
+    const deadline = Date.now() + 5000;
+    while (chatsSoFar().length < 20 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(chatsSoFar()).toEqual(Array.from({ length: 20 }, (_, i) => `m${i}`));
+    session.dispose();
+  });
+
+  test("netStats reports traffic over the rolling window", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.sendChat("count me");
+    instances[0].emit(tick());
+    // Two afterFrames: one opens the window, the second (past 2 s) rolls it.
+    session.afterFrame(1000);
+    session.afterFrame(4000);
+    const stats = session.netStats();
+    expect(stats.outKBps).toBeGreaterThan(0);
+    expect(stats.inKBps).toBeGreaterThan(0);
+    session.dispose();
+  });
+
   test("a non-fatal drop runs the reconnect ladder and resumes the same replica", async () => {
     const { make, instances } = socketFactory();
     let ticketsMinted = 0;
@@ -338,6 +386,249 @@ describe("connectNetworkSession", () => {
     expect(session.status()).toBe("closed");
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(reconnects).toBe(0);
+    session.dispose();
+  });
+});
+
+/**
+ * Optimistic placement scene: the local player stands on flat ground at
+ * (5.5, g+1, 5.5) aiming down-forward (+x), dirt in hand — the ray hits the
+ * ground top two cells ahead, so a predicted place lands at (6, g+1, 5).
+ */
+async function placeScene() {
+  const { make, instances } = socketFactory();
+  const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+  await pushWorldSync(instances[0], worldSync(WELCOME.players));
+  const state = session.engine.state;
+  const self = state.players.get("acct-1")!;
+  const g = state.world.highestSolidY(6, 5);
+  self.position.set(5.5, g + 1, 5.5);
+  self.yaw = -Math.PI / 2;
+  self.pitch = -0.9;
+  self.inventory = [...self.inventory];
+  self.inventory[0] = createSlot("dirt", 5);
+  self.selectedSlot = 0;
+  const idx = state.world.index(6, g + 1, 5);
+  return { session, instances, state, self, g, idx };
+}
+
+const dirtCount = (session: NetworkSession) => session.engine.state.players.get("acct-1")!.inventory[0]?.count;
+
+describe("optimistic block placement", () => {
+  test("a predicted place lands instantly: world block, stack take, local event, cmd on the wire", async () => {
+    const { session, instances, state, g, idx } = await placeScene();
+    session.dispatch({ type: "placeBlock" });
+
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Dirt);
+    expect(dirtCount(session)).toBe(4);
+    expect(session.netStats().pendingPredictions).toBe(1);
+    expect(session.engine.consumeEvents().some((e) => e.type === "blockPlaced")).toBe(true);
+    expect(instances[0].sentTypes()).toContain("cmd");
+    expect(idx).toBe(state.world.index(6, g + 1, 5));
+    session.dispose();
+  });
+
+  test("a matching journal confirms without flicker and the own echo is suppressed", async () => {
+    const { session, instances, state, g, idx } = await placeScene();
+    session.dispatch({ type: "placeBlock" });
+    session.drainEvents(); // clear anything pre-echo
+
+    instances[0].emit(
+      tick(undefined, {
+        blocks: [[idx, BlockId.Dirt]],
+        ev: [{ type: "blockPlaced", blockId: BlockId.Dirt, x: 6, y: g + 1, z: 5, playerId: "acct-1" }]
+      })
+    );
+
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Dirt);
+    expect(session.netStats().pendingPredictions).toBe(0);
+    expect(session.drainEvents().some((e) => e.type === "blockPlaced")).toBe(false); // echo swallowed
+    expect(dirtCount(session)).toBe(4); // no spurious refund
+    session.dispose();
+  });
+
+  test("another player's edit at an unpredicted cell flows through untouched", async () => {
+    const { session, instances, state, g } = await placeScene();
+    const otherIdx = state.world.index(9, g + 1, 5);
+    instances[0].emit(
+      tick(undefined, {
+        blocks: [[otherIdx, BlockId.Stone]],
+        ev: [{ type: "blockPlaced", blockId: BlockId.Stone, x: 9, y: g + 1, z: 5, playerId: "acct-2" }]
+      })
+    );
+    expect(state.world.get(9, g + 1, 5)).toBe(BlockId.Stone);
+    expect(session.drainEvents().some((e) => e.type === "blockPlaced")).toBe(true);
+    session.dispose();
+  });
+
+  test("a door race reverts the stranded upper half, not just the contested cell", async () => {
+    const { session, instances, state, self, g } = await placeScene();
+    self.inventory = [...self.inventory];
+    self.inventory[0] = createSlot("door", 2);
+    session.dispatch({ type: "placeBlock" }); // predicts BOTH door cells at (6, g+1..g+2, 5)
+    expect(state.world.get(6, g + 1, 5)).not.toBe(BlockId.Air);
+    expect(state.world.get(6, g + 2, 5)).not.toBe(BlockId.Air);
+    expect(session.netStats().pendingPredictions).toBe(1);
+
+    // Another player's stone won the lower cell; the server never wrote the
+    // upper (its whole door placement failed) — the replica must not keep a
+    // floating half-door.
+    const lowerIdx = state.world.index(6, g + 1, 5);
+    instances[0].emit(tick(undefined, { blocks: [[lowerIdx, BlockId.Stone]] }));
+
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Stone); // server truth
+    expect(state.world.get(6, g + 2, 5)).toBe(BlockId.Air); // sibling reverted
+    expect(state.players.get("acct-1")!.inventory[0]?.count).toBe(2); // door refunded
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  });
+
+  test("a lost race reverts to the server's block and refunds the stack", async () => {
+    const { session, instances, state, g, idx } = await placeScene();
+    session.dispatch({ type: "placeBlock" });
+    expect(dirtCount(session)).toBe(4);
+
+    instances[0].emit(tick(undefined, { blocks: [[idx, BlockId.Stone]] }));
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Stone); // server won
+    expect(dirtCount(session)).toBe(5); // stack handed back
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  });
+
+  test("an unanswered prediction times out: block reverts (with relight path) and the item returns", async () => {
+    const { session, state, g } = await placeScene();
+    session.dispatch({ type: "placeBlock" });
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Dirt);
+
+    await new Promise((resolve) => setTimeout(resolve, 1250)); // > the 1000 ms floor at rtt 0
+    session.afterFrame(performance.now());
+
+    expect(state.world.get(6, g + 1, 5)).toBe(BlockId.Air);
+    expect(dirtCount(session)).toBe(5);
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  }, 10_000);
+
+  test("a world-sync clears pending predictions", async () => {
+    const { session, instances } = await placeScene();
+    session.dispatch({ type: "placeBlock" });
+    expect(session.netStats().pendingPredictions).toBe(1);
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  });
+
+  test("no prediction without a placeable block in hand (the cmd still travels)", async () => {
+    const { session, instances, self } = await placeScene();
+    self.inventory = [...self.inventory];
+    self.inventory[0] = createSlot("wheat_seeds", 3); // item-driven branch: server decides
+    const cmdsBefore = instances[0].sentTypes().filter((t) => t === "cmd").length;
+    session.dispatch({ type: "placeBlock" });
+    expect(session.netStats().pendingPredictions).toBe(0);
+    expect(instances[0].sentTypes().filter((t) => t === "cmd").length).toBe(cmdsBefore + 1);
+    session.dispose();
+  });
+});
+
+describe("predictive block breaking + instant swing", () => {
+  /** Pin dirt underfoot, aim straight down, and hold the mouse until the replica commits the break. */
+  async function breakScene() {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    const state = session.engine.state;
+    const self = state.players.get("acct-1")!;
+    const g = state.world.highestSolidY(5, 5);
+    state.blockChanges.set(5, g, 5, BlockId.Dirt);
+    state.blockChanges.drainEditsDetailed(); // the pin is scenery, not a prediction
+    self.position.set(5.5, g + 1, 5.5);
+    self.pitch = -Math.PI / 2 + 0.02;
+    const held = frameInput({ mineHeld: true });
+    for (let t = 0; t < 8 && state.world.get(5, g, 5) !== BlockId.Air; t += 0.05) session.engine.step(0.05, held);
+    const idx = state.world.index(5, g, 5);
+    return { session, instances, state, g, idx };
+  }
+
+  test("a mined block vanishes at crack completion and the ledger tracks it through confirmation", async () => {
+    const { session, instances, state, g, idx } = await breakScene();
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Air); // committed by the replica step
+
+    session.afterFrame(performance.now()); // capture into the ledger
+    expect(session.netStats().pendingPredictions).toBe(1);
+
+    session.drainEvents();
+    instances[0].emit(
+      tick(undefined, {
+        blocks: [[idx, BlockId.Air]],
+        ev: [{ type: "blockBroken", blockId: BlockId.Dirt, x: 5, y: g, z: 5, playerId: "acct-1" }]
+      })
+    );
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Air);
+    expect(session.netStats().pendingPredictions).toBe(0);
+    expect(session.drainEvents().some((e) => e.type === "blockBroken")).toBe(false); // echo swallowed
+    session.dispose();
+  });
+
+  test("a break committed while disconnected reverts immediately (the server never heard the mining)", async () => {
+    const { session, instances, state, g } = await breakScene();
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Air);
+
+    instances[0].emitClose(4000, "bad ticket"); // fatal: no reconnect, socket gone
+    session.afterFrame(performance.now());
+
+    expect(state.world.get(5, g, 5)).toBe(BlockId.Dirt); // undone on the spot
+    expect(session.netStats().pendingPredictions).toBe(0);
+    session.dispose();
+  });
+
+  test("attack swings locally at click time and its echo is suppressed; other players' swings pass", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    session.dispatch({ type: "attack" });
+    expect(instances[0].sentTypes()).toContain("cmd");
+    expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(true); // synthetic, instant
+
+    instances[0].emit(tick(undefined, { ev: [{ type: "attackSwung", playerId: "acct-1" }] }));
+    expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(false); // own echo
+
+    instances[0].emit(tick(undefined, { ev: [{ type: "attackSwung", playerId: "acct-2" }] }));
+    expect(session.drainEvents().some((e) => e.type === "attackSwung")).toBe(true); // someone else's
+    session.dispose();
+  });
+
+  test("attack cmds carry the render-time view stamp once the clock is synced; nothing else does", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    const lastCmd = () =>
+      instances[0].sent
+        .map((s) => JSON.parse(s) as { t: string; cmd?: { type: string }; view?: number })
+        .filter((m) => m.t === "cmd")
+        .at(-1)!;
+
+    // Before any pong the clock isn't synced: attacks go out unstamped.
+    session.dispatch({ type: "attack" });
+    expect(lastCmd().cmd?.type).toBe("attack");
+    expect("view" in lastCmd()).toBe(false);
+
+    // One pong (serverTick 100 → the 5000 ms mark on the server timeline) syncs
+    // the clock; the next frame samples the interpolation render time.
+    instances[0].emit(JSON.stringify({ t: "pong", id: 1, tMs: performance.now() - 20, serverTick: 100 }));
+    session.afterFrame(performance.now());
+    session.dispatch({ type: "attack" });
+    const stamped = lastCmd();
+    expect(stamped.view).toBeDefined();
+    // The stamp is the render time: behind the ~5000 ms server-time estimate by
+    // the interpolation delay (125–450 ms), never ahead of it.
+    expect(stamped.view!).toBeGreaterThan(5000 - 450 - 100);
+    expect(stamped.view!).toBeLessThan(5000 - 125 + 100);
+
+    // Non-attack commands are never stamped, synced or not.
+    session.dispatch({ type: "selectSlot", index: 2 });
+    expect(lastCmd().cmd?.type).toBe("selectSlot");
+    expect("view" in lastCmd()).toBe(false);
     session.dispose();
   });
 });

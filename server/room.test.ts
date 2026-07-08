@@ -4,7 +4,10 @@ import { PROTOCOL_VERSION, type ServerMessage, type WorldSync } from "@/lib/net/
 import { gunzipWorldSync } from "@/lib/net/codec";
 import { restoreVehicle } from "@/lib/game/engine/systems/vehicles";
 import type { TicketClaims } from "@/lib/net/tickets";
+import { FACTION_BY_KIND } from "@/lib/game/mobs";
+import type { MobState } from "@/lib/game/engine/state";
 import { createMemoryPersistence, parseSaveBlob } from "./persistence";
+import { MELEE_REWIND_MAX_TICKS } from "./mobHistory";
 import { Room, type ClientSink } from "./room";
 
 /**
@@ -102,6 +105,31 @@ describe("room lifecycle", () => {
     // …and bob's tick carries alice's pose, not his own.
     expect(tickB?.pp.some((p) => p.id === "alice")).toBe(true);
     expect(tickB?.pp.some((p) => p.id === "bob")).toBe(false);
+    // Wire poses are quantized (re-quantizing is a no-op).
+    for (const p of tickB!.pp) {
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.yaw).toBe(Math.round(p.yaw * 1000) / 1000);
+    }
+  });
+
+  test("tick events carry the acting player's id (echo dedup relies on it)", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const alice = room.engine.state.players.get("alice")!;
+
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    const swungAtB = b
+      .messagesOf("tick")
+      .at(-1)
+      ?.ev.find((e) => e.type === "attackSwung");
+    expect(swungAtB).toBeDefined();
+    expect(swungAtB?.playerId).toBe("alice");
   });
 
   test("a speed-hacked pose is refused and answered with forcePose; an honest one sticks", async () => {
@@ -207,6 +235,16 @@ describe("room lifecycle", () => {
     const t = b.messagesOf("tick").at(-1);
     expect(t?.vp?.some((v) => v.id === vehicleId && v.kind === "raft")).toBe(true);
     expect(t?.prj?.some((p) => p.id === 99 && p.vx === 8)).toBe(true);
+    // Wire quantization holds on every pose channel (re-quantizing is a no-op).
+    for (const v of t!.vp!) {
+      expect(v.x).toBe(Math.round(v.x * 100) / 100);
+      expect(v.yaw).toBe(Math.round(v.yaw * 1000) / 1000);
+    }
+    for (const p of t!.prj!) {
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.vx).toBe(Math.round(p.vx * 100) / 100);
+    }
+    for (const m of t?.mp ?? []) expect(m.x).toBe(Math.round(m.x * 100) / 100);
 
     // A late joiner's world-sync keyframe carries both (force-emits past the deadband).
     const c = fakeSink();
@@ -269,7 +307,7 @@ describe("room lifecycle", () => {
     const blob = persistence.blobs.get("w1");
     expect(blob).toBeTruthy();
     const save = await parseSaveBlob(blob!);
-    expect(save?.version).toBe(17);
+    expect(save?.version).toBe(18);
     expect(save?.players.find((p) => p.id === "alice")?.xp).toBe(77);
   });
 
@@ -416,5 +454,168 @@ describe("ops surface", () => {
     a.frames.length = 0;
     await room.handleMessage("alice", { t: "cmd", seq: 999, cmd: { type: "attack" }, pose: { x: x + 60, y, z: z + 60, yaw: 0, pitch: 0 } });
     expect(alice.position.x).toBeCloseTo(x, 3); // the jump was clamped, not admitted
+  });
+});
+
+describe("melee lag compensation (view-stamped attacks)", () => {
+  /** A stationary passive mob the AI won't move, burn, or aggro. */
+  function pushSheep(room: Room, id: number, x: number, y: number, z: number): MobState {
+    const sheep = {
+      id,
+      kind: "sheep",
+      hostile: false,
+      faction: FACTION_BY_KIND.sheep,
+      targetId: null,
+      retargetTimer: 0,
+      hp: 50,
+      position: new THREE.Vector3(x, y, z),
+      direction: new THREE.Vector3(),
+      yaw: 0,
+      turnTimer: 9999,
+      speed: 0,
+      moveSpeed: 0,
+      detectRange: 0,
+      attackDamage: 0,
+      attackCooldown: 1,
+      attackTimer: 0,
+      halfHeight: 0.9,
+      bobSeed: 0,
+      fedTimer: 0,
+      ageTimer: 0
+    } as unknown as MobState;
+    room.engine.state.mobs.push(sheep);
+    return sheep;
+  }
+
+  /**
+   * One room per suite (worldgen is slow); each scenario below re-derives its
+   * timing from the CURRENT tick count via ticksSoFar(), so they compose.
+   * The aim pose targets the position history actually recorded (the engine
+   * may settle a pinned mob during its step), which is what a real client's
+   * interpolated view shows too.
+   */
+  async function setup() {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    const alice = room.engine.state.players.get("alice")!;
+    room.engine.state.mobs = [];
+    room.engine.state.dayClock = 60; // calm daytime — no hostile spawn noise
+    const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+    const tickCount = () => (room as unknown as { tickCount: number }).tickCount;
+    const eye = () => new THREE.Vector3(alice.position.x, alice.position.y + 1.62, alice.position.z);
+    /** The cmd pose whose eye ray points from alice at `target` (lookDirection inverse). */
+    const poseAiming = (target: THREE.Vector3) => {
+      const dir = target.clone().sub(eye()).normalize();
+      return { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: Math.atan2(-dir.x, -dir.z), pitch: Math.asin(dir.y) };
+    };
+    return { room, alice, tick, tickCount, eye, poseAiming };
+  }
+
+  test("a stamped attack hits where the attacker saw the mob; an unstamped one misses live", async () => {
+    const { room, tick, tickCount, eye, poseAiming } = await setup();
+    const front = eye().add(new THREE.Vector3(0, 0, -2));
+    const sheep = pushSheep(room, 4242, front.x, front.y, front.z);
+
+    // Five ticks with the mob pinned in front, then it "bolts" 30 blocks away.
+    for (let i = 0; i < 5; i += 1) {
+      sheep.position.set(front.x, front.y, front.z);
+      tick();
+    }
+    const seenAt = tickCount(); // the last tick recorded with the mob in front
+    const seen = sheep.position.clone(); // wherever the engine settled it — what history holds
+    for (let i = 0; i < 3; i += 1) {
+      sheep.position.set(front.x + 30, front.y, front.z + 30);
+      tick();
+    }
+
+    const pose = poseAiming(seen);
+    // Unstamped: judged at the live (far) position — a whiff.
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    expect(sheep.hp).toBe(50);
+
+    // Stamped with the tick alice was rendering: judged where she SAW it.
+    await room.handleMessage("alice", { t: "cmd", seq: 2, cmd: { type: "attack" }, pose, view: seenAt * 50 });
+    expect(sheep.hp).toBeLessThan(50);
+  });
+
+  test("stale and future view stamps clamp to live behavior", async () => {
+    const { room, tick, tickCount, eye, poseAiming } = await setup();
+    const front = eye().add(new THREE.Vector3(0, 0, -2));
+    const sheep = pushSheep(room, 4243, front.x, front.y, front.z);
+
+    for (let i = 0; i < 3; i += 1) {
+      sheep.position.set(front.x, front.y, front.z);
+      tick();
+    }
+    const seenAt = tickCount();
+    const seen = sheep.position.clone();
+    // Far away for longer than the whole rewind window (18 ticks + slack).
+    for (let i = 0; i < MELEE_REWIND_MAX_TICKS + 8; i += 1) {
+      sheep.position.set(front.x + 30, front.y, front.z + 30);
+      tick();
+    }
+
+    const pose = poseAiming(seen);
+    // The in-front tick is beyond the clamp: floored inside the far window → miss.
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose, view: seenAt * 50 });
+    expect(sheep.hp).toBe(50);
+    // A future stamp clamps to the current tick → plain live selection → miss.
+    await room.handleMessage("alice", { t: "cmd", seq: 2, cmd: { type: "attack" }, pose, view: (tickCount() + 100) * 50 });
+    expect(sheep.hp).toBe(50);
+  });
+
+  test("a mob with no history at the viewed tick falls back to its live position", async () => {
+    const { room, tick, tickCount, eye, poseAiming } = await setup();
+    const viewTick = tickCount() + 2;
+    for (let i = 0; i < 5; i += 1) tick(); // history exists, but without this mob…
+    const front = eye().add(new THREE.Vector3(0, 0, -2));
+    const sheep = pushSheep(room, 4244, front.x, front.y, front.z);
+    sheep.position.set(front.x, front.y, front.z);
+    tick(); // …which only enters history now
+    const live = sheep.position.clone();
+
+    // The stamp predates the mob's existence: selection falls back to live → hit.
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: poseAiming(live), view: viewTick * 50 });
+    expect(sheep.hp).toBeLessThan(50);
+  });
+
+  test("attack commands are budgeted per second; the budget refills at the boundary", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const alice = room.engine.state.players.get("alice")!;
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    // A 20-attack burst inside one second: only 12 swings make it through.
+    for (let i = 0; i < 20; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "attack" }, pose });
+    tick();
+    const swings = b
+      .messagesOf("tick")
+      .at(-1)
+      ?.ev.filter((e) => e.type === "attackSwung").length;
+    expect(swings).toBe(12);
+
+    // Cross a second boundary (budgets reset every 20th tick) and swing again.
+    for (let i = 0; i < 20; i += 1) tick();
+    await room.handleMessage("alice", { t: "cmd", seq: 99, cmd: { type: "attack" }, pose });
+    tick();
+    expect(
+      b
+        .messagesOf("tick")
+        .at(-1)
+        ?.ev.filter((e) => e.type === "attackSwung").length
+    ).toBe(1);
+  });
+
+  test("a view stamp on a non-attack command is inert", async () => {
+    const { room, alice, tick } = await setup();
+    tick();
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "selectSlot", index: 4 }, pose, view: 50 });
+    expect(alice.selectedSlot).toBe(4);
   });
 });

@@ -1,17 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import MinecraftGame from "@/components/MinecraftGame";
 import AccountProfileSelect from "@/components/menu/AccountProfileSelect";
+import AuthScreen from "@/components/menu/AuthScreen";
 import OnlineWorldSelect from "@/components/menu/OnlineWorldSelect";
 import ProfileSelect from "@/components/menu/ProfileSelect";
+import WelcomeScreen from "@/components/menu/WelcomeScreen";
 import WorldSelect from "@/components/menu/WorldSelect";
 import { currentUser, onlineUsed, type OnlineUser } from "@/lib/auth/client";
 import { migrateLegacySave } from "@/lib/game/legacyMigration";
 import { DEFAULT_SKIN_ID, isSkinId } from "@/lib/game/playerSkins";
 import { getProfile, setActiveProfile, type Profile } from "@/lib/game/profiles";
-import { createWorld, deleteWorld, getWorld, touchWorld, worldSaveKey, type WorldMeta } from "@/lib/game/worlds";
-import { writeSave } from "@/lib/game/save";
+import { createWorld, deleteWorld, getWorld, readWorlds, touchWorld, type WorldMeta } from "@/lib/game/worlds";
+import { requestPersistentStorage, worldSaves } from "@/lib/game/saveStore";
+import type { SaveData } from "@/lib/game/types";
 import { pullCloudSaveIfNewer } from "@/lib/game/cloudSaves";
 import { deleteOnlineWorld, requestJoinTicket, type OnlineWorld } from "@/lib/online/onlineClient";
 import type { OnlineProfile } from "@/lib/online/profilesClient";
@@ -19,14 +22,20 @@ import { connectNetworkSession, type NetworkSession } from "@/lib/net/NetworkSes
 import { installUiTiles } from "@/lib/ui/chromeTiles";
 
 /**
- * Top-level menu shell. Owns the screen state machine (profile-select ->
- * world-select -> play) and boots the legacy migration once on mount. The play
- * screen mounts MinecraftGame keyed by world id + a reload nonce, so switching
- * worlds (or Load/Reset) remounts the subtree — the game effect's cleanup
- * disposes the old engine/renderer and a fresh mount boots the next world, with
- * no page reload.
+ * Top-level menu shell. Owns the screen state machine — logged out it roots at
+ * the welcome gate (sign in via the dedicated auth screen, or play locally:
+ * welcome -> auth | profile-select -> world-select -> play), while a signed-in
+ * session skips the gate straight to the account home — and boots the legacy
+ * migration once on mount. The play screen mounts MinecraftGame keyed by world
+ * id + a reload nonce, so switching worlds (or Load/Reset) remounts the
+ * subtree — the game effect's cleanup disposes the old engine/renderer and a
+ * fresh mount boots the next world, with no page reload.
  */
 type Screen =
+  // The logged-out root: choose an online account or local (browser) play.
+  | { name: "welcome" }
+  // The dedicated sign-in / register screen behind the gate's "Sign in".
+  | { name: "auth" }
   | { name: "profile-select" }
   | { name: "world-select"; profileId: string }
   | { name: "online-worlds"; profile: OnlineProfile }
@@ -76,6 +85,9 @@ function onlineWorldMeta(world: OnlineWorld, profileId: string): WorldMeta {
  */
 const SESSION_KEY = "monecraft_active_session";
 
+/** How long the welcome gate may wait on the session probe before showing. */
+const AUTH_PROBE_TIMEOUT_MS = 4000;
+
 function readSessionPointer(): { profileId: string; worldId: string } | null {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
@@ -99,9 +111,38 @@ function writeSessionPointer(pointer: { profileId: string; worldId: string } | n
   }
 }
 
+/**
+ * Preloads a world's SaveData so the engine boot inside useMinecraftGame stays
+ * synchronous (IndexedDB reads are async; the mount callback can't await).
+ * Callers key this by world id + reload nonce: a Load/Reset remount re-runs
+ * the read, which the save store orders after the previous mount's enqueued
+ * write (read-your-writes). A read failure boots a fresh world from seed —
+ * the same total behavior readSave always had.
+ */
+function WorldSaveGate({ worldId, children }: { worldId: string; children: (save: SaveData | null) => ReactNode }) {
+  // Wrapped in an object so "loaded, but no save" (null) is distinct from "loading".
+  const [loaded, setLoaded] = useState<{ save: SaveData | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false; // StrictMode double-invoke / fast-unmount guard
+    worldSaves.read(worldId).then(
+      (save) => {
+        if (!cancelled) setLoaded({ save });
+      },
+      () => {
+        if (!cancelled) setLoaded({ save: null });
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [worldId]);
+  if (!loaded) return <div className="menu-screen" />;
+  return <>{children(loaded.save)}</>;
+}
+
 export default function GameShell() {
   const [ready, setReady] = useState(false);
-  const [screen, setScreen] = useState<Screen>({ name: "profile-select" });
+  const [screen, setScreen] = useState<Screen>({ name: "welcome" });
   const [reloadNonce, setReloadNonce] = useState(0);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -111,15 +152,36 @@ export default function GameShell() {
   // The signed-in account (its presence flips the menu into account mode).
   // Offline-first: never asked until this browser went online.
   const [onlineUser, setOnlineUser] = useState<OnlineUser | null>(null);
-  // The "Play locally" door: a signed-in account browsing its local (browser)
+  // The local-worlds door: a signed-in account browsing its local (browser)
   // profiles/worlds — where cloud-save sync lives — without signing out.
   const [browsingLocal, setBrowsingLocal] = useState(false);
+  // True once the mount-time session probe has answered (or was skipped) —
+  // the welcome gate holds a neutral frame until then, so a signed-in reload
+  // lands straight on the account home with no gate flash.
+  const [authProbed, setAuthProbed] = useState(false);
   const refreshOnlineUser = useCallback(() => {
-    if (onlineUsed())
-      void currentUser().then((user) => {
+    if (!onlineUsed()) {
+      // Pure-local browser: nothing to probe. Microtask hop keeps the set off
+      // the synchronous effect path (cascading-render lint).
+      queueMicrotask(() => setAuthProbed(true));
+      return;
+    }
+    // A hung probe (stalled fetch, dead proxy) must not strand the gate on the
+    // neutral frame: reveal it at the deadline and treat the visitor as logged
+    // out — a probe that settles later still flips into account mode.
+    const deadline = setTimeout(() => setAuthProbed(true), AUTH_PROBE_TIMEOUT_MS);
+    void currentUser().then(
+      (user) => {
+        clearTimeout(deadline);
         setOnlineUser(user);
         if (!user) setBrowsingLocal(false); // signed out: the door has no "back"
-      });
+        setAuthProbed(true);
+      },
+      () => {
+        clearTimeout(deadline);
+        setAuthProbed(true); // probe failed (offline): treat as logged out
+      }
+    );
   }, []);
 
   /**
@@ -137,7 +199,7 @@ export default function GameShell() {
       setConnecting(world.name);
       try {
         const decision = await pullCloudSaveIfNewer(world.cloudId);
-        if (decision.adopt) writeSave(worldSaveKey(worldId), decision.save);
+        if (decision.adopt) await worldSaves.write(worldId, decision.save);
       } catch {
         // Offline or a bad blob → fall through and play the local copy.
       } finally {
@@ -170,7 +232,7 @@ export default function GameShell() {
     setConnecting(world.name);
     try {
       const decision = await pullCloudSaveIfNewer(world.id);
-      if (decision.adopt) writeSave(worldSaveKey(`cloud:${world.id}`), decision.save);
+      if (decision.adopt) await worldSaves.write(`cloud:${world.id}`, decision.save);
     } catch {
       // Offline or a bad blob → play this device's cache (or a fresh world).
     } finally {
@@ -234,6 +296,12 @@ export default function GameShell() {
   useEffect(() => {
     installUiTiles(); // the menu chrome shares the in-game noise tiles
     migrateLegacySave();
+    // Sweep any legacy localStorage save blobs into IndexedDB (idempotent,
+    // copy-then-delete; picks up what migrateLegacySave just wrote too), and
+    // ask for eviction protection — but only for returning players, so a
+    // first-time visitor never sees Firefox's permission prompt.
+    void worldSaves.migrateAll().catch(() => {});
+    if (readWorlds().worlds.length > 0) requestPersistentStorage();
     // Resume the tab's world if one was being played and still exists.
     const pointer = readSessionPointer();
     const resume: Screen | null =
@@ -285,21 +353,25 @@ export default function GameShell() {
     // Both exist in normal flow; a cross-tab delete drops us back to a menu.
     if (profile && world) {
       return (
-        <MinecraftGame
-          key={`${world.id}:${reloadNonce}`}
-          world={world}
-          profile={profile}
-          onQuitToWorlds={() => {
-            writeSessionPointer(null);
-            setScreen({ name: "world-select", profileId: profile.id });
-          }}
-          onDeleteWorld={() => {
-            deleteWorld(world.id); // hardcore Game Over: erase the dead world and leave
-            writeSessionPointer(null);
-            setScreen({ name: "world-select", profileId: profile.id });
-          }}
-          onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
-        />
+        <WorldSaveGate key={`${world.id}:${reloadNonce}`} worldId={world.id}>
+          {(save) => (
+            <MinecraftGame
+              world={world}
+              profile={profile}
+              initialSave={save}
+              onQuitToWorlds={() => {
+                writeSessionPointer(null);
+                setScreen({ name: "world-select", profileId: profile.id });
+              }}
+              onDeleteWorld={() => {
+                deleteWorld(world.id); // hardcore Game Over: erase the dead world and leave
+                writeSessionPointer(null);
+                setScreen({ name: "world-select", profileId: profile.id });
+              }}
+              onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+            />
+          )}
+        </WorldSaveGate>
       );
     }
   }
@@ -307,28 +379,27 @@ export default function GameShell() {
   if (screen.name === "play-cloud") {
     const backToWorlds: Screen = { name: "online-worlds", profile: screen.profile };
     return (
-      <MinecraftGame
-        key={`cloud:${screen.world.id}:${reloadNonce}`}
-        world={cloudWorldMeta(screen.world, screen.profile.id)}
-        profile={profileFromOnline(screen.profile)}
-        onQuitToWorlds={() => setScreen(backToWorlds)}
-        onDeleteWorld={() => {
-          // Hardcore game-over: delete the cloud world (row + blob), then this
-          // device's save cache — only after the server confirmed, so a failed
-          // delete (offline) leaves a still-playable world in the list rather
-          // than a hollow one that re-downloads its own game-over.
-          void deleteOnlineWorld(screen.world.id).then((deleted) => {
-            if (!deleted) return;
-            try {
-              localStorage.removeItem(worldSaveKey(`cloud:${screen.world.id}`));
-            } catch {
-              // Cache cleanup only — never fatal.
-            }
-          });
-          setScreen(backToWorlds);
-        }}
-        onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
-      />
+      <WorldSaveGate key={`cloud:${screen.world.id}:${reloadNonce}`} worldId={`cloud:${screen.world.id}`}>
+        {(save) => (
+          <MinecraftGame
+            world={cloudWorldMeta(screen.world, screen.profile.id)}
+            profile={profileFromOnline(screen.profile)}
+            initialSave={save}
+            onQuitToWorlds={() => setScreen(backToWorlds)}
+            onDeleteWorld={() => {
+              // Hardcore game-over: delete the cloud world (row + blob), then this
+              // device's save cache — only after the server confirmed, so a failed
+              // delete (offline) leaves a still-playable world in the list rather
+              // than a hollow one that re-downloads its own game-over.
+              void deleteOnlineWorld(screen.world.id).then((deleted) => {
+                if (deleted) void worldSaves.remove(`cloud:${screen.world.id}`).catch(() => {});
+              });
+              setScreen(backToWorlds);
+            }}
+            onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+          />
+        )}
+      </WorldSaveGate>
     );
   }
 
@@ -340,6 +411,7 @@ export default function GameShell() {
         key={`online:${screen.world.id}`}
         world={onlineWorldMeta(screen.world, screen.profile.id)}
         profile={screen.profile}
+        initialSave={null} // the server owns the world; nothing is read locally
         online={screen.session}
         onQuitToWorlds={() => setScreen(backToWorlds)}
         onDeleteWorld={() => {
@@ -386,19 +458,39 @@ export default function GameShell() {
     );
   }
 
-  // The profile-select screen is auth-aware: a signed-in account browses its
-  // synced online profiles (unless it stepped through the "Play locally" door);
-  // everyone else gets the local (browser) profiles.
+  // The root menus are auth-aware: a signed-in account gets its account home
+  // (unless it stepped through the local-worlds door), a logged-out visitor
+  // roots at the welcome gate — sign in on the dedicated screen, or browse the
+  // local (browser) profiles.
   const accountMode = onlineUser !== null;
   if (accountMode && !browsingLocal) {
     return (
       <AccountProfileSelect
         user={onlineUser}
         onPlay={(profile) => setScreen({ name: "online-worlds", profile })}
-        onPlayLocally={() => setBrowsingLocal(true)}
-        onSignedOut={() => setOnlineUser(null)}
+        onPlayLocally={() => {
+          // Set the screen too: it may still read "welcome"/"auth", which
+          // would bounce the door back to the gate instead of the local list.
+          setBrowsingLocal(true);
+          setScreen({ name: "profile-select" });
+        }}
+        onSignedOut={() => {
+          setOnlineUser(null);
+          setScreen({ name: "welcome" }); // sign-out lands on the gate
+        }}
       />
     );
+  }
+
+  if (screen.name === "auth") {
+    return <AuthScreen onAuthChange={refreshOnlineUser} onBack={() => setScreen({ name: "welcome" })} />;
+  }
+
+  if (screen.name === "welcome") {
+    // Hold the neutral frame until the session probe answers — a signed-in
+    // reload goes straight to the account home above, never a gate flash.
+    if (!authProbed) return <div className="menu-screen" />;
+    return <WelcomeScreen onSignIn={() => setScreen({ name: "auth" })} onPlayLocally={() => setScreen({ name: "profile-select" })} />;
   }
 
   return (
@@ -407,8 +499,8 @@ export default function GameShell() {
         setActiveProfile(profileId);
         setScreen({ name: "world-select", profileId });
       }}
-      onAuthChange={refreshOnlineUser}
       onBackToAccount={accountMode ? () => setBrowsingLocal(false) : undefined}
+      onBackToWelcome={accountMode ? undefined : () => setScreen({ name: "welcome" })}
     />
   );
 }

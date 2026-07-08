@@ -39,3 +39,4 @@ Saves store only the world seed plus block-change deltas. World generation must 
 - `docs/adding-content.md` — how to add a block / item / recipe / mob
 - `docs/save-format.md` — save schema and compatibility rules
 - `docs/testing.md` — what is tested and the hash re-baseline policy
+- `docs/releasing.md` — cutting a version (keep `package.json`, the git tag, and the CHANGELOG heading in lockstep)

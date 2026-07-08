@@ -1,5 +1,7 @@
 import { BiomeId, BlockId, WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z } from "./blocks";
 import { isDoorBlock } from "./doors";
+import { isRailBlock } from "./rails";
+import { isRedstoneOverlay } from "./redstone";
 import { portableSin } from "./noise";
 
 /**
@@ -53,7 +55,9 @@ export class VoxelWorld {
 
   isSolid(x: number, y: number, z: number): boolean {
     const block = this.get(x, y, z);
-    return block !== BlockId.Air && block !== BlockId.Water;
+    // Water and the portal surface are walked into, never collided with (the
+    // portal also lets the solid raycast pass — you target the frame, not it).
+    return block !== BlockId.Air && block !== BlockId.Water && block !== BlockId.NetherPortal;
   }
 
   /** Sky-light level (0..15) at a voxel. Outside the world reads as open sky. */
@@ -71,7 +75,7 @@ export class VoxelWorld {
   highestSolidY(x: number, z: number): number {
     for (let y = this.sizeY - 1; y >= 0; y -= 1) {
       const block = this.get(x, y, z);
-      if (this.isSolid(x, y, z) && !isDoorBlock(block)) return y;
+      if (this.isSolid(x, y, z) && !isDoorBlock(block) && !isRedstoneOverlay(block) && !isRailBlock(block)) return y;
     }
     return 0;
   }

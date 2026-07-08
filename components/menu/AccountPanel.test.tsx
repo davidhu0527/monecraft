@@ -37,12 +37,13 @@ void mock.module("@/lib/auth/client", () => ({
 const { default: AccountPanel } = await import("./AccountPanel");
 
 describe("AccountPanel", () => {
-  test("logged out offers Sign in only — no guest path", async () => {
+  test("logged out offers Sign in and Create account — no guest path", async () => {
     fake.user = null;
     render(<AccountPanel />);
     await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
 
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /guest/i })).toBeNull();
   });
 
@@ -52,8 +53,7 @@ describe("AccountPanel", () => {
     render(<AccountPanel onAuthChange={onAuthChange} />);
     await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
 
-    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    await userEvent.click(screen.getByRole("button", { name: "I need an account" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
     await userEvent.type(screen.getByLabelText("Email"), "new@example.com");
     await userEvent.type(screen.getByLabelText("Display name"), "Newbie");
     await userEvent.type(screen.getByLabelText("Password"), "hunter2hunter2");
@@ -61,6 +61,18 @@ describe("AccountPanel", () => {
 
     await waitFor(() => expect(screen.getByText("Signed in as Newbie")).toBeTruthy());
     expect(onAuthChange).toHaveBeenCalled();
+  });
+
+  test("the sign-in form still toggles into sign-up", async () => {
+    fake.user = null;
+    render(<AccountPanel />);
+    await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy());
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(screen.queryByLabelText("Display name")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "I need an account" }));
+    expect(screen.getByLabelText("Display name")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
   });
 
   test("a signed-in account shows its name and can sign out", async () => {

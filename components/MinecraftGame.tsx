@@ -12,11 +12,13 @@ import InventoryPanel from "@/components/game/InventoryPanel";
 import PauseMenu from "@/components/game/PauseMenu";
 import SleepOverlay from "@/components/game/SleepOverlay";
 import StatusBars from "@/components/game/StatusBars";
+import TouchControls from "@/components/game/TouchControls";
 import TreasureCompass from "@/components/game/TreasureCompass";
 import VictoryScreen from "@/components/game/VictoryScreen";
 import XpBar from "@/components/game/XpBar";
 import { ANVIL_COMBINE_COST_LEVELS, ANVIL_RENAME_COST_LEVELS, ANVIL_REPAIR_COST_LEVELS, ENCHANT_COST_LEVELS } from "@/lib/game/config";
 import type { Profile } from "@/lib/game/profiles";
+import type { SaveData } from "@/lib/game/types";
 import { useMinecraftGame } from "@/lib/game/useMinecraftGame";
 import { takesDamage, usesInventory } from "@/lib/game/gameModes";
 import type { WorldMeta } from "@/lib/game/worlds";
@@ -29,6 +31,8 @@ import type { NetworkSession } from "@/lib/net/NetworkSession";
 type MinecraftGameProps = {
   world: WorldMeta;
   profile: Profile;
+  /** Preloaded by the shell's WorldSaveGate; null boots a fresh world from seed. */
+  initialSave: SaveData | null;
   /** A connected multiplayer session — this world lives on the server. */
   online?: NetworkSession;
   onQuitToWorlds: () => void;
@@ -37,7 +41,7 @@ type MinecraftGameProps = {
   onReloadWorld: () => void;
 };
 
-export default function MinecraftGame({ world, profile, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
+export default function MinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -107,8 +111,19 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
     saveNow,
     loadNow,
     resetNow,
-    quitToWorlds
-  } = useMinecraftGame({ world, profile, online, onQuitToWorlds, onReloadWorld });
+    quitToWorlds,
+    suppressUnmountSave,
+    touchControls,
+    engageControls,
+    isFlying,
+    pauseNow,
+    toggleInventory,
+    toggleCameraView,
+    clearControlKeys,
+    touchMode,
+    updateTouchSettings,
+    unstuckNow
+  } = useMinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
     installUiTiles();
@@ -138,15 +153,42 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
   }
 
   const showClickHint = !locked && !paused && !inventoryOpen && !advancementsOpen && respawnSeconds === 0;
+  const showTouchControls =
+    touchControls !== null && locked && !paused && !inventoryOpen && !advancementsOpen && respawnSeconds === 0 && !gameOver && !victory && !sleeping;
+  const heldSlot = inventory[selectedSlot];
+  const showEat = Boolean(heldSlot && heldSlot.count > 0 && (heldSlot.hunger != null || heldSlot.effect != null));
 
   return (
     <div className="game-root">
       <div ref={attachMount} className="game-canvas-wrap" />
       <div className="vignette" aria-hidden="true" />
 
-      {debugOpen ? <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} /> : null}
+      {debugOpen ? (
+        <DebugOverlay debug={debug} passiveCount={passiveCount} hostileCount={hostileCount} daylightPercent={daylightPercent} net={online ?? null} />
+      ) : null}
 
-      {showClickHint ? <div className="click-hint">Double-click to play</div> : null}
+      {showClickHint ? (
+        touchControls ? (
+          // On touch the hint doubles as the engagement surface: any tap starts play.
+          <button type="button" className="touch-tap-area" onPointerDown={engageControls}>
+            <span className="click-hint">Tap to play</span>
+          </button>
+        ) : (
+          <div className="click-hint">Double-click to play</div>
+        )
+      ) : null}
+
+      {showTouchControls ? (
+        <TouchControls
+          controls={touchControls}
+          showEat={showEat}
+          isFlying={isFlying}
+          onPause={pauseNow}
+          onOpenInventory={toggleInventory}
+          onToggleCamera={toggleCameraView}
+          onDeactivate={clearControlKeys}
+        />
+      ) : null}
 
       <BossHealthBar boss={boss} />
 
@@ -217,6 +259,7 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
           onAnvilRename={anvilRename}
           onGrindstoneStrip={grindstoneStrip}
           onGiveItem={giveCreativeItem}
+          onClose={toggleInventory}
         />
       ) : null}
 
@@ -232,6 +275,13 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
           hardcore={hardcore}
           skinId={skinId}
           onSkinChange={updateSkin}
+          touchMode={touchMode}
+          onTouchModeChange={(mode) => updateTouchSettings({ mode })}
+          touchActive={touchControls !== null}
+          onUnstuck={() => {
+            unstuckNow();
+            resumeNow();
+          }}
           onBack={resumeNow}
           onSave={saveNow}
           onLoad={loadNow}
@@ -244,12 +294,21 @@ export default function MinecraftGame({ world, profile, online, onQuitToWorlds, 
 
       <VictoryScreen show={victory} onDismiss={dismissVictory} />
 
-      <GameOverScreen show={gameOver} onQuitToWorlds={quitToWorlds} onDeleteWorld={onDeleteWorld} />
+      <GameOverScreen
+        show={gameOver}
+        onQuitToWorlds={quitToWorlds}
+        onDeleteWorld={() => {
+          // The shell deletes the world; the teardown save must not recreate it.
+          suppressUnmountSave();
+          onDeleteWorld();
+        }}
+      />
 
       <SleepOverlay sleeping={sleeping} />
 
       <div className="crosshair" />
-      <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>
+      {/* CapsLock is meaningless without a keyboard; sprint lives on the joystick. */}
+      {touchControls ? null : <div className={capsActive ? "caps-indicator on" : "caps-indicator"}>CapsLock {capsActive ? "ON (Sprint)" : "OFF"}</div>}
     </div>
   );
 }

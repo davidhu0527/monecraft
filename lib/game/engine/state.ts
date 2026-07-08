@@ -3,7 +3,18 @@ import { VoxelWorld, type BlockId } from "@/lib/world";
 import type { BossTracking } from "@/lib/game/bossTracking";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
-import type { EffectId, EnchantmentId, EquippedArmor, InventorySlot, MobFaction, MobKind, Profession, SaveData, VehicleKind } from "@/lib/game/types";
+import type {
+  DimensionId,
+  EffectId,
+  EnchantmentId,
+  EquippedArmor,
+  InventorySlot,
+  MobFaction,
+  MobKind,
+  Profession,
+  SaveData,
+  VehicleKind
+} from "@/lib/game/types";
 import type { BlockChangeTracker } from "./blockChanges";
 import type { Command } from "./commands";
 
@@ -164,6 +175,13 @@ export type ProjectileState = {
   owner?: PlayerId;
   /** Seconds remaining before the arrow despawns mid-air. */
   ttl: number;
+  /**
+   * Visual/audio family; absent = an ordinary arrow. The scorcher's fireball
+   * flies and hits exactly like an arrow — only its look differs. SP-only
+   * today (nether mobs never exist in an online world), so it never crosses
+   * the wire.
+   */
+  kind?: "arrow" | "fireball";
 };
 
 export type MiningState = {
@@ -202,6 +220,12 @@ export type VehicleState = {
   position: THREE.Vector3;
   yaw: number;
   rider: PlayerId | null;
+  /**
+   * Minecart travel speed along its yaw heading (blocks/sec, signed — negative
+   * is reversing). Session-only: never serialized, so a parked cart restores at
+   * rest, matching SavedVehicle's kind/pose-only shape. Absent on boats.
+   */
+  speed?: number;
 };
 
 /** Throttled (~4 Hz) readout for the F3 overlay; null while the overlay is closed. */
@@ -236,6 +260,10 @@ export type PlayerTimers = {
   spearThrowCooldown: number;
   /** Seconds until the bow can fire again (instant click-to-fire rate limit). */
   bowCooldownTimer: number;
+  /** Seconds spent standing in a portal surface; travel fires at PORTAL_DWELL_SECONDS. */
+  portalDwellSeconds: number;
+  /** Travel fired (or the player arrived inside a portal) — no re-fire until they step out. */
+  portalLatched: boolean;
 };
 
 /** World-scoped director/sampler timers — live on GameState.timers. */
@@ -277,6 +305,12 @@ export type RaidState = {
 export type GameState = {
   world: VoxelWorld;
   blockChanges: BlockChangeTracker;
+  /**
+   * Which dimension this engine simulates (swap-on-travel: one live dimension
+   * per engine — `world` and every voxel-indexed collection are in ITS space).
+   * Fixed for the engine's life; portal travel boots a fresh engine.
+   */
+  dimension: DimensionId;
   /** Every player in the world, by id. Single-player is the one-entry case. */
   players: Map<PlayerId, PlayerState>;
   /**
@@ -379,6 +413,24 @@ export type GameState = {
   victory: boolean;
   /** The active village raid, or null. Session-only (a reload cancels it). */
   raid: RaidState | null;
+  /**
+   * Redstone bookkeeping (session-only, never serialized): the tracked
+   * component cells, pressed-button timers, last pass's powered doors, and the
+   * fixed-cadence accumulator. Power itself is re-derived from the block grid
+   * every pass, so nothing here needs to survive a reload.
+   */
+  redstone: RedstoneState;
+};
+
+export type RedstoneState = {
+  /** Voxel indices holding redstone components; self-heals when a cell changes. */
+  cells: Set<number>;
+  /** Pressed button → seconds until pop-back (the primedTnt pattern). */
+  buttonTimers: Map<number, number>;
+  /** Lower-half indices of doors powered last pass (edge detection). */
+  prevDoorPowered: Set<number>;
+  /** Accumulator toward the next fixed-cadence power pass. */
+  timer: number;
 };
 
 export function createPlayerTimers(): PlayerTimers {
@@ -398,7 +450,9 @@ export function createPlayerTimers(): PlayerTimers {
     effectPoisonTimer: 0,
     stuckTimer: 0,
     spearThrowCooldown: 0,
-    bowCooldownTimer: 0
+    bowCooldownTimer: 0,
+    portalDwellSeconds: 0,
+    portalLatched: false
   };
 }
 
@@ -548,7 +602,7 @@ export type GameEvent =
   | { type: "tntPrimed"; x: number; y: number; z: number }
   | { type: "attackSwung" }
   | { type: "sleepStarted" }
-  | { type: "sleepDenied"; reason: "daylight" | "hostiles" }
+  | { type: "sleepDenied"; reason: "daylight" | "hostiles" | "dimension" }
   | { type: "wokeUp" }
   | { type: "playerJoined"; playerId: PlayerId }
   | { type: "playerLeft"; playerId: PlayerId }
@@ -556,12 +610,20 @@ export type GameEvent =
   | { type: "plantedSeed" }
   | { type: "plantedSapling" }
   | { type: "usedBoneMeal" }
+  | { type: "bucketFilled"; fluid: "water" | "lava" }
+  | { type: "bucketEmptied"; fluid: "water" | "lava" }
+  | { type: "lavaSolidified" }
+  | { type: "portalLit" }
+  | { type: "portalDenied"; reason: "online" | "invalidFrame" }
+  | { type: "dimensionTravel"; target: DimensionId; anchor: { x: number; y: number; z: number } }
   | { type: "fishingCast"; x: number; y: number; z: number }
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }
   | { type: "fishingReeledEmpty" }
   | { type: "vehiclePlaced"; kind: VehicleKind }
   | { type: "vehiclePlaceFailed" }
+  | { type: "vehicleBoarded"; kind: VehicleKind }
+  | { type: "detectorToggled"; on: boolean }
   | { type: "openedStation"; station: "furnace" | "villager" | "brewing" | "enchanting" | "anvil" | "grindstone" }
   | { type: "enchanted"; enchant: EnchantmentId }
   | { type: "anvilCombined" }
@@ -570,6 +632,10 @@ export type GameEvent =
   | { type: "grindstoneStripped" }
   | { type: "openedContainer" }
   | { type: "doorToggled"; open: boolean }
+  | { type: "leverToggled"; on: boolean }
+  | { type: "buttonPressed" }
+  | { type: "plateToggled"; on: boolean }
+  | { type: "lampToggled"; on: boolean }
   | { type: "breakBlocked"; reason: "containerFull" }
   | { type: "smelted" }
   | { type: "crafted"; recipeId: string }
@@ -584,5 +650,13 @@ export type GameEvent =
   | { type: "raidLost" }
   | { type: "raidFailed" }
   | { type: "pickedUp"; items: Array<{ itemId: string; count: number }> };
+
+/**
+ * A GameEvent stamped with the acting player where one exists. Server rooms
+ * attribute every emit (wire-compatible — the tick's `ev` already carries an
+ * optional playerId) so a predicting client can tell its own echoes from
+ * other players' actions; a local engine leaves events unstamped.
+ */
+export type AttributedGameEvent = GameEvent & { playerId?: PlayerId };
 
 export type EmitGameEvent = (event: GameEvent) => void;

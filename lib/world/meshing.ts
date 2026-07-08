@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { ATLAS_COLUMNS, ATLAS_ROWS, tileIndexFor } from "./atlas";
 import { BlockId } from "./blocks";
 import { doorBounds, isDoorBlock } from "./doors";
+import { isRailBlock, railAxis, railBounds } from "./rails";
+import { isRedstoneOverlay, redstoneBounds } from "./redstone";
+import { isPartialBlock, shapeBoxes } from "./slabs";
 import { MAX_LIGHT } from "./lighting";
 import { VoxelWorld } from "./voxelWorld";
 
@@ -214,7 +217,20 @@ function buildGeometryBuffers(
     return Math.max(0.8, 1 - occ * 0.06);
   };
 
-  const pushBlockCuboid = (target: GeometryBuffers, block: number, x: number, y: number, z: number, minX: number, maxX: number, minZ: number, maxZ: number) => {
+  const pushBlockCuboid = (
+    target: GeometryBuffers,
+    block: number,
+    x: number,
+    y: number,
+    z: number,
+    minX: number,
+    maxX: number,
+    minY: number,
+    maxY: number,
+    minZ: number,
+    maxZ: number,
+    rotateTopUV = false
+  ) => {
     for (const face of FACE_DEFS) {
       const nx = face.dir[0];
       const ny = face.dir[1];
@@ -222,14 +238,21 @@ function buildGeometryBuffers(
       const color = materialTint(ny);
       const light = sampleFaceLight(x + nx, y + ny, z + nz);
       const [u0, v0, u1, v1] = tileUV(block, ny);
-      const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + cy, z + (cz ? maxZ : minZ)] as const);
+      // Rotating the top-face texture 90° (rails oriented by their neighbors)
+      // is a permutation of the corner UV assignment, not a new tile.
+      const uvA: [number, number] = [u0, v1];
+      const uvB: [number, number] = [u0, v0];
+      const uvC: [number, number] = [u1, v0];
+      const uvD: [number, number] = [u1, v1];
+      const uvs = rotateTopUV && ny > 0 ? [uvB, uvC, uvD, uvA] : [uvA, uvB, uvC, uvD];
+      const corners = face.corners.map(([cx, cy, cz]) => [x + (cx ? maxX : minX), y + (cy ? maxY : minY), z + (cz ? maxZ : minZ)] as const);
       const [a, b, c, d] = corners;
-      pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
-      pushVertex(target, ...b, nx, ny, nz, color, u0, v0, light);
-      pushVertex(target, ...c, nx, ny, nz, color, u1, v0, light);
-      pushVertex(target, ...a, nx, ny, nz, color, u0, v1, light);
-      pushVertex(target, ...c, nx, ny, nz, color, u1, v0, light);
-      pushVertex(target, ...d, nx, ny, nz, color, u1, v1, light);
+      pushVertex(target, ...a, nx, ny, nz, color, uvs[0][0], uvs[0][1], light);
+      pushVertex(target, ...b, nx, ny, nz, color, uvs[1][0], uvs[1][1], light);
+      pushVertex(target, ...c, nx, ny, nz, color, uvs[2][0], uvs[2][1], light);
+      pushVertex(target, ...a, nx, ny, nz, color, uvs[0][0], uvs[0][1], light);
+      pushVertex(target, ...c, nx, ny, nz, color, uvs[2][0], uvs[2][1], light);
+      pushVertex(target, ...d, nx, ny, nz, color, uvs[3][0], uvs[3][1], light);
     }
   };
 
@@ -241,7 +264,43 @@ function buildGeometryBuffers(
         const target = splitGlass && block === BlockId.Glass ? glass : opaque;
         if (isDoorBlock(block)) {
           const bounds = doorBounds(block)!;
-          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, bounds.minZ, bounds.maxZ);
+          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, 0, 1, bounds.minZ, bounds.maxZ);
+          continue;
+        }
+        // Redstone overlays are small floor-mounted boxes (flat wire, a lever
+        // base, a torch stub) — like doors, they mesh as inset cuboids with no
+        // neighbor culling either way.
+        if (isRedstoneOverlay(block)) {
+          const bounds = redstoneBounds(block)!;
+          pushBlockCuboid(target, block, x, y, z, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, bounds.minZ, bounds.maxZ);
+          continue;
+        }
+        // Rails are the same flat-overlay shape, oriented along their track
+        // axis by rotating the top-face texture (the shape stays symmetric).
+        if (isRailBlock(block)) {
+          const bounds = railBounds();
+          pushBlockCuboid(
+            target,
+            block,
+            x,
+            y,
+            z,
+            bounds.minX,
+            bounds.maxX,
+            bounds.minY,
+            bounds.maxY,
+            bounds.minZ,
+            bounds.maxZ,
+            railAxis(world, x, y, z) === "z"
+          );
+          continue;
+        }
+        // Slabs are one half-height box; stairs are that box plus a raised
+        // back — the same shape boxes collision reads (slabs.ts).
+        if (isPartialBlock(block)) {
+          for (const box of shapeBoxes(block)!) {
+            pushBlockCuboid(target, block, x, y, z, box.minX, box.maxX, box.minY, box.maxY, box.minZ, box.maxZ);
+          }
           continue;
         }
         for (const face of FACE_DEFS) {
@@ -249,9 +308,16 @@ function buildGeometryBuffers(
           const ny = face.dir[1];
           const nz = face.dir[2];
           const neighbor = world.get(x + nx, y + ny, z + nz);
-          if (block === BlockId.Water || block === BlockId.Glass) {
+          if (block === BlockId.Water || block === BlockId.Glass || block === BlockId.NetherPortal) {
             if (neighbor === block) continue;
-          } else if (neighbor !== BlockId.Glass && !isDoorBlock(neighbor) && world.isSolid(x + nx, y + ny, z + nz)) {
+          } else if (
+            neighbor !== BlockId.Glass &&
+            !isDoorBlock(neighbor) &&
+            !isRedstoneOverlay(neighbor) &&
+            !isRailBlock(neighbor) &&
+            !isPartialBlock(neighbor) &&
+            world.isSolid(x + nx, y + ny, z + nz)
+          ) {
             continue;
           }
 

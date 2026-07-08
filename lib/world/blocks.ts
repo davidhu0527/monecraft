@@ -83,7 +83,70 @@ export const enum BlockId {
   Kelp = 55,
   // Decorative reef blocks scattered on the ocean floor (worldgen only).
   CoralPink = 56,
-  CoralBlue = 57
+  CoralBlue = 57,
+  // Redstone-lite (see redstone.ts). Power state is id PARITY — even = off,
+  // odd = on (`b | 1` / `b & ~1`) — so toggles ride the save diff like doors.
+  // Ids 58-67 are floor-mounted "overlays": non-cube, non-colliding shapes
+  // meshed via redstoneBounds. The lamp pair is a plain full cube.
+  RedstoneWire = 58,
+  RedstoneWireOn = 59,
+  Lever = 60,
+  LeverOn = 61,
+  RedstoneButton = 62,
+  RedstoneButtonOn = 63,
+  PressurePlate = 64,
+  PressurePlateOn = 65,
+  // The torch item places the LIT variant; the power pass turns it off when
+  // its support block is powered (the inverter rule).
+  RedstoneTorchOff = 66,
+  RedstoneTorch = 67,
+  RedstoneLamp = 68,
+  RedstoneLampOn = 69,
+  // Rails (see rails.ts): flat floor overlays like wire, ridden by minecarts.
+  // The powered/detector pairs join the redstone family — power is id PARITY,
+  // so each pair MUST start on an even id. Plain Rail carries no power state
+  // and must never pass through the redstoneOn/redstoneOff parity math.
+  PoweredRail = 70,
+  PoweredRailOn = 71,
+  DetectorRail = 72,
+  DetectorRailOn = 73,
+  Rail = 74,
+  // Partial building blocks (see slabs.ts). Slabs fill the bottom half of the
+  // cell; stairs add a half-height back on the side they FACE, encoded as 4
+  // contiguous ids per material (the doors offset-math precedent) in
+  // north/east/south/west order — keep them contiguous and in order.
+  PlankSlab = 75,
+  StoneSlab = 76,
+  CobbleSlab = 77,
+  PlankStairsNorth = 78,
+  PlankStairsEast = 79,
+  PlankStairsSouth = 80,
+  PlankStairsWest = 81,
+  StoneStairsNorth = 82,
+  StoneStairsEast = 83,
+  StoneStairsSouth = 84,
+  StoneStairsWest = 85,
+  CobbleStairsNorth = 86,
+  CobbleStairsEast = 87,
+  CobbleStairsSouth = 88,
+  CobbleStairsWest = 89,
+  // Volcanic glass, created by quenching lava with a water bucket (interact.ts).
+  // The hardest mineable block — diamond-pickaxe-gated (mining.ts) — and the
+  // only material a nether portal frame can be built from (portal.ts).
+  Obsidian = 90,
+  // The lit portal surface filling an obsidian frame (portal.ts). Non-solid
+  // (walked into, never collided with), unmineable (the solid raycast passes
+  // through it — break the frame instead), emits light, and has no item.
+  NetherPortal = 91,
+  // The nether's landmass (netherGeneration.ts): a crimson rock, soft and
+  // fast to mine — the dimension's building staple.
+  Netherrack = 92,
+  // Hanging crystal clusters on nether cavern ceilings: a strong natural
+  // light source (see lighting.ts) that drops glowstone dust.
+  Glowstone = 93,
+  // The nether's deep ore, the post-diamond tier: diamond-pickaxe-gated,
+  // smelts into blazite ingots (see recipes.ts).
+  BlaziteOre = 94
 }
 
 export enum BiomeId {
@@ -128,7 +191,25 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.Grindstone]: 0x8a7a5c,
   [BlockId.Kelp]: 0x3f7a4a,
   [BlockId.CoralPink]: 0xd9739c,
-  [BlockId.CoralBlue]: 0x4f86c8
+  [BlockId.CoralBlue]: 0x4f86c8,
+  [BlockId.RedstoneWire]: 0xb03a2a,
+  [BlockId.Lever]: 0x8a8f96,
+  [BlockId.RedstoneButton]: 0x8f9296,
+  [BlockId.PressurePlate]: 0xbe965d,
+  [BlockId.RedstoneTorch]: 0xe0503a,
+  [BlockId.RedstoneLamp]: 0xc9a24a,
+  [BlockId.Rail]: 0x8a8f96,
+  [BlockId.PoweredRail]: 0xc9a24a,
+  [BlockId.DetectorRail]: 0x9fa3aa,
+  [BlockId.PlankSlab]: 0xbe965d,
+  [BlockId.StoneSlab]: 0x8f9296,
+  [BlockId.CobbleSlab]: 0x787c82,
+  [BlockId.PlankStairsNorth]: 0xbe965d,
+  [BlockId.StoneStairsNorth]: 0x8f9296,
+  [BlockId.CobbleStairsNorth]: 0x787c82,
+  [BlockId.Obsidian]: 0x241c38,
+  [BlockId.Netherrack]: 0x8a3d34,
+  [BlockId.Glowstone]: 0xf2c957
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -202,5 +283,52 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   [BlockId.Kelp]: [0.16, 0.4, 0.24],
   // Reef corals: a branching pattern over the base color (painted in atlas.ts).
   [BlockId.CoralPink]: [0.8, 0.42, 0.58],
-  [BlockId.CoralBlue]: [0.28, 0.5, 0.76]
+  [BlockId.CoralBlue]: [0.28, 0.5, 0.76],
+  // Redstone components (painted in atlas.ts); the on variants glow brighter.
+  [BlockId.RedstoneWire]: [0.35, 0.1, 0.08],
+  [BlockId.RedstoneWireOn]: [0.75, 0.16, 0.1],
+  [BlockId.Lever]: [0.45, 0.46, 0.48],
+  [BlockId.LeverOn]: [0.45, 0.46, 0.48],
+  [BlockId.RedstoneButton]: [0.5, 0.52, 0.54],
+  [BlockId.RedstoneButtonOn]: [0.44, 0.46, 0.48],
+  [BlockId.PressurePlate]: [0.7, 0.56, 0.35],
+  [BlockId.PressurePlateOn]: [0.62, 0.5, 0.31],
+  [BlockId.RedstoneTorchOff]: [0.3, 0.12, 0.1],
+  [BlockId.RedstoneTorch]: [0.8, 0.22, 0.14],
+  [BlockId.RedstoneLamp]: [0.45, 0.35, 0.2],
+  [BlockId.RedstoneLampOn]: [0.95, 0.78, 0.4],
+  // Rails (painted in atlas.ts): steel strips over wooden ties; the powered
+  // pair glows warm when on, the detector carries a center sensor plate.
+  [BlockId.PoweredRail]: [0.4, 0.28, 0.16],
+  [BlockId.PoweredRailOn]: [0.5, 0.3, 0.15],
+  [BlockId.DetectorRail]: [0.38, 0.32, 0.24],
+  [BlockId.DetectorRailOn]: [0.42, 0.34, 0.24],
+  [BlockId.Rail]: [0.35, 0.28, 0.18],
+  // Slabs and stairs reuse their material's tone (atlas.ts extends the plank
+  // grain / stone speckle accents to them).
+  [BlockId.PlankSlab]: [0.76, 0.61, 0.38],
+  [BlockId.StoneSlab]: [0.54, 0.56, 0.58],
+  [BlockId.CobbleSlab]: [0.42, 0.43, 0.45],
+  [BlockId.PlankStairsNorth]: [0.76, 0.61, 0.38],
+  [BlockId.PlankStairsEast]: [0.76, 0.61, 0.38],
+  [BlockId.PlankStairsSouth]: [0.76, 0.61, 0.38],
+  [BlockId.PlankStairsWest]: [0.76, 0.61, 0.38],
+  [BlockId.StoneStairsNorth]: [0.54, 0.56, 0.58],
+  [BlockId.StoneStairsEast]: [0.54, 0.56, 0.58],
+  [BlockId.StoneStairsSouth]: [0.54, 0.56, 0.58],
+  [BlockId.StoneStairsWest]: [0.54, 0.56, 0.58],
+  [BlockId.CobbleStairsNorth]: [0.42, 0.43, 0.45],
+  [BlockId.CobbleStairsEast]: [0.42, 0.43, 0.45],
+  [BlockId.CobbleStairsSouth]: [0.42, 0.43, 0.45],
+  [BlockId.CobbleStairsWest]: [0.42, 0.43, 0.45],
+  // Near-black volcanic glass with violet flecks (painted in atlas.ts).
+  [BlockId.Obsidian]: [0.09, 0.07, 0.14],
+  // A swirling violet portal surface (painted in atlas.ts; emits block light).
+  [BlockId.NetherPortal]: [0.45, 0.18, 0.68],
+  // Crimson nether rock, pitted (painted in atlas.ts).
+  [BlockId.Netherrack]: [0.48, 0.2, 0.17],
+  // A glowing amber crystal cluster (painted in atlas.ts; emits block light).
+  [BlockId.Glowstone]: [0.9, 0.72, 0.32],
+  // Netherrack-toned rock with ember speckles (painted in atlas.ts).
+  [BlockId.BlaziteOre]: [0.48, 0.2, 0.17]
 };

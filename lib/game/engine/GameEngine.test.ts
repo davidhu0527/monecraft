@@ -29,7 +29,8 @@ import {
   ANVIL_REPAIR_COST_LEVELS,
   BOSS_HP,
   CHEST_SLOTS,
-  GRINDSTONE_REFUND_XP_PER_LEVEL
+  GRINDSTONE_REFUND_XP_PER_LEVEL,
+  NETHER_DAYLIGHT
 } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
@@ -44,6 +45,7 @@ import { GameEngine } from "@/lib/game/engine/GameEngine";
 import { daylightAt } from "@/lib/game/engine/systems/dayNight";
 import { fillWorldgenChestIfUnlooted } from "@/lib/game/engine/systems/dungeon";
 import { tickSpawnerDirector } from "@/lib/game/engine/systems/spawnDirector";
+import { seedRedstoneCells } from "@/lib/game/engine/systems/redstone";
 import type { FrameInput, GameEvent } from "@/lib/game/engine/state";
 import type { MobKind } from "@/lib/game/types";
 
@@ -979,6 +981,112 @@ describe("doors", () => {
   });
 });
 
+describe("redstone", () => {
+  /** Builds a supported lever→wire→lamp line at eye height in front of the player, aimed at the lever. */
+  function setAimedCircuit(engine: GameEngine): { x: number; y: number; z: number } {
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    // Support column under each overlay (the tick pops orphans otherwise).
+    for (let dz = 0; dz >= -2; dz -= 1) state.blockChanges.set(x, y - 1, z + dz, BlockId.Stone);
+    state.blockChanges.set(x, y, z, BlockId.Lever);
+    state.blockChanges.set(x, y, z - 1, BlockId.RedstoneWire);
+    state.blockChanges.set(x, y, z - 2, BlockId.RedstoneLamp);
+    seedRedstoneCells(state); // as the boot path does after applySavedChanges
+    return { x, y, z };
+  }
+
+  test("right-clicking a lever toggles it and the circuit lights the lamp through real steps", () => {
+    const engine = makeEngine();
+    const lever = setAimedCircuit(engine);
+    engine.consumeEvents();
+
+    engine.dispatch({ type: "placeBlock" }); // right-click → interact wins over place
+    expect(engine.state.world.get(lever.x, lever.y, lever.z)).toBe(BlockId.LeverOn);
+    expect(engine.consumeEvents()).toContainEqual({ type: "leverToggled", on: true });
+
+    run(engine, 0.5); // several power passes
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 1)).toBe(BlockId.RedstoneWireOn);
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLampOn);
+
+    engine.dispatch({ type: "placeBlock" }); // flip it back
+    run(engine, 0.5);
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 1)).toBe(BlockId.RedstoneWire);
+    expect(engine.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLamp);
+  });
+
+  test("circuit state persists through the ordinary block-change save and re-arms on boot", () => {
+    const engine = makeEngine();
+    const lever = setAimedCircuit(engine);
+    engine.dispatch({ type: "placeBlock" });
+    run(engine, 0.5);
+
+    const restored = makeEngine(engine.serialize());
+    expect(restored.state.world.get(lever.x, lever.y, lever.z)).toBe(BlockId.LeverOn);
+    expect(restored.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLampOn);
+    // The boot seed recovered the cells: the restored circuit still simulates.
+    restored.state.blockChanges.set(lever.x, lever.y, lever.z, BlockId.Lever);
+    run(restored, 0.5);
+    expect(restored.state.world.get(lever.x, lever.y, lever.z - 2)).toBe(BlockId.RedstoneLamp);
+  });
+
+  test("an overlay refuses placement without solid support and refunds the item", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 3;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 3.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    // A floating stone two cells out: the raycast's previous cell hangs in air.
+    state.blockChanges.set(x, y, z, BlockId.Stone);
+    state.blockChanges.set(x, y - 1, z + 1, BlockId.Air);
+    state.inventory = [...state.inventory];
+    state.inventory[state.selectedSlot] = createSlot("redstone", 4);
+
+    engine.dispatch({ type: "placeBlock" });
+    expect(state.world.get(x, y, z + 1)).toBe(BlockId.Air); // refused
+    expect(state.inventory[state.selectedSlot].count).toBe(4); // refunded
+  });
+
+  test("breaking the support block pops the wire above and drops its item", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    engine.state.mobs = [];
+    run(engine, 1);
+    const { state } = engine;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z) - 1;
+    const y = Math.floor(state.player.position.y + EYE_HEIGHT);
+    state.player.position.x = x + 0.5;
+    state.player.position.z = z + 1.5;
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.blockChanges.set(x, y, z, BlockId.Dirt); // bare-hand mineable support (the aimed block)
+    state.blockChanges.set(x, y + 1, z, BlockId.RedstoneWire);
+    seedRedstoneCells(state);
+    const before = countsById(state.inventory).get("redstone") ?? 0;
+
+    run(engine, 5, input({ mineHeld: true }));
+    expect(state.world.get(x, y, z)).toBe(BlockId.Air);
+    expect(state.world.get(x, y + 1, z)).toBe(BlockId.Air);
+    expect(countsById(state.inventory).get("redstone")).toBe(before + 1);
+  });
+});
+
 /** Decodes a voxel index back to [x, y, z] for the active world. */
 function indexToXYZ(state: GameEngine["state"], idx: number): [number, number, number] {
   const layer = state.world.sizeX * state.world.sizeZ;
@@ -1574,6 +1682,41 @@ describe("persistence", () => {
     expect(state.blockChanges.changes().length).toBe(0);
   });
 
+  test("serialize stamps the worldgen version, and a mismatched stamp reboots the world half but keeps the player", () => {
+    const engine = makeEngine();
+    engine.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    engine.state.player.xp = 57;
+    const save = engine.serialize();
+    expect(save.worldgenVersion).toBeDefined();
+
+    // Same stamp: the edit survives the reload.
+    const same = makeEngine(save);
+    expect(same.state.world.get(10, 40, 10)).toBe(BlockId.Brick);
+    expect(same.state.player.xp).toBe(57);
+
+    // A stale stamp: the guard discards the diff, the player slice survives.
+    const stale = makeEngine({ ...save, worldgenVersion: save.worldgenVersion! + 1 });
+    expect(stale.state.world.get(10, 40, 10)).not.toBe(BlockId.Brick);
+    expect(stale.state.blockChanges.changes()).toEqual([]);
+    expect(stale.state.player.xp).toBe(57);
+  });
+
+  test("a foreign dimension section rides through serialize untouched (the server-room pass-through)", () => {
+    const nether = { changes: [[7, 90]] as Array<[number, number]>, lootedChests: [9] };
+    const engine = makeEngine();
+    const withNether = { ...engine.serialize(), dimensions: { nether } };
+
+    // An (overworld) engine booted from that save — the server room's exact path —
+    // must re-emit the section byte-for-byte even after unrelated world edits.
+    const room = makeEngine(withNether);
+    room.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    const persisted = room.serialize();
+    expect(persisted.dimensions).toEqual({ nether });
+
+    // And a save with no dimensions never grows one.
+    expect(makeEngine(engine.serialize()).serialize().dimensions).toBeUndefined();
+  });
+
   test("save format is current and carries clock, stats, spawn point, and game mode", () => {
     const engine = makeEngine();
     engine.state.dayClock = 123;
@@ -1581,7 +1724,7 @@ describe("persistence", () => {
     engine.state.hunger = 9;
     engine.state.spawnPoint = { x: 12, y: 40, z: 8 };
     const save = engine.serialize();
-    expect(save.version).toBe(17);
+    expect(save.version).toBe(18);
     expect(save.players[0].gameMode).toBe("survival");
     expect(save.difficulty).toBe("normal");
 
@@ -3098,5 +3241,134 @@ describe("mob persistence (pets)", () => {
     expect(pet.faction).toBe("ally");
     expect(pet.hp).toBe(PET_TAMED_HP);
     expect(pet.detectRange).toBe(PET_FIGHT_RANGE); // re-armed so the pet still fights
+  });
+});
+
+describe("dimension-aware boot (the nether)", () => {
+  function makeNetherEngine(save: ReturnType<GameEngine["serialize"]> | null = null): GameEngine {
+    return new GameEngine({ save, dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+  }
+
+  test("a nether engine boots onto the cavern floor with daylight pinned, no sites, no weather", () => {
+    const e = makeNetherEngine();
+    expect(e.state.dimension).toBe("nether");
+    expect(e.state.daylight).toBe(NETHER_DAYLIGHT);
+    // The stub nether: bedrock caps + a stone mass — the spawn must sit on the
+    // floor pocket, not on the bedrock roof (the surfaceYAt ceiling landmine).
+    expect(e.state.player.position.y).toBeLessThan(e.state.world.sizeY - 5);
+    expect(e.state.player.position.y).toBeGreaterThan(2);
+    expect(e.state.dungeonChestIndices.size).toBe(0);
+    expect(e.state.villageSites).toHaveLength(0);
+    expect(e.state.weather.kind).toBe("clear");
+  });
+
+  test("daylight stays pinned through the day cycle (hostile gates never open or close)", () => {
+    const e = makeNetherEngine();
+    e.state.dayClock = 60; // overworld noon
+    run(e, 1);
+    expect(e.state.daylight).toBe(NETHER_DAYLIGHT);
+  });
+
+  test("a save round-trips overworld and nether world halves independently", () => {
+    // An overworld world with an edit…
+    const over = makeEngine();
+    over.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    const overSave = over.serialize();
+    expect(overSave.villagesSeeded).toBe(true);
+
+    // …travels to the nether (what serializeForTravel will write): same save,
+    // local player flipped into the nether.
+    const travelSave = { ...overSave, players: overSave.players.map((p) => ({ ...p, dimension: "nether" as const })) };
+    const nether = makeNetherEngine(travelSave);
+    expect(nether.state.dimension).toBe("nether");
+    expect(nether.state.blockChanges.changes()).toEqual([]); // fresh nether — no diffs yet
+
+    // A nether edit persists into dimensions.nether while the overworld half
+    // (including its villagesSeeded flag) rides through verbatim.
+    nether.state.blockChanges.set(5, 41, 5, BlockId.Obsidian);
+    const netherSave = nether.serialize();
+    expect(netherSave.changes).toEqual(overSave.changes);
+    expect(netherSave.villagesSeeded).toBe(true);
+    expect(netherSave.dimensions?.nether?.changes).toHaveLength(1);
+    expect(netherSave.players[0].dimension).toBe("nether");
+
+    // …and travelling home boots an overworld engine with both halves intact.
+    const homeSave = { ...netherSave, players: netherSave.players.map((p) => ({ ...p, dimension: "overworld" as const })) };
+    const home = makeEngine(homeSave);
+    expect(home.state.dimension).toBe("overworld");
+    expect(home.state.world.get(10, 40, 10)).toBe(BlockId.Brick); // the overworld edit survived the detour
+    expect(home.serialize().dimensions?.nether?.changes).toHaveLength(1); // the nether edit still rides along
+  });
+});
+
+describe("portal travel (swap-on-travel)", () => {
+  test("serializeForTravel rewrites only the local player: dimension, position, and the one-shot anchor", () => {
+    const engine = makeEngine();
+    const anchor = { x: 30, y: 41, z: 30 };
+    const travel = engine.serializeForTravel("nether", anchor);
+    expect(travel.players[0].dimension).toBe("nether");
+    expect(travel.players[0].position).toEqual(anchor);
+    expect(travel.players[0].portalArrival).toEqual(anchor);
+    // The world half is an ordinary serialize.
+    expect(travel.seed).toBe(engine.serialize().seed);
+    // An ordinary serialize never writes the one-shot anchor.
+    expect(engine.serialize().players[0].portalArrival).toBeUndefined();
+  });
+
+  test("booting from a travel save builds the arrival portal, lands the player inside it, latched", () => {
+    const over = makeEngine();
+    const travel = over.serializeForTravel("nether", { x: 30, y: 41, z: 30 });
+    const nether = new GameEngine({ save: travel, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+
+    expect(nether.state.dimension).toBe("nether");
+    const feet = nether.state.player.position;
+    const cell = nether.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z));
+    expect(cell).toBe(BlockId.NetherPortal); // landed inside the arrival portal
+    expect(nether.state.player.timers.portalLatched).toBe(true);
+
+    // Latched: standing put through several dwell windows never fires travel.
+    run(nether, 8);
+    expect(nether.consumeEvents().some((e) => e.type === "dimensionTravel")).toBe(false);
+
+    // The built portal persists as ordinary diff — a plain reload finds it again.
+    const reload = new GameEngine({ save: nether.serialize(), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(reload.state.dimension).toBe("nether");
+    expect(reload.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
+  });
+
+  test("the return trip reuses the departure-side portal", () => {
+    const over = makeEngine();
+    // Travel out and straight back: the return anchor is the overworld frame
+    // base, so the arrival scan must find a portal there if one exists. Build
+    // one first (as ignition would have).
+    const anchor = { x: 30, y: 41, z: 30 };
+    const travel = over.serializeForTravel("nether", anchor);
+    const nether = new GameEngine({ save: travel, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    const home = new GameEngine({ save: nether.serializeForTravel("overworld", anchor), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    expect(home.state.dimension).toBe("overworld");
+    const feet = home.state.player.position;
+    expect(home.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
+  });
+});
+
+describe("nether unstuck", () => {
+  test("forceUnstuck in the nether relocates to a cavern-floor pocket, never the bedrock roof", () => {
+    const nether = new GameEngine({ dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    const player = nether.state.player;
+    // Wedge the player inside the solid netherrack mass, then ask for rescue.
+    player.position.set(20.5, 20, 20.5);
+    nether.dispatch({ type: "unstuck" });
+
+    const fx = Math.floor(player.position.x);
+    const fy = Math.floor(player.position.y);
+    const fz = Math.floor(player.position.z);
+    // Below the roof, above the guards' floor, standing in open interior cells…
+    expect(fy).toBeLessThan(nether.state.world.sizeY - 5);
+    expect(fy).toBeGreaterThan(2);
+    expect(nether.state.world.get(fx, fy, fz)).toBe(BlockId.Air);
+    expect(nether.state.world.get(fx, fy + 1, fz)).toBe(BlockId.Air);
+    // …on solid, non-lava footing (the whole point of the nether floor walker).
+    expect(nether.state.world.isSolid(fx, fy - 1, fz)).toBe(true);
+    expect(nether.state.world.get(fx, fy - 1, fz)).not.toBe(BlockId.Lava);
   });
 });

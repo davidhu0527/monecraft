@@ -70,6 +70,86 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "grindstone", count: 1 }
   },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
+  // Redstone-lite. Dust is craft-only for now (gold as the conductor gates
+  // circuits behind a tier-3 pick); redstone ORE worldgen is deferred to a
+  // future WORLDGEN_VERSION batch.
+  {
+    id: "redstone",
+    label: "1 Gold Ore + 1 Coal -> 8 Redstone Dust",
+    cost: [
+      { slotId: "gold_ore", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "redstone", count: 8 }
+  },
+  {
+    id: "lever",
+    label: "1 Cobble + 1 Planks -> Lever",
+    cost: [
+      { slotId: "cobble", count: 1 },
+      { slotId: "planks", count: 1 }
+    ],
+    result: { slotId: "lever", count: 1 }
+  },
+  { id: "stone_button", label: "1 Cobble -> 2 Stone Button", cost: [{ slotId: "cobble", count: 1 }], result: { slotId: "stone_button", count: 2 } },
+  { id: "pressure_plate", label: "2 Planks -> Pressure Plate", cost: [{ slotId: "planks", count: 2 }], result: { slotId: "pressure_plate", count: 1 } },
+  {
+    id: "redstone_torch",
+    label: "1 Redstone Dust + 1 Wood -> 2 Redstone Torch",
+    cost: [
+      { slotId: "redstone", count: 1 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "redstone_torch", count: 2 }
+  },
+  {
+    id: "redstone_lamp",
+    label: "4 Redstone Dust + 2 Glass -> Redstone Lamp",
+    cost: [
+      { slotId: "redstone", count: 4 },
+      { slotId: "glass", count: 2 }
+    ],
+    result: { slotId: "redstone_lamp", count: 1 }
+  },
+  // Rails. Sliver is the iron analog; the batch of 16 makes laying real track
+  // affordable, while the powered rail's gold + dust cost mirrors its redstone
+  // tier (it is a circuit output as much as a track piece).
+  {
+    id: "rail",
+    label: "3 Sliver Ore + 3 Wood -> 16 Rail",
+    cost: [
+      { slotId: "sliver_ore", count: 3 },
+      { slotId: "wood", count: 3 }
+    ],
+    result: { slotId: "rail", count: 16 }
+  },
+  {
+    id: "powered_rail",
+    label: "2 Gold Ore + 1 Redstone Dust + 2 Wood -> 4 Powered Rail",
+    cost: [
+      { slotId: "gold_ore", count: 2 },
+      { slotId: "redstone", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "powered_rail", count: 4 }
+  },
+  {
+    id: "detector_rail",
+    label: "1 Sliver Ore + 1 Redstone Dust + 1 Cobble -> 2 Detector Rail",
+    cost: [
+      { slotId: "sliver_ore", count: 1 },
+      { slotId: "redstone", count: 1 },
+      { slotId: "cobble", count: 1 }
+    ],
+    result: { slotId: "detector_rail", count: 2 }
+  },
+  // Half-blocks: the classic 3-material-to-6-slabs and 6-to-4-stairs ratios.
+  { id: "plank_slab", label: "3 Planks -> 6 Plank Slab", cost: [{ slotId: "planks", count: 3 }], result: { slotId: "plank_slab", count: 6 } },
+  { id: "stone_slab", label: "3 Stone -> 6 Stone Slab", cost: [{ slotId: "stone", count: 3 }], result: { slotId: "stone_slab", count: 6 } },
+  { id: "cobble_slab", label: "3 Cobble -> 6 Cobble Slab", cost: [{ slotId: "cobble", count: 3 }], result: { slotId: "cobble_slab", count: 6 } },
+  { id: "plank_stairs", label: "6 Planks -> 4 Plank Stairs", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "plank_stairs", count: 4 } },
+  { id: "stone_stairs", label: "6 Stone -> 4 Stone Stairs", cost: [{ slotId: "stone", count: 6 }], result: { slotId: "stone_stairs", count: 4 } },
+  { id: "cobble_stairs", label: "6 Cobble -> 4 Cobble Stairs", cost: [{ slotId: "cobble", count: 6 }], result: { slotId: "cobble_stairs", count: 4 } },
   {
     id: "torch",
     label: "1 Coal + 1 Wood -> 4 Torch",
@@ -92,6 +172,28 @@ const CRAFTING_RECIPES: Recipe[] = [
   // no fuel itself), so this is a straight wood -> charcoal conversion — the
   // bootstrap fuel for a player who hasn't found coal yet.
   { id: "charcoal", label: "1 Wood -> 1 Charcoal", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "charcoal", count: 1 }, station: "furnace" },
+  // Raw nether blazite smelts into the ingot the post-diamond gear is forged
+  // from (fuel is an ingredient, so the usual coal/charcoal variant pair).
+  {
+    id: "smelt_blazite",
+    label: "2 Blazite Ore + Coal -> Blazite Ingot",
+    cost: [
+      { slotId: "blazite_ore", count: 2 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "blazite_ingot", count: 1 },
+    station: "furnace"
+  },
+  {
+    id: "smelt_blazite_charcoal",
+    label: "2 Blazite Ore + Charcoal -> Blazite Ingot",
+    cost: [
+      { slotId: "blazite_ore", count: 2 },
+      { slotId: "charcoal", count: 1 }
+    ],
+    result: { slotId: "blazite_ingot", count: 1 },
+    station: "furnace"
+  },
   // Cooking burns a fuel ingredient: coal (mined) or charcoal (smelted from wood).
   {
     id: "cook_chicken",
@@ -381,6 +483,15 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "diamond_pickaxe", count: 1 }
   },
   {
+    id: "blazite_pickaxe",
+    label: "2 Blazite Ingot + 1 Wood -> Blazite Pickaxe",
+    cost: [
+      { slotId: "blazite_ingot", count: 2 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "blazite_pickaxe", count: 1 }
+  },
+  {
     id: "knife",
     label: "1 Stone + 1 Wood -> Knife",
     cost: [
@@ -453,6 +564,15 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "diamond_sword", count: 1 }
   },
   {
+    id: "blazite_sword",
+    label: "2 Blazite Ingot + 1 Wood -> Blazite Sword",
+    cost: [
+      { slotId: "blazite_ingot", count: 2 },
+      { slotId: "wood", count: 1 }
+    ],
+    result: { slotId: "blazite_sword", count: 1 }
+  },
+  {
     id: "wood_spear",
     label: "1 Planks + 2 Wood -> Wood Spear",
     cost: [
@@ -516,6 +636,15 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "diamond_spear", count: 1 }
   },
   {
+    id: "blazite_spear",
+    label: "1 Blazite Ingot + 2 Wood -> Blazite Spear",
+    cost: [
+      { slotId: "blazite_ingot", count: 1 },
+      { slotId: "wood", count: 2 }
+    ],
+    result: { slotId: "blazite_spear", count: 1 }
+  },
+  {
     id: "bow",
     label: "3 Wood + 3 String -> Bow",
     cost: [
@@ -532,6 +661,27 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "string", count: 2 }
     ],
     result: { slotId: "fishing_rod", count: 1 }
+  },
+  {
+    id: "bucket",
+    label: "3 Sliver Ore -> Bucket",
+    cost: [{ slotId: "sliver_ore", count: 3 }],
+    result: { slotId: "bucket", count: 1 }
+  },
+  {
+    id: "flint_and_steel",
+    label: "1 Sliver Ore + 1 Coal -> Flint & Steel",
+    cost: [
+      { slotId: "sliver_ore", count: 1 },
+      { slotId: "coal", count: 1 }
+    ],
+    result: { slotId: "flint_and_steel", count: 1 }
+  },
+  {
+    id: "glowstone",
+    label: "4 Glowstone Dust -> Glowstone",
+    cost: [{ slotId: "glowstone_dust", count: 4 }],
+    result: { slotId: "glowstone", count: 1 }
   },
   {
     id: "raft",
@@ -551,6 +701,12 @@ const CRAFTING_RECIPES: Recipe[] = [
       { slotId: "string", count: 2 }
     ],
     result: { slotId: "ship", count: 1 }
+  },
+  {
+    id: "minecart",
+    label: "5 Sliver Ore -> Minecart",
+    cost: [{ slotId: "sliver_ore", count: 5 }],
+    result: { slotId: "minecart", count: 1 }
   },
   {
     id: "arrow",

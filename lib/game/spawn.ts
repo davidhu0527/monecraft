@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BiomeId, BlockId, VoxelWorld } from "@/lib/world";
+import { BiomeId, BlockId, isSlabBlock, VoxelWorld } from "@/lib/world";
 
 export type SurfaceYAtFn = (x: number, z: number) => number;
 
@@ -8,8 +8,58 @@ export function createSurfaceYAt(world: VoxelWorld): SurfaceYAtFn {
     const ix = Math.floor(x);
     const iz = Math.floor(z);
     if (ix < 0 || iz < 0 || ix >= world.sizeX || iz >= world.sizeZ) return 1;
-    return world.highestSolidY(ix, iz) + 1;
+    const top = world.highestSolidY(ix, iz);
+    // A slab-topped column's walkable surface is half a block down — without
+    // this, mobs ground-clamped by surfaceYAt hover above player-laid slabs.
+    // (Stairs use the full-cell top; feet sink slightly into the low half.)
+    if (isSlabBlock(world.get(ix, top, iz))) return top + 0.5;
+    return top + 1;
   };
+}
+
+/**
+ * The nether's surfaceYAt: the world is ROOFED (a bedrock ceiling cap), so
+ * `highestSolidY` would put every consumer — unstuck, respawn, the spawn
+ * directors — on top of the roof. Instead, walk each column down from beneath
+ * the cap: skip any mass hanging from the ceiling, descend the open air, and
+ * the first air-over-solid pocket is the cavern floor. A lava floor is not a
+ * floor (return 1, which every consumer's `y > 2` guard rejects).
+ */
+export function createNetherFloorYAt(world: VoxelWorld): SurfaceYAtFn {
+  return (x: number, z: number) => {
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+    if (ix < 0 || iz < 0 || ix >= world.sizeX || iz >= world.sizeZ) return 1;
+    let y = world.sizeY - 2;
+    while (y > 1 && world.isSolid(ix, y, iz)) y -= 1; // through the ceiling mass
+    while (y > 1 && !world.isSolid(ix, y - 1, iz)) y -= 1; // down the open air
+    if (y <= 1) return 1; // solid to the floor — no pocket
+    const floor = world.get(ix, y - 1, iz);
+    if (floor === BlockId.Lava) return 1;
+    if (isSlabBlock(floor)) return y - 0.5;
+    return y;
+  };
+}
+
+/**
+ * Deterministic spiral search for a safe nether spawn: a floor pocket with
+ * body + head clearance, nearest the search center. Only reachable without a
+ * portal arrival anchor (tests, or a corrupt save) — a real travel boot places
+ * the player at the arrival portal instead.
+ */
+export function findNetherSpawn(world: VoxelWorld, floorYAt: SurfaceYAtFn, centerX: number, centerZ: number): { x: number; y: number; z: number } {
+  const maxRadius = Math.min(300, Math.floor(Math.min(world.sizeX, world.sizeZ) * 0.4));
+  for (let radius = 0; radius <= maxRadius; radius += 2) {
+    for (let i = 0; i < 32; i += 1) {
+      const angle = (Math.PI * 2 * i) / 32;
+      const x = Math.max(5, Math.min(world.sizeX - 6, Math.floor(centerX + Math.cos(angle) * radius)));
+      const z = Math.max(5, Math.min(world.sizeZ - 6, Math.floor(centerZ + Math.sin(angle) * radius)));
+      const y = floorYAt(x, z);
+      if (y <= 2 || y !== Math.floor(y)) continue; // no pocket / a slab-top — keep it simple
+      if (world.get(x, y, z) === BlockId.Air && world.get(x, y + 1, z) === BlockId.Air) return { x, y, z };
+    }
+  }
+  return { x: centerX, y: Math.max(2, floorYAt(centerX, centerZ)), z: centerZ };
 }
 
 /**
@@ -80,11 +130,15 @@ export function randomWaterPointNear(
   centerZ: number,
   radius: number,
   rng: () => number = Math.random,
-  minDepth = 2
+  minDepth = 2,
+  minRadius = 0
 ): THREE.Vector3 | null {
   for (let i = 0; i < 50; i += 1) {
     const x = Math.max(10, Math.min(world.sizeX - 10, centerX + (rng() * 2 - 1) * radius));
     const z = Math.max(10, Math.min(world.sizeZ - 10, centerZ + (rng() * 2 - 1) * radius));
+    // A standoff for hostile spawns (mirrors randomLandPointNear's minRadius):
+    // nothing should materialize point-blank under a swimming player.
+    if (minRadius > 0 && Math.hypot(x - centerX, z - centerZ) < minRadius) continue;
     const ix = Math.floor(x);
     const iz = Math.floor(z);
     const floor = world.highestSolidY(ix, iz);

@@ -15,13 +15,17 @@ const CALL_INTERVALS: Record<MobKind, readonly [number, number]> = {
   // Fish are nearly silent — sparse bubble blips when close.
   cod: [9, 18],
   salmon: [9, 18],
+  // The drowned gurgles more often than fish blip, less than land hostiles groan.
+  drowned: [6, 14],
   zombie: [4, 9],
   skeleton: [5, 11],
   spider: [4, 10],
   creeper: [6, 13],
   raider: [5, 11],
   villager: [7, 15],
-  boss: [6, 12]
+  boss: [6, 12],
+  imp: [4, 9],
+  scorcher: [5, 11]
 };
 
 /** Structural subset of the engine's MobState — state.mobs passes directly. */

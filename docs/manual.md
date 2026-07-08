@@ -14,19 +14,23 @@ the [README](../README.md#controls).
 
 The game opens to a menu rather than dropping you straight into a world:
 
-1. **Pick a profile.** A profile is a player — a name and an appearance (skin). On a
+1. **Choose how to play.** The game opens with two doors: **Sign in** (online
+   worlds and cloud saves — needs a free account, see
+   [Playing online](#playing-online)) or **Play locally** (everything below —
+   stored in this browser, no account).
+2. **Pick a profile.** A profile is a player — a name and an appearance (skin). On a
    shared browser everyone can have their own. Create one with **New Profile**, choose
    a skin, and you're in; rename or delete profiles from the same screen.
-2. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
+3. **Pick a world.** Each profile keeps its **own** list of worlds. **New World** lets
    you name it, choose a **world type** (Default, Superflat, Amplified, or Islands —
    see [the reference](reference.md#world-types)), and optionally enter a **seed** —
    type a number or a word to get the same world every time, or leave it blank for a
    random one. Worlds you've played show most-recent first; rename or delete them here too.
-3. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
+4. **Play.** Choosing a world drops you in. From the pause menu (**Esc**), **Save &
    Quit to Worlds** takes you back to the list, and reloading the page resumes the
    world you were in.
 
-Everything is saved in your browser (localStorage). Deleting a world removes its save;
+Everything is saved in your browser (world saves in IndexedDB, so big builds don't hit localStorage's small quota). Deleting a world removes its save;
 deleting a profile removes all of its worlds.
 
 ## Getting started: your first day
@@ -38,7 +42,8 @@ The day-night cycle is short — **four minutes per full day** — so the first 
 comes fast. A good opening:
 
 1. **Look around.** Double-click the game to lock the mouse (the starting gesture
-   doesn't mine). Move with `W A S D`, look with the mouse.
+   doesn't mine). Move with `W A S D`, look with the mouse. On a touch device,
+   tap to play instead — move with the left joystick and drag the world to look.
 2. **Gear up from your kit.** Open the inventory with **`I`**. You already have
    cobble and wood, so craft a **stone pickaxe** (2 cobble + 1 wood) and a **stone
    sword** (2 cobble + 1 wood) — both upgrades over your starting wood pickaxe and
@@ -53,25 +58,37 @@ From there it's a sandbox: dig for ores, build, farm, breed animals, and gear up
 
 ## Controls
 
-| Key / input        | Action                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `W` `A` `S` `D`    | Move (walk / strafe)                                                                                          |
-| `Space`            | Jump                                                                                                          |
-| `C`                | Crouch (slower, careful movement)                                                                             |
-| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                            |
-| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying                   |
-| Mouse              | Look around (double-click the game first to lock the pointer)                                                 |
-| Left-click (hold)  | Break the targeted block / attack a mob                                                                       |
-| Right-click or `E` | Place/interact, or throw a selected spear                                                                     |
-| `1`–`9`            | Select a hotbar slot                                                                                          |
-| `I`                | Open / close inventory & crafting                                                                             |
-| `L`                | Open / close advancements & statistics                                                                        |
-| `F`                | Eat the selected food, or drink a selected potion                                                             |
-| `V`                | Cycle camera: first-person → third-person rear → third-person front                                           |
-| `T` or `Enter`     | Chat (online worlds only) — `Esc` closes without sending                                                      |
-| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                         |
-| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins), Controls tabs |
-| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                           |
+| Key / input        | Action                                                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `W` `A` `S` `D`    | Move (walk / strafe)                                                                                                 |
+| `Space`            | Jump                                                                                                                 |
+| `C`                | Crouch (slower, careful movement)                                                                                    |
+| `W` + `CapsLock`   | Sprint — faster, but drains hunger                                                                                   |
+| Double-tap `Space` | Toggle flight in Creative (Spectator always flies); `Space` / `C` rise/descend while flying                          |
+| Mouse              | Look around (double-click the game first to lock the pointer)                                                        |
+| Left-click (hold)  | Break the targeted block / attack a mob                                                                              |
+| Right-click or `E` | Place/interact, or throw a selected spear                                                                            |
+| `1`–`9`            | Select a hotbar slot                                                                                                 |
+| `I`                | Open / close inventory & crafting                                                                                    |
+| `L`                | Open / close advancements & statistics                                                                               |
+| `F`                | Eat the selected food, or drink a selected potion                                                                    |
+| `V`                | Cycle camera: first-person → third-person rear → third-person front                                                  |
+| `T` or `Enter`     | Chat (online worlds only) — `Esc` closes without sending                                                             |
+| `Shift` + `U`      | Emergency unstuck (teleport to safe ground if wedged)                                                                |
+| `Esc`              | Pause menu — Game (save / load / reset / quit, Game Mode, Difficulty), Options (volume, skins, touch), Controls tabs |
+| `F3`               | Debug overlay (FPS, position, daylight, mob counts)                                                                  |
+
+**Touch** (tablets & landscape phones; auto-detected, with an Auto/On/Off
+override in Pause → Options): tap to play, move on the left joystick
+(re-engage it quickly and push forward to sprint), drag the world to look,
+**tap** to attack, **press and hold** to mine. Buttons cover Jump (double-tap
+toggles flight in Creative; they read Rise/Descend while flying), Sneak (a
+toggle), Place/interact/throw, and Eat (appears while holding food). Tap
+hotbar slots to select; **long-press** any slot or recipe entry for the
+details desktop shows on hover (durability, missing ingredients). The top bar
+has pause, inventory, and camera buttons, and the pause menu's Game tab gains
+an Emergency Unstuck button. Chat and the debug overlay are desktop-only for
+now.
 
 Gameplay is always **eye-relative**: even in third person, your reach, aim, and
 audio follow where your eyes point, and the crosshair stays centered.
@@ -171,6 +188,64 @@ touching it burns you **immediately** for 3 hearts every half-second — no grac
 period — and you keep burning for a few seconds even after you scramble off. Armor
 doesn't help. Bridge over it carefully.
 
+### Buckets, lava, and obsidian
+
+Craft a **bucket** (3 sliver ore) to carry fluids. Right-click a **water surface**
+to scoop a block of water, or aim at a **lava** block to scoop lava (careful with
+the approach — the burn rules above still apply). Right-click a solid face with a
+filled bucket to pour the fluid back out into the empty cell in front of it.
+Fluids are **still**: there is no flowing or spreading, so scooping a block out
+of the ocean leaves a neat one-block hole, and a poured block stays exactly where
+you put it. Empty buckets stack to 16; a filled bucket rides alone in its slot.
+
+Pour **water directly onto a lava block** and it hisses into **obsidian** — the
+hardest mineable block in the game. Only a **diamond pickaxe** can dig it out,
+and slowly at that. The deep lava floods (below Y≈9, under the cave layer) are
+the natural quarry: bring water buckets down, quench, and mine. Obsidian is the
+portal-frame material — see [The nether portal](#the-nether-portal).
+
+### The nether portal
+
+Build a standing **obsidian rectangle** — corners included — around an open
+interior between **2×3** and **4×4**, then strike an inner face with **flint &
+steel** (1 sliver ore + 1 coal; 64 strikes). A valid frame fills with a glowing
+violet surface; an incomplete one tells you so. Step in and hold still for a
+few seconds and the world crossfades into **the Nether** — a roofed, skyless
+ember world. Your first arrival builds a return portal around you (or reuses
+one nearby); step out, and step back in whenever you want to go home. Portals
+come out at the **same coordinates** in the other world.
+
+Mind the frame: breaking any of its obsidian extinguishes the surface, and a
+portal that somehow lost its frame will refuse to carry you (it clears instead).
+Beds don't work in the Nether — there is no morning to skip to — and portals
+are **not yet available in online worlds** (the game will say so if you try to
+light one there).
+
+### Surviving the Nether
+
+The other side is a sealed world of **netherrack** caverns under a bedrock sky,
+lit by hanging **glowstone** clusters and the glow of **lava seas** that fill
+the deeps. There is no day, no weather, no water, and no mercy: **imps**
+(fast, vicious melee brutes) and **scorchers** (hovering fire-spirits that lob
+fireballs) spawn near you _constantly_ — the darkness that summons monsters
+never lifts here. Come armed, wall yourself in when you mine, and consider a
+Fire Resistance potion before working near the seas.
+
+Why go? Three exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
+recombine into a placeable glowstone block — a torch-strength light source for
+your builds). **Blazite ore** — the post-diamond ore, found deep (below Y≈40)
+and gated behind a diamond pickaxe like the obsidian you came through. Smelt 2
+raw ore into a **blazite ingot** and forge the game's best craftable gear: the
+**blazite pickaxe** (faster than diamond, and it chews obsidian), **sword**
+(stronger than diamond, shy of the Dragon Sword), and **spear**. And bragging
+rights: four advancements live down here.
+
+Your arrival portal is your lifeline home — its frame is ordinary obsidian, so
+keep a spare flint & steel (and ideally frame material) on you. And know this
+before you risk it: **dying in the Nether respawns you in the Nether**, at a
+random cavern floor — your bed is a world away and can't reach you here. The
+walk back to your (still lit, still glowing) portal is part of the price.
+
 ### Rafts and ships
 
 Craft a **raft** (4 planks + 2 wood) or a **ship** (8 planks + 3 wood + 2 string)
@@ -181,7 +256,8 @@ automatically. While aboard, steer with the movement keys; crouch dismounts when
 there is room beside the vehicle. Placing needs open water within reach — aim
 somewhere that can't hold a boat, or once the world hits its 64-vehicle cap, and
 you'll hear a dull "can't place here" thud instead. Rafts and ships appear in
-their own **Vehicles** crafting category.
+their own **Vehicles** crafting category — alongside the land-going
+[minecart](#rails-and-minecarts).
 
 ### Hunger
 
@@ -320,6 +396,16 @@ to light the fuse — stand well back, because after a couple of seconds it blow
 crater and hurts anything close. TNT next to more TNT chains. It won't touch
 bedrock, and it mostly destroys rather than drops blocks, so it's for digging and
 demolition, not free resources.
+
+**Slabs and stairs.** Cut your materials into half-blocks for real architecture:
+**slabs** (3 planks/stone/cobble → 6) fill the bottom half of a block, and
+**stairs** (6 → 4) add a raised back that faces **away from you** when placed —
+walk straight up what you just laid. You **step up** half-height rises
+automatically (no jumping up your own staircase; a full block still needs the
+jump — and that auto-step works on any half-high lip, not just cut blocks).
+Half-blocks are solid to walk on but can't support floor-mounted fittings: doors,
+redstone parts, and rails all need a full block under them. A slab roof still
+casts full shade.
 
 ## Dungeons and loot
 
@@ -475,6 +561,65 @@ half to open or close the whole door. Closed doors block players and mobs; open
 doors rotate against their hinge so you can pass. Mobs cannot open or close doors.
 Breaking either half removes the whole door and returns one door item.
 
+## Redstone
+
+Build **power circuits** that open doors, light lamps, and set off TNT. Craft
+**Redstone Dust** from **1 gold ore + 1 coal** (→ 8 dust — you'll need a
+sliver-tier pickaxe to reach gold), then wire up:
+
+- **Sources** make power: a **lever** (right-click to toggle), a **stone button**
+  (right-click for a ~1-second pulse), a **pressure plate** (press by standing on
+  it — mobs trigger plates too, so traps work), and a **redstone torch** (always
+  on... see below).
+- **Redstone dust** places as **wire**: a flat trail that carries power up to
+  **15 blocks** from a source, climbing single-block steps. Powered wire glows
+  red. Wire, levers, buttons, plates, and torches all mount on top of a solid
+  block and pop off (dropping their item) if you break the block under them.
+- **Consumers** react to power: a **door** next to a powered wire is forced open
+  (and closes when the power drops — you can still open/close it by hand in
+  between), **TNT** ignites its fuse, and the new **redstone lamp**
+  (4 dust + 2 glass) lights up like a torch you can switch.
+
+The **redstone torch** (1 dust + 1 wood → 2) is the clever piece: it powers its
+neighbors like a tiny always-on source, **unless the block it stands on is
+powered — then it turns off**. That inversion is a **NOT gate**: lever → wire →
+torch's base block, and the torch's output is the opposite of the lever. Feed a
+torch's output back to its own base through a wire loop and it blinks — a
+**clock** for flashing lamps. Circuits update on a fixed ~0.1 s tick, so signals
+ripple visibly through long contraptions.
+
+## Rails and minecarts
+
+Lay track and ride it. Craft **rails** (3 sliver ore + 3 wood → 16) and place
+them on solid ground — like wire, they mount on top of a block and pop off
+(dropping their item) if you break the block under them. A line of rails is a
+track; put two lines at a right angle and the corner just works (carts turn to
+follow the track — there is no special curve piece). Rails don't climb; keep a
+line on one level.
+
+Craft a **minecart** (5 sliver ore), aim at a rail, and right-click to set the
+cart on it. Right-click the cart to board. While riding, **forward**
+accelerates, **back** brakes (and then reverses), and **crouch** hops out —
+the track does the steering. Mining the rail out from under a cart strands it
+where the track ended.
+
+Two special rails hook into redstone:
+
+- A **powered rail** (2 gold ore + 1 redstone dust + 2 wood → 4) is a
+  **consumer**: powered (by wire, a lever beside it, a plate…), it glows and
+  drives carts up past cruise speed. **Unpowered, it's a brake** that stops
+  carts dead — so a lever next to one is a station switch: on = launch,
+  off = hold. A stationary cart parked on a lit powered rail launches the way
+  it faces, no rider needed.
+- A **detector rail** (1 sliver ore + 1 redstone dust + 1 cobble → 2) is a
+  **source**: it powers its neighbors like a pressed plate while a cart sits
+  on it — wire it to a lamp for an occupancy light, to a door for an automatic
+  gate, or to TNT for a very unwelcoming railway. (A parked cart also holds an
+  ordinary pressure plate down.)
+
+Riding a minecart for the first time unlocks the **On Rails** advancement, and
+the statistics tab counts your rides.
+
 ## Storage
 
 Your pack only holds 36 slots, so build **chests** to stash the overflow. Craft a
@@ -600,6 +745,15 @@ The sea is worth sailing (see [Rafts and ships](#rafts-and-ships)):
 - **Fish.** Schools of **cod and salmon** swim the open water. They flee when you
   get close and drop **raw fish** when killed — the same fish the rod catches and
   cats are tamed with. A fish knocked onto land flops helplessly and suffocates.
+- **The drowned.** At **night** the water itself turns dangerous: sunken,
+  teal-skinned zombies rise near you and pursue you through the water in all
+  three dimensions — a wreck dive after dark is a fight, not a swim. They are
+  strictly water-bound (they never walk ashore; knock one onto the beach and it
+  suffocates like a fish), and unlike zombies they don't burn in daylight —
+  submersion shields them — so a deep hoard stays guarded until you deal with
+  its keeper. They drop **rotten flesh**, often
+  **kelp**, and — rarely — a **sliver spear** torn from some other victim.
+  Slaying your first unlocks **Revenge of the Tides**. On Peaceful none spawn.
 - **Kelp and coral.** The sandy ocean floor grows swaying **kelp stalks** and
   scattered pink/blue **coral**. Kelp breaks instantly (breaking one cell takes
   the whole stalk above it, and the water fills back in), regrows over time, and
@@ -649,11 +803,13 @@ private co-op with people you invite, not public matchmaking. Everything offline
 stays exactly as it is: local worlds never need an account or a connection.
 
 **Getting an identity.** Online play needs an **account** — a one-time
-email/password registration from the **Account** panel on the profile screen
-(or right on an invite page). Signed in, the menu becomes your account home:
-up to five **online profiles** (name + skin) that follow you across devices,
-each owning its online worlds. Your local worlds stay put — press **Play
-locally** to visit them (and their cloud-save controls) without signing out.
+email/password registration: choose **Sign in** on the welcome screen and use
+**"I need an account"** on the sign-in form (or register right on an invite
+page). Signed in, the menu becomes your account home: up to five **online
+profiles** (name + skin) that follow you across devices, each owning its
+online worlds. Your local worlds stay put — the **"Local worlds on this
+browser"** link at the bottom of the account home visits them (and their
+cloud-save controls) without signing out.
 
 **Hosting.** Pick an online profile to see its worlds. **New Online World**
 uses the same form as a local world (name, seed, world type, mode,

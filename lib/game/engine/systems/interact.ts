@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, doorBlock, doorState, voxelRaycast } from "@/lib/world";
+import { BlockId, collidesAt, doorBlock, doorState, voxelRaycast, waterSurfaceRaycast } from "@/lib/world";
 import {
   BONE_MEAL_CROP_STAGES_MAX,
   BREED_FED_WINDOW_SECONDS,
@@ -8,13 +8,15 @@ import {
   MINE_REACH,
   PET_FIGHT_RANGE,
   PET_TAMED_HP,
+  PLAYER_HALF_WIDTH,
+  PLAYER_HEIGHT,
   SLEEP_ALLOWED_BELOW_DAYLIGHT,
   SLEEP_FADE_SECONDS,
   SLEEP_HOSTILE_RADIUS,
   TAME_CHANCE
 } from "@/lib/game/config";
-import { adjustSlotCount, consumeToolDurability } from "@/lib/game/inventory";
-import { createEmptySlot } from "@/lib/game/items";
+import { adjustSlotCount, consumeToolDurability, countsById } from "@/lib/game/inventory";
+import { createEmptySlot, createSlot } from "@/lib/game/items";
 import type { MobKind } from "@/lib/game/types";
 import type { EmitGameEvent, GameState, PlayerState } from "../state";
 import { allEligiblePlayersSleeping } from "../players";
@@ -22,13 +24,14 @@ import { findAimedMobIndex } from "./combat";
 import { fillWorldgenChestIfUnlooted } from "./dungeon";
 import { primeTnt } from "./explosion";
 import { lookDirection } from "./playerMotion";
+import { pressButton, toggleLever } from "./redstone";
 import { growTreeAt } from "./treeGrowth";
 
 const scratchEye = new THREE.Vector3();
 const scratchDir = new THREE.Vector3();
 
 /** Blocks whose right-click runs a handler instead of placing the held block. */
-export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil" | "grindstone";
+export type InteractiveKind = "bed" | "furnace" | "chest" | "door" | "brewing" | "enchanting" | "anvil" | "grindstone" | "lever" | "button";
 
 export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Bed]: "bed",
@@ -38,6 +41,10 @@ export const INTERACTIVE_BLOCKS: Partial<Record<BlockId, InteractiveKind>> = {
   [BlockId.Anvil]: "anvil",
   [BlockId.Grindstone]: "grindstone",
   [BlockId.Chest]: "chest",
+  [BlockId.Lever]: "lever",
+  [BlockId.LeverOn]: "lever",
+  [BlockId.RedstoneButton]: "button",
+  [BlockId.RedstoneButtonOn]: "button",
   [BlockId.DoorNorthLower]: "door",
   [BlockId.DoorNorthUpper]: "door",
   [BlockId.DoorEastLower]: "door",
@@ -83,6 +90,8 @@ export function tryInteractBlock(state: GameState, player: PlayerState, emit: Em
   if (kind === "grindstone") return interactGrindstone(player, emit);
   if (kind === "chest") return interactChest(state, player, emit, result.hit.x, result.hit.y, result.hit.z);
   if (kind === "door") return interactDoor(state, emit, result.hit.x, result.hit.y, result.hit.z);
+  if (kind === "lever") return toggleLever(state, emit, result.hit.x, result.hit.y, result.hit.z);
+  if (kind === "button") return pressButton(state, emit, result.hit.x, result.hit.y, result.hit.z);
   return false;
 }
 
@@ -263,6 +272,12 @@ export function tryTradeAimedVillager(state: GameState, player: PlayerState, emi
 
 /** Sleep in a bed: only at night, only when no hostile is near. Sets the respawn point. */
 function interactBed(state: GameState, player: PlayerState, emit: EmitGameEvent, x: number, y: number, z: number): boolean {
+  // No sky, no morning: the nether's pinned daylight would otherwise slip
+  // under the sleep threshold and let a bed skip time that never dawns.
+  if (state.dimension === "nether") {
+    emit({ type: "sleepDenied", reason: "dimension" });
+    return true;
+  }
   if (state.daylight >= SLEEP_ALLOWED_BELOW_DAYLIGHT) {
     emit({ type: "sleepDenied", reason: "daylight" });
     return true;
@@ -284,9 +299,34 @@ function interactBed(state: GameState, player: PlayerState, emit: EmitGameEvent,
 }
 
 /**
+ * Swaps one unit of the held item for `resultId` (the bucket fill/empty trade).
+ * When the hand empties, the result lands right back in it; otherwise it joins
+ * the inventory wherever it fits. Returns false — no change — when it can't fit.
+ */
+function swapHeldForItem(player: PlayerState, resultId: string): boolean {
+  const slot = player.inventory[player.selectedSlot];
+  if (!slot?.id) return false;
+  const removed = adjustSlotCount(player.inventory, slot.id, -1, player.selectedSlot);
+  if (!removed) return false;
+  const hand = removed[player.selectedSlot];
+  if (hand.id === null) {
+    removed[player.selectedSlot] = createSlot(resultId, 1);
+    player.inventory = removed;
+    return true;
+  }
+  // The hand still holds a stack, so the result must fit elsewhere. Positive
+  // adjustSlotCount is best-effort — verify the count actually grew.
+  const added = adjustSlotCount(removed, resultId, 1);
+  if (!added || (countsById(added).get(resultId) ?? 0) !== (countsById(removed).get(resultId) ?? 0) + 1) return false;
+  player.inventory = added;
+  return true;
+}
+
+/**
  * Right-click "use" of the held item on the aimed block: a hoe tills grass/dirt
- * into farmland, seeds plant wheat on farmland. Returns true when an action
- * happened (consumes the click), false to fall through to block placement.
+ * into farmland, seeds plant wheat on farmland, buckets scoop and pour fluids.
+ * Returns true when an action happened (consumes the click), false to fall
+ * through to block placement.
  */
 export function tryUseHeldItem(state: GameState, player: PlayerState, emit: EmitGameEvent, rng: () => number): boolean {
   const slot = player.inventory[player.selectedSlot];
@@ -296,12 +336,39 @@ export function tryUseHeldItem(state: GameState, player: PlayerState, emit: Emit
   const isTorch = slot.id === "torch";
   const isSapling = slot.id === "sapling";
   const isBoneMeal = slot.id === "bone_meal";
-  if (!isHoe && !isSeeds && !isTorch && !isSapling && !isBoneMeal) return false;
+  const isBucket = slot.id === "bucket";
+  const isWaterBucket = slot.id === "water_bucket";
+  const isLavaBucket = slot.id === "lava_bucket";
+  if (!isHoe && !isSeeds && !isTorch && !isSapling && !isBoneMeal && !isBucket && !isWaterBucket && !isLavaBucket) return false;
 
   const { world } = state;
   scratchEye.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
   lookDirection(player.yaw, player.pitch, scratchDir);
   const result = voxelRaycast(world, scratchEye, scratchDir, MINE_REACH);
+
+  // Empty bucket: scoop the aimed fluid up — its cell becomes air. There is no
+  // flow simulation, so the scooped hole simply remains (even mid-ocean). Runs
+  // before the solid-hit guard: aiming at open water yields no solid hit at all.
+  if (isBucket) {
+    // Lava is solid, so the normal raycast hits it directly.
+    if (result && world.get(result.hit.x, result.hit.y, result.hit.z) === BlockId.Lava) {
+      if (!swapHeldForItem(player, "lava_bucket")) return false;
+      state.blockChanges.set(result.hit.x, result.hit.y, result.hit.z, BlockId.Air);
+      state.worldMeshDirty = true;
+      emit({ type: "bucketFilled", fluid: "lava" });
+      return true;
+    }
+    // Water is passed through by the solid raycast (it treats water as empty),
+    // so aim at the water surface the fishing-bobber way.
+    const water = waterSurfaceRaycast(world, scratchEye, scratchDir, MINE_REACH);
+    if (!water) return false;
+    if (!swapHeldForItem(player, "water_bucket")) return false;
+    state.blockChanges.set(water.x, water.y, water.z, BlockId.Air);
+    state.worldMeshDirty = true;
+    emit({ type: "bucketFilled", fluid: "water" });
+    return true;
+  }
+
   if (!result) return false;
   const { x, y, z } = result.hit;
   const block = world.get(x, y, z) as BlockId;
@@ -311,6 +378,39 @@ export function tryUseHeldItem(state: GameState, player: PlayerState, emit: Emit
   if (isTorch) {
     if (block !== BlockId.Tnt) return false;
     primeTnt(state, x, y, z, emit);
+    return true;
+  }
+
+  // Water poured ON a lava block quenches it into obsidian — the game's only
+  // obsidian source. The cell keeps its place in the world; only the block
+  // (and its max-light emission, via applyEdit) changes.
+  if (isWaterBucket && block === BlockId.Lava) {
+    if (!swapHeldForItem(player, "bucket")) return false;
+    state.blockChanges.set(x, y, z, BlockId.Obsidian);
+    state.worldMeshDirty = true;
+    emit({ type: "lavaSolidified" });
+    return true;
+  }
+
+  // Filled bucket: pour into the empty cell in front of the aimed face. Lava is
+  // a solid block, so a pour that would entomb the player rolls back (the
+  // placeSelectedBlock rule); the click is still consumed.
+  if (isWaterBucket || isLavaBucket) {
+    const px = result.previous.x;
+    const py = result.previous.y;
+    const pz = result.previous.z;
+    if (!world.inBounds(px, py, pz) || world.get(px, py, pz) !== BlockId.Air) return false;
+    state.blockChanges.set(px, py, pz, isWaterBucket ? BlockId.Water : BlockId.Lava);
+    if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+      state.blockChanges.set(px, py, pz, BlockId.Air);
+      return true;
+    }
+    if (!swapHeldForItem(player, "bucket")) {
+      state.blockChanges.set(px, py, pz, BlockId.Air);
+      return false;
+    }
+    state.worldMeshDirty = true;
+    emit({ type: "bucketEmptied", fluid: isWaterBucket ? "water" : "lava" });
     return true;
   }
 

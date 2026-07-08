@@ -74,3 +74,22 @@ describe("mob drop tables", () => {
     }
   });
 });
+
+describe("chance-gated drops (the drowned)", () => {
+  test("the rare spear drops only when the chance roll passes", () => {
+    // rng sequence per entry: [chance?] then [count]. Flesh has no gate.
+    // Sequence: flesh count, kelp chance (fail), spear chance (pass), spear count.
+    const seq = [0.0, 0.9, 0.05, 0.0];
+    let i = 0;
+    const drops = rollMobDrops("drowned", () => seq[i++ % seq.length]);
+    expect(drops.some((d) => d.itemId === "sliver_spear")).toBe(true);
+    expect(drops.some((d) => d.itemId === "kelp")).toBe(false);
+    expect(drops.some((d) => d.itemId === "rotten_flesh")).toBe(true);
+  });
+
+  test("a failing chance roll drops neither extra", () => {
+    // High rolls fail both the 0.5 kelp gate and the 0.07 spear gate.
+    const drops = rollMobDrops("drowned", () => 0.95);
+    expect(drops.map((d) => d.itemId)).toEqual(["rotten_flesh"]);
+  });
+});

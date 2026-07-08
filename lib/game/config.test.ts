@@ -31,7 +31,7 @@ describe("item definitions", () => {
 
   test("every spear has long melee reach and throw damage", () => {
     const spears = ITEM_DEFS.filter((item) => item.id.endsWith("_spear"));
-    expect(spears).toHaveLength(7);
+    expect(spears).toHaveLength(8); // seven ore tiers plus blazite
     for (const spear of spears) {
       expect(spear.meleeReach).toBeGreaterThan(4.5);
       expect(spear.throwDamage).toBeGreaterThan(spear.attack ?? 0);
@@ -150,5 +150,21 @@ describe("slot factories", () => {
         expect(slot.count).toBeLessThanOrEqual(MAX_STACK_SIZE);
       }
     }
+  });
+});
+
+describe("nether block drops", () => {
+  test("glowstone shatters into 2-4 dust, Fortune-boosted but capped at a block's worth", () => {
+    expect(rollBlockDrops(BlockId.Glowstone, () => 0)).toEqual([{ itemId: "glowstone_dust", count: 2 }]);
+    expect(rollBlockDrops(BlockId.Glowstone, () => 0.99)).toEqual([{ itemId: "glowstone_dust", count: 4 }]);
+    expect(rollBlockDrops(BlockId.Glowstone, () => 0.99, 3)).toEqual([{ itemId: "glowstone_dust", count: 4 }]); // capped
+    expect(rollBlockDrops(BlockId.Glowstone, () => 0, 1)).toEqual([{ itemId: "glowstone_dust", count: 3 }]);
+  });
+
+  test("blazite ore drops the smeltable material and rides the Fortune ore multiplier", () => {
+    expect(rollBlockDrops(BlockId.BlaziteOre, () => 0.5)).toEqual([{ itemId: "blazite_ore", count: 1 }]);
+    const lucky = rollBlockDrops(BlockId.BlaziteOre, () => 0.99, 3);
+    expect(lucky[0].itemId).toBe("blazite_ore");
+    expect(lucky[0].count).toBeGreaterThan(1);
   });
 });

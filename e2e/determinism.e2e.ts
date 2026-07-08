@@ -10,15 +10,15 @@ import { expect, test } from "./helpers";
  * same constants — if the two engines ever disagreed, lib/world/noise.ts
  * failed at its one job.
  */
-test("Chromium generates the same seed-1337 world bytes as the Bun baseline", async ({ gamePage }) => {
-  // Freeze the sim first: block edits after boot (e.g. a creeper explosion)
-  // would corrupt the digest. A fresh world has no random-tickable blocks, so
-  // the only mutation vector is gameplay, and pause gates all of it.
-  await gamePage.evaluate(() => {
-    window.__monecraft!.engine.state.mobs = [];
-    window.__monecraft!.engine.dispatch({ type: "pause" });
-  });
+// pauseOnBoot freezes the engine before its first step. Pausing from the test
+// body is too late: the boot window (menus → first frames) simulates live, and
+// a fresh seed-1337 world is NOT free of random-tickable blocks — worldgen
+// leaves growable kelp stalks and cave-exposed dirt beside grass in
+// tickRandomBlocks range of spawn, each one Math.random roll away from a
+// single-block edit that would corrupt the digest.
+test.use({ pauseOnBoot: true });
 
+test("Chromium generates the same seed-1337 world bytes as the Bun baseline", async ({ gamePage }) => {
   // Guard the guard: prove no block edits happened before the hash, so a
   // digest mismatch can only ever mean cross-engine divergence.
   const editCount = await gamePage.evaluate(() => window.__monecraft!.engine.serialize().changes.length);

@@ -1,4 +1,4 @@
-# Wire protocol (v2)
+# Wire protocol (v3)
 
 The client↔game-server protocol, defined in `lib/net/protocol.ts` (single
 source of truth — this page is the narrative). Versioned as a whole via
@@ -13,6 +13,19 @@ discriminated on `t`, except **one binary frame**: the world sync (join and
 terraformed one compresses >2×. Hot paths (pose/tick) can move to packed
 binary later without renegotiating anything: the envelope shape is the
 contract, not the encoding.
+
+Two wire-size measures keep the JSON hot path cheap (neither changes the
+envelope, so no protocol bump):
+
+- **Pose quantization** (`qPos`/`qAng`, `lib/net/codec.ts`): every replicated
+  position and velocity rounds to 2 decimals (1 cm) and every angle to 3
+  before serialization — well inside all movement clamps and deadbands.
+  Applied at the serialization sites only; server-side shadows keep full
+  precision.
+- **permessage-deflate**: the server offers it (`server/index.ts`), browsers
+  negotiate automatically. Note `/rooms`' `kbOutPerSec` counts
+  **pre-compression** bytes, so it reflects quantization but not deflate;
+  check DevTools (`Sec-WebSocket-Extensions`) or Fly egress for the latter.
 
 ## Handshake
 
@@ -37,7 +50,16 @@ the join payload is KBs, not the 37 MB voxel field.
 - `cmd` — a discrete `Command` + the claimed eye pose (applied through the
   same clamps before dispatch, so aimed raycasts resolve where the client
   looked). Validated against a per-type **allow-list**; local-presentation
-  commands (pause/debug/camera) never travel. Budget: 60/s.
+  commands (pause/debug/camera) never travel. Budget: 60/s (attacks
+  additionally 12/s — see the rewind note below).
+- `view` on `cmd` (v3, optional) — the sender's render-time view of the world:
+  ms on the server tick timeline (`tick × 50`), i.e. the instant the
+  interpolated mobs on their screen were sampled at. Attacks carry it once the
+  clock is synced; the server uses it for **melee lag compensation** — target
+  selection rewinds to the stamped tick (clamped to ≤`MELEE_REWIND_MAX_MS`,
+  900 ms), while damage/knockback/kill-credit act on the live mob. Anything
+  degenerate (unstamped, future, too stale, mob spawned since) degrades to
+  live selection.
 - `chat` (≤256 chars, 3/s), `ping`, `resync`.
 - `kick { targetId }` — **owner-only**: eject a player. The server re-checks
   the sender's ticket `role` (same gate as the owner-wide `setDifficulty`/
@@ -48,7 +70,9 @@ the join payload is KBs, not the 37 MB voxel field.
 **Server → client**
 
 - `tick { n, ev, pp, mp, vp?, prj?, day?, self? }` @20 Hz — world events since
-  last tick (block edits ride these), other players' poses, deadbanded mob
+  last tick (block edits ride these; each event is stamped with the acting
+  `playerId` where one exists — clients use the stamp to tell their own
+  echoes from other players' actions), other players' poses, deadbanded mob
   poses (~10 Hz), **vehicle poses** (`vp`, deadbanded — a parked boat costs
   nothing; vehicles never despawn so no absence-pruning), **arrow poses**
   (`prj`, the full live set every tick — arrows are few and fast, so they snap
@@ -102,7 +126,16 @@ exhausted the client shows the disconnect modal.
 
 The server is authoritative for the world: every gameplay command executes
 in ITS engine; clients cannot invent items or edits. The one client-owned
-thing is each avatar's own movement (clamped, never trusted blindly). The
+thing is each avatar's own movement (clamped, never trusted blindly).
+Client-side prediction doesn't change this: a predicted block edit is a
+local _presentation_ of the cmd that already traveled — the server's block
+journal confirms, overrides, or (by timeout) the client reverts. Nothing a
+client predicts changes what the server accepts. The
 claimed eye pose on `cmd` is the hybrid model's soft spot — acceptable for
-invite-only co-op, and the envelope already carries what stricter server-side
-rewind validation would need.
+invite-only co-op. The v3 `view` stamp is bounded the same way a claimed pose
+is clamped: the server rewinds melee **selection only**, never more than
+`MELEE_REWIND_MAX_MS` (900 ms) into its own recorded history, treats every
+malformed or out-of-window stamp as "judge it live", and caps attacks at 12/s
+so a scripted client can't sweep a mob's whole position trail with varied
+stamps. A dishonest stamp can therefore claim at most what an honestly-laggy
+client would see anyway.

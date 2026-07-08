@@ -3,6 +3,7 @@ import type { AudioSettings } from "@/lib/game/audio/audioDirector";
 import { GAME_MODE_PRESETS, type GameMode } from "@/lib/game/gameModes";
 import { DIFFICULTY_PRESETS, type Difficulty } from "@/lib/game/difficulties";
 import { SKIN_PRESETS, type SkinId } from "@/lib/game/playerSkins";
+import type { TouchControlsMode } from "@/lib/game/input/touchSettings";
 import { skinPortraitUrl } from "@/lib/ui/sprites";
 import PixelImg from "./PixelImg";
 
@@ -18,6 +19,11 @@ type PauseMenuProps = {
   hardcore: boolean;
   skinId: SkinId;
   onSkinChange: (id: SkinId) => void;
+  touchMode: TouchControlsMode;
+  onTouchModeChange: (mode: TouchControlsMode) => void;
+  /** Touch controls currently driving input — the Controls tab shows gestures instead of keys. */
+  touchActive: boolean;
+  onUnstuck: () => void;
   onBack: () => void;
   onSave: () => void;
   onLoad: () => void;
@@ -48,6 +54,25 @@ const CONTROLS: Array<[string, string]> = [
   ["Emergency unstuck", "Shift + U"]
 ];
 
+const TOUCH_CONTROLS: Array<[string, string]> = [
+  ["Move", "Left joystick (re-engage fast + push forward = sprint)"],
+  ["Look", "Drag anywhere on the world"],
+  ["Attack", "Tap the world"],
+  ["Mine", "Press and hold the world"],
+  ["Place / interact / throw spear", "Place button"],
+  ["Eat / drink", "Eat button (shown when holding food)"],
+  ["Jump / fly", "Jump button (double-tap = toggle flight)"],
+  ["Sneak", "Sneak button (toggles)"],
+  ["Hotbar", "Tap a slot"],
+  ["Item details", "Long-press a slot"]
+];
+
+const TOUCH_MODES: ReadonlyArray<{ id: TouchControlsMode; label: string }> = [
+  { id: "auto", label: "Auto" },
+  { id: "on", label: "On" },
+  { id: "off", label: "Off" }
+];
+
 /**
  * The Minecraft-style game menu: shown while the engine is paused, over a dimmed
  * (frozen) world. "Back to Game" stays pinned on top; the rest is split across
@@ -66,6 +91,10 @@ export default function PauseMenu({
   hardcore,
   skinId,
   onSkinChange,
+  touchMode,
+  onTouchModeChange,
+  touchActive,
+  onUnstuck,
   onBack,
   onSave,
   onLoad,
@@ -132,6 +161,10 @@ export default function PauseMenu({
               <button className="mc-button" onClick={onQuitToWorlds}>
                 Save &amp; Quit to Worlds
               </button>
+              {/* Shift+U's home for players without a keyboard; teleports out of wedged terrain and resumes. */}
+              <button className="mc-button" onClick={onUnstuck}>
+                Emergency Unstuck
+              </button>
               <div className="pause-modes">
                 <div className="pause-skins-title">Game Mode{hardcore ? " — locked (Hardcore)" : ""}</div>
                 <div className="pause-modes-grid">
@@ -178,6 +211,22 @@ export default function PauseMenu({
                   {audioSettings.muted ? "Unmute Sound" : "Mute Sound"}
                 </button>
               </div>
+              <div className="pause-modes">
+                <div className="pause-skins-title">Touch Controls</div>
+                <div className="pause-modes-grid">
+                  {TOUCH_MODES.map((entry) => (
+                    <button
+                      key={entry.id}
+                      className="mc-button mode-option"
+                      aria-pressed={entry.id === touchMode}
+                      aria-label={`Touch controls ${entry.label}`}
+                      onClick={() => onTouchModeChange(entry.id)}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="pause-skins">
                 <div className="pause-skins-title">Appearance</div>
                 <div className="pause-skins-grid">
@@ -200,7 +249,7 @@ export default function PauseMenu({
 
           {tab === "controls" && (
             <div className="pause-controls">
-              {CONTROLS.map(([action, keys]) => (
+              {(touchActive ? TOUCH_CONTROLS : CONTROLS).map(([action, keys]) => (
                 <div key={action} className="pause-controls-row">
                   <span>{action}</span>
                   <span>{keys}</span>

@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { BLOCK_COLORS, BlockId } from "./blocks";
 import { doorState, isDoorBlock } from "./doors";
+import { isDetectorRail, isPoweredRail, isRailBlock } from "./rails";
+import { isRedstoneOn } from "./redstone";
+import { isPartialBlock } from "./slabs";
 
 // Procedural texture atlas: one 16x16 tile per block face variant, painted on a
 // canvas at startup. This is the only world module that touches the DOM.
@@ -64,8 +67,20 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
         let c = tone(base, 0.92 + n * 0.22);
 
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
-        if ((block === BlockId.Stone || block === BlockId.Cobblestone || block === BlockId.Bedrock) && n > 0.8) c = tone(base, 1.18);
-        if ((block === BlockId.Wood || block === BlockId.Planks) && (x + y) % 4 === 0) c = tone(base, 0.82);
+        // Slabs/stairs inherit their material's accent so cut blocks read as
+        // the same substance (plank grain / stone-cobble speckle).
+        const stoneLike =
+          block === BlockId.Stone ||
+          block === BlockId.Cobblestone ||
+          block === BlockId.Bedrock ||
+          (isPartialBlock(block) && block !== BlockId.PlankSlab && !(block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest));
+        const plankLike =
+          block === BlockId.Wood ||
+          block === BlockId.Planks ||
+          block === BlockId.PlankSlab ||
+          (block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest);
+        if (stoneLike && n > 0.8) c = tone(base, 1.18);
+        if (plankLike && (x + y) % 4 === 0) c = tone(base, 0.82);
         if (block === BlockId.CoalOre && n > 0.82) c = tone([0.09, 0.09, 0.11], 1);
         if (block === BlockId.SliverOre && n > 0.86) c = tone([0.93, 0.93, 0.95], 1);
         if (block === BlockId.RubyOre && n > 0.88) c = tone([0.86, 0.24, 0.24], 1);
@@ -107,6 +122,40 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           const crack = n > 0.78;
           const crust = n < 0.2;
           c = crack ? tone([1, 0.78, 0.2], 1) : crust ? tone([0.35, 0.1, 0.04], 1) : tone([0.92, 0.34, 0.08], 0.85 + n * 0.4);
+        }
+        if (block === BlockId.Obsidian) {
+          // Volcanic glass: a near-black bed with faint violet sheen bands and
+          // the occasional bright fleck where the surface catches light.
+          const sheen = (x + y * 2) % 7 === 0;
+          c = sheen ? tone([0.24, 0.16, 0.4], 0.9 + n * 0.3) : tone([0.08, 0.06, 0.13], 0.85 + n * 0.35);
+          if (n > 0.94) c = tone([0.55, 0.42, 0.78], 1); // light-catching fleck
+        }
+        if (block === BlockId.NetherPortal) {
+          // A swirling violet surface: concentric sine bands around the tile
+          // center over a deep purple bed, with bright sparks. Emits light 11,
+          // so it reads as an active gateway.
+          const cx = x - 7.5;
+          const cy = y - 7.5;
+          const ring = Math.sin(Math.sqrt(cx * cx + cy * cy) * 1.4 + n * 4);
+          c = ring > 0.35 ? tone([0.62, 0.3, 0.9], 0.85 + n * 0.3) : tone([0.28, 0.1, 0.45], 0.8 + n * 0.3);
+          if (n > 0.93) c = tone([0.9, 0.75, 1], 1); // spark
+        }
+        if (block === BlockId.Netherrack) {
+          // Crimson pitted rock: darker pocks over the red base, a rare pale wart.
+          if (n < 0.24) c = tone([0.3, 0.1, 0.09], 0.85 + n * 0.4);
+          if (n > 0.92) c = tone([0.68, 0.4, 0.36], 1);
+        }
+        if (block === BlockId.Glowstone) {
+          // A crystalline cluster: bright amber facets over a honey base, with
+          // near-white glints along the facet joints (the block emits light 14).
+          const facet = (x * 3 + y * 5) % 11 < 4;
+          c = facet ? tone([1, 0.87, 0.5], 0.9 + n * 0.2) : tone([0.82, 0.6, 0.24], 0.85 + n * 0.3);
+          if (n > 0.9) c = tone([1, 0.97, 0.85], 1);
+        }
+        if (block === BlockId.BlaziteOre) {
+          // Netherrack base carrying ember-orange ore flecks that read as hot.
+          if (n < 0.22) c = tone([0.3, 0.1, 0.09], 0.85 + n * 0.4);
+          if (n > 0.8) c = tone([1, 0.55, 0.12], 0.9 + n * 0.25);
         }
         if (block === BlockId.Tnt) {
           // Classic TNT: a red block of "dynamite" with a white label band around
@@ -199,6 +248,82 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           else if (inset) c = tone(base, 0.78 + n * 0.08);
           else c = tone(base, 0.95 + n * 0.12);
           if (!state.upper && x >= 11 && x <= 12 && y >= 5 && y <= 6) c = tone([0.82, 0.72, 0.36], 0.9 + n * 0.15);
+        }
+        if (block === BlockId.RedstoneWire || block === BlockId.RedstoneWireOn) {
+          // A dust trail crossing the tile on a dark bed; the on variant reads
+          // bright signal-red. The mesh is a flat overlay, so the top face is
+          // what players mostly see.
+          const lit = block === BlockId.RedstoneWireOn;
+          const onTrail = (x >= 6 && x <= 9) || (y >= 6 && y <= 9);
+          if (onTrail) c = lit ? tone([0.95, 0.22, 0.12], 0.82 + n * 0.35) : tone([0.45, 0.12, 0.08], 0.85 + n * 0.25);
+          else c = tone([0.16, 0.14, 0.13], 0.9 + n * 0.15);
+        }
+        if (block === BlockId.Lever || block === BlockId.LeverOn) {
+          // A cobblestone base with a wooden handle; the on state tips the
+          // handle to the other side and lights a red fleck on the base top.
+          const on = block === BlockId.LeverOn;
+          const handleX = on ? 10 : 5;
+          const onHandle = Math.abs(x - handleX) <= 1 && y >= 3 && y <= 11;
+          if (face === "top") {
+            c = tone([0.45, 0.46, 0.48], 0.85 + n * 0.25);
+            if (on && Math.abs(x - 7.5) + Math.abs(y - 7.5) < 3) c = tone([0.9, 0.25, 0.15], 0.9 + n * 0.2);
+          } else if (y >= 12) c = tone([0.45, 0.46, 0.48], 0.85 + n * 0.25);
+          else if (onHandle) c = tone([0.55, 0.38, 0.2], 0.85 + n * 0.2);
+          else c = tone([0.1, 0.1, 0.12], 1);
+        }
+        if (block === BlockId.RedstoneButton || block === BlockId.RedstoneButtonOn) {
+          // A small stone pad with a beveled rim; pressed reads darker (and
+          // the pressed mesh sits lower).
+          const pressed = block === BlockId.RedstoneButtonOn;
+          c = tone([0.5, 0.52, 0.54], (pressed ? 0.72 : 0.9) + n * 0.18);
+          if (x < 1 || x > 14 || y < 1 || y > 14) c = tone([0.3, 0.31, 0.33], 0.9 + n * 0.1);
+        }
+        if (block === BlockId.PressurePlate || block === BlockId.PressurePlateOn) {
+          // A plank pad with grain and a beveled rim; pressed reads darker.
+          const pressed = block === BlockId.PressurePlateOn;
+          c = tone([0.7, 0.56, 0.35], (pressed ? 0.75 : 0.92) + n * 0.15);
+          if ((x + y) % 4 === 0) c = tone([0.6, 0.47, 0.29], pressed ? 0.75 : 0.9);
+          if (x < 2 || x > 13 || y < 2 || y > 13) c = tone([0.5, 0.4, 0.25], 0.85 + n * 0.1);
+        }
+        if (block === BlockId.RedstoneTorchOff || block === BlockId.RedstoneTorch) {
+          // The torch motif with a redstone tip: bright red when lit, a dead
+          // crimson knob when its support is powered (the inverter's off state).
+          const lit = block === BlockId.RedstoneTorch;
+          const onStick = x >= 7 && x <= 8 && y >= 6;
+          const tip = x >= 6 && x <= 9 && y <= 6 && Math.abs(x - 7.5) + y * 0.5 < 4;
+          if (face === "top") c = lit ? tone([1, 0.35, 0.2], 0.8 + n * 0.5) : tone([0.3, 0.1, 0.08], 0.9 + n * 0.2);
+          else if (tip) c = lit ? tone([0.95, 0.28, 0.15], 0.78 + n * 0.5) : tone([0.28, 0.09, 0.07], 0.9 + n * 0.2);
+          else if (onStick) c = tone([0.55, 0.38, 0.2], 0.85 + n * 0.2);
+          else c = tone([0.05, 0.05, 0.07], 1);
+        }
+        if (block === BlockId.RedstoneLamp || block === BlockId.RedstoneLampOn) {
+          // A glowstone-style lattice: a dark frame over an ochre core that
+          // brightens to a saturated glow when powered — the emitted block
+          // light (emission 15) does the rest of the glowing.
+          const lit = block === BlockId.RedstoneLampOn;
+          const frame = x % 5 === 0 || y % 5 === 0;
+          if (frame) c = tone([0.25, 0.2, 0.14], 0.9 + n * 0.2);
+          else c = lit ? tone([1, 0.85, 0.42], 0.85 + n * 0.3) : tone([0.5, 0.4, 0.22], 0.85 + n * 0.25);
+        }
+        if (isRailBlock(block)) {
+          // Two steel strips over wooden ties on a gravel bed. The strips run
+          // along the tile's v axis; the mesher rotates the top face 90° for
+          // north-south track. Powered rails carry a center power lane that
+          // glows when on; detector rails a center sensor plate.
+          const lit = isRedstoneOn(block);
+          const strip = x === 3 || x === 4 || x === 11 || x === 12;
+          const tie = y % 5 === 2 || y % 5 === 3;
+          if (strip) {
+            c = isPoweredRail(block) && lit ? tone([0.95, 0.62, 0.28], 0.88 + n * 0.22) : tone([0.62, 0.64, 0.68], 0.85 + n * 0.25);
+          } else if (isDetectorRail(block) && x >= 6 && x <= 9 && y >= 6 && y <= 9) {
+            c = lit ? tone([0.92, 0.3, 0.18], 0.88 + n * 0.22) : tone([0.55, 0.57, 0.6], 0.85 + n * 0.2);
+          } else if (isPoweredRail(block) && (x === 7 || x === 8)) {
+            c = lit ? tone([0.95, 0.35, 0.15], 0.85 + n * 0.3) : tone([0.4, 0.14, 0.1], 0.85 + n * 0.2);
+          } else if (tie) {
+            c = tone([0.45, 0.32, 0.18], 0.85 + n * 0.2);
+          } else {
+            c = tone([0.24, 0.2, 0.16], 0.9 + n * 0.15);
+          }
         }
 
         ctx.fillStyle = rgb(c);

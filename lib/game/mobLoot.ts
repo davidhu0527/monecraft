@@ -40,6 +40,15 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
   // sword is just a wetter way to fill the cat-taming/cooking pipeline.
   cod: [{ itemId: "raw_fish", min: 1, max: 1 }],
   salmon: [{ itemId: "raw_fish", min: 1, max: 2 }],
+  // Zombie kinship plus sea salvage; the rare sliver spear is the trident nod
+  // (a durable weapon on a chance gate — createSlot re-initializes durability).
+  // Both extras sit behind `chance` so itemSources keeps their natural hints
+  // (kelp is mined, the spear is crafted — a drowned is neither's real source).
+  drowned: [
+    { itemId: "rotten_flesh", min: 1, max: 2 },
+    { itemId: "kelp", min: 1, max: 1, chance: 0.5 },
+    { itemId: "sliver_spear", min: 1, max: 1, chance: 0.07 }
+  ],
   zombie: [{ itemId: "rotten_flesh", min: 1, max: 2 }],
   skeleton: [{ itemId: "bone", min: 1, max: 2 }],
   spider: [{ itemId: "string", min: 0, max: 2 }],
@@ -53,7 +62,14 @@ export const MOB_DROPS: Record<MobKind, MobDrop[]> = {
   boss: [
     { itemId: "dragon_heart", min: 1, max: 1 },
     { itemId: "diamond_ore", min: 2, max: 4 }
-  ]
+  ],
+  // Nether hostiles pay out in glowstone dust — the dimension's farmable
+  // export — with the imp's occasional gold nugget-in-spirit.
+  imp: [
+    { itemId: "glowstone_dust", min: 0, max: 1 },
+    { itemId: "gold_ore", min: 1, max: 1, chance: 0.15 }
+  ],
+  scorcher: [{ itemId: "glowstone_dust", min: 0, max: 2 }]
 };
 
 /** Clamps an rng sample into [0, 1) so a pathological injected rng can't over-roll. */

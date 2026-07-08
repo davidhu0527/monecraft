@@ -1,4 +1,4 @@
-import { acquirePointerLock, calmDaytime, expect, itemCount, playerPosition, test } from "./helpers";
+import { acquirePointerLock, calmDaytime, expect, itemCount, playerPosition, readWorldSave, saveViaPauseMenu, test } from "./helpers";
 
 test("boots without errors and renders the world", async ({ gamePage: page }) => {
   await expect(page.locator(".game-canvas-wrap canvas")).toBeVisible();
@@ -142,6 +142,9 @@ test("right-click still places a block when not aimed at an interactive one", as
 });
 
 test("a chest opens, stores an item, and keeps it across a reload", async ({ gamePage: page }) => {
+  // A lot of steps end to end — build, open, move, IndexedDB save, reload, reboot,
+  // read — and a slammed CI runner has overrun the default 60s on the reboot.
+  test.setTimeout(120000);
   await calmDaytime(page);
   await acquirePointerLock(page);
   await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
@@ -181,10 +184,14 @@ test("a chest opens, stores an item, and keeps it across a reload", async ({ gam
   expect(storedId).toBe("grass");
 
   // Persist and reload: the chest block-entity survives in the per-world save.
-  await page.evaluate(() => {
-    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
-    localStorage.setItem(`minecraft_world_save_${session.worldId}`, JSON.stringify(window.__monecraft!.engine.serialize()));
-  });
+  // Saved through the real pause-menu path — saves live in IndexedDB now, so
+  // there is no synchronous localStorage write to fake.
+  await page.keyboard.press("Escape"); // close the chest panel (lock was released when it opened)
+  // Headless Chromium held a *forced* lock flag (acquirePointerLock's fallback),
+  // which the container-open release can't clear — drop it so Escape reaches
+  // the pause branch instead of reading as a lock exit.
+  await page.evaluate(() => window.__monecraft!.input.forcePointerLock(false));
+  await saveViaPauseMenu(page);
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
 
@@ -282,15 +289,12 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   const seed = await page.evaluate(() => window.__monecraft!.engine.state.world.seed);
   const positionBefore = await playerPosition(page);
 
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Save Game" }).click();
-  const saved = await page.evaluate(() => {
-    const session = JSON.parse(sessionStorage.getItem("monecraft_active_session")!) as { worldId: string };
-    return localStorage.getItem(`minecraft_world_save_${session.worldId}`);
-  });
+  // The "Saved" toast now means the IndexedDB write durably committed.
+  await saveViaPauseMenu(page);
+  const saved = await readWorldSave(page);
   expect(saved).not.toBeNull();
-  expect(JSON.parse(saved!).seed).toBe(seed);
-  expect(JSON.parse(saved!).version).toBe(17);
+  expect(saved!.seed).toBe(seed);
+  expect(saved!.version).toBe(18);
 
   await page.reload();
   await page.waitForFunction(() => window.__monecraft !== undefined, undefined, { timeout: 30000 });
@@ -299,4 +303,77 @@ test("saving from the pause menu persists the world across a reload", async ({ g
   const positionAfter = await playerPosition(page);
   expect(Math.abs(positionAfter.x - positionBefore.x)).toBeLessThan(2);
   expect(Math.abs(positionAfter.z - positionBefore.z)).toBeLessThan(2);
+});
+
+test("a minecart places onto rails and a lit powered rail launches it", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle (slow CI renderers need the margin)
+
+  const placed = await page.evaluate(() => {
+    const engine = window.__monecraft!.engine;
+    const state = engine.state;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const groundY = Math.round(state.player.position.y) - 1;
+    // A stone shelf carrying a rail line east of the player, headroom cleared:
+    // a lit powered rail first (71 = PoweredRailOn), plain rail beyond (74),
+    // stone underneath (3) so nothing pops for lack of support.
+    for (let i = 1; i <= 8; i += 1) {
+      state.blockChanges.set(x + i, groundY, z, 3);
+      state.blockChanges.set(x + i, groundY + 1, z, i === 1 ? 71 : 74);
+      state.blockChanges.set(x + i, groundY + 2, z, 0);
+      state.blockChanges.set(x + i, groundY + 3, z, 0);
+    }
+    // Hold a minecart (creative palette) and place it on the aimed powered rail.
+    engine.dispatch({ type: "setGameMode", mode: "creative" });
+    engine.dispatch({ type: "creativeGiveItem", itemId: "minecart" });
+    state.player.selectedSlot = state.player.inventory.findIndex((slot) => slot?.id === "minecart");
+    state.player.position.set(x + 0.5, groundY + 1, z + 0.5);
+    state.player.velocity.set(0, 0, 0);
+    state.player.yaw = -Math.PI / 2; // face east, along the line
+    state.player.pitch = -1.0; // aim down at the first rail cell
+    engine.dispatch({ type: "placeBlock" });
+    const cart = state.vehicles[0];
+    return { kind: cart?.kind ?? null, x0: cart?.position.x ?? 0 };
+  });
+  expect(placed.kind).toBe("minecart");
+
+  // The lit powered rail launches the riderless cart down the line (the
+  // world-scoped coasting tick), and the renderer keeps drawing its visual.
+  await expect
+    .poll(async () => page.evaluate(() => window.__monecraft!.engine.state.vehicles[0]?.position.x ?? 0), { timeout: 30000 })
+    .toBeGreaterThan(placed.x0 + 1.5);
+  expect(await page.evaluate(() => window.__monecraft!.renderer.renderedTriangles())).toBeGreaterThan(0);
+});
+
+test("auto step-up climbs a stair mid-walk without a jump", async ({ gamePage: page }) => {
+  await calmDaytime(page);
+  await acquirePointerLock(page);
+  await page.waitForTimeout(1000); // settle
+
+  const feetY = await page.evaluate(() => {
+    const state = window.__monecraft!.engine.state;
+    const x = Math.floor(state.player.position.x);
+    const z = Math.floor(state.player.position.z);
+    const groundY = Math.round(state.player.position.y) - 1;
+    // A stair one block east (79 = PlankStairsEast — its low half greets the
+    // walker) rising onto a stone plateau (3), with the lane's headroom cleared.
+    for (let i = 1; i <= 6; i += 1) {
+      state.blockChanges.set(x + i, groundY, z, 3);
+      state.blockChanges.set(x + i, groundY + 1, z, i === 1 ? 79 : 3);
+      for (let dy = 2; dy <= 4; dy += 1) state.blockChanges.set(x + i, groundY + dy, z, 0);
+    }
+    state.player.position.set(x + 0.5, groundY + 1, z + 0.5);
+    state.player.velocity.set(0, 0, 0);
+    state.player.yaw = -Math.PI / 2; // face east, into the stair
+    state.player.pitch = 0;
+    return groundY + 1;
+  });
+
+  // Hold W: the walk climbs the stair's two half-steps onto the plateau —
+  // a full block gained with no jump ever pressed.
+  await page.keyboard.down("w");
+  await expect.poll(async () => page.evaluate(() => window.__monecraft!.engine.state.player.position.y), { timeout: 30000 }).toBeGreaterThan(feetY + 0.8);
+  await page.keyboard.up("w");
 });

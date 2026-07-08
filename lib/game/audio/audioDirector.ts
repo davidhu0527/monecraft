@@ -9,12 +9,16 @@ import {
   BOSS_ROAR_SOUND,
   BOW_FIRE_SOUND,
   BREAK_SOUNDS,
+  BUCKET_FILL_SOUND,
+  BUCKET_POUR_SOUND,
   FISHING_BITE_SOUND,
   FISHING_CAST_SOUND,
   FISHING_CATCH_SOUND,
   FISHING_REEL_EMPTY_SOUND,
   DEATH_SOUND,
   DRINK_SOUND,
+  LAVA_QUENCH_SOUND,
+  PORTAL_LIT_SOUND,
   EAT_SOUND,
   XP_SOUND,
   ENCHANT_SOUND,
@@ -27,6 +31,7 @@ import {
   MOB_ATTACK_SOUNDS,
   MOB_BRED_SOUND,
   MOB_DEATH_SOUND,
+  MINECART_ROLL_SOUND,
   MOB_FED_SOUND,
   MOB_HIT_SOUND,
   MOB_SPAWN_SOUND,
@@ -36,6 +41,7 @@ import {
   SLEEP_SOUND,
   CHEST_OPEN_SOUND,
   SMELT_SOUND,
+  SWITCH_CLICK_SOUND,
   TILL_SOUND,
   VEHICLE_DENIED_SOUND,
   VICTORY_SOUND,
@@ -136,6 +142,8 @@ export type AudioDirectorDeps = {
 export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector {
   const createGraph = deps.createGraph ?? createDefaultGraph;
   const footsteps = createFootstepScheduler();
+  // A second stride tracker paces the wheel-on-rail clack while riding a cart.
+  const railClack = createFootstepScheduler();
   const mobAmbience = createMobAmbienceScheduler(deps.rng);
 
   let graph: AudioGraph | null = null;
@@ -204,10 +212,14 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           backend.play(PLACE_SOUNDS[materialGroupFor(event.blockId)]);
           break;
         case "vehiclePlaced":
-          backend.play(PLACE_SOUNDS.wood); // rafts and ships are wooden — reuse the plank thunk
+          // Rafts and ships are wooden (the plank thunk); the minecart clanks like stone.
+          backend.play(event.kind === "minecart" ? PLACE_SOUNDS.stone : PLACE_SOUNDS.wood);
           break;
         case "vehiclePlaceFailed":
           backend.play(VEHICLE_DENIED_SOUND);
+          break;
+        case "vehicleBoarded":
+          backend.play(event.kind === "minecart" ? PLACE_SOUNDS.stone : PLACE_SOUNDS.wood, { gain: 0.7 });
           break;
         case "playerHurt":
           backend.play(HURT_SOUND);
@@ -305,6 +317,18 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
         case "usedBoneMeal":
           backend.play(BONE_MEAL_SOUND);
           break;
+        case "bucketFilled":
+          backend.play(BUCKET_FILL_SOUND);
+          break;
+        case "bucketEmptied":
+          backend.play(BUCKET_POUR_SOUND);
+          break;
+        case "lavaSolidified":
+          backend.play(LAVA_QUENCH_SOUND);
+          break;
+        case "portalLit":
+          backend.play(PORTAL_LIT_SOUND);
+          break;
         case "fishingCast":
           backend.play(FISHING_CAST_SOUND);
           break;
@@ -325,6 +349,20 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
           break;
         case "doorToggled":
           backend.play(PLACE_SOUNDS.wood, { gain: event.open ? 0.8 : 1 });
+          break;
+        // Redstone switches share one click; off states play slightly softer.
+        // Lamp toggles stay silent — the light change is the feedback.
+        case "leverToggled":
+          backend.play(SWITCH_CLICK_SOUND, { gain: event.on ? 1 : 0.8 });
+          break;
+        case "buttonPressed":
+          backend.play(SWITCH_CLICK_SOUND);
+          break;
+        case "plateToggled":
+          backend.play(SWITCH_CLICK_SOUND, { gain: event.on ? 0.9 : 0.7 });
+          break;
+        case "detectorToggled":
+          backend.play(SWITCH_CLICK_SOUND, { gain: event.on ? 0.9 : 0.7 });
           break;
         case "mobFed":
           backend.play(MOB_FED_SOUND);
@@ -358,8 +396,15 @@ export function createAudioDirector(deps: AudioDirectorDeps = {}): AudioDirector
       const dz = player.position.z - lastZ;
       lastX = player.position.x;
       lastZ = player.position.z;
-      if (!state.paused && !state.isDead && footsteps.tick(player.onGround, dx, dz)) {
+      // While mounted the vehicle carries the player: no footsteps (a rider's
+      // feet never touch ground — this also silences the old boat "walking"),
+      // and a minecart clacks along the rail on the same distance stride.
+      const mounted = player.mountedVehicleId === null ? null : (state.vehicles.find((v) => v.id === player.mountedVehicleId) ?? null);
+      if (!state.paused && !state.isDead && !mounted && footsteps.tick(player.onGround, dx, dz)) {
         graph.backend.play(FOOTSTEP_SOUNDS[surfaceGroupUnder(state, fx, fy, fz)]);
+      }
+      if (!state.paused && !state.isDead && mounted?.kind === "minecart" && railClack.tick(true, dx, dz)) {
+        graph.backend.play(MINECART_ROLL_SOUND);
       }
 
       // Mining hit ticks: one per quarter of the block's hardness.

@@ -52,7 +52,7 @@ export function createMinimapRenderer(container: HTMLElement): MinimapRenderer |
           image.data[i + 3] = 0; // outside the world: transparent
           continue;
         }
-        const [r, g, b] = columnColor(world, wx, wz);
+        const [r, g, b] = columnColor(world, wx, wz, state.dimension === "nether");
         image.data[i] = r;
         image.data[i + 1] = g;
         image.data[i + 2] = b;

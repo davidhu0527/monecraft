@@ -11,17 +11,33 @@ import * as schema from "./schema";
  *
  * `DATABASE_URL=pglite://memory` runs an EPHEMERAL in-process Postgres with
  * the schema pre-applied — the Playwright multiplayer suite and daemon-free
- * local dev use it; data lives exactly as long as the server process.
+ * local dev use it; data lives exactly as long as the server process. Outside
+ * production an unset DATABASE_URL falls back to that mode, so `bun run dev`
+ * needs zero env config; production keeps the hard error (a prod deploy
+ * silently running on an in-memory database would lose everything).
  */
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 let instance: Db | null = null;
 
+/**
+ * The connection-string decision, separated from the connection itself so it
+ * can be unit-tested (constructing PGlite under the happy-dom test runner
+ * breaks on its URL polyfill). db()'s memo makes the dev warning effectively
+ * once-per-process.
+ */
+export function resolveDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (url) return url;
+  if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is not set — see .env.example");
+  console.warn("DATABASE_URL not set — using in-memory PGlite; online data resets on restart. See .env.example for Postgres.");
+  return "pglite://memory";
+}
+
 export function db(): Db {
   if (instance) return instance;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set — see .env.example");
+  const url = resolveDatabaseUrl();
   if (url.startsWith("pglite:")) {
     // Lazy requires keep PGlite (a WASM bundle) out of production paths.
     /* eslint-disable @typescript-eslint/no-require-imports */

@@ -28,6 +28,14 @@ Postgres.
   no anonymous-guest layer: an invite link, cloud sync, or hosting all start
   with sign-in/register. Logged-out **Local Players** keep any number of
   browser-local profiles and worlds and make **zero** server calls.
+- **The logged-out root is a welcome gate**
+  (`components/menu/WelcomeScreen.tsx`): exactly two doors — **Sign in**
+  (opens the dedicated `AuthScreen`, whose email/password form registers via
+  its "I need an account" toggle; the form itself is the shared
+  `AccountForm`) and **Play locally** (the browser-local `ProfileSelect`,
+  with no account UI on it and a Back to the gate). The gate shows on every
+  logged-out launch; a signed-in reload skips it — the shell holds a neutral
+  frame until the session probe answers, then lands on the account home.
 - When signed in, the menu opens into an **account home**
   (`components/menu/AccountProfileSelect.tsx`) listing that account's
   server-side profiles (create/rename/delete, capped at `MAX_ONLINE_PROFILES`,
@@ -41,13 +49,15 @@ Postgres.
   so do singleplayer saves uploaded from the local menus (`profileId` null —
   account-level).
 - Local worlds are **hidden but preserved** while signed in — never deleted,
-  never auto-uploaded. The account home's **"Play locally"** button opens the
-  local menus without signing out (that's also where cloud-save sync lives);
-  "Back to account" returns. Signing out lands on the local flow directly.
+  never auto-uploaded. The account home's quiet **"Local worlds on this
+  browser"** footer link opens the local menus without signing out (that's
+  also where cloud-save sync lives); "Back to account" returns. Signing out
+  lands on the welcome gate.
 - Sessions are better-auth cookies; the game server never sees them.
-- The Account panel renders on the profile-select screen **and on the
-  first-run create-profile screen** (`components/menu/ProfileSelect.tsx`), so
-  sign in / register is reachable before any local profile exists.
+- The compact Account panel (`components/menu/AccountPanel.tsx` — logged out
+  it offers **Sign in** and **Create account** side by side, expanding into
+  the shared `AccountForm`) now serves **only** the `/join/<token>` invite
+  landing page; the main menu routes through the welcome gate instead.
 
 ## Worlds, invites, cloud saves
 
@@ -111,7 +121,10 @@ other player — it sends a `kick` message that the server re-checks against the
 sender's ticket role (a member's kick is dropped), reusing the same in-process
 `Room.kick` as the admin endpoint. It renders above the pause overlay, so the
 owner frees the cursor (Escape) and ejects a griefer without leaving. No
-web→game admin bridge: the protocol path keeps the game server stateless.
+web→game admin bridge: the protocol path keeps the game server independent of
+the web app (its only trust input is the signed ticket) — though the server
+itself is stateful: live rooms exist only in its process memory (see
+[Game server operations](#game-server-operations)).
 
 Boarding works online (protocol v2): a mounted rider's position is
 server-owned and streamed on the `SelfDelta` (`mountedVehicleId` + `x/y/z`),
@@ -149,10 +162,14 @@ world in the first, and paste its invite link into the second.
 
 **No Docker at all**: `DATABASE_URL=pglite://memory` runs the web app on an
 ephemeral in-process Postgres (`db/index.ts` applies the schema from
-`db/ddl.ts` at boot; data lives as long as the process). Pair it with the
-game server's `PERSISTENCE=memory` and the whole online stack is two
-commands with zero services — exactly how the Playwright multiplayer suite
-boots it (`playwright.config.ts`).
+`db/ddl.ts` at boot; data lives as long as the process). Outside production
+an **unset** `DATABASE_URL` falls back to exactly that (with a one-time
+console notice), so a bare `bun run dev` boots the whole web/auth/cloud-save
+stack with zero env config — better-auth accepts its built-in dev secret, so
+`BETTER_AUTH_*` may stay unset too. Pair it with the game server's
+`PERSISTENCE=memory` and the whole online stack is two commands with zero
+services — exactly how the Playwright multiplayer suite boots it
+(`playwright.config.ts`).
 
 Schema lives in `db/schema.ts` (drizzle); migrations are generated with
 `bunx drizzle-kit generate` and committed under `db/migrations/`. The PGlite
@@ -181,6 +198,17 @@ on the drift-corrected 20 Hz ticker. Rooms load from Postgres on first join,
 persist every 60 s (when dirty), on last-leave, and on SIGTERM (deploys
 drain, ≤60 s loss crash-safe); five idle minutes evicts a room from memory.
 See [protocol.md](protocol.md) for the wire format.
+
+**Single instance, by design.** Rooms live in the process's memory
+(`server/roomRegistry.ts`) with no cross-instance coordination — Postgres holds
+world _saves_, not live rooms. Run **exactly one** game-server instance:
+behind a load balancer, a second instance loads its own independent copy of a
+world on first join, silently splitting that world's players across copies
+(each connects fine and sees "Players (1)"). On Fly that means
+`fly scale count 1` — `fly launch` defaults to a two-machine HA pair, and
+`min_machines_running = 1` is a floor, not a cap (see
+[deploy.md](deploy.md#step-2--game-server-flyio)). Scaling _up_ means a bigger
+machine or real room affinity (route by world id), not replicas.
 
 All admin endpoints require `Authorization: Bearer $ADMIN_TOKEN` (absent
 `ADMIN_TOKEN` = always 403):
@@ -215,8 +243,9 @@ tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
 - **"How did this happen?"** Pull `/rooms/:id/log`, then `bun scripts/replay.ts`
   to replay the command stream against a fresh engine and diff the outcome.
 - **Latency feels bad.** From a browser console, `window.__monecraft.net`
-  `.setSimulatedLatency(ms)` injects delay to reproduce; set
-  `NEXT_PUBLIC_NET_SIM_LATENCY_MS` to bake it into a dev build.
+  `.setSimulatedLatency(ms, jitterMs?)` injects delay (± jitter) to reproduce;
+  set `NEXT_PUBLIC_NET_SIM_LATENCY_MS` / `NEXT_PUBLIC_NET_SIM_JITTER_MS` to
+  bake it into a dev build. The F3 overlay shows live net stats.
 - **Capacity.** Run `loadSim` at the target player count and watch
   `slowestTickMs`/`kbOutPerSec` in `/rooms`; keep p95 well under 50 ms and set
   `MAX_ROOMS` so peak memory (~74 MB/room) fits the machine. Net constants

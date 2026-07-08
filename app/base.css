@@ -41,6 +41,10 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  /* Kill iOS double-tap zoom (the viewport meta alone is not honored by
+     Safari); panels that scroll keep working because manipulation still
+     allows pan. Game surfaces tighten this to `none` individually. */
+  touch-action: manipulation;
   /* --mc-font (Monocraft, set on <html> by next/font) already carries the
      monospace fallback list, so text renders even before the font loads. */
   font-family: var(--mc-font), var(--mc-font-mono);
@@ -56,13 +60,36 @@ body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  /* Mobile URL-bar collapse: dvh tracks the real visible height (the vh line
+     above stays as the fallback for pre-15.4 iOS). */
+  height: 100dvh;
   overflow: hidden;
   background: radial-gradient(circle at 50% 20%, #bfe4ff 0%, #7ab2f2 45%, #5084c8 100%);
+  /* No text selection or long-press callout anywhere over the game. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /* Safe-area insets as vars so HUD and touch layers pad off notches and the
+     home indicator (0px everywhere else; needs viewportFit "cover"). */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
 }
 
 .game-canvas-wrap {
   position: absolute;
   inset: 0;
+  /* The 3D surface owns its gestures entirely — no browser pan/zoom. */
+  touch-action: none;
+}
+
+/* Text fields inside the game (chat, anvil rename) stay selectable despite
+   the game-root's user-select: none. */
+.game-root input,
+.game-root textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Subtle always-on vignette over the 3D world; sits above the canvas but below

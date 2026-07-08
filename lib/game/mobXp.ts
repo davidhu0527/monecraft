@@ -17,6 +17,7 @@ export const MOB_XP: Record<MobKind, number> = {
   cat: 0,
   cod: 1,
   salmon: 1,
+  drowned: 5,
   // A villager is a trade NPC — no combat reward (and you shouldn't be killing it).
   villager: 0,
   zombie: 5,
@@ -24,7 +25,10 @@ export const MOB_XP: Record<MobKind, number> = {
   spider: 5,
   creeper: 5,
   raider: 6,
-  boss: 200
+  boss: 200,
+  // The imp's toughness earns a premium; the scorcher matches the skeleton.
+  imp: 8,
+  scorcher: 5
 };
 
 export function xpForMob(kind: MobKind): number {

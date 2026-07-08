@@ -26,12 +26,13 @@ describe("ProfileSelect", () => {
     expect(screen.getByText("Create Your Profile")).toBeTruthy();
     expect(screen.getByLabelText("Profile name")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-    // Login / register must be reachable on first run, not hidden behind first
-    // creating a local profile.
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    // Sign-in lives on the welcome gate's AuthScreen now — this menu is purely
+    // local and must not render any account controls.
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
   });
 
-  test("Back to account renders only for the Play-locally door and fires", async () => {
+  test("Back to account renders only for the local-worlds door and fires", async () => {
     const user = userEvent.setup();
     createProfile("Alice", "alex");
     const onBackToAccount = mock();
@@ -44,6 +45,24 @@ describe("ProfileSelect", () => {
     // Without the door (logged out) there is no account to go back to.
     render(<ProfileSelect onPlay={mock()} />);
     expect(screen.queryByTestId("back-to-account")).toBeNull();
+  });
+
+  test("Back to the welcome gate renders for logged-out visitors and fires", async () => {
+    const user = userEvent.setup();
+    createProfile("Alice", "alex");
+    const onBackToWelcome = mock();
+    const { unmount } = render(<ProfileSelect onPlay={mock()} onBackToWelcome={onBackToWelcome} />);
+
+    await user.click(screen.getByTestId("back-to-welcome"));
+    expect(onBackToWelcome).toHaveBeenCalled();
+    unmount();
+
+    // The first-run create form needs the way back too — a visitor who picked
+    // "Play locally" by mistake must not be trapped into creating a profile.
+    localStorage.clear(); // drop Alice so the first-run branch renders
+    render(<ProfileSelect onPlay={mock()} onBackToWelcome={onBackToWelcome} />);
+    expect(screen.getByText("Create Your Profile")).toBeTruthy();
+    expect(screen.getByTestId("back-to-welcome")).toBeTruthy();
   });
 
   test("Back to account is reachable from the first-run create form too", async () => {

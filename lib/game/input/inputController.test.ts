@@ -71,4 +71,34 @@ describe("inputController pointer lock", () => {
     document.dispatchEvent(new MouseEvent("dblclick", { button: 0, bubbles: true }));
     expect(requestPointerLock).toHaveBeenCalledTimes(1);
   });
+
+  test("engage() requests pointer lock on the canvas", () => {
+    const { engine } = makeStubEngine();
+    const canvas = document.createElement("canvas");
+    const requestPointerLock = mock(() => Promise.resolve());
+    canvas.requestPointerLock = requestPointerLock;
+    controller = createInputController({ canvas, engine, onResize: () => {}, onLockChange: () => {} });
+
+    controller.engage();
+    expect(requestPointerLock).toHaveBeenCalledTimes(1);
+  });
+
+  test("release() exits pointer lock only when this controller's canvas holds it", () => {
+    const { engine } = makeStubEngine();
+    const canvas = document.createElement("canvas");
+    controller = createInputController({ canvas, engine, onResize: () => {}, onLockChange: () => {} });
+    const exitPointerLock = mock(() => {});
+    document.exitPointerLock = exitPointerLock;
+
+    // Someone else's element holds the lock: not ours to release.
+    Object.defineProperty(document, "pointerLockElement", { value: document.createElement("div"), configurable: true });
+    controller.release();
+    expect(exitPointerLock).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, "pointerLockElement", { value: canvas, configurable: true });
+    controller.release();
+    expect(exitPointerLock).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "pointerLockElement", { value: null, configurable: true });
+  });
 });

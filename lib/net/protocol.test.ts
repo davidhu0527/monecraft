@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { decodeClientFrame, gunzipWorldSync, gzipWorldSync } from "./codec";
-import { createClockSync } from "./clock";
 import { readClientMessage, readCommand, type WorldSync } from "./protocol";
 
 describe("client message validation", () => {
@@ -16,6 +15,19 @@ describe("client message validation", () => {
     expect(readClientMessage({ t: "cmd", seq: 2, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 } })).toMatchObject({
       t: "cmd",
       cmd: { type: "attack" }
+    });
+    // v3 view stamp: optional; carried through when numeric, absent when omitted.
+    expect(readClientMessage({ t: "cmd", seq: 2, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: 12345 })).toMatchObject({
+      t: "cmd",
+      view: 12345
+    });
+    const unstamped = readClientMessage({ t: "cmd", seq: 2, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 } });
+    expect(unstamped && unstamped.t === "cmd" ? "view" in unstamped : null).toBe(false);
+    // The reader doesn't police which command types carry it — that's the room's call.
+    expect(
+      readClientMessage({ t: "cmd", seq: 3, cmd: { type: "selectSlot", index: 3 }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: 50 })
+    ).toMatchObject({
+      view: 50
     });
     expect(readClientMessage({ t: "chat", text: "hi" })).toMatchObject({ t: "chat", text: "hi" });
     expect(readClientMessage({ t: "ping", id: 1, tMs: 123 })).toMatchObject({ t: "ping" });
@@ -37,6 +49,9 @@ describe("client message validation", () => {
       { t: "pose", seq: 1, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, onGround: true, move: { forward: 1 }, mineHeld: false },
       { t: "cmd", seq: 1, cmd: { type: "hackTheGibson" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 } },
       { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: "here", y: 0, z: 0, yaw: 0, pitch: 0 } },
+      { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: "abc" },
+      { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: Number.NaN },
+      { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, view: Number.POSITIVE_INFINITY },
       { t: "chat", text: "   " },
       { t: "ping", id: "one", tMs: 2 }
     ]) {
@@ -92,22 +107,5 @@ describe("world-sync codec", () => {
 
   test("gunzip is total on garbage", async () => {
     expect(await gunzipWorldSync(new Uint8Array([9, 9, 9]))).toBeNull();
-  });
-});
-
-describe("clock sync", () => {
-  test("estimates the server timeline through jittery pongs", () => {
-    const clock = createClockSync();
-    expect(clock.ready()).toBe(false);
-    // Server is at tick 1000 (= 50_000ms on the tick clock); RTT ~80ms.
-    clock.onPong(1000, 1080, 1000);
-    expect(clock.ready()).toBe(true);
-    expect(clock.rttMs()).toBeCloseTo(80, 5);
-    // At local 1080: serverTime ≈ 50_000 + 40 (half RTT since the pong left).
-    expect(clock.estimatedServerTimeMs(1080)).toBeCloseTo(50_040, 5);
-    // Jittery follow-ups move the estimate smoothly, not wildly.
-    clock.onPong(2000, 2200, 1024);
-    const drifted = clock.estimatedServerTimeMs(2200);
-    expect(Math.abs(drifted - 51_240)).toBeLessThan(300);
   });
 });

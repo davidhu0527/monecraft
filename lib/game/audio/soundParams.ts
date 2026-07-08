@@ -696,6 +696,25 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       filter: -400
     })
   },
+  drowned: {
+    // A waterlogged zombie groan: low and slow with a bubbling burble on top.
+    params: zz({
+      volume: 0.5,
+      randomness: 0.2,
+      frequency: 130,
+      attack: 0.03,
+      sustain: 0.12,
+      release: 0.2,
+      shape: 2,
+      shapeCurve: 1.3,
+      slide: -1,
+      noise: 0.35,
+      sustainVolume: 0.75,
+      decay: 0.1,
+      tremolo: 0.35,
+      filter: -320
+    })
+  },
   raider: {
     // A low, menacing grunt.
     params: zz({
@@ -712,6 +731,42 @@ export const MOB_AMBIENT_SOUNDS: Record<MobKind, SoundDef> = {
       sustainVolume: 0.8,
       decay: 0.12,
       filter: -260
+    })
+  },
+  imp: {
+    // A guttural crackling snarl — a zombie groan with fire in it.
+    params: zz({
+      volume: 0.55,
+      randomness: 0.2,
+      frequency: 110,
+      attack: 0.02,
+      sustain: 0.12,
+      release: 0.2,
+      shape: 2,
+      shapeCurve: 1.4,
+      slide: -1.2,
+      noise: 0.45,
+      sustainVolume: 0.75,
+      decay: 0.12,
+      tremolo: 0.25,
+      filter: -240
+    })
+  },
+  scorcher: {
+    // A breathy furnace-draft hiss, rising then sighing away.
+    params: zz({
+      volume: 0.5,
+      randomness: 0.2,
+      frequency: 320,
+      attack: 0.05,
+      sustain: 0.15,
+      release: 0.3,
+      shape: 0,
+      slide: 2,
+      noise: 0.9,
+      sustainVolume: 0.6,
+      decay: 0.1,
+      filter: 500
     })
   }
 };
@@ -947,6 +1002,24 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
     }),
     minRetriggerMs: 120
   },
+  drowned: {
+    // A wet, muffled bite — the zombie strike heard through water.
+    params: zz({
+      volume: 0.65,
+      randomness: 0.15,
+      frequency: 110,
+      sustain: 0.03,
+      release: 0.14,
+      shape: 4,
+      shapeCurve: 1.3,
+      slide: -3,
+      noise: 0.55,
+      sustainVolume: 0.75,
+      decay: 0.06,
+      filter: -420
+    }),
+    minRetriggerMs: 110
+  },
   raider: {
     // A brutish thwack.
     params: zz({
@@ -964,6 +1037,42 @@ export const MOB_ATTACK_SOUNDS: Record<MobKind, SoundDef> = {
       filter: -350
     }),
     minRetriggerMs: 110
+  },
+  imp: {
+    // A clawed strike with a hot crackle under it.
+    params: zz({
+      volume: 0.7,
+      randomness: 0.15,
+      frequency: 140,
+      sustain: 0.03,
+      release: 0.12,
+      shape: 4,
+      shapeCurve: 1.3,
+      slide: -2,
+      noise: 0.7,
+      sustainVolume: 0.75,
+      decay: 0.05,
+      filter: -300
+    }),
+    minRetriggerMs: 110
+  },
+  scorcher: {
+    // The fireball leaving with a whoomph (the launch reads as the attack).
+    params: zz({
+      volume: 0.65,
+      randomness: 0.15,
+      frequency: 180,
+      attack: 0.01,
+      sustain: 0.06,
+      release: 0.22,
+      shape: 0,
+      slide: -3,
+      noise: 1.1,
+      sustainVolume: 0.7,
+      decay: 0.08,
+      filter: -200
+    }),
+    minRetriggerMs: 150
   }
 };
 
@@ -1028,6 +1137,30 @@ export const LAND_SOUND: SoundDef = {
     filter: -600
   }),
   minRetriggerMs: 150
+};
+
+/** A crisp mechanical click for redstone switches (lever, button, plate). */
+export const SWITCH_CLICK_SOUND: SoundDef = {
+  params: zz({ volume: 0.45, frequency: 900, attack: 0.001, sustain: 0.015, release: 0.04, shape: 1, shapeCurve: 2, slide: -20 }),
+  minRetriggerMs: 60
+};
+
+/** The wheel-on-rail clack while riding a minecart (distance-scheduled in sync). */
+export const MINECART_ROLL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.3,
+    randomness: 0.2,
+    frequency: 320,
+    attack: 0.001,
+    sustain: 0.02,
+    release: 0.05,
+    shape: 4,
+    shapeCurve: 1.4,
+    noise: 0.9,
+    decay: 0.02,
+    filter: -900
+  }),
+  minRetriggerMs: 90
 };
 
 export const HURT_SOUND: SoundDef = {
@@ -1243,6 +1376,80 @@ export const BONE_MEAL_SOUND: SoundDef = {
     decay: 0.03
   }),
   minRetriggerMs: 120
+};
+
+/** A deep wet gulp as a bucket scoops a fluid block up. */
+export const BUCKET_FILL_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.25,
+    frequency: 240,
+    sustain: 0.03,
+    release: 0.14,
+    shape: 0,
+    slide: 2,
+    noise: 0.5,
+    pitchJump: -120,
+    pitchJumpTime: 0.05,
+    sustainVolume: 0.5,
+    decay: 0.04,
+    filter: -260
+  }),
+  minRetriggerMs: 120
+};
+
+/** A sloshing splash as a bucket pours its fluid out. */
+export const BUCKET_POUR_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.5,
+    randomness: 0.3,
+    frequency: 320,
+    sustain: 0.04,
+    release: 0.18,
+    shape: 0,
+    slide: -2,
+    noise: 0.7,
+    sustainVolume: 0.55,
+    decay: 0.05,
+    filter: -220
+  }),
+  minRetriggerMs: 120
+};
+
+/** A deep resonant whoosh as a portal frame ignites. */
+export const PORTAL_LIT_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.6,
+    randomness: 0.15,
+    frequency: 120,
+    sustain: 0.15,
+    release: 0.5,
+    shape: 0,
+    slide: 4,
+    noise: 0.8,
+    sustainVolume: 0.7,
+    decay: 0.1,
+    filter: -300
+  }),
+  minRetriggerMs: 300
+};
+
+/** A sharp steam hiss as water quenches lava into obsidian. */
+export const LAVA_QUENCH_SOUND: SoundDef = {
+  params: zz({
+    volume: 0.55,
+    randomness: 0.2,
+    frequency: 900,
+    sustain: 0.08,
+    release: 0.3,
+    shape: 0,
+    slide: -6,
+    noise: 1,
+    sustainVolume: 0.6,
+    decay: 0.06,
+    filter: 800
+  }),
+  minRetriggerMs: 150
 };
 
 /** A whoosh into a soft plop as the bobber lands on the water. */

@@ -3,9 +3,9 @@
 [![CI](https://github.com/hutusi/monecraft/actions/workflows/ci.yml/badge.svg)](https://github.com/hutusi/monecraft/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/tag/hutusi/monecraft?label=release&sort=semver)](https://github.com/hutusi/monecraft/tags)
 
-A playable, Minecraft-inspired voxel game that runs entirely in your browser. Explore procedural terrain across five biomes, cross water by **raft** or **ship** — over living oceans with **fish**, **kelp**, sunken **shipwrecks** to dive, and **buried treasure** to hunt by map — and dig into **dark caves** — lit only by the torches you craft and place, where lava pools and mobs lurk. Mine ores, raid **underground dungeons** for loot, build and farm, breed animals, craft through seven gear tiers up to a **bow** and throwable **spears**, and take on an **endgame boss** for a true win condition — all across a day-night cycle with hunger, drowning, and lava hazards.
+A playable, Minecraft-inspired voxel game that runs entirely in your browser. Explore procedural terrain across five biomes, cross water by **raft** or **ship** — over living oceans with **fish**, **kelp**, sunken **shipwrecks** to dive, and **buried treasure** to hunt by map — and dig into **dark caves** — lit only by the torches you craft and place, where lava pools and mobs lurk. Mine ores, raid **underground dungeons** for loot, build and farm, breed animals, craft through seven gear tiers up to a **bow** and throwable **spears**, quench lava into obsidian and light a **portal to the Nether** — a sealed ember dimension of glowstone, lava seas, and the post-diamond **blazite** tier — and take on an **endgame boss** for a true win condition — all across a day-night cycle with hunger, drowning, and lava hazards.
 
-The twist: **everything is procedural — zero binary assets.** Block textures and item sprites are painted from pixel code, all sound and music is synthesized at runtime, and lighting is computed per voxel. Single-player is client-only: keep **multiple worlds** under **multiple player profiles**, all saved to localStorage, no account needed. Or play **online co-op** (2–8 players): host a server-backed world with a free account and share an invite link — friends register and join in a click. See [docs/manual.md](docs/manual.md#playing-online).
+The twist: **everything is procedural — zero binary assets.** Block textures and item sprites are painted from pixel code, all sound and music is synthesized at runtime, and lighting is computed per voxel. Single-player is client-only: keep **multiple worlds** under **multiple player profiles**, all saved in your browser (worlds in IndexedDB — room for big builds), no account needed. Or play **online co-op** (2–8 players): host a server-backed world with a free account and share an invite link — friends register and join in a click. See [docs/manual.md](docs/manual.md#playing-online).
 
 ## Run
 
@@ -16,7 +16,9 @@ bun run dev
 
 Then open `http://localhost:3000`.
 
-The game opens to a menu: pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — a **game mode**, a **difficulty** (Peaceful · Easy · Normal · Hard), an optional **Hardcore** toggle (permadeath, locked to Survival + Hard), and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
+Monecraft is also an installable **PWA**: in a Chromium browser, the address-bar install button turns it into a desktop app, and after the first visit **single-player works fully offline** (online features — accounts, cloud saves, co-op — still need a connection). It plays with **mouse + keyboard or touch**: tablets and landscape phones get on-screen controls automatically (a virtual joystick, drag-to-look, and action buttons — see Touch controls below). Chat and the debug overlay remain desktop-only for now.
+
+The game opens with a choice: **Sign in** for online play (co-op worlds, cloud saves — a free account), or **Play locally** with browser profiles and no account. Locally, pick or create a **profile** (your name and look), then create or choose a **world** to play. New worlds let you pick a **type** — Default, Superflat, Amplified, or Islands — a **game mode**, a **difficulty** (Peaceful · Easy · Normal · Hard), an optional **Hardcore** toggle (permadeath, locked to Survival + Hard), and a seed. Each profile keeps its own list of worlds, so several players can share one browser. Inside the game, **Esc → Save & Quit to Worlds** returns to the world list.
 
 ## Controls
 
@@ -31,6 +33,14 @@ The game opens to a menu: pick or create a **profile** (your name and look), the
 - `V`: Camera view (first-person → third-person rear → third-person front)
 - `T` or `Enter`: Chat (online worlds)
 - `Esc`: Pause menu — three tabs: **Game** (save / load / reset, **Save & Quit to Worlds**, the **Game Mode** and **Difficulty** switchers), **Options** (sound/music volume, Appearance skins), and **Controls** · `F3`: Debug overlay
+
+**Touch controls** (tablets & landscape phones — enabled automatically, or force via Pause → Options → Touch Controls):
+
+- Left joystick: move (re-engage it quickly and push forward to sprint)
+- Drag anywhere on the world: look · Tap: attack · Press and hold: mine
+- Buttons: Jump (double-tap toggles flight in Creative), Sneak (toggle), Place/interact, Eat (appears when holding food)
+- Tap a hotbar slot to select it; long-press any slot or recipe for its details
+- Top bar: pause, inventory, camera view
 
 New here? The [player manual](docs/manual.md) walks through your first day, survival, crafting, farming, mobs, and more.
 

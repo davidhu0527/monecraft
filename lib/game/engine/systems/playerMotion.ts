@@ -10,6 +10,7 @@ import {
   PLAYER_HEIGHT,
   SPRINT_MIN_HUNGER,
   SPRINT_SPEED,
+  STEP_UP_HEIGHT,
   WALK_SPEED,
   WORLD_BORDER_PADDING
 } from "@/lib/game/config";
@@ -54,6 +55,30 @@ export function tickPlayerMotion(state: GameState, player: PlayerState, input: F
   // vertical control instead of gravity.
   const noclip = isNoclip(player.gameMode);
   const flying = noclip || (player.isFlying && canFly(player.gameMode));
+  // Captured before the axis steps clear it — the step-up gate below and the
+  // landing checks at the bottom both need the pre-move grounded state.
+  const wasGrounded = player.onGround;
+
+  // Auto step-up: lift the (already horizontally advanced) body by up to
+  // STEP_UP_HEIGHT and settle it back down onto the landing surface. Returns
+  // false with the position untouched when even the lifted body collides —
+  // the obstacle is taller than a step (a full block still needs the jump).
+  const tryStepUp = (): boolean => {
+    const baseY = player.position.y;
+    player.position.y = baseY + STEP_UP_HEIGHT;
+    if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+      player.position.y = baseY;
+      return false;
+    }
+    while (player.position.y - 0.05 > baseY) {
+      player.position.y -= 0.05;
+      if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+        player.position.y += 0.05;
+        break;
+      }
+    }
+    return true;
+  };
 
   const stepAxis = (axis: "x" | "y" | "z", amount: number) => {
     if (noclip) {
@@ -66,6 +91,12 @@ export function tickPlayerMotion(state: GameState, player: PlayerState, input: F
       const step = Math.abs(remaining) > Math.abs(stepSize) ? stepSize : remaining;
       player.position[axis] += step;
       if (collidesAt(world, player.position, PLAYER_HALF_WIDTH, PLAYER_HEIGHT)) {
+        // Grounded horizontal motion climbs half-height rises (slabs, stairs)
+        // without a jump; airborne and flying bodies never auto-step.
+        if (axis !== "y" && !flying && wasGrounded && tryStepUp()) {
+          remaining -= step;
+          continue;
+        }
         player.position[axis] -= step;
         if (axis === "y" && step < 0) player.onGround = true;
         if (axis === "y") player.velocity.y = 0;
@@ -96,7 +127,6 @@ export function tickPlayerMotion(state: GameState, player: PlayerState, input: F
   player.velocity.x = scratchMoveDir.x * speed;
   player.velocity.z = scratchMoveDir.z * speed;
 
-  const wasGrounded = player.onGround;
   let didJump = false;
   if (flying) {
     // Flight: direct vertical control, no gravity. Space ascends, crouch

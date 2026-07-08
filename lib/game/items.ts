@@ -79,7 +79,50 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Sapling]: 1,
   [BlockId.Kelp]: 1,
   [BlockId.CoralPink]: 2,
-  [BlockId.CoralBlue]: 2
+  [BlockId.CoralBlue]: 2,
+  // Redstone components snap off instantly; the lamp breaks like glass-ish gear.
+  [BlockId.RedstoneWire]: 1,
+  [BlockId.RedstoneWireOn]: 1,
+  [BlockId.Lever]: 1,
+  [BlockId.LeverOn]: 1,
+  [BlockId.RedstoneButton]: 1,
+  [BlockId.RedstoneButtonOn]: 1,
+  [BlockId.PressurePlate]: 1,
+  [BlockId.PressurePlateOn]: 1,
+  [BlockId.RedstoneTorchOff]: 1,
+  [BlockId.RedstoneTorch]: 1,
+  [BlockId.RedstoneLamp]: 3,
+  [BlockId.RedstoneLampOn]: 3,
+  // Rails snap off like the other floor overlays.
+  [BlockId.Rail]: 1,
+  [BlockId.PoweredRail]: 1,
+  [BlockId.PoweredRailOn]: 1,
+  [BlockId.DetectorRail]: 1,
+  [BlockId.DetectorRailOn]: 1,
+  // Half-blocks break a touch faster than their full material.
+  [BlockId.PlankSlab]: 2,
+  [BlockId.StoneSlab]: 4,
+  [BlockId.CobbleSlab]: 4,
+  [BlockId.PlankStairsNorth]: 2,
+  [BlockId.PlankStairsEast]: 2,
+  [BlockId.PlankStairsSouth]: 2,
+  [BlockId.PlankStairsWest]: 2,
+  [BlockId.StoneStairsNorth]: 4,
+  [BlockId.StoneStairsEast]: 4,
+  [BlockId.StoneStairsSouth]: 4,
+  [BlockId.StoneStairsWest]: 4,
+  [BlockId.CobbleStairsNorth]: 4,
+  [BlockId.CobbleStairsEast]: 4,
+  [BlockId.CobbleStairsSouth]: 4,
+  [BlockId.CobbleStairsWest]: 4,
+  // The hardest mineable block — a long grind even for the diamond pickaxe
+  // that its tier gate requires (see canMineBlock in mining.ts).
+  [BlockId.Obsidian]: 40,
+  // Soft nether rock — faster than stone even though a pickaxe is required.
+  [BlockId.Netherrack]: 4,
+  [BlockId.Glowstone]: 2,
+  // Deeper than diamond in spirit: slower than diamond ore, far from obsidian.
+  [BlockId.BlaziteOre]: 16
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -109,6 +152,32 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "mossy_cobble", label: "Mossy Cobble", kind: "block", blockId: BlockId.MossyCobblestone },
   { id: "torch", label: "Torch", kind: "block", blockId: BlockId.Torch },
   { id: "door", label: "Wood Door", kind: "block", blockId: BlockId.DoorNorthLower },
+  // Redstone-lite components. The dust item places wire; the torch item places
+  // the LIT variant (the power pass turns it off on a powered support).
+  { id: "redstone", label: "Redstone Dust", kind: "block", blockId: BlockId.RedstoneWire },
+  { id: "lever", label: "Lever", kind: "block", blockId: BlockId.Lever },
+  { id: "stone_button", label: "Stone Button", kind: "block", blockId: BlockId.RedstoneButton },
+  { id: "pressure_plate", label: "Pressure Plate", kind: "block", blockId: BlockId.PressurePlate },
+  { id: "redstone_torch", label: "Redstone Torch", kind: "block", blockId: BlockId.RedstoneTorch },
+  { id: "redstone_lamp", label: "Redstone Lamp", kind: "block", blockId: BlockId.RedstoneLamp },
+  // Rails place only on solid ground (see mining.ts); minecarts ride them.
+  { id: "rail", label: "Rail", kind: "block", blockId: BlockId.Rail },
+  { id: "powered_rail", label: "Powered Rail", kind: "block", blockId: BlockId.PoweredRail },
+  { id: "detector_rail", label: "Detector Rail", kind: "block", blockId: BlockId.DetectorRail },
+  // Half-blocks. A stair item carries its north id; placement re-orients it by
+  // player yaw (orientStair in mining.ts, the door-facing pattern).
+  { id: "plank_slab", label: "Plank Slab", kind: "block", blockId: BlockId.PlankSlab },
+  { id: "stone_slab", label: "Stone Slab", kind: "block", blockId: BlockId.StoneSlab },
+  { id: "cobble_slab", label: "Cobble Slab", kind: "block", blockId: BlockId.CobbleSlab },
+  { id: "plank_stairs", label: "Plank Stairs", kind: "block", blockId: BlockId.PlankStairsNorth },
+  { id: "stone_stairs", label: "Stone Stairs", kind: "block", blockId: BlockId.StoneStairsNorth },
+  { id: "cobble_stairs", label: "Cobble Stairs", kind: "block", blockId: BlockId.CobbleStairsNorth },
+  // Created by quenching lava with a water bucket; the portal-frame material.
+  { id: "obsidian", label: "Obsidian", kind: "block", blockId: BlockId.Obsidian },
+  // Nether blocks: the landmass rock and the glowing ceiling crystal (placing
+  // glowstone back down makes it a portable light source).
+  { id: "netherrack", label: "Netherrack", kind: "block", blockId: BlockId.Netherrack },
+  { id: "glowstone", label: "Glowstone", kind: "block", blockId: BlockId.Glowstone },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -116,9 +185,25 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_pickaxe", label: "Sapphire Pickaxe", kind: "tool", minePower: 3.3, mineTier: 5, maxDurability: 430 },
   { id: "gold_pickaxe", label: "Gold Pickaxe", kind: "tool", minePower: 3.8, mineTier: 6, maxDurability: 520 },
   { id: "diamond_pickaxe", label: "Diamond Pickaxe", kind: "tool", minePower: 4.4, mineTier: 7, maxDurability: 700 },
+  // The post-diamond tier, forged from smelted nether blazite (tier 8 — above
+  // every gate in the game, so it also chews obsidian and blazite ore).
+  { id: "blazite_pickaxe", label: "Blazite Pickaxe", kind: "tool", minePower: 5.0, mineTier: 8, maxDurability: 900 },
   // A durable tool used (via the right-click held-item path) to fish, not to mine —
   // minePower 0 means it breaks no blocks; it renders from a custom sprite grid.
   { id: "fishing_rod", label: "Fishing Rod", kind: "tool", minePower: 0, mineTier: 0, maxDurability: FISHING_ROD_DURABILITY },
+  // Strikes sparks — used (via the right-click held-item path) to light a
+  // nether portal's obsidian frame; each ignition wears it by one.
+  { id: "flint_and_steel", label: "Flint & Steel", kind: "tool", minePower: 0, mineTier: 0, maxDurability: 64 },
+  // Buckets carry one fluid block (right-click use — see interact.ts). Empties
+  // stack in bundles; a filled bucket is a single sloshing payload.
+  { id: "bucket", label: "Bucket", kind: "material", stackSize: 16 },
+  { id: "water_bucket", label: "Water Bucket", kind: "material", stackSize: 1 },
+  { id: "lava_bucket", label: "Lava Bucket", kind: "material", stackSize: 1 },
+  // Nether materials: glowstone dust recombines into the block (4 → 1); raw
+  // blazite ore smelts into ingots for the post-diamond gear tier.
+  { id: "glowstone_dust", label: "Glowstone Dust", kind: "material" },
+  { id: "blazite_ore", label: "Blazite Ore", kind: "material" },
+  { id: "blazite_ingot", label: "Blazite Ingot", kind: "material" },
   { id: "food", label: "Food", kind: "food", hunger: 7 },
   // Mob materials — craft ingredients with no direct use on their own yet.
   { id: "wool", label: "Wool", kind: "material" },
@@ -193,6 +278,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "sapphire_sword", label: "Sapphire Sword", kind: "weapon", attack: 35, maxDurability: 450 },
   { id: "gold_sword", label: "Gold Sword", kind: "weapon", attack: 40, maxDurability: 540 },
   { id: "diamond_sword", label: "Diamond Sword", kind: "weapon", attack: 47, maxDurability: 720 },
+  // Post-diamond, still under the boss-trophy Dragon Sword (60/1200).
+  { id: "blazite_sword", label: "Blazite Sword", kind: "weapon", attack: 53, maxDurability: 950 },
   {
     id: "wood_spear",
     label: "Wood Spear",
@@ -256,12 +343,23 @@ export const ITEM_DEFS: ItemDef[] = [
     throwDamage: 55,
     maxDurability: 680
   },
+  {
+    id: "blazite_spear",
+    label: "Blazite Spear",
+    kind: "weapon",
+    attack: 50,
+    meleeReach: SPEAR_MELEE_REACH,
+    throwDamage: 62,
+    maxDurability: 880
+  },
   // Bow fires arrows; it never melees (attack 0), so the attack input branches
   // to firing when a bow is held. Arrows are the consumable ammo.
   { id: "bow", label: "Bow", kind: "weapon", attack: 0, maxDurability: 200 },
   { id: "arrow", label: "Arrow", kind: "material" },
   { id: "raft", label: "Raft", kind: "vehicle" },
   { id: "ship", label: "Ship", kind: "vehicle" },
+  // Places onto a rail block and is ridden along the track (vehicles.ts).
+  { id: "minecart", label: "Minecart", kind: "vehicle" },
   // Looted from shipwrecks (and rarely fished up): while held, a compass HUD
   // points to the nearest unearthed buried-treasure chest (see bossTracking.ts).
   { id: "treasure_map", label: "Treasure Map", kind: "material" },
@@ -283,7 +381,9 @@ export const ITEM_DEFS: ItemDef[] = [
 export const ITEM_DEF_BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEM_DEFS.map((item) => [item.id, item]));
 
 export function maxStackSizeForItem(itemId: string): number {
-  return ITEM_DEF_BY_ID[itemId]?.maxDurability ? 1 : MAX_STACK_SIZE;
+  const def = ITEM_DEF_BY_ID[itemId];
+  if (def?.maxDurability) return 1;
+  return def?.stackSize ?? MAX_STACK_SIZE;
 }
 
 export function createEmptySlot(): InventorySlot {
@@ -335,6 +435,9 @@ export const REPAIR_MATERIAL_BY_ITEM: Record<string, string> = {
   diamond_pickaxe: "diamond_ore",
   diamond_sword: "diamond_ore",
   diamond_spear: "diamond_ore",
+  blazite_pickaxe: "blazite_ingot",
+  blazite_sword: "blazite_ingot",
+  blazite_spear: "blazite_ingot",
   dragon_sword: "diamond_ore",
   bow: "string",
   fishing_rod: "string",
@@ -399,6 +502,45 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.CoralPink]: "coral_pink",
   [BlockId.CoralBlue]: "coral_blue",
   [BlockId.DoorNorthLower]: "door",
+  // Redstone components: on and off variants both drop the one item.
+  [BlockId.RedstoneWire]: "redstone",
+  [BlockId.RedstoneWireOn]: "redstone",
+  [BlockId.Lever]: "lever",
+  [BlockId.LeverOn]: "lever",
+  [BlockId.RedstoneButton]: "stone_button",
+  [BlockId.RedstoneButtonOn]: "stone_button",
+  [BlockId.PressurePlate]: "pressure_plate",
+  [BlockId.PressurePlateOn]: "pressure_plate",
+  [BlockId.RedstoneTorchOff]: "redstone_torch",
+  [BlockId.RedstoneTorch]: "redstone_torch",
+  [BlockId.RedstoneLamp]: "redstone_lamp",
+  [BlockId.RedstoneLampOn]: "redstone_lamp",
+  [BlockId.Rail]: "rail",
+  [BlockId.PoweredRail]: "powered_rail",
+  [BlockId.PoweredRailOn]: "powered_rail",
+  [BlockId.DetectorRail]: "detector_rail",
+  [BlockId.DetectorRailOn]: "detector_rail",
+  // Every stair facing drops the one item (the doors precedent).
+  [BlockId.PlankSlab]: "plank_slab",
+  [BlockId.StoneSlab]: "stone_slab",
+  [BlockId.CobbleSlab]: "cobble_slab",
+  [BlockId.PlankStairsNorth]: "plank_stairs",
+  [BlockId.PlankStairsEast]: "plank_stairs",
+  [BlockId.PlankStairsSouth]: "plank_stairs",
+  [BlockId.PlankStairsWest]: "plank_stairs",
+  [BlockId.StoneStairsNorth]: "stone_stairs",
+  [BlockId.StoneStairsEast]: "stone_stairs",
+  [BlockId.StoneStairsSouth]: "stone_stairs",
+  [BlockId.StoneStairsWest]: "stone_stairs",
+  [BlockId.CobbleStairsNorth]: "cobble_stairs",
+  [BlockId.CobbleStairsEast]: "cobble_stairs",
+  [BlockId.CobbleStairsSouth]: "cobble_stairs",
+  [BlockId.CobbleStairsWest]: "cobble_stairs",
+  [BlockId.Obsidian]: "obsidian",
+  [BlockId.Netherrack]: "netherrack",
+  // Glowstone drops 2-4 dust — handled in rollBlockDrops, not here.
+  // Blazite ore drops the smeltable material item (the coal-ore pattern).
+  [BlockId.BlaziteOre]: "blazite_ore",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
   [BlockId.Farmland]: "dirt",
   [BlockId.WheatStage0]: "seeds",
@@ -407,7 +549,15 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
 };
 
 /** Ores whose mined yield the Fortune enchantment multiplies (their `BLOCK_TO_SLOT` item is the drop). */
-const FORTUNE_ORE_BLOCKS = new Set<BlockId>([BlockId.CoalOre, BlockId.SliverOre, BlockId.RubyOre, BlockId.GoldOre, BlockId.SapphireOre, BlockId.DiamondOre]);
+const FORTUNE_ORE_BLOCKS = new Set<BlockId>([
+  BlockId.CoalOre,
+  BlockId.SliverOre,
+  BlockId.RubyOre,
+  BlockId.GoldOre,
+  BlockId.SapphireOre,
+  BlockId.DiamondOre,
+  BlockId.BlaziteOre
+]);
 
 /**
  * Items a broken block yields. The default is its single `BLOCK_TO_SLOT` entry;
@@ -430,6 +580,11 @@ export function rollBlockDrops(block: BlockId, rng: () => number, fortuneLevel =
 
   if (block === BlockId.Leaves && rng() < LEAVES_SAPLING_DROP_CHANCE) {
     drops.push({ itemId: "sapling", count: 1 });
+  }
+  // Glowstone shatters into 2-4 dust (its only yield — 4 dust recombine into
+  // the block); Fortune adds its level, capped at a full block's worth.
+  if (block === BlockId.Glowstone) {
+    drops.push({ itemId: "glowstone_dust", count: Math.min(4, 2 + Math.floor(rng() * 3) + fortuneLevel) });
   }
   if (block === BlockId.Grass && rng() < GRASS_SEED_DROP_CHANCE) {
     drops.push({ itemId: "seeds", count: 1 });

@@ -9,6 +9,8 @@ export type SpawnArrowOptions = {
   ttl: number;
   /** The firing player (for kill credit); omit for mob arrows. */
   owner?: PlayerId;
+  /** Visual/audio family; absent = an ordinary arrow (see ProjectileState.kind). */
+  kind?: "arrow" | "fireball";
 };
 
 // Spawn the arrow a little ahead of the muzzle so the firer never collides with
@@ -38,7 +40,8 @@ export function spawnArrow(state: GameState, originX: number, originY: number, o
     knockback: opts.knockback,
     fromPlayer: opts.fromPlayer,
     owner: opts.owner,
-    ttl: opts.ttl
+    ttl: opts.ttl,
+    kind: opts.kind
   };
 
   state.nextProjectileId += 1;

@@ -5,6 +5,8 @@ import {
   AQUATIC_CAP,
   AQUATIC_SPAWN_INTERVAL_SECONDS,
   BOSS_SUMMON_INTERVAL_SECONDS,
+  DROWNED_CAP,
+  DROWNED_SPAWN_MIN_RADIUS,
   HOSTILE_CAP,
   HOSTILE_SPAWN_BELOW_DAYLIGHT,
   HOSTILE_SPAWN_INTERVAL_SECONDS,
@@ -82,16 +84,28 @@ export function spawnMobGroup(state: GameState, args: SpawnGroupArgs, rng: () =>
 }
 
 /**
- * Spawns fish submerged in open water near the center. Each fish needs a water
- * column at least 2 deep; a dry world (Superflat) or an inland center simply
- * yields fewer or zero fish — the sampler fails closed, never onto land.
+ * Spawns aquatic mobs submerged in open water near the center. Each needs a
+ * water column at least 2 deep; a dry world (Superflat) or an inland center
+ * simply yields fewer or zero — the sampler fails closed, never onto land.
  * pushMob expects ground-level feet, so the swim point converts to feet-y.
+ * `minSpawnRadius` is the hostile standoff (per kind, chosen by the caller)
+ * so nothing surfaces point-blank under a swimming player.
  */
-export function spawnAquaticGroup(state: GameState, kind: MobKind, count: number, centerX: number, centerZ: number, radius: number, rng: () => number): void {
+export function spawnAquaticGroup(
+  state: GameState,
+  kind: MobKind,
+  count: number,
+  centerX: number,
+  centerZ: number,
+  radius: number,
+  rng: () => number,
+  hostile = false,
+  minSpawnRadius = 0
+): void {
   for (let i = 0; i < count; i += 1) {
-    const pos = randomWaterPointNear(state.world, centerX, centerZ, radius, rng);
+    const pos = randomWaterPointNear(state.world, centerX, centerZ, radius, rng, 2, minSpawnRadius);
     if (!pos) return;
-    pushMob(state, kind, false, pos.x, pos.y - mobHalfHeight(kind), pos.z, rng);
+    pushMob(state, kind, hostile, pos.x, pos.y - mobHalfHeight(kind), pos.z, rng);
   }
 }
 
@@ -101,6 +115,27 @@ export function spawnAquaticGroup(state: GameState, kind: MobKind, count: number
  * petting zoo; hostiles stay closer (the dawn-aggro behavior tests document).
  */
 export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
+  // The nether's population is hostile-only — no animals, no fish, no
+  // villagers — seeded around the arrival area at a respectful standoff.
+  if (state.dimension === "nether") {
+    if (!hostilesSpawn(state.difficulty)) return; // Peaceful nether: empty, still deadly terrain
+    const anchor = nearestPlayerTo(state, state.world.sizeX / 2, state.world.sizeZ / 2);
+    const cx = anchor ? anchor.position.x : state.world.sizeX / 2;
+    const cz = anchor ? anchor.position.z : state.world.sizeZ / 2;
+    const netherGroups: Array<[MobKind, number]> = [
+      ["imp", 6],
+      ["scorcher", 4]
+    ];
+    for (const [kind, count] of netherGroups) {
+      spawnMobGroup(
+        state,
+        { kind, hostile: true, count, centerX: cx, centerZ: cz, radius: RENDER_RADIUS * 0.8, minRadius: HOSTILE_SPAWN_MIN_RADIUS },
+        rng,
+        surfaceYAt
+      );
+    }
+    return;
+  }
   // Day-one population centers on the booting player; a playerless world (a
   // fresh server room before the first join) seeds around the map center.
   const anchor = nearestPlayerTo(state, state.world.sizeX / 2, state.world.sizeZ / 2);
@@ -145,22 +180,42 @@ export function spawnInitialMobs(state: GameState, rng: () => number, surfaceYAt
  * Trickles fish in around the player so any ocean feels stocked, not just the
  * spawn-time one. Every interval it tops the population up toward AQUATIC_CAP,
  * one small school at a time; without nearby deep water the sampler fails
- * closed and the tick is a no-op (Superflat never spawns a fish).
+ * closed and the tick is a no-op (Superflat never spawns a fish). At night the
+ * same interval also trickles in the drowned — the water-bound hostile — gated
+ * exactly like the land director (difficulty + darkness) under its own
+ * DROWNED_CAP plus the shared difficulty-scaled hostile cap.
  */
 export function tickAquaticSpawnDirector(state: GameState, dt: number, rng: () => number): void {
+  if (state.dimension === "nether") return; // no water, no fish, no drowned
   state.timers.aquaticSpawnTimer += dt;
   if (state.timers.aquaticSpawnTimer < AQUATIC_SPAWN_INTERVAL_SECONDS) return;
   state.timers.aquaticSpawnTimer = 0;
 
-  let aquatic = 0;
-  for (const mob of state.mobs) if (MOB_TEMPLATES[mob.kind].aquatic) aquatic += 1;
-  if (aquatic >= AQUATIC_CAP) return;
+  // Passive fish top-up. Hostiles never count against the fish budget — a full
+  // night of drowned must not starve the cod schools.
+  let fish = 0;
+  for (const mob of state.mobs) if (MOB_TEMPLATES[mob.kind].aquatic && !mob.hostile) fish += 1;
+  if (fish < AQUATIC_CAP) {
+    const kind: MobKind = rng() < 0.6 ? "cod" : "salmon";
+    const count = Math.min(AQUATIC_CAP - fish, 1 + (rng() > 0.6 ? 1 : 0));
+    const center = spawnCenterPlayer(state, rng);
+    if (!center) return;
+    spawnAquaticGroup(state, kind, count, center.position.x, center.position.z, RENDER_RADIUS * 0.85, rng);
+  }
 
-  const kind: MobKind = rng() < 0.6 ? "cod" : "salmon";
-  const count = Math.min(AQUATIC_CAP - aquatic, 1 + (rng() > 0.6 ? 1 : 0));
+  // Night waters turn hostile (Peaceful spawns none; daylight ends it).
+  if (!hostilesSpawn(state.difficulty) || state.daylight >= HOSTILE_SPAWN_BELOW_DAYLIGHT) return;
+  let drowned = 0;
+  let hostiles = 0;
+  for (const mob of state.mobs) {
+    if (mob.kind === "drowned") drowned += 1;
+    if (mob.hostile) hostiles += 1;
+  }
+  const cap = Math.round(HOSTILE_CAP * hostileCapScale(state.difficulty)) * partyCapScale(state);
+  if (drowned >= DROWNED_CAP || hostiles >= cap) return;
   const center = spawnCenterPlayer(state, rng);
   if (!center) return;
-  spawnAquaticGroup(state, kind, count, center.position.x, center.position.z, RENDER_RADIUS * 0.85, rng);
+  spawnAquaticGroup(state, "drowned", 1, center.position.x, center.position.z, RENDER_RADIUS * 0.85, rng, true, DROWNED_SPAWN_MIN_RADIUS);
 }
 
 /**
@@ -214,7 +269,12 @@ function partyCapScale(state: GameState): number {
   return Math.max(1, Math.ceil(state.players.size / 2));
 }
 
-/** Trickles hostile mobs in around the player at night, up to the cap. Difficulty scales the cadence and cap; Peaceful spawns none. */
+/**
+ * Trickles hostile mobs in around the player at night, up to the cap.
+ * Difficulty scales the cadence and cap; Peaceful spawns none. In the nether
+ * the roster swaps to imps and scorchers — and the pinned daylight (under the
+ * spawn threshold) makes the trickle perpetual: there is no dawn to end it.
+ */
 export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () => number, surfaceYAt: SurfaceYAtFn): void {
   if (!hostilesSpawn(state.difficulty)) return;
   state.timers.hostileSpawnTimer += dt;
@@ -228,7 +288,7 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
 
   const center = spawnCenterPlayer(state, rng);
   if (!center) return;
-  const spawnKinds: Array<"zombie" | "skeleton" | "spider" | "creeper"> = ["zombie", "skeleton", "spider", "creeper"];
+  const spawnKinds: MobKind[] = state.dimension === "nether" ? ["imp", "imp", "scorcher"] : ["zombie", "skeleton", "spider", "creeper"];
   const kind = spawnKinds[Math.floor(rng() * spawnKinds.length)];
   // A wave is 1–2 mobs, but never more than the slots left under the cap — so a
   // 2-pack rolled at cap-1 can't overshoot (especially Easy's tighter cap of 8).

@@ -48,6 +48,8 @@ export type ItemDef = {
   hunger?: number;
   /** The status effect this potion applies when drunk (potion items only). */
   effect?: ItemEffect;
+  /** Per-item stack cap; defaults to MAX_STACK_SIZE (durable gear always stacks to 1). */
+  stackSize?: number;
 };
 
 export type InventorySlot = {
@@ -96,13 +98,16 @@ export type MobKind =
   | "cat"
   | "cod"
   | "salmon"
+  | "drowned"
   | "zombie"
   | "skeleton"
   | "spider"
   | "creeper"
   | "raider"
   | "villager"
-  | "boss";
+  | "boss"
+  | "imp"
+  | "scorcher";
 
 /**
  * A mob's social allegiance — the axis that drives who fights whom (see mobAI's
@@ -119,7 +124,7 @@ export type MobFaction = "wild" | "hostile" | "ally" | "villager" | "raider";
  */
 export type Profession = "farmer" | "blacksmith" | "librarian" | "cleric";
 
-export type VehicleKind = "raft" | "ship";
+export type VehicleKind = "raft" | "ship" | "minecart";
 
 export type MobModel = {
   group: THREE.Group;
@@ -356,11 +361,17 @@ export type SaveDataV16 = Omit<SaveDataV15, "version"> & {
   vehicles?: SavedVehicle[];
 };
 
+/** The game's world spaces. The overworld is where every world starts; the nether is reached by portal. */
+export type DimensionId = "overworld" | "nether";
+
 /**
- * One persisted player (v17). Exactly the per-player slice that sat flat on
+ * One persisted player (v17+). Exactly the per-player slice that sat flat on
  * ≤v16 saves, under the same field names (so the field validators are shared);
  * `position` is the one rename (v16 called it `player`). Single-player worlds
  * hold one entry with id "local"; a multiplayer server holds one per account.
+ * v18 adds `dimension` (where the player is; absent = overworld) and
+ * `portalArrival` (a one-shot arrival anchor written only by portal travel and
+ * consumed at the next boot — never written by an ordinary save).
  */
 export type SavedPlayer = {
   id: string;
@@ -377,16 +388,18 @@ export type SavedPlayer = {
   stats?: SavedStat[];
   advancements?: string[];
   spawnPoint?: { x: number; y: number; z: number } | null;
+  dimension?: DimensionId;
+  portalArrival?: { x: number; y: number; z: number };
 };
 
 /**
- * Current save shape (v17): the players map. Every per-player field moves off
+ * Save shape (v17): the players map. Every per-player field moves off
  * the top level into `players[]` (world-level fields — seed, changes,
  * difficulty, hardcore, blockEntities, mobs, vehicles, dayClock — stay put).
  * migrateSaveV16toV17 wraps a flat single-player save as [{ id: "local", … }]
  * and rewrites pet owners from the legacy literal "player" to "local".
  */
-export type SaveData = Omit<
+export type SaveDataV17 = Omit<
   SaveDataV16,
   | "version"
   | "gameMode"
@@ -405,4 +418,34 @@ export type SaveData = Omit<
 > & {
   version: 17;
   players: SavedPlayer[];
+};
+
+/**
+ * One dimension's world half: exactly the world-level fields the top level
+ * carries for the overworld, for a non-overworld dimension. Voxel indices in
+ * `changes`/`blockEntities`/`lootedChests` are in THAT dimension's coordinate
+ * space. When a field is added to `serialize()`'s world half it must be added
+ * here too, or it silently stays overworld-global (see docs/save-format.md).
+ */
+export type DimensionSection = {
+  changes: Array<[number, number]>;
+  blockEntities?: SavedContainer[];
+  lootedChests?: number[];
+  mobs?: SavedMob[];
+  vehicles?: SavedVehicle[];
+};
+
+/**
+ * Current save shape (v18): dimensions. The top-level world fields REMAIN the
+ * overworld's (no data moved — the v17→v18 migration is a pure version bump);
+ * other dimensions' world halves live under `dimensions`. `worldgenVersion`
+ * stamps which generator produced the diffs: on mismatch the load path
+ * discards every dimension's world half and reboots from the seed (absent =
+ * a pre-v18 save, grandfathered — the guard stays inert). Player location
+ * rides `SavedPlayer.dimension`/`portalArrival`.
+ */
+export type SaveData = Omit<SaveDataV17, "version"> & {
+  version: 18;
+  worldgenVersion?: number;
+  dimensions?: { nether?: DimensionSection };
 };

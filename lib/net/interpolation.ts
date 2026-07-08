@@ -1,11 +1,23 @@
 /**
- * Entity interpolation: remote players and mobs render ~125 ms in the past,
- * lerped between the two authoritative samples that bracket the target time.
- * Pure math over per-entity ring buffers — no engine, no sockets.
+ * Entity interpolation: remote players and mobs render in the past, lerped
+ * between the two authoritative samples that bracket the target time. How FAR
+ * in the past is adaptive: a fixed delay sized for LAN jitter underruns on a
+ * jittery long-haul link — ticks arrive in bursts, the buffer runs dry, and
+ * remote entities freeze-and-snap. The DelayController measures tick
+ * inter-arrival jitter and sizes the delay to absorb it, slewing gradually so
+ * remote timelines never visibly warp. Pure math over per-entity ring
+ * buffers — no engine, no sockets.
  */
 
-export const INTERPOLATION_DELAY_MS = 125;
-const BUFFER_SIZE = 32; // ~1.6s of 20 Hz samples
+/** The floor (the old fixed delay) — what clean links converge to. */
+export const INTERPOLATION_DELAY_MIN_MS = 125;
+export const INTERPOLATION_DELAY_MAX_MS = 450;
+/** Delay target = nominal tick interval + this × the p90 arrival deviation. */
+export const INTERPOLATION_JITTER_MULT = 2;
+/** How fast the effective delay chases its target (ms per second — ≤6% warp). */
+export const DELAY_SLEW_MS_PER_SEC = 60;
+const JITTER_WINDOW = 64; // ~3.2 s of tick arrivals
+const BUFFER_SIZE = 32; // ~1.6s of 20 Hz samples — covers DELAY_MAX comfortably
 
 export type PoseSample = { tMs: number; x: number; y: number; z: number; yaw: number; pitch?: number };
 export type InterpolatedPose = { x: number; y: number; z: number; yaw: number; pitch: number };
@@ -67,6 +79,69 @@ export function createPoseBuffer(): PoseBuffer {
 
     latest() {
       return samples[samples.length - 1] ?? null;
+    }
+  };
+}
+
+export type DelayController = {
+  /** Feed one tick frame's arrival (client wall clock + server tick number). */
+  onTickArrival(nowMs: number, tickN: number): void;
+  /** Slewed effective delay for this frame — call once per rAF (it advances the slew). */
+  effectiveDelayMs(nowMs: number): number;
+  /** The current effective delay without advancing the slew (for stats). */
+  currentDelayMs(): number;
+  /** p90 |inter-arrival − nominal| over the window (for stats). */
+  jitterMs(): number;
+  /** Forget arrival history (reconnect/world-sync — the gap isn't jitter). Keeps the effective delay. */
+  reset(): void;
+};
+
+export function createDelayController(nominalMs = 50): DelayController {
+  const deviations: number[] = [];
+  let lastArrivalMs: number | null = null;
+  let lastTickN = 0;
+  let effective = INTERPOLATION_DELAY_MIN_MS;
+  let lastSlewMs: number | null = null;
+
+  const p90 = (): number => {
+    if (deviations.length === 0) return 0;
+    const sorted = [...deviations].sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))];
+  };
+
+  return {
+    onTickArrival(nowMs, tickN) {
+      // Non-increasing tick numbers are dupes/reordered frames, not jitter.
+      if (lastTickN !== 0 && tickN <= lastTickN) return;
+      if (lastArrivalMs !== null && lastTickN !== 0) {
+        // Tick-number-aware: a coalesced TCP burst after a stall is ONE
+        // deviation against its combined expected gap, not N violations.
+        const expectedGap = (tickN - lastTickN) * nominalMs;
+        deviations.push(Math.abs(nowMs - lastArrivalMs - expectedGap));
+        if (deviations.length > JITTER_WINDOW) deviations.shift();
+      }
+      lastArrivalMs = nowMs;
+      lastTickN = tickN;
+    },
+
+    effectiveDelayMs(nowMs) {
+      const target = Math.min(INTERPOLATION_DELAY_MAX_MS, Math.max(INTERPOLATION_DELAY_MIN_MS, nominalMs + INTERPOLATION_JITTER_MULT * p90()));
+      if (lastSlewMs !== null) {
+        const step = (DELAY_SLEW_MS_PER_SEC * Math.max(0, nowMs - lastSlewMs)) / 1000;
+        const error = target - effective;
+        effective += Math.sign(error) * Math.min(Math.abs(error), step);
+      }
+      lastSlewMs = nowMs;
+      return effective;
+    },
+
+    currentDelayMs: () => effective,
+    jitterMs: p90,
+
+    reset() {
+      deviations.length = 0;
+      lastArrivalMs = null;
+      lastTickN = 0;
     }
   };
 }

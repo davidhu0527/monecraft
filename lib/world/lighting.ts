@@ -1,4 +1,6 @@
 import { BlockId } from "./blocks";
+import { isRailBlock } from "./rails";
+import { isRedstoneOverlay } from "./redstone";
 import { VoxelWorld } from "./voxelWorld";
 
 /**
@@ -47,9 +49,15 @@ const DOWN = 3;
  * OPAQUE — a solid block casts shadow until classified otherwise.
  */
 export function opacity(block: BlockId): number {
+  // Redstone overlays (wire, lever, button, plate, torch) are tiny shapes far
+  // from filling their cell — they must not black it out. The lamp is a full
+  // cube and stays default-opaque (an opaque emitter, like lava). Rails are
+  // the same flat-overlay shape.
+  if (isRedstoneOverlay(block) || isRailBlock(block)) return 0;
   switch (block) {
     case BlockId.Air:
     case BlockId.Glass:
+    case BlockId.NetherPortal:
       return 0;
     case BlockId.Leaves:
     case BlockId.Water:
@@ -76,6 +84,20 @@ export function emission(block: BlockId): number {
       return 14;
     case BlockId.Lava:
       return MAX_LIGHT;
+    // A lit redstone torch glows dimmer than a real torch; the powered lamp is
+    // a full-strength light source. Their off variants emit nothing — a power
+    // toggle swaps the id, and applyEdit re-derives emission at the cell.
+    case BlockId.RedstoneTorch:
+      return 7;
+    case BlockId.RedstoneLampOn:
+      return MAX_LIGHT;
+    // The lit portal surface glows a shade under a torch — enough to read as
+    // active and to light its chamber, without washing out torch placement.
+    case BlockId.NetherPortal:
+      return 11;
+    // Glowstone matches the torch: the nether's natural (and portable) light.
+    case BlockId.Glowstone:
+      return 14;
     default:
       return 0;
   }
