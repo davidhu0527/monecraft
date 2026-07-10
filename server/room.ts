@@ -1,5 +1,6 @@
 import { GameEngine, type DispatchOptions } from "@/lib/game/engine/GameEngine";
 import type { Command } from "@/lib/game/engine/commands";
+import { isGameMode } from "@/lib/game/gameModes";
 import { createMobPoseHistory, MELEE_REWIND_MAX_TICKS } from "./mobHistory";
 import { createFixedTicker, TICK_SECONDS, type FixedTicker } from "@/lib/game/engine/tickDriver";
 import {
@@ -440,7 +441,10 @@ export class Room {
     // Seat the player where their slice left them — a player who left (or was
     // kicked) in the nether rejoins there, booting the shard if needed.
     const shard = this.ensureShard(restore ? restorePlayerDimension(restore) : "overworld");
-    const player = shard.engine.addPlayer({ id: claims.sub, restore });
+    // First-time joiners take the WORLD's game mode from the ticket (the web
+    // app owns that row; this server may have no database). A returning
+    // player's slice outranks it inside addPlayer's restore.
+    const player = shard.engine.addPlayer({ id: claims.sub, ...(isGameMode(claims.gm) ? { gameMode: claims.gm } : {}), restore });
     this.offlinePlayers.delete(claims.sub);
     this.dirtySinceStore = true;
 

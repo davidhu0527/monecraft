@@ -153,6 +153,21 @@ describe("room lifecycle", () => {
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6);
   });
 
+  test("a first-time joiner takes the world's game mode from the ticket; a returning slice outranks it", async () => {
+    const { room } = await makeRoom();
+    await room.join({ ...claimsFor("alice", "w1", "owner"), gm: "creative" }, fakeSink());
+    const alice = room.engine.state.players.get("alice")!;
+    expect(alice.gameMode).toBe("creative");
+    // The player switched modes in-game; their slice outranks the ticket on rejoin.
+    alice.gameMode = "survival";
+    room.leave("alice");
+    await room.join({ ...claimsFor("alice", "w1", "owner"), gm: "creative" }, fakeSink());
+    expect(room.engine.state.players.get("alice")!.gameMode).toBe("survival");
+    // A bogus claim (or a ticket without one) falls back to survival.
+    await room.join({ ...claimsFor("bob", "w1"), gm: "godmode" }, fakeSink());
+    expect(room.engine.state.players.get("bob")!.gameMode).toBe("survival");
+  });
+
   test("a pose or cmd stamped with the wrong dimension is dropped silently (travel race guard)", async () => {
     const { room } = await makeRoom();
     const a = fakeSink();

@@ -24,6 +24,13 @@ export type TicketClaims = {
   skinId: string | null;
   /** Room role — the owner may kick/close. */
   role: "owner" | "member";
+  /**
+   * The WORLD's game mode at mint time (optional, additive). Tickets carry it
+   * because the game server may run without the web database (memory
+   * persistence) — the room seats a first-time joiner in this mode; a
+   * returning player's persisted slice outranks it.
+   */
+  gm?: string;
   /** Protocol version the client was built against. */
   pv: number;
   iat: number;
