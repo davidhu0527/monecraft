@@ -121,7 +121,7 @@ describe("room lifecycle", () => {
     const alice = room.engine.state.players.get("alice")!;
 
     const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose });
     (room as unknown as { tick(dt: number): void }).tick(0.05);
 
     const swungAtB = b
@@ -139,16 +139,16 @@ describe("room lifecycle", () => {
     const alice = room.engine.state.players.get("alice")!;
     const { x, y, z } = alice.position;
 
-    await room.handleMessage("alice", { t: "pose", seq: 1, x: x + 0.4, y, z, yaw: 0.3, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 1, x: x + 0.4, y, z, yaw: 0.3, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6);
     expect(a.messagesOf("forcePose")).toHaveLength(0);
 
-    await room.handleMessage("alice", { t: "pose", seq: 2, x: x + 90, y, z: z + 90, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 2, x: x + 90, y, z: z + 90, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6); // unmoved
     expect(a.messagesOf("forcePose")).toHaveLength(1);
 
     // Stale seq replay is silently dropped.
-    await room.handleMessage("alice", { t: "pose", seq: 2, x: x + 1, y, z, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 2, x: x + 1, y, z, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6);
   });
 
@@ -285,7 +285,7 @@ describe("room lifecycle", () => {
     // A pose while mounted is ignored (position is server-owned) and must NOT be
     // answered with forcePose — that reject means "ignore the stream", not "desync".
     a.frames.length = 0;
-    await room.handleMessage("alice", { t: "pose", seq: 1, x: 999, y: 41, z: 999, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 1, x: 999, y: 41, z: 999, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(10, 6);
     expect(a.messagesOf("forcePose")).toHaveLength(0);
   });
@@ -332,7 +332,7 @@ describe("ops surface", () => {
     const a = fakeSink();
     await room.join(claimsFor("alice", "w1"), a);
 
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "toggleInventory" }, pose: eyePose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "toggleInventory" }, pose: eyePose });
     for (let i = 0; i < 20; i += 1) (room as unknown as { tick(dt: number): void }).tick(0.05); // triggers a pose checkpoint at tick 20
 
     const dump = room.logDump();
@@ -350,7 +350,8 @@ describe("ops surface", () => {
     const room = new Room(record!, persistence, () => 0, 5); // tiny log
     const a = fakeSink();
     await room.join(claimsFor("alice", "w1"), a);
-    for (let i = 0; i < 30; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "toggleInventory" }, pose: eyePose });
+    for (let i = 0; i < 30; i += 1)
+      await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: i + 1, cmd: { type: "toggleInventory" }, pose: eyePose });
     expect(room.logDump().entries.length).toBeLessThanOrEqual(5);
   });
 
@@ -413,10 +414,10 @@ describe("ops surface", () => {
     await room.join(claimsFor("bob", "w1", "member"), member);
     const pose = { x: 0, y: 40, z: 0, yaw: 0, pitch: 0 };
 
-    await room.handleMessage("bob", { t: "cmd", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    await room.handleMessage("bob", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
     expect(room.engine.state.difficulty).not.toBe("peaceful"); // member ignored
 
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
     expect(room.engine.state.difficulty).toBe("peaceful"); // owner honored
   });
 
@@ -449,10 +450,10 @@ describe("ops surface", () => {
     // each advances lastPoseTick. Then a teleport-sized cmd pose must be rejected.
     for (let i = 0; i < 40; i += 1) {
       tickRoom();
-      await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "toggleInventory" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
+      await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: i + 1, cmd: { type: "toggleInventory" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
     }
     a.frames.length = 0;
-    await room.handleMessage("alice", { t: "cmd", seq: 999, cmd: { type: "attack" }, pose: { x: x + 60, y, z: z + 60, yaw: 0, pitch: 0 } });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 999, cmd: { type: "attack" }, pose: { x: x + 60, y, z: z + 60, yaw: 0, pitch: 0 } });
     expect(alice.position.x).toBeCloseTo(x, 3); // the jump was clamped, not admitted
   });
 });
@@ -531,11 +532,11 @@ describe("melee lag compensation (view-stamped attacks)", () => {
 
     const pose = poseAiming(seen);
     // Unstamped: judged at the live (far) position — a whiff.
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose });
     expect(sheep.hp).toBe(50);
 
     // Stamped with the tick alice was rendering: judged where she SAW it.
-    await room.handleMessage("alice", { t: "cmd", seq: 2, cmd: { type: "attack" }, pose, view: seenAt * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 2, cmd: { type: "attack" }, pose, view: seenAt * 50 });
     expect(sheep.hp).toBeLessThan(50);
   });
 
@@ -558,10 +559,10 @@ describe("melee lag compensation (view-stamped attacks)", () => {
 
     const pose = poseAiming(seen);
     // The in-front tick is beyond the clamp: floored inside the far window → miss.
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose, view: seenAt * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose, view: seenAt * 50 });
     expect(sheep.hp).toBe(50);
     // A future stamp clamps to the current tick → plain live selection → miss.
-    await room.handleMessage("alice", { t: "cmd", seq: 2, cmd: { type: "attack" }, pose, view: (tickCount() + 100) * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 2, cmd: { type: "attack" }, pose, view: (tickCount() + 100) * 50 });
     expect(sheep.hp).toBe(50);
   });
 
@@ -576,7 +577,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     const live = sheep.position.clone();
 
     // The stamp predates the mob's existence: selection falls back to live → hit.
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: poseAiming(live), view: viewTick * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose: poseAiming(live), view: viewTick * 50 });
     expect(sheep.hp).toBeLessThan(50);
   });
 
@@ -591,7 +592,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
 
     // A 20-attack burst inside one second: only 12 swings make it through.
-    for (let i = 0; i < 20; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "attack" }, pose });
+    for (let i = 0; i < 20; i += 1) await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: i + 1, cmd: { type: "attack" }, pose });
     tick();
     const swings = b
       .messagesOf("tick")
@@ -601,7 +602,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
 
     // Cross a second boundary (budgets reset every 20th tick) and swing again.
     for (let i = 0; i < 20; i += 1) tick();
-    await room.handleMessage("alice", { t: "cmd", seq: 99, cmd: { type: "attack" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 99, cmd: { type: "attack" }, pose });
     tick();
     expect(
       b
@@ -615,7 +616,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     const { room, alice, tick } = await setup();
     tick();
     const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "selectSlot", index: 4 }, pose, view: 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "selectSlot", index: 4 }, pose, view: 50 });
     expect(alice.selectedSlot).toBe(4);
   });
 });

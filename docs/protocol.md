@@ -1,4 +1,4 @@
-# Wire protocol (v3)
+# Wire protocol (v4)
 
 The client↔game-server protocol, defined in `lib/net/protocol.ts` (single
 source of truth — this page is the narrative). Versioned as a whole via
@@ -52,6 +52,10 @@ the join payload is KBs, not the 37 MB voxel field.
   looked). Validated against a per-type **allow-list**; local-presentation
   commands (pause/debug/camera) never travel. Budget: 60/s (attacks
   additionally 12/s — see the rewind note below).
+- `d` on `pose` and `cmd` (v4, required) — the dimension the sender believes
+  it is in. The **travel race guard**: frames in flight when the server
+  swapped the sender's dimension carry the old stamp and are silently dropped
+  (no `forcePose` fight, no raycast into the wrong world).
 - `view` on `cmd` (v3, optional) — the sender's render-time view of the world:
   ms on the server tick timeline (`tick × 50`), i.e. the instant the
   interpolated mobs on their screen were sampled at. Attacks carry it once the
@@ -92,6 +96,24 @@ stream is rejected without a `forcePose` correction, and the `SelfDelta`
 carries `mountedVehicleId` (on mount/dismount) plus the authoritative `x/y/z`
 (while mounted). The replica adopts that mount state and snaps to the position,
 skipping its own motion integration until it dismounts.
+
+**Dimensions (v4).** A room simulates one engine **per active dimension**
+(overworld always; the nether lazily), and every tick channel is scoped to
+the recipient's dimension: `blocks`/`ev`/`pp`/`mp`/`vp`/`prj` and
+`mobsKeyframe` describe only the world the recipient is in (a cross-dimension
+keyframe would mass-prune the replica's mobs, since keyframes delete by
+absence). `chat`, `playerJoined`/`playerLeft`, `pong`, and `day` stay global.
+Where each player is rides the roster (`RosterEntry.dim`), the recipient's
+own dimension rides `welcome.dimension`, and every `worldSync` is stamped
+with the dimension it describes (a stale resync racing a travel swap is
+ignored). **Travel** is server-initiated: portal dwell runs in the server
+engine, and on travel the server moves the player between its dimension
+engines, then sends the traveler `dim { dimension, tick, dayClock }` followed
+immediately by a fresh gzipped `worldSync` for the target — the client
+rebuilds its replica engine and renderer in place, **without dropping the
+socket** (the online analog of single-player's save-and-remount). Everyone
+else gets `playerDim { id, dimension }` (roster tag, toast, and replica
+prune/adopt of that player's avatar).
 
 Backpressure: past 256 KB buffered, a client's `pp`/`mp`/`vp`/`prj` are shed
 (events and `self` still flow); sustained >1 MB is a `4008` kick.

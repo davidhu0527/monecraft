@@ -710,6 +710,7 @@ export async function connectNetworkSession(
       encodeClientMessage({
         t: "cmd",
         seq,
+        d: state.dimension,
         cmd: command,
         pose: { x: qPos(self.position.x), y: qPos(self.position.y), z: qPos(self.position.z), yaw: qAng(self.yaw), pitch: qAng(self.pitch) },
         ...(command.type === "attack" && lastRenderTimeMs !== null ? { view: Math.round(Math.max(0, lastRenderTimeMs)) } : {})
@@ -813,6 +814,7 @@ export async function connectNetworkSession(
           encodeClientMessage({
             t: "pose",
             seq,
+            d: state.dimension,
             x: qPos(self.position.x),
             y: qPos(self.position.y),
             z: qPos(self.position.z),

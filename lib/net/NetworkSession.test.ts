@@ -32,13 +32,15 @@ const WELCOME: WelcomeMessage = {
   dayClock: 60,
   tick: 100,
   role: "owner",
-  players: [{ id: "acct-1", name: "Alpha", skinId: null, x: 5, y: 40, z: 5, yaw: 0 }]
+  dimension: "overworld" as const,
+  players: [{ id: "acct-1", name: "Alpha", skinId: null, dim: "overworld" as const, x: 5, y: 40, z: 5, yaw: 0 }]
 };
 
 function worldSync(players: WorldSync["players"], overrides: Partial<WorldSync> = {}): WorldSync {
   return {
     t: "worldSync",
     tick: 100,
+    dimension: "overworld",
     dayClock: 60,
     changes: [],
     blockEntities: [],

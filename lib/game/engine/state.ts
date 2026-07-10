@@ -621,6 +621,9 @@ export type GameEvent =
   | { type: "portalLit" }
   | { type: "portalDenied"; reason: "online" | "invalidFrame" }
   | { type: "dimensionTravel"; target: DimensionId; anchor: { x: number; y: number; z: number } }
+  // Synthesized by the CLIENT session from the wire's playerDim broadcast (never
+  // emitted by an engine) — the shell's toast seam for "X entered the Nether".
+  | { type: "playerDimension"; playerId: PlayerId; dimension: DimensionId }
   | { type: "fishingCast"; x: number; y: number; z: number }
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }

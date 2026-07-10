@@ -276,6 +276,7 @@ export class Room {
         dayClock: this.engine.state.dayClock,
         tick: this.tickCount,
         role: claims.role,
+        dimension: this.engine.state.dimension,
         players: this.roster()
       })
     );
@@ -510,6 +511,7 @@ export class Room {
       id: player.id,
       name: conn.name,
       skinId: conn.skinId,
+      dim: this.engine.state.dimension,
       x: qPos(player.position.x),
       y: qPos(player.position.y),
       z: qPos(player.position.z),
@@ -522,6 +524,7 @@ export class Room {
     return {
       t: "worldSync",
       tick: this.tickCount,
+      dimension: state.dimension,
       dayClock: state.dayClock,
       changes: state.blockChanges.changes(),
       blockEntities: serializeContainers(state.containers),
