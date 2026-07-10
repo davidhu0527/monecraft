@@ -1204,6 +1204,12 @@ export class GameEngine {
       timers: createPlayerTimers()
     };
     if (spec.restore) this.restorePlayerFields(player, spec.restore);
+    // APPEARING inside a portal surface never travels — only walking in does.
+    // Without this, a player who left (or was seated) latched inside a portal
+    // rejoins unlatched and rides it again 3 seconds later.
+    const feetCell = state.world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z));
+    const bodyCell = state.world.get(Math.floor(player.position.x), Math.floor(player.position.y) + 1, Math.floor(player.position.z));
+    if (feetCell === BlockId.NetherPortal || bodyCell === BlockId.NetherPortal) player.timers.portalLatched = true;
     state.players.set(spec.id, player);
     // A replica boots playerless with a stub snapshot; the primary taking
     // their seat is when a real one first becomes buildable.

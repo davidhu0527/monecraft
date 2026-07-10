@@ -34,31 +34,65 @@ async function aimAt(page: Page, target: { x: number; y: number; z: number }): P
  * ~FLY_SPEED×1.6×0.05+0.5 ≈ 1.3 blocks — a bigger hop is refused and
  * force-posed back, which is exactly the stall this helper must avoid.
  */
-async function flyTo(page: Page, target: { x: number; y: number; z: number }, stepSize = 1): Promise<void> {
+async function flyTo(page: Page, target: { x: number; y: number; z: number }, stepSize = 1, ignoreY = false): Promise<void> {
+  let lastDist = Infinity;
+  let stalled = 0;
   for (let hop = 0; hop < 400; hop += 1) {
-    const done = await page.evaluate(
-      ({ t, stepSize: size }) => {
+    const dist = await page.evaluate(
+      ({ t, stepSize: size, ignoreY: flat }) => {
         const p = window.__monecraft!.engine.state.player;
         const dx = t.x - p.position.x;
-        const dy = t.y - p.position.y;
+        const dy = flat ? 0 : t.y - p.position.y;
         const dz = t.z - p.position.z;
-        const dist = Math.hypot(dx, dy, dz);
-        if (dist < 0.3) return true;
-        const step = Math.min(size, dist);
-        p.position.set(p.position.x + (dx / dist) * step, p.position.y + (dy / dist) * step, p.position.z + (dz / dist) * step);
+        const d = Math.hypot(dx, dy, dz);
+        if (d < 0.3) return 0;
+        const step = Math.min(size, d);
+        p.position.set(p.position.x + (dx / d) * step, p.position.y + (dy / d) * step, p.position.z + (dz / d) * step);
         p.velocity.set(0, 0, 0);
-        return false;
+        return d;
       },
-      { t: target, stepSize }
+      { t: target, stepSize, ignoreY }
     );
-    if (done) return;
+    if (dist === 0) return;
+    // Collision stall (a canopy or ledge the site scan couldn't see): the
+    // physics keeps pushing the hop back. Dodge up-and-sideways and re-run —
+    // the straight line re-forms from the new spot.
+    stalled = lastDist - dist < 0.05 ? stalled + 1 : 0;
+    lastDist = dist;
+    if (stalled >= 5) {
+      stalled = 0;
+      lastDist = Infinity;
+      await page.evaluate((h) => {
+        const p = window.__monecraft!.engine.state.player;
+        p.position.set(p.position.x + (h % 2 === 0 ? 0.8 : -0.8), p.position.y + 1.5, p.position.z);
+        p.velocity.set(0, 0, 0);
+      }, hop);
+    }
     await page.waitForTimeout(120); // let the pose stream carry the hop
   }
-  throw new Error(`could not reach ${JSON.stringify(target)}`);
+  const debug = await page.evaluate(() => {
+    const s = window.__monecraft!.engine.state;
+    const p = s.player;
+    const cell = { x: Math.floor(p.position.x), y: Math.floor(p.position.y), z: Math.floor(p.position.z) };
+    return {
+      pos: { x: p.position.x, y: p.position.y, z: p.position.z },
+      isFlying: p.isFlying,
+      dimension: s.dimension,
+      status: window.__monecraft!.net?.status(),
+      blockAt: s.world.get(cell.x, cell.y, cell.z),
+      blockBelow: s.world.get(cell.x, cell.y - 1, cell.z)
+    };
+  });
+  throw new Error(`could not reach ${JSON.stringify(target)}; player=${JSON.stringify(debug)}`);
 }
 
-/** Ground movement: like flyTo but with sub-clamp steps — a NON-flying player's per-pose allowance is under a block at the 20 Hz cadence. */
-const walkTo = (page: Page, target: { x: number; y: number; z: number }) => flyTo(page, target, 0.8);
+/**
+ * Ground movement: sub-clamp steps (a NON-flying player's per-pose allowance
+ * is under a block at the 20 Hz cadence) on the XZ plane only — gravity owns
+ * y, and chasing a captured y that physics has since settled away from would
+ * stall forever against the ground.
+ */
+const walkTo = (page: Page, target: { x: number; y: number; z: number }) => flyTo(page, target, 0.8, true);
 
 /**
  * Places the selected block at a cell through the REAL wire path (aim → the

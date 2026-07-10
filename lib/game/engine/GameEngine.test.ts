@@ -3429,6 +3429,20 @@ describe("portal travel (swap-on-travel)", () => {
     expect(engine.state.blockChanges.drainEdits()).toHaveLength(0);
   });
 
+  test("a player who APPEARS inside a portal boots latched (rejoin/handoff must not re-travel)", () => {
+    const engine = makeEngine();
+    const pos = engine.ensureArrival({ x: 30, y: 41, z: 30 });
+    const player = engine.addPlayer({
+      id: "p2",
+      restore: { id: "p2", position: { x: pos.x + 0.5, y: pos.y, z: pos.z + 0.5 } }
+    });
+    expect(player.timers.portalLatched).toBe(true);
+    // Standing put through several dwell windows never fires travel for them.
+    engine.consumeEvents();
+    run(engine, 8);
+    expect(engine.consumeEvents().some((e) => e.type === "dimensionTravel")).toBe(false);
+  });
+
   test("the return trip reuses the departure-side portal", () => {
     const over = makeEngine();
     // Travel out and straight back: the return anchor is the overworld frame

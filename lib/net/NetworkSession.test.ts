@@ -675,6 +675,30 @@ describe("dimension travel (the nether online)", () => {
     session.dispose();
   });
 
+  test("the pose stream pauses between the dim swap and its worldSync (the fresh replica's spawn is transient)", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: NETHER_SIZE });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    session.afterFrame(5_000); // baseline: online poses flow
+    const posesBefore = instances[0].sent.filter((s) => (JSON.parse(s) as { t: string }).t === "pose").length;
+    expect(posesBefore).toBeGreaterThan(0);
+
+    instances[0].emit(JSON.stringify({ t: "dim", dimension: "nether", tick: 200, dayClock: 61 }));
+    // Mid-swap: self sits at a generic spawn the sync hasn't corrected yet —
+    // streaming it could walk the server player out of the arrival portal.
+    session.afterFrame(10_000);
+    session.afterFrame(10_100);
+    expect(instances[0].sent.filter((s) => (JSON.parse(s) as { t: string }).t === "pose").length).toBe(posesBefore);
+
+    // The sync seats us; the stream resumes with the new stamp.
+    await pushWorldSync(instances[0], netherSync(mySpot(20, 40, 20, "nether")));
+    session.afterFrame(20_000);
+    const poses = instances[0].sent.map((s) => JSON.parse(s) as { t: string; d?: string }).filter((m) => m.t === "pose");
+    expect(poses.length).toBe(posesBefore + 1);
+    expect(poses.at(-1)?.d).toBe("nether");
+    session.dispose();
+  });
+
   test("a stale worldSync for the departed dimension is ignored", async () => {
     const { make, instances } = socketFactory();
     const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: NETHER_SIZE });

@@ -932,8 +932,12 @@ export async function connectNetworkSession(
         state.worldMeshDirty = true;
       }
       const open = socketOpen;
-      // Pose stream at tick rate.
-      if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
+      // Pose stream at tick rate — but NOT while a travel swap awaits its
+      // worldSync: the fresh replica seated `self` at a generic spawn, and
+      // streaming that transient position can walk the server player out of
+      // the arrival portal (clearing the latch — an idle player then re-dwells
+      // and ping-pongs between dimensions).
+      if (open && !adoptSelfFromSync && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
         lastPoseSentMs = nowMs;
         seq += 1;
         delayedSend(
