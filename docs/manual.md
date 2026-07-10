@@ -234,7 +234,9 @@ Fire Resistance potion before working near the seas.
 
 Why go? Four exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
 recombine into a placeable glowstone block — a torch-strength light source for
-your builds). **Blazite ore** — the post-diamond ore, found deep (below Y≈40)
+your builds). **Nether brick** — the fortress building stone, smelted from
+netherrack (see [Nether fortresses](#nether-fortresses) below). **Blazite
+ore** — the post-diamond ore, found deep (below Y≈40)
 and gated behind a diamond pickaxe like the obsidian you came through. Smelt 2
 raw ore into a **blazite ingot** and forge the game's best craftable gear: the
 **blazite pickaxe** (faster than diamond, and it chews obsidian), **sword**
