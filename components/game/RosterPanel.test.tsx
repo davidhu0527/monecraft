@@ -17,8 +17,8 @@ function fakeSession(role: "owner" | "member", members: RosterMember[]) {
 }
 
 const members: RosterMember[] = [
-  { id: "me", name: "Alpha" },
-  { id: "acct-2", name: "Beta" }
+  { id: "me", name: "Alpha", dimension: "overworld" },
+  { id: "acct-2", name: "Beta", dimension: "overworld" }
 ];
 
 describe("RosterPanel", () => {
