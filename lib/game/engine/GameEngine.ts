@@ -532,12 +532,14 @@ export class GameEngine {
   }
 
   /**
-   * Portals work in local single-player only (for now): the server engine and
-   * every replica refuse ignition, so an online world can never strand a
-   * player in a dimension the room doesn't simulate.
+   * Portals work wherever the engine is AUTHORITATIVE over travel: local
+   * single-player (the shell save-and-remounts on dimensionTravel) and the
+   * server room (which hands the player between its dimension shards).
+   * Replicas alone refuse — a client mirrors travel the server initiated
+   * (the `dim` message), it never fires its own.
    */
   private get portalsEnabled(): boolean {
-    return this.authority === "local" && !this.replica;
+    return !this.replica;
   }
 
   /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
@@ -800,8 +802,10 @@ export class GameEngine {
     tickWaterExposure(state, player, dt, damageEnv);
     tickLavaExposure(state, player, dt, damageEnv, hasEffect(player, "fire_resistance"));
     tickOxygen(state, player, dt, damageEnv, hasEffect(player, "water_breathing"));
-    // Dimension travel is single-player only (like ignition): the shell hears
-    // the event and performs the save + remount swap.
+    // Dimension travel fires only where the engine owns it (see
+    // portalsEnabled): the SP shell hears the event and save-remounts; the
+    // server room hears it (attributed to this player) and hands the player
+    // to the target dimension's shard. Replicas mirror, never fire.
     if (this.portalsEnabled) tickPortalDwell(state, player, dt, this.emit);
     player.timers.bowCooldownTimer = Math.max(0, player.timers.bowCooldownTimer - dt);
     player.timers.spearThrowCooldown = Math.max(0, player.timers.spearThrowCooldown - dt);

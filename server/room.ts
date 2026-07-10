@@ -12,7 +12,7 @@ import {
   serializeLootedChests,
   serializeStats
 } from "@/lib/game/save";
-import type { DimensionId, SavedPlayer } from "@/lib/game/types";
+import type { DimensionId, DimensionSection, SavedPlayer, SaveData } from "@/lib/game/types";
 import type { PlayerState } from "@/lib/game/engine/state";
 import { encodeServerMessage, gzipWorldSync, qAng, qPos } from "@/lib/net/codec";
 import {
@@ -86,6 +86,12 @@ type ClientConn = {
   role: "owner" | "member";
   /** Which dimension shard this client lives in (drives all tick fan-out + input routing). */
   dimension: DimensionId;
+  /**
+   * True from a travel handoff until the target dimension's worldSync has
+   * been sent. Tick frames are withheld meanwhile — they'd describe a world
+   * the client hasn't adopted yet and corrupt the replica it still runs.
+   */
+  pendingDimensionSync: boolean;
   sink: ClientSink;
   /** Highest pose seq applied (stale/replayed packets drop). */
   poseSeq: number;
@@ -132,6 +138,12 @@ const BACKPRESSURE_KICK_BYTES = 1024 * 1024;
 const BACKPRESSURE_KICK_STRIKES = 100; // ~5s of sustained >1MB at 20Hz
 const DEFAULT_COMMAND_LOG_SIZE = 4096;
 /**
+ * How long an EMPTY nether shard lingers before it is persisted and dropped
+ * (its ~40 MB engine freed). Long enough that a quick there-and-back doesn't
+ * thrash worldgen; short enough that an abandoned nether doesn't hold memory.
+ */
+const DEFAULT_NETHER_SHARD_LINGER_MS = 60_000;
+/**
  * Per-second cap on attack commands per client. Far above honest clicking,
  * but with lag-compensated rewind an unbounded rate would let a scripted
  * client sweep a mob's whole 900 ms position trail with varied view stamps.
@@ -170,6 +182,17 @@ export class Room {
   private ticker: FixedTicker | null = null;
   private tickCount = 0;
   private dirtySinceStore = false;
+  /**
+   * The nether's world half from an evicted shard, re-emitted by composeSave
+   * until a new shard (whose boot save carries it) supersedes it. The
+   * OVERWORLD engine's own pass-through (`foreignDimensions`) is captured at
+   * ITS boot and goes stale the moment a nether engine runs — this room-level
+   * override is what keeps nether builds alive across shard lifecycles.
+   */
+  private dormantNether: DimensionSection | undefined;
+  /** Wall-clock ms since the nether shard emptied of players (linger-evict clock), or null while occupied/absent. */
+  private netherEmptySinceMs: number | null = null;
+  private readonly netherLingerMs = Number.parseInt(process.env.NETHER_SHARD_LINGER_MS ?? "", 10) || DEFAULT_NETHER_SHARD_LINGER_MS;
   /** Wall-clock ms when the room became empty (idle-eviction clock), or null while occupied. */
   emptySinceMs: number | null;
   /** p95-ish diagnostics: the slowest tick of the last window. */
@@ -234,6 +257,125 @@ export class Room {
     return { dimension, engine, mobHistory: createMobPoseHistory(), mobShadow: new Map(), vehicleShadow: new Map(), lastProjectileCount: 0 };
   }
 
+  /**
+   * The shard for a dimension, booting its engine on first demand (a portal
+   * travel or a join-in-nether). Construction is synchronous — one worldgen
+   * pass, no light bake (headless) — a one-time hitch on the shared tick
+   * thread, same class as a room load. The boot save is the composed CURRENT
+   * world so the new engine sees the freshest nether section and difficulty.
+   */
+  private ensureShard(dimension: DimensionId): DimensionShard {
+    const existing = this.shards.get(dimension);
+    if (existing) return existing;
+    const base = this.overworld.engine;
+    const shard = this.makeShard(
+      dimension,
+      new GameEngine({
+        save: this.composeSave(),
+        dimension,
+        authority: "server",
+        headless: true,
+        bootPlayer: false
+      })
+    );
+    this.shards.set(dimension, shard);
+    this.netherEmptySinceMs = null;
+    // Mirror world time immediately (the save carried it, but be explicit).
+    shard.engine.state.dayClock = base.state.dayClock;
+    return shard;
+  }
+
+  /**
+   * The whole world as one save: the overworld engine's serialize (its own
+   * top-level world half) with the LIVE nether shard's section and players
+   * layered on — or the dormant section from an evicted shard. Overrides the
+   * overworld engine's boot-captured pass-through, which is stale by now (the
+   * drift-trap comment on `dormantNether`).
+   */
+  private composeSave(): SaveData {
+    const save = this.overworld.engine.serialize();
+    const nether = this.shards.get("nether");
+    if (nether) {
+      const netherSave = nether.engine.serialize();
+      const section = netherSave.dimensions?.nether;
+      if (section) save.dimensions = { ...save.dimensions, nether: section };
+      save.players = [...save.players, ...netherSave.players];
+    } else if (this.dormantNether) {
+      save.dimensions = { ...save.dimensions, nether: this.dormantNether };
+    }
+    return save;
+  }
+
+  /**
+   * The travel handoff: moves a player between dimension shards. The slice
+   * crosses whole (inventory, xp, effects — serializePlayer/addPlayer are the
+   * same machinery leave/join use); position is replaced by the target-side
+   * arrival portal, latched so they don't immediately bounce back. Mobs
+   * (pets included) and vehicles stay behind — they are dimension state.
+   */
+  private travelPlayer(playerId: string, from: DimensionShard, target: DimensionId, anchor: { x: number; y: number; z: number }): void {
+    const conn = this.clients.get(playerId);
+    if (!conn || conn.dimension !== from.dimension) return; // left or already handed off
+    const slice = from.engine.removePlayer(playerId);
+    if (!slice) return;
+    const shard = this.ensureShard(target);
+    const player = shard.engine.addPlayer({ id: playerId, restore: slice });
+    const pos = shard.engine.ensureArrival(anchor);
+    player.position.set(pos.x + 0.5, pos.y, pos.z + 0.5);
+    player.velocity.set(0, 0, 0);
+    player.onGround = false;
+    // Arriving INSIDE a portal: latch the dwell or the return trip fires in 3s.
+    player.timers.portalLatched = true;
+    player.timers.portalDwellSeconds = 0;
+    conn.dimension = target;
+    conn.shadow = null; // full SelfDelta next tick
+    conn.lastPoseTick = this.tickCount;
+    this.dirtySinceStore = true;
+    this.sendTravelSync(conn, shard);
+    this.broadcast({ t: "playerDim", id: playerId, dimension: target });
+  }
+
+  /** `dim` first (the client swaps its replica), then the target worldSync. Tick frames are withheld until the sync is on the wire. */
+  private sendTravelSync(conn: ClientConn, shard: DimensionShard): void {
+    conn.pendingDimensionSync = true;
+    conn.sink.send(encodeServerMessage({ t: "dim", dimension: shard.dimension, tick: this.tickCount, dayClock: shard.engine.state.dayClock }));
+    const sync = this.buildWorldSync(shard);
+    void gzipWorldSync(sync)
+      .then((bytes) => {
+        this.bytesOut += bytes.length;
+        conn.sink.send(bytes);
+      })
+      .finally(() => {
+        conn.pendingDimensionSync = false;
+      });
+  }
+
+  /**
+   * Persist-and-drop an empty nether shard after the linger window: the ~40 MB
+   * engine is the price of an OCCUPIED nether, not a visited-once one. The
+   * section survives as `dormantNether` (and in the stored save); the next
+   * travel reboots the shard from it.
+   */
+  private sweepNetherShard(): void {
+    const shard = this.shards.get("nether");
+    if (!shard) return;
+    let occupied = false;
+    for (const conn of this.clients.values()) if (conn.dimension === "nether") occupied = true;
+    if (occupied) {
+      this.netherEmptySinceMs = null;
+      return;
+    }
+    if (this.netherEmptySinceMs === null) {
+      this.netherEmptySinceMs = this.now();
+      return;
+    }
+    if (this.now() - this.netherEmptySinceMs < this.netherLingerMs) return;
+    this.dormantNether = shard.engine.serialize().dimensions?.nether ?? this.dormantNether;
+    this.shards.delete("nether");
+    this.netherEmptySinceMs = null;
+    this.dirtySinceStore = true;
+  }
+
   /** Starts the 20 Hz ticker (index.ts calls this once after construction). */
   start(setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>, clearTimer?: (id: ReturnType<typeof setTimeout>) => void): void {
     this.ticker = createFixedTicker({
@@ -295,9 +437,9 @@ export class Room {
     this.clients.delete(claims.sub);
 
     const restore = this.offlinePlayers.get(claims.sub) ?? null;
-    // Seat the player where their slice left them (a player who left in the
-    // nether rejoins there); no shard for it yet falls back to the overworld.
-    const shard = restore ? this.shardFor(restorePlayerDimension(restore)) : this.overworld;
+    // Seat the player where their slice left them — a player who left (or was
+    // kicked) in the nether rejoins there, booting the shard if needed.
+    const shard = this.ensureShard(restore ? restorePlayerDimension(restore) : "overworld");
     const player = shard.engine.addPlayer({ id: claims.sub, restore });
     this.offlinePlayers.delete(claims.sub);
     this.dirtySinceStore = true;
@@ -308,6 +450,7 @@ export class Room {
       skinId: claims.skinId,
       role: claims.role,
       dimension: shard.dimension,
+      pendingDimensionSync: false,
       sink,
       poseSeq: -1,
       lastPoseTick: this.tickCount,
@@ -338,11 +481,6 @@ export class Room {
     sink.send(await gzipWorldSync(this.buildWorldSync(shard)));
     this.broadcast({ t: "playerJoined", player: this.rosterEntry(player, conn) }, claims.sub);
     return true;
-  }
-
-  /** The shard a persisted slice belongs to; a missing shard falls back to the overworld (its creation is the travel path's job). */
-  private shardFor(dimension: DimensionId): DimensionShard {
-    return this.shards.get(dimension) ?? this.overworld;
   }
 
   /** Owner-initiated eject: close the socket with a fatal code so the client won't retry, then leave. Returns false if not present. */
@@ -438,6 +576,13 @@ export class Room {
           pose: message.pose,
           ...(message.view !== undefined ? { view: message.view } : {})
         });
+        // The owner's difficulty is WORLD state: mirror it into every other
+        // shard so e.g. Peaceful despawns hostiles in the nether too.
+        if (message.cmd.type === "setDifficulty") {
+          for (const other of this.shards.values()) {
+            if (other !== shard) other.engine.setWorldDifficulty(message.cmd.difficulty);
+          }
+        }
         // Melee lag compensation: a stamped attack rewinds TARGET SELECTION to
         // the tick the attacker was rendering, clamped into the rewind window.
         // Everything degrades to live behavior: unstamped/future/too-stale
@@ -490,9 +635,9 @@ export class Room {
     await this.persist();
   }
 
-  /** Persists the full world (live players merged with offline slices). */
+  /** Persists the full world (every shard's half, live players merged with offline slices). */
   async persist(): Promise<void> {
-    const save = this.engine.serialize();
+    const save = this.composeSave();
     for (const [id, saved] of this.offlinePlayers) {
       if (!save.players.some((p) => p.id === id)) save.players.push(saved);
     }
@@ -514,14 +659,25 @@ export class Room {
     // Step every shard and gather its per-tick broadcast data. Coordinates,
     // ids, and events only mean anything inside one dimension's space, so
     // each client receives exactly their own shard's channels.
+    const travels: Array<{ playerId: string; from: DimensionShard; target: DimensionId; anchor: { x: number; y: number; z: number } }> = [];
     const perShard = new Map<DimensionId, ShardTickData>();
     for (const shard of this.shards.values()) {
+      // World time is owned by the overworld engine (which steps first —
+      // insertion order); mirror it into the others before they step so a
+      // sleep-skip's clock jump reaches the nether the same tick.
+      if (shard.dimension !== "overworld") shard.engine.state.dayClock = this.overworld.engine.state.dayClock;
       shard.engine.step(dt);
       // Post-step positions: exactly what this tick's mp/keyframe broadcasts,
       // i.e. the timeline the client's interpolation buffers (and view stamps)
       // live on.
       shard.mobHistory.record(this.tickCount, shard.engine.state.mobs);
-      const events = shard.engine.consumeEvents();
+      // dimensionTravel is the room's cue to hand the player between shards —
+      // it never broadcasts (the traveler gets `dim`, everyone else playerDim).
+      const events = shard.engine.consumeEvents().filter((e) => {
+        if (e.type !== "dimensionTravel") return true;
+        if (e.playerId) travels.push({ playerId: e.playerId, from: shard, target: e.target, anchor: e.anchor });
+        return false;
+      });
       const blocks = shard.engine.state.blockChanges.drainEdits();
       if (events.some((e) => e.type === "blockPlaced" || e.type === "blockBroken" || e.type === "explosion")) this.dirtySinceStore = true;
       const projectilePoses = this.collectProjectilePoses(shard);
@@ -537,10 +693,19 @@ export class Room {
         includeProjectiles
       });
     }
+    // Hand travelers between shards AFTER every shard consumed its events —
+    // the handoff's own emissions (playerLeft/playerJoined echoes, the
+    // arrival portal's block writes) broadcast next tick, which is fine: the
+    // traveler receives a full worldSync and everyone else a playerDim now.
+    for (const travel of travels) this.travelPlayer(travel.playerId, travel.from, travel.target, travel.anchor);
+
     // The day clock is world time, owned by the overworld shard.
     const day = this.tickCount % DAY_INTERVAL_TICKS === 0 ? this.overworld.engine.state.dayClock : undefined;
 
     for (const conn of this.clients.values()) {
+      // Mid-swap: the client hasn't received its new dimension's worldSync
+      // yet — a tick frame now would corrupt the replica it still runs.
+      if (conn.pendingDimensionSync) continue;
       const buffered = conn.sink.bufferedAmount();
       if (buffered > BACKPRESSURE_KICK_BYTES) {
         conn.slowStrikes += 1;
@@ -552,7 +717,8 @@ export class Room {
       }
       conn.slowStrikes = 0;
       const shed = buffered > BACKPRESSURE_SOFT_BYTES;
-      const data = perShard.get(conn.dimension) ?? perShard.get("overworld")!;
+      const data = perShard.get(conn.dimension);
+      if (!data) continue; // shard born mid-tick (travel); its first step — and this client's first frame — is next tick
       const message: TickMessage = {
         t: "tick",
         n: this.tickCount,
@@ -595,6 +761,7 @@ export class Room {
     if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && this.dirtySinceStore) {
       void this.persist();
     }
+    this.sweepNetherShard();
     this.slowestTickMs = Math.max(this.slowestTickMs * 0.99, this.now() - started);
   }
 
