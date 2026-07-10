@@ -58,10 +58,10 @@ mix. Source: `lib/world/worldTypes.ts` + `terrainConfigFor` in `lib/world/genera
 
 ## Recipes
 
-**100 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
+**102 crafting recipes** (plus **10 villager trades**, listed under [Trading](#trading)).
 All use the always-available crafting grid except the **furnace** smelting recipes
 (need an open furnace) and the eight **brewing** recipes (need an open
-[brewing stand](#brewing--potions)). The tables below show 92 rows: each furnace
+[brewing stand](#brewing--potions)). The tables below show 94 rows: each furnace
 "+ Fuel" row (and the torch) collapses its separate coal and charcoal recipes
 into one line.
 
@@ -269,7 +269,7 @@ selected tool/weapon/armor. Enchantments are per-item and survive a save.
 
 ## Blocks
 
-**59 block types** (plus air). Hardness is relative break time — higher is slower.
+**63 block types** (plus air). Hardness is relative break time — higher is slower.
 "Mine with" is the minimum tool needed; blocks with no requirement break with bare
 hands or any tool. Bedrock, water, and lava cannot be broken (though water and
 lava can be **scooped with a bucket**).
