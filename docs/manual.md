@@ -232,14 +232,30 @@ fireballs) spawn near you _constantly_ — the darkness that summons monsters
 never lifts here. Come armed, wall yourself in when you mine, and consider a
 Fire Resistance potion before working near the seas.
 
-Why go? Three exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
+Why go? Four exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
 recombine into a placeable glowstone block — a torch-strength light source for
 your builds). **Blazite ore** — the post-diamond ore, found deep (below Y≈40)
 and gated behind a diamond pickaxe like the obsidian you came through. Smelt 2
 raw ore into a **blazite ingot** and forge the game's best craftable gear: the
 **blazite pickaxe** (faster than diamond, and it chews obsidian), **sword**
-(stronger than diamond, shy of the Dragon Sword), and **spear**. And bragging
-rights: four advancements live down here.
+(stronger than diamond, shy of the Dragon Sword), and **spear**. **Fortress
+loot** — see below. And bragging rights: five advancements live down here.
+
+### Nether fortresses
+
+Watch the horizon for dark **nether-brick** silhouettes: a walled keep whose
+four covered bridges stride out over the lava seas to watchtowers. Fortresses
+hold the Nether's **loot chests** — the keep usually 1–2 plus most towers one —
+filled on first open like dungeon chests (nether brick salvage, glowstone dust,
+gold, coal, bread, redstone dust; rarely blazite ore, **obsidian**, diamond
+ore, or a sapphire sword). The catch: the keep usually houses a **spawner**
+that drips imps (and the odd scorcher) while you're near — clear it or mine it
+out before you shop. Your first fortress chest unlocks the **Fortress Raider**
+advancement.
+
+The brick itself is worth carrying home: smelt **1 netherrack → 1 nether
+brick** in a furnace (no fuel needed) and craft its **slabs and stairs** — the
+fortress look for your own builds.
 
 Your arrival portal is your lifeline home — its frame is ordinary obsidian, so
 keep a spare flint & steel (and ideally frame material) on you. And know this
@@ -564,9 +580,10 @@ Breaking either half removes the whole door and returns one door item.
 
 ## Redstone
 
-Build **power circuits** that open doors, light lamps, and set off TNT. Craft
-**Redstone Dust** from **1 gold ore + 1 coal** (→ 8 dust — you'll need a
-sliver-tier pickaxe to reach gold), then wire up:
+Build **power circuits** that open doors, light lamps, and set off TNT. Mine
+**Redstone Dust** from deep **redstone ore** (below Y≈24; each block shatters
+into 4–5 dust, and you'll need a sliver-tier pickaxe — fortress chests in the
+Nether also carry dust), then wire up:
 
 - **Sources** make power: a **lever** (right-click to toggle), a **stone button**
   (right-click for a ~1-second pulse), a **pressure plate** (press by standing on
