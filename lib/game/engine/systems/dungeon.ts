@@ -2,13 +2,15 @@ import { CHEST_SLOTS } from "@/lib/game/config";
 import { rollDungeonLoot, seededRng, type LootDrop } from "@/lib/game/dungeonLoot";
 import { rollShipwreckLoot } from "@/lib/game/shipwreckLoot";
 import { rollBuriedTreasureLoot } from "@/lib/game/buriedTreasureLoot";
+import { rollFortressLoot } from "@/lib/game/fortressLoot";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { tryInsertSlots } from "@/lib/game/inventory";
 import type { EmitGameEvent, GameState } from "../state";
 
 /**
- * Fills a worldgen loot chest (dungeon, shipwreck, or buried treasure) on its
- * FIRST access (open or break) and marks it looted. The chest's family — which
+ * Fills a worldgen loot chest (dungeon, shipwreck, buried treasure, or nether
+ * fortress) on its FIRST access (open or break) and marks it looted. The
+ * chest's family — which
  * site set holds its voxel index — picks the loot table, and each family mixes
  * a distinct constant into the seed so chests from different families at a
  * colliding index could never share a roll. The loot is seeded from the world
@@ -27,6 +29,7 @@ export function fillWorldgenChestIfUnlooted(state: GameState, idx: number, emit?
   if (state.lootedWorldgenChests.has(idx)) return;
   let loot: LootDrop[];
   let unearthedTreasure = false;
+  let raidedFortress = false;
   if (state.dungeonChestIndices.has(idx)) {
     loot = rollDungeonLoot(seededRng((state.world.seed ^ idx ^ 0x9e3779b1) >>> 0));
   } else if (state.shipwreckChestIndices.has(idx)) {
@@ -34,6 +37,9 @@ export function fillWorldgenChestIfUnlooted(state: GameState, idx: number, emit?
   } else if (state.buriedTreasureChestIndices.has(idx)) {
     loot = rollBuriedTreasureLoot(seededRng((state.world.seed ^ idx ^ 0x94d049bb) >>> 0));
     unearthedTreasure = true;
+  } else if (state.fortressChestIndices.has(idx)) {
+    loot = rollFortressLoot(seededRng((state.world.seed ^ idx ^ 0xbf58476d) >>> 0));
+    raidedFortress = true;
   } else {
     return;
   }
@@ -49,4 +55,6 @@ export function fillWorldgenChestIfUnlooted(state: GameState, idx: number, emit?
   // "X Marks the Spot" advancement (and retargets the compass, which only
   // tracks unlooted sites).
   if (unearthedTreasure) emit?.({ type: "treasureUnearthed" });
+  // Likewise a fortress chest feeds "Fortress Raider".
+  if (raidedFortress) emit?.({ type: "fortressLooted" });
 }

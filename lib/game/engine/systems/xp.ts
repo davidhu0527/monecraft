@@ -17,7 +17,8 @@ const ORE_XP: Partial<Record<BlockId, number>> = {
   [BlockId.RubyOre]: 4,
   [BlockId.GoldOre]: 4,
   [BlockId.SapphireOre]: 6,
-  [BlockId.DiamondOre]: 8
+  [BlockId.DiamondOre]: 8,
+  [BlockId.RedstoneOre]: 3
 };
 
 export function xpForBlock(block: BlockId): number {

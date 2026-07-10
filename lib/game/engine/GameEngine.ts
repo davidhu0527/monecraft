@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectFortressSites,
   collectShipwreckSites,
   collectTreasureSites,
   collectVillageSites,
@@ -333,6 +334,8 @@ export class GameEngine {
     const shipwreckSites = dimension === "nether" ? { chestIndices: [] as number[] } : collectShipwreckSites(world, this.worldType);
     const treasureSites = dimension === "nether" ? { sites: [] } : collectTreasureSites(world, this.worldType);
     const villageSites = dimension === "nether" ? { centers: [] } : collectVillageSites(world, this.worldType);
+    // The inverse of the above: fortresses are the nether's loot sites.
+    const fortressSites = dimension === "nether" ? collectFortressSites(world) : { chestIndices: [] as number[], spawnerIndices: [] as number[] };
 
     const blockChanges = createBlockChangeTracker(world);
     if (section) blockChanges.applySavedChanges(section.changes);
@@ -423,6 +426,8 @@ export class GameEngine {
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
       shipwreckChestIndices: new Set(shipwreckSites.chestIndices),
       buriedTreasureChestIndices: new Set(treasureSites.sites.map((site) => site.index)),
+      fortressChestIndices: new Set(fortressSites.chestIndices),
+      fortressSpawnerIndices: new Set(fortressSites.spawnerIndices),
       treasureSites: treasureSites.sites,
       lootedWorldgenChests: new Set(),
       villageSites: villageSites.centers,

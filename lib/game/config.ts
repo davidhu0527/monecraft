@@ -419,13 +419,15 @@ export const SAVE_KEY = "minecraft_save_v7";
 // ocean flora (kelp/coral) and the aquatic-update structures; v11 moved all
 // seed-determined noise to bit-portable implementations (lib/world/noise.ts),
 // so the same seed now generates identical bytes on every JS engine — the
-// prerequisite for a multiplayer server sharing worlds with browsers. Each world
+// prerequisite for a multiplayer server sharing worlds with browsers; v12 added
+// deep redstone ore to the overworld and fortresses to the nether (one bump
+// covers both dimensions — the stamp governs every dimension's diffs). Each world
 // records the WORLDGEN_VERSION it was generated under; a world whose recorded
 // version differs from this constant has its block-diffs discarded and is
 // rebooted from its stored seed (lib/game/worlds.ts). The save *schema* (SaveData)
 // is independent of this — lighting is a derived cache and lava is worldgen, so
 // neither is persisted, and additive schema bumps don't touch it.
-export const WORLDGEN_VERSION = 11;
+export const WORLDGEN_VERSION = 12;
 
 // Rendering
 export const RENDER_RADIUS = 90;

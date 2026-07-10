@@ -832,6 +832,41 @@ describe("chests", () => {
     fillWorldgenChestIfUnlooted(engine.state, idx);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
+
+  test("a fortress chest fills from the fortress table, once, emitting fortressLooted", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(26, 40, 26);
+    engine.state.fortressChestIndices.add(idx);
+
+    const events: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(engine.state, idx, (e) => events.push(e));
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
+    expect(events.some((e) => e.type === "fortressLooted")).toBe(true);
+    // Nether brick is the fortress table's guaranteed salvage.
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id === "nether_brick" && slot.count > 0)).toBe(true);
+
+    // Re-access after emptying never re-rolls, and never re-fires the event.
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    const again: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(engine.state, idx, (e) => again.push(e));
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
+    expect(again).toHaveLength(0);
+  });
+
+  test("a nether engine derives fortress sites from the seed; the overworld derives none", () => {
+    const nether = new GameEngine({ dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 128, y: 150, z: 128 } });
+    expect(nether.state.fortressChestIndices.size).toBeGreaterThan(0);
+    // Every derived site holds the chest the fortress build wrote.
+    for (const idx of nether.state.fortressChestIndices) {
+      expect(nether.state.world.blocks[idx]).toBe(BlockId.Chest);
+    }
+    const overworld = makeEngine();
+    expect(overworld.state.fortressChestIndices.size).toBe(0);
+    expect(overworld.state.fortressSpawnerIndices.size).toBe(0);
+  });
 });
 
 describe("dungeon spawners", () => {
@@ -894,6 +929,26 @@ describe("dungeon spawners", () => {
     for (let i = 0; i < 10; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
 
     expect(state.mobs.length).toBe(0);
+  });
+
+  test("a fortress spawner drips only the nether's hostiles", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    // Register the spawner under the FORTRESS set — membership picks the mob table.
+    const idx = placeSpawner(engine);
+    state.dungeonSpawnerIndices.delete(idx);
+    state.fortressSpawnerIndices.add(idx);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 1, sy, sz + 1);
+
+    const rng = mulberry32(7);
+    for (let i = 0; i < 20; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
+
+    expect(state.mobs.length).toBeGreaterThan(0);
+    for (const mob of state.mobs) {
+      expect(["imp", "scorcher"]).toContain(mob.kind);
+      expect(mob.hostile).toBe(true);
+    }
   });
 });
 

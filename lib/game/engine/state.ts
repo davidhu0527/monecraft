@@ -376,6 +376,10 @@ export type GameState = {
   shipwreckChestIndices: Set<number>;
   /** Worldgen buried-treasure chest voxel indices (session; re-derived from the seed each load). */
   buriedTreasureChestIndices: Set<number>;
+  /** Nether fortress chest voxel indices (session; re-derived from the seed each load — empty in the overworld). */
+  fortressChestIndices: Set<number>;
+  /** Nether fortress spawner voxel indices (session; re-derived from the seed each load — empty in the overworld). */
+  fortressSpawnerIndices: Set<number>;
   /** Buried-treasure chest positions (session; re-derived) — the treasure-map compass targets the nearest unlooted one. */
   treasureSites: Array<{ x: number; y: number; z: number; index: number }>;
   /** Worldgen chests (dungeon/shipwreck/buried) already opened/broken (persisted as `lootedChests`) — gates one-time lazy loot fill. */
@@ -602,6 +606,7 @@ export type GameEvent =
   | { type: "bossSummoned"; x: number; y: number; z: number }
   | { type: "bossDefeated"; x: number; y: number; z: number }
   | { type: "treasureUnearthed" }
+  | { type: "fortressLooted" }
   | { type: "summonFailed" }
   | { type: "explosion"; x: number; y: number; z: number; power: number }
   | { type: "tntPrimed"; x: number; y: number; z: number }

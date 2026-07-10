@@ -68,12 +68,16 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
 
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
         // Slabs/stairs inherit their material's accent so cut blocks read as
-        // the same substance (plank grain / stone-cobble speckle).
+        // the same substance (plank grain / stone-cobble speckle / brick mortar).
+        const netherBrickLike = block === BlockId.NetherBrick || (block >= BlockId.NetherBrickSlab && block <= BlockId.NetherBrickStairsWest);
         const stoneLike =
           block === BlockId.Stone ||
           block === BlockId.Cobblestone ||
           block === BlockId.Bedrock ||
-          (isPartialBlock(block) && block !== BlockId.PlankSlab && !(block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest));
+          (isPartialBlock(block) &&
+            !netherBrickLike &&
+            block !== BlockId.PlankSlab &&
+            !(block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest));
         const plankLike =
           block === BlockId.Wood ||
           block === BlockId.Planks ||
@@ -157,6 +161,18 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           if (n < 0.22) c = tone([0.3, 0.1, 0.09], 0.85 + n * 0.4);
           if (n > 0.8) c = tone([1, 0.55, 0.12], 0.9 + n * 0.25);
         }
+        if (netherBrickLike) {
+          // Dressed fortress brick: dark mortar seams on a staggered 8x4 grid
+          // (offset alternate courses like real brickwork) over the maroon base.
+          // The slab/stair variants carry the same coursework.
+          const course = Math.floor(y / 4);
+          const seam = y % 4 === 0 || (x + (course % 2 === 0 ? 0 : 4)) % 8 === 0;
+          if (seam) c = tone([0.12, 0.06, 0.07], 0.9 + n * 0.2);
+          else if (n > 0.88) c = tone(base, 1.2); // fired-clay highlight
+        }
+        // Stone base carrying signal-red dust flecks (the RubyOre motif, but
+        // brighter — the vein reads as powering up when it catches light).
+        if (block === BlockId.RedstoneOre && n > 0.85) c = tone([0.85, 0.15, 0.1], 1);
         if (block === BlockId.Tnt) {
           // Classic TNT: a red block of "dynamite" with a white label band around
           // the sides and a darker cap on the top/bottom (the bundled fuse ends).

@@ -309,18 +309,23 @@ export function tickHostileSpawnDirector(state: GameState, dt: number, rng: () =
 }
 
 const SPAWNER_KINDS: ReadonlyArray<"zombie" | "skeleton" | "spider"> = ["zombie", "skeleton", "spider"];
+// Fortress spawners drip the nether's own hostiles (imp-weighted, matching the
+// dimension's ambient wave mix above).
+const FORTRESS_SPAWNER_KINDS: ReadonlyArray<"imp" | "scorcher"> = ["imp", "imp", "scorcher"];
 
 /**
- * Drips hostiles from dungeon spawners. On each interval, every intact spawner
- * with the player inside its activation radius spawns one hostile on the room
- * floor (feet at the spawner's own y, not the surface), bounded by a local
- * cluster cap and the shared global HOSTILE_CAP. Time-independent — dungeons
- * are dark. Spawner positions come from the session-derived index set, so
- * mining out a spawner block stops it (the world.get check below).
+ * Drips hostiles from dungeon and fortress spawners. On each interval, every
+ * intact spawner with the player inside its activation radius spawns one
+ * hostile on the room floor (feet at the spawner's own y, not the surface),
+ * bounded by a local cluster cap and the shared global HOSTILE_CAP.
+ * Time-independent — dungeons are dark and the nether has no day. Which site
+ * set holds a spawner's index picks its mob table; positions come from the
+ * session-derived sets, so mining out a spawner block stops it (the world.get
+ * check below).
  */
 export function tickSpawnerDirector(state: GameState, dt: number, rng: () => number, emit: EmitGameEvent): void {
   if (!hostilesSpawn(state.difficulty)) return; // Peaceful keeps even dungeon spawners inert
-  if (state.dungeonSpawnerIndices.size === 0) return;
+  if (state.dungeonSpawnerIndices.size === 0 && state.fortressSpawnerIndices.size === 0) return;
   state.timers.spawnerTimer += dt;
   if (state.timers.spawnerTimer < SPAWNER_INTERVAL_SECONDS) return;
   state.timers.spawnerTimer = 0;
@@ -331,7 +336,7 @@ export function tickSpawnerDirector(state: GameState, dt: number, rng: () => num
 
   const { world } = state;
   const layer = world.sizeX * world.sizeZ;
-  for (const idx of state.dungeonSpawnerIndices) {
+  for (const idx of [...state.dungeonSpawnerIndices, ...state.fortressSpawnerIndices]) {
     const sy = Math.floor(idx / layer);
     const rem = idx - sy * layer;
     const sz = Math.floor(rem / world.sizeX);
@@ -354,7 +359,8 @@ export function tickSpawnerDirector(state: GameState, dt: number, rng: () => num
     );
     if (nearby >= SPAWNER_LOCAL_CAP) continue;
 
-    const kind = SPAWNER_KINDS[Math.floor(rng() * SPAWNER_KINDS.length)];
+    const kinds = state.fortressSpawnerIndices.has(idx) ? FORTRESS_SPAWNER_KINDS : SPAWNER_KINDS;
+    const kind = kinds[Math.floor(rng() * kinds.length)];
     const jx = sx + 0.5 + (rng() * 2 - 1) * 1.2;
     const jz = sz + 0.5 + (rng() * 2 - 1) * 1.2;
     pushMob(state, kind, true, jx, sy, jz, rng);
