@@ -115,6 +115,9 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
     case "treasureUnearthed":
       bump(player, "treasure_unearthed");
       break;
+    case "fortressLooted":
+      bump(player, "fortress_looted");
+      break;
     case "leverToggled":
       bump(player, "levers_flipped");
       break;
@@ -249,6 +252,15 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "treasure_map",
     category: "Adventure",
     stat: "treasure_unearthed",
+    threshold: 1
+  },
+  {
+    id: "fortress_raider",
+    title: "Fortress Raider",
+    description: "Loot a chest in a nether fortress.",
+    icon: "nether_brick",
+    category: "Adventure",
+    stat: "fortress_looted",
     threshold: 1
   },
   {
