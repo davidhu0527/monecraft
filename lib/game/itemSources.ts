@@ -52,6 +52,9 @@ const MOB_LABELS: Record<MobKind, string> = {
  */
 const MINE_OVERRIDES: Record<string, string> = {
   coal: "Mine coal ore",
+  // Dust drops from deep redstone ore; the BLOCK_TO_SLOT path that would
+  // otherwise name it only covers breaking your own placed wire.
+  redstone: "Mine redstone ore",
   sapling: "Break leaves",
   seeds: "Break grass",
   wheat: "Harvest grown wheat"

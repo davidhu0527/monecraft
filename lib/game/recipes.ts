@@ -70,18 +70,9 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "grindstone", count: 1 }
   },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
-  // Redstone-lite. Dust is craft-only for now (gold as the conductor gates
-  // circuits behind a tier-3 pick); redstone ORE worldgen is deferred to a
-  // future WORLDGEN_VERSION batch.
-  {
-    id: "redstone",
-    label: "1 Gold Ore + 1 Coal -> 8 Redstone Dust",
-    cost: [
-      { slotId: "gold_ore", count: 1 },
-      { slotId: "coal", count: 1 }
-    ],
-    result: { slotId: "redstone", count: 8 }
-  },
+  // Redstone-lite. Dust is mined from deep redstone ore (worldgen v12) — the
+  // gold+coal stopgap recipe that predated the ore was retired with it, so the
+  // ore hunt is the one dust source (still tier-3-pick-gated, via the ore).
   {
     id: "lever",
     label: "1 Cobble + 1 Planks -> Lever",

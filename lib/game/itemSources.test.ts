@@ -20,6 +20,13 @@ describe("itemSourceHint", () => {
     expect(itemSourceHint("coal")).toBe("Mine coal ore"); // override: item differs from the block
   });
 
+  test("redstone dust points at the ore now that the craft stopgap is retired", () => {
+    // With the gold+coal recipe gone, the override keeps the hint on the real
+    // source (the BLOCK_TO_SLOT path would read "Mine Redstone Dust" — that
+    // only covers breaking your own placed wire).
+    expect(itemSourceHint("redstone")).toBe("Mine redstone ore");
+  });
+
   test("raw fish points at hunting cod now that fish mobs swim the oceans", () => {
     // Hunt-first priority: cod drop raw fish, which beats the fishing fallback
     // (every FISHING_LOOT item now has an earlier-priority source).
