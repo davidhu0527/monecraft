@@ -789,11 +789,12 @@ export function restoreGameOver(save: Pick<SaveData, "hardcore">, saved: SavedPl
   return save.hardcore === true && saved.gameOver === true;
 }
 
-/** Restores the bed respawn point; null if absent or explicitly cleared. */
-export function restoreSpawnPoint(save: SavedPlayer): { x: number; y: number; z: number } | null {
+/** Restores the bed respawn point; null if absent or explicitly cleared. A saved dimension rides along only when valid (absent = pre-nether save = overworld). */
+export function restoreSpawnPoint(save: SavedPlayer): { x: number; y: number; z: number; dimension?: DimensionId } | null {
   const sp = save.spawnPoint;
   if (!sp || !Number.isFinite(sp.x) || !Number.isFinite(sp.y) || !Number.isFinite(sp.z)) return null;
-  return { x: Math.floor(sp.x), y: Math.floor(sp.y), z: Math.floor(sp.z) };
+  const dimension = sp.dimension === "nether" || sp.dimension === "overworld" ? sp.dimension : undefined;
+  return { x: Math.floor(sp.x), y: Math.floor(sp.y), z: Math.floor(sp.z), ...(dimension ? { dimension } : {}) };
 }
 
 /**

@@ -1266,6 +1266,48 @@ describe("death and respawn", () => {
     expect(engine.state.player.position.y).toBeGreaterThan(0);
     expect(engine.consumeEvents().some((event) => event.type === "respawned")).toBe(true);
   });
+
+  test("a bed respawn point is honored only in its own dimension", () => {
+    // Same block coords index a DIFFERENT voxel in each dimension, so a bed
+    // stamped for another world must not be honored even when this world
+    // coincidentally has a bed at those coords.
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 0.5);
+    const { world } = engine.state;
+    const bx = 30;
+    const bz = 30;
+    const by = world.highestSolidY(bx, bz) + 1;
+    engine.state.blockChanges.set(bx, by, bz, BlockId.Bed);
+    engine.state.player.spawnPoint = { x: bx, y: by, z: bz, dimension: "nether" };
+    engine.state.hearts = 1;
+    engine.state.player.position.y = -10; // into the void
+    run(engine, 5.5);
+    expect(engine.state.isDead).toBe(false);
+    // A honored bed lands exactly on it (y = bed + 1.05); a foreign bed falls
+    // through to the random land point (y = surface + 2, whole-numbered).
+    expect(engine.state.player.position.y).not.toBeCloseTo(by + 1.05, 5);
+  });
+
+  test("a bed with no dimension stamp (a pre-nether save) is honored in the overworld", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 0.5);
+    const { world } = engine.state;
+    const bx = 30;
+    const bz = 30;
+    const by = world.highestSolidY(bx, bz) + 1;
+    engine.state.blockChanges.set(bx, by, bz, BlockId.Bed);
+    engine.state.player.spawnPoint = { x: bx, y: by, z: bz };
+    engine.state.hearts = 1;
+    engine.state.player.position.y = -10;
+    run(engine, 5.5);
+    expect(engine.state.isDead).toBe(false);
+    expect(engine.state.player.position.x).toBeCloseTo(bx + 0.5, 5);
+    // Gravity settles the fresh spawn a fraction onto the bed surface.
+    expect(engine.state.player.position.y).toBeCloseTo(by + 1.05, 0);
+    expect(engine.state.player.position.z).toBeCloseTo(bz + 0.5, 5);
+  });
 });
 
 describe("day-night and the spawn director", () => {
@@ -1968,7 +2010,7 @@ describe("beds and sleep", () => {
     expect(engine.consumeEvents().some((event) => event.type === "sleepStarted")).toBe(true);
     expect(engine.state.sleepTimer).toBeGreaterThan(0);
     expect(engine.getSnapshot().sleeping).toBe(true);
-    expect(engine.state.spawnPoint).toEqual(bed);
+    expect(engine.state.spawnPoint).toEqual({ ...bed, dimension: "overworld" });
 
     run(engine, 2); // let the fade complete and the clock jump
     expect(engine.state.sleepTimer).toBe(0);

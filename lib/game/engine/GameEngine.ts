@@ -1757,7 +1757,11 @@ export class GameEngine {
   private respawn(player: PlayerState): void {
     const state = this.state;
     const bed = player.spawnPoint;
-    if (bed && state.world.get(bed.x, bed.y, bed.z) === BlockId.Bed) {
+    // The bed must stand in THIS dimension: the same block coords index a
+    // different voxel in each world, so a foreign bed could false-positive on
+    // whatever happens to occupy that cell here. Absent dimension = a
+    // pre-nether save's bed = overworld.
+    if (bed && (bed.dimension ?? "overworld") === state.dimension && state.world.get(bed.x, bed.y, bed.z) === BlockId.Bed) {
       // Respawn standing on the bed; the bed block is non-solid head room above it.
       player.position.set(bed.x + 0.5, bed.y + 1.05, bed.z + 0.5);
     } else {
