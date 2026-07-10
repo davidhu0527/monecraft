@@ -35,6 +35,44 @@ describe("rollBlockDrops Fortune", () => {
   });
 });
 
+describe("redstone ore drops", () => {
+  test("shatters into 4-5 dust, never an ore block", () => {
+    expect(
+      dropCount(
+        rollBlockDrops(BlockId.RedstoneOre, () => 0),
+        "redstone"
+      )
+    ).toBe(4);
+    expect(
+      dropCount(
+        rollBlockDrops(BlockId.RedstoneOre, () => 0.999),
+        "redstone"
+      )
+    ).toBe(5);
+    expect(rollBlockDrops(BlockId.RedstoneOre, () => 0)).toHaveLength(1);
+  });
+
+  test("Fortune adds its level to the dust yield", () => {
+    expect(
+      dropCount(
+        rollBlockDrops(BlockId.RedstoneOre, () => 0, 3),
+        "redstone"
+      )
+    ).toBe(4 + 3);
+  });
+});
+
+describe("nether brick drops", () => {
+  test("drops its own block item", () => {
+    expect(
+      dropCount(
+        rollBlockDrops(BlockId.NetherBrick, () => 0),
+        "nether_brick"
+      )
+    ).toBe(1);
+  });
+});
+
 describe("maxStackSizeForItem", () => {
   test("honors a per-item stackSize: empty buckets bundle, filled buckets don't", () => {
     expect(maxStackSizeForItem("bucket")).toBe(16);

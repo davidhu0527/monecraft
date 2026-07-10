@@ -122,7 +122,11 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   [BlockId.Netherrack]: 4,
   [BlockId.Glowstone]: 2,
   // Deeper than diamond in spirit: slower than diamond ore, far from obsidian.
-  [BlockId.BlaziteOre]: 16
+  [BlockId.BlaziteOre]: 16,
+  // Fired brick breaks like the enchanting table — sturdier than raw netherrack.
+  [BlockId.NetherBrick]: 6,
+  // Between ruby (9) and sliver (7): a mid-tier ore worth a dedicated dig.
+  [BlockId.RedstoneOre]: 8
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -178,6 +182,8 @@ export const ITEM_DEFS: ItemDef[] = [
   // glowstone back down makes it a portable light source).
   { id: "netherrack", label: "Netherrack", kind: "block", blockId: BlockId.Netherrack },
   { id: "glowstone", label: "Glowstone", kind: "block", blockId: BlockId.Glowstone },
+  // The fortress material — smelt netherrack in a furnace to make more.
+  { id: "nether_brick", label: "Nether Brick", kind: "block", blockId: BlockId.NetherBrick },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -538,7 +544,9 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.CobbleStairsWest]: "cobble_stairs",
   [BlockId.Obsidian]: "obsidian",
   [BlockId.Netherrack]: "netherrack",
+  [BlockId.NetherBrick]: "nether_brick",
   // Glowstone drops 2-4 dust — handled in rollBlockDrops, not here.
+  // Redstone ore shatters into 4-5 dust — also handled in rollBlockDrops.
   // Blazite ore drops the smeltable material item (the coal-ore pattern).
   [BlockId.BlaziteOre]: "blazite_ore",
   // Tilled soil reverts to dirt; immature wheat returns its seed.
@@ -585,6 +593,12 @@ export function rollBlockDrops(block: BlockId, rng: () => number, fortuneLevel =
   // the block); Fortune adds its level, capped at a full block's worth.
   if (block === BlockId.Glowstone) {
     drops.push({ itemId: "glowstone_dust", count: Math.min(4, 2 + Math.floor(rng() * 3) + fortuneLevel) });
+  }
+  // Redstone ore shatters into 4-5 dust plus Fortune's level — a multi-drop
+  // like glowstone, not a 1-per-block ore, because one vein has to be able to
+  // fund a real circuit now that the ore is the dust's only source.
+  if (block === BlockId.RedstoneOre) {
+    drops.push({ itemId: "redstone", count: 4 + Math.floor(rng() * 2) + fortuneLevel });
   }
   if (block === BlockId.Grass && rng() < GRASS_SEED_DROP_CHANCE) {
     drops.push({ itemId: "seeds", count: 1 });

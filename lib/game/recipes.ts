@@ -172,6 +172,16 @@ const CRAFTING_RECIPES: Recipe[] = [
   // no fuel itself), so this is a straight wood -> charcoal conversion — the
   // bootstrap fuel for a player who hasn't found coal yet.
   { id: "charcoal", label: "1 Wood -> 1 Charcoal", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "charcoal", count: 1 }, station: "furnace" },
+  // Nether brick: fire the nether's soft rock into the fortress's dressed
+  // building stone (a straight conversion, like charcoal — no fuel ingredient,
+  // so fortress-scale builds stay affordable).
+  {
+    id: "nether_brick",
+    label: "1 Netherrack -> 1 Nether Brick",
+    cost: [{ slotId: "netherrack", count: 1 }],
+    result: { slotId: "nether_brick", count: 1 },
+    station: "furnace"
+  },
   // Raw nether blazite smelts into the ingot the post-diamond gear is forged
   // from (fuel is an ingredient, so the usual coal/charcoal variant pair).
   {

@@ -58,7 +58,8 @@ const MINED_STAT_BY_BLOCK: Partial<Record<BlockId, string>> = {
   [BlockId.DiamondOre]: "diamond_ore_mined",
   [BlockId.WheatStage3]: "wheat_harvested",
   [BlockId.Glowstone]: "glowstone_mined",
-  [BlockId.BlaziteOre]: "blazite_ore_mined"
+  [BlockId.BlaziteOre]: "blazite_ore_mined",
+  [BlockId.RedstoneOre]: "redstone_ore_mined"
 };
 
 const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
