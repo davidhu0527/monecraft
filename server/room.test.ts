@@ -152,6 +152,28 @@ describe("room lifecycle", () => {
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6);
   });
 
+  test("a pose or cmd stamped with the wrong dimension is dropped silently (travel race guard)", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const alice = room.engine.state.players.get("alice")!;
+    const { x, y, z } = alice.position;
+
+    // A frame from the world the sender "left": no movement, no forcePose fight.
+    await room.handleMessage("alice", { t: "pose", d: "nether", seq: 1, x: x + 0.4, y, z, yaw: 0.3, pitch: 0, onGround: true, move, mineHeld: false });
+    expect(alice.position.x).toBeCloseTo(x, 6);
+    expect(a.messagesOf("forcePose")).toHaveLength(0);
+    // …and a mis-stamped cmd never dispatches (no swing event).
+    await room.handleMessage("alice", { t: "cmd", d: "nether", seq: 2, cmd: { type: "attack" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+    expect(
+      a
+        .messagesOf("tick")
+        .at(-1)
+        ?.ev.some((e) => e.type === "attackSwung")
+    ).toBe(false);
+  });
+
   test("self-deltas ship only on change; chat is rate-limited and broadcast", async () => {
     const { room } = await makeRoom();
     const a = fakeSink();

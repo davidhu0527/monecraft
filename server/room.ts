@@ -3,6 +3,7 @@ import type { Command } from "@/lib/game/engine/commands";
 import { createMobPoseHistory, MELEE_REWIND_MAX_TICKS } from "./mobHistory";
 import { createFixedTicker, TICK_SECONDS, type FixedTicker } from "@/lib/game/engine/tickDriver";
 import {
+  restorePlayerDimension,
   serializeEffects,
   serializeEquippedArmor,
   inventorySlotsSnapshot,
@@ -11,7 +12,7 @@ import {
   serializeLootedChests,
   serializeStats
 } from "@/lib/game/save";
-import type { SavedPlayer } from "@/lib/game/types";
+import type { DimensionId, SavedPlayer } from "@/lib/game/types";
 import type { PlayerState } from "@/lib/game/engine/state";
 import { encodeServerMessage, gzipWorldSync, qAng, qPos } from "@/lib/net/codec";
 import {
@@ -36,10 +37,12 @@ import type { TicketClaims } from "@/lib/net/tickets";
 import type { Persistence, WorldRecord } from "./persistence";
 
 /**
- * One world room: an authoritative GameEngine on the fixed 20 Hz ticker,
- * fed by client poses/commands and broadcasting per-tick deltas. Sockets are
- * abstracted as ClientSink so the whole class unit-tests with fakes; only
- * index.ts binds it to real Bun WebSockets.
+ * One world room: an authoritative GameEngine **per active dimension** (a
+ * "shard" — the overworld always; others as needed) on one fixed 20 Hz
+ * ticker, fed by client poses/commands and broadcasting per-tick deltas
+ * scoped to each client's dimension. Sockets are abstracted as ClientSink so
+ * the whole class unit-tests with fakes; only index.ts binds it to real Bun
+ * WebSockets.
  */
 
 export type ClientSink = {
@@ -48,11 +51,41 @@ export type ClientSink = {
   bufferedAmount(): number;
 };
 
+/**
+ * One dimension's simulation + its per-dimension replication state. Every
+ * voxel-indexed or entity-keyed structure lives here because ids and
+ * coordinates only mean anything inside one engine's space — sharing a mob
+ * shadow or lag-comp history across dimensions would resolve hits against
+ * the wrong world.
+ */
+type DimensionShard = {
+  dimension: DimensionId;
+  engine: GameEngine;
+  /** Per-tick mob positions for melee lag compensation (see handleMessage "cmd"). */
+  mobHistory: ReturnType<typeof createMobPoseHistory>;
+  mobShadow: Map<number, { x: number; y: number; z: number; hp: number }>;
+  vehicleShadow: Map<number, { x: number; y: number; z: number; yaw: number; riderId: string | null }>;
+  /** Count of live arrows broadcast last tick — drives one trailing empty `prj` frame so the client prunes the last one. */
+  lastProjectileCount: number;
+};
+
+/** The per-tick broadcast data gathered from one shard, fanned out to that shard's clients only. */
+type ShardTickData = {
+  events: ReturnType<GameEngine["consumeEvents"]>;
+  blocks: Array<[number, number]>;
+  mobPoses: MobPose[];
+  vehiclePoses: VehiclePose[];
+  projectilePoses: ProjectilePose[];
+  includeProjectiles: boolean;
+};
+
 type ClientConn = {
   playerId: string;
   name: string;
   skinId: string | null;
   role: "owner" | "member";
+  /** Which dimension shard this client lives in (drives all tick fan-out + input routing). */
+  dimension: DimensionId;
   sink: ClientSink;
   /** Highest pose seq applied (stale/replayed packets drop). */
   poseSeq: number;
@@ -112,8 +145,8 @@ const MELEE_ATTACKS_PER_SECOND = 12;
  * anchors); it's recorded for offline diagnosis of rewind disputes.
  */
 export type CommandLogEntry =
-  | { tick: number; playerId: string; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number }; view?: number }
-  | { tick: number; playerId: string; pose: { x: number; y: number; z: number; yaw: number; pitch: number } };
+  | { tick: number; playerId: string; dim?: DimensionId; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number }; view?: number }
+  | { tick: number; playerId: string; dim?: DimensionId; pose: { x: number; y: number; z: number; yaw: number; pitch: number } };
 
 /** A room's replay log plus the world constants needed to reconstruct it offline (see server/scripts/replay.ts). */
 export type RoomLogDump = {
@@ -128,7 +161,8 @@ export type RoomLogDump = {
 
 export class Room {
   readonly worldId: string;
-  readonly engine: GameEngine;
+  /** The dimension shards this room simulates (the overworld always exists). */
+  private readonly shards = new Map<DimensionId, DimensionShard>();
   private readonly clients = new Map<string, ClientConn>();
   /** Persisted slices of players who left (merged into the stored save). */
   private readonly offlinePlayers = new Map<string, SavedPlayer>();
@@ -136,12 +170,6 @@ export class Room {
   private ticker: FixedTicker | null = null;
   private tickCount = 0;
   private dirtySinceStore = false;
-  private readonly mobShadow = new Map<number, { x: number; y: number; z: number; hp: number }>();
-  /** Per-tick mob positions for melee lag compensation (see handleMessage "cmd"). */
-  private readonly mobHistory = createMobPoseHistory();
-  private readonly vehicleShadow = new Map<number, { x: number; y: number; z: number; yaw: number; riderId: string | null }>();
-  /** Count of live arrows broadcast last tick — drives one trailing empty `prj` frame so the client prunes the last one. */
-  private lastProjectileCount = 0;
   /** Wall-clock ms when the room became empty (idle-eviction clock), or null while occupied. */
   emptySinceMs: number | null;
   /** p95-ish diagnostics: the slowest tick of the last window. */
@@ -169,18 +197,41 @@ export class Room {
     this.worldId = record.id;
     this.persistence = persistence;
     this.commandLogSize = commandLogSize;
-    this.engine = new GameEngine({
-      save: record.save,
-      seed: record.seed,
-      worldType: record.worldType as never,
-      difficulty: record.difficulty as never,
-      hardcore: record.hardcore,
-      authority: "server",
-      headless: true,
-      bootPlayer: false
-    });
+    this.shards.set(
+      "overworld",
+      this.makeShard(
+        "overworld",
+        new GameEngine({
+          save: record.save,
+          seed: record.seed,
+          worldType: record.worldType as never,
+          difficulty: record.difficulty as never,
+          hardcore: record.hardcore,
+          authority: "server",
+          headless: true,
+          bootPlayer: false
+        })
+      )
+    );
     for (const saved of record.save?.players ?? []) this.offlinePlayers.set(saved.id, saved);
     this.emptySinceMs = this.now();
+  }
+
+  /** The overworld shard's engine — the room's anchor world (registry checks, replay constants, tests). */
+  get engine(): GameEngine {
+    return this.overworld.engine;
+  }
+
+  private get overworld(): DimensionShard {
+    return this.shards.get("overworld")!;
+  }
+
+  private shardOf(conn: ClientConn): DimensionShard {
+    return this.shards.get(conn.dimension) ?? this.overworld;
+  }
+
+  private makeShard(dimension: DimensionId, engine: GameEngine): DimensionShard {
+    return { dimension, engine, mobHistory: createMobPoseHistory(), mobShadow: new Map(), vehicleShadow: new Map(), lastProjectileCount: 0 };
   }
 
   /** Starts the 20 Hz ticker (index.ts calls this once after construction). */
@@ -244,7 +295,10 @@ export class Room {
     this.clients.delete(claims.sub);
 
     const restore = this.offlinePlayers.get(claims.sub) ?? null;
-    const player = this.engine.addPlayer({ id: claims.sub, restore });
+    // Seat the player where their slice left them (a player who left in the
+    // nether rejoins there); no shard for it yet falls back to the overworld.
+    const shard = restore ? this.shardFor(restorePlayerDimension(restore)) : this.overworld;
+    const player = shard.engine.addPlayer({ id: claims.sub, restore });
     this.offlinePlayers.delete(claims.sub);
     this.dirtySinceStore = true;
 
@@ -253,6 +307,7 @@ export class Room {
       name: claims.name,
       skinId: claims.skinId,
       role: claims.role,
+      dimension: shard.dimension,
       sink,
       poseSeq: -1,
       lastPoseTick: this.tickCount,
@@ -269,20 +324,25 @@ export class Room {
         protocol: PROTOCOL_VERSION,
         playerId: claims.sub,
         worldId: this.worldId,
-        seed: this.engine.state.world.seed,
-        worldType: this.engine.worldTypeName,
-        difficulty: this.engine.state.difficulty,
-        hardcore: this.engine.state.hardcore,
-        dayClock: this.engine.state.dayClock,
+        seed: shard.engine.state.world.seed,
+        worldType: shard.engine.worldTypeName,
+        difficulty: shard.engine.state.difficulty,
+        hardcore: shard.engine.state.hardcore,
+        dayClock: shard.engine.state.dayClock,
         tick: this.tickCount,
         role: claims.role,
-        dimension: this.engine.state.dimension,
+        dimension: conn.dimension,
         players: this.roster()
       })
     );
-    sink.send(await gzipWorldSync(this.buildWorldSync()));
+    sink.send(await gzipWorldSync(this.buildWorldSync(shard)));
     this.broadcast({ t: "playerJoined", player: this.rosterEntry(player, conn) }, claims.sub);
     return true;
+  }
+
+  /** The shard a persisted slice belongs to; a missing shard falls back to the overworld (its creation is the travel path's job). */
+  private shardFor(dimension: DimensionId): DimensionShard {
+    return this.shards.get(dimension) ?? this.overworld;
   }
 
   /** Owner-initiated eject: close the socket with a fatal code so the client won't retry, then leave. Returns false if not present. */
@@ -299,7 +359,9 @@ export class Room {
     const conn = this.clients.get(playerId);
     if (!conn) return;
     this.clients.delete(playerId);
-    const saved = this.engine.removePlayer(playerId);
+    // Remove from THEIR shard — the slice self-stamps its dimension, so a
+    // player who leaves in the nether rejoins there.
+    const saved = this.shardOf(conn).engine.removePlayer(playerId);
     if (saved) this.offlinePlayers.set(playerId, saved);
     this.dirtySinceStore = true;
     this.broadcast({ t: "playerLeft", id: playerId });
@@ -312,15 +374,20 @@ export class Room {
     if (!conn) return;
     switch (message.t) {
       case "pose": {
+        // The travel race guard: a frame in flight when this player's
+        // dimension swapped describes the world they LEFT — drop it silently
+        // (a forcePose here would fight the client's own swap-in-progress).
+        if (message.d !== conn.dimension) return;
         if (message.seq <= conn.poseSeq) return; // stale or replayed
         conn.poseSeq = message.seq;
+        const shard = this.shardOf(conn);
         const elapsed = Math.max(1, this.tickCount - conn.lastPoseTick) * TICK_SECONDS;
-        const { accepted } = this.engine.applyRemotePose(playerId, message, elapsed);
-        this.engine.setPlayerInput(playerId, { move: message.move, mineHeld: message.mineHeld });
+        const { accepted } = shard.engine.applyRemotePose(playerId, message, elapsed);
+        shard.engine.setPlayerInput(playerId, { move: message.move, mineHeld: message.mineHeld });
         if (accepted) {
           conn.lastPoseTick = this.tickCount;
         } else {
-          const player = this.engine.state.players.get(playerId);
+          const player = shard.engine.state.players.get(playerId);
           // A mounted player's position is server-owned and streamed via the
           // self-delta; don't fight that with forcePose (the reject there is
           // "ignore the stream", not "you desynced"). Only correct real desync.
@@ -340,6 +407,9 @@ export class Room {
         return;
       }
       case "cmd": {
+        // Same travel race guard as the pose stream: a command aimed in the
+        // world the sender just left must not raycast into this one.
+        if (message.d !== conn.dimension) return;
         if (conn.budget.cmd >= 60) return; // per-second flood guard
         conn.budget.cmd += 1;
         if (message.cmd.type === "attack") {
@@ -348,31 +418,41 @@ export class Room {
         }
         // Room-wide settings are the owner's call, not any member's.
         if ((message.cmd.type === "setDifficulty" || message.cmd.type === "setGameMode") && conn.role !== "owner") return;
+        const shard = this.shardOf(conn);
         // Apply the claimed pose (same clamps as the stream) so the command's
         // raycast happens from where the client actually stood/aimed.
         const elapsed = Math.max(1, this.tickCount - conn.lastPoseTick) * TICK_SECONDS;
-        const { accepted } = this.engine.applyRemotePose(
+        const { accepted } = shard.engine.applyRemotePose(
           playerId,
-          { ...message.pose, onGround: this.engine.state.players.get(playerId)?.onGround ?? false },
+          { ...message.pose, onGround: shard.engine.state.players.get(playerId)?.onGround ?? false },
           elapsed
         );
         // Advance the pose clock on an accepted cmd pose too — otherwise a
         // client sending only cmds lets `elapsed` grow and inflate the clamp.
         if (accepted) conn.lastPoseTick = this.tickCount;
-        this.recordLog({ tick: this.tickCount, playerId, cmd: message.cmd, pose: message.pose, ...(message.view !== undefined ? { view: message.view } : {}) });
+        this.recordLog({
+          tick: this.tickCount,
+          playerId,
+          dim: conn.dimension,
+          cmd: message.cmd,
+          pose: message.pose,
+          ...(message.view !== undefined ? { view: message.view } : {})
+        });
         // Melee lag compensation: a stamped attack rewinds TARGET SELECTION to
         // the tick the attacker was rendering, clamped into the rewind window.
         // Everything degrades to live behavior: unstamped/future/too-stale
         // stamps, mobs without history (spawned since), non-attack commands.
+        // The history ring is the SHARD's — ids/positions only mean anything
+        // inside one dimension's space.
         let opts: DispatchOptions | undefined;
         if (message.cmd.type === "attack" && message.view !== undefined) {
           const viewTick = Math.round(message.view / (TICK_SECONDS * 1000));
           const rewindTick = Math.min(this.tickCount, Math.max(viewTick, this.tickCount - MELEE_REWIND_MAX_TICKS));
           if (rewindTick < this.tickCount) {
-            opts = { mobPosOf: (mob) => this.mobHistory.positionAt(rewindTick, mob.id) ?? mob.position };
+            opts = { mobPosOf: (mob) => shard.mobHistory.positionAt(rewindTick, mob.id) ?? mob.position };
           }
         }
-        this.engine.dispatch(message.cmd, playerId, opts);
+        shard.engine.dispatch(message.cmd, playerId, opts);
         return;
       }
       case "chat": {
@@ -386,7 +466,7 @@ export class Room {
         return;
       }
       case "resync": {
-        conn.sink.send(await gzipWorldSync(this.buildWorldSync()));
+        conn.sink.send(await gzipWorldSync(this.buildWorldSync(this.shardOf(conn))));
         conn.shadow = null; // resend the full self-delta next tick
         return;
       }
@@ -431,22 +511,34 @@ export class Room {
       for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0 };
     }
 
-    this.engine.step(dt);
-    // Post-step positions: exactly what this tick's mp/keyframe broadcasts,
-    // i.e. the timeline the client's interpolation buffers (and view stamps)
-    // live on.
-    this.mobHistory.record(this.tickCount, this.engine.state.mobs);
-    const events = this.engine.consumeEvents();
-    const blocks = this.engine.state.blockChanges.drainEdits();
-    if (events.some((e) => e.type === "blockPlaced" || e.type === "blockBroken" || e.type === "explosion")) this.dirtySinceStore = true;
-
-    const mobPoses = this.collectMobPoses(false);
-    const vehiclePoses = this.collectVehiclePoses(false);
-    const projectilePoses = this.collectProjectilePoses();
-    // Send a trailing empty `prj` the tick the last arrow clears so clients prune it.
-    const includeProjectiles = projectilePoses.length > 0 || this.lastProjectileCount > 0;
-    this.lastProjectileCount = projectilePoses.length;
-    const day = this.tickCount % DAY_INTERVAL_TICKS === 0 ? this.engine.state.dayClock : undefined;
+    // Step every shard and gather its per-tick broadcast data. Coordinates,
+    // ids, and events only mean anything inside one dimension's space, so
+    // each client receives exactly their own shard's channels.
+    const perShard = new Map<DimensionId, ShardTickData>();
+    for (const shard of this.shards.values()) {
+      shard.engine.step(dt);
+      // Post-step positions: exactly what this tick's mp/keyframe broadcasts,
+      // i.e. the timeline the client's interpolation buffers (and view stamps)
+      // live on.
+      shard.mobHistory.record(this.tickCount, shard.engine.state.mobs);
+      const events = shard.engine.consumeEvents();
+      const blocks = shard.engine.state.blockChanges.drainEdits();
+      if (events.some((e) => e.type === "blockPlaced" || e.type === "blockBroken" || e.type === "explosion")) this.dirtySinceStore = true;
+      const projectilePoses = this.collectProjectilePoses(shard);
+      // Send a trailing empty `prj` the tick the last arrow clears so clients prune it.
+      const includeProjectiles = projectilePoses.length > 0 || shard.lastProjectileCount > 0;
+      shard.lastProjectileCount = projectilePoses.length;
+      perShard.set(shard.dimension, {
+        events,
+        blocks,
+        mobPoses: this.collectMobPoses(shard, false),
+        vehiclePoses: this.collectVehiclePoses(shard, false),
+        projectilePoses,
+        includeProjectiles
+      });
+    }
+    // The day clock is world time, owned by the overworld shard.
+    const day = this.tickCount % DAY_INTERVAL_TICKS === 0 ? this.overworld.engine.state.dayClock : undefined;
 
     for (const conn of this.clients.values()) {
       const buffered = conn.sink.bufferedAmount();
@@ -460,15 +552,16 @@ export class Room {
       }
       conn.slowStrikes = 0;
       const shed = buffered > BACKPRESSURE_SOFT_BYTES;
+      const data = perShard.get(conn.dimension) ?? perShard.get("overworld")!;
       const message: TickMessage = {
         t: "tick",
         n: this.tickCount,
-        ...(blocks.length > 0 ? { blocks } : {}),
-        ev: events,
-        pp: shed ? [] : this.collectPlayerPoses(conn.playerId),
-        mp: shed ? [] : mobPoses,
-        ...(!shed && vehiclePoses.length > 0 ? { vp: vehiclePoses } : {}),
-        ...(!shed && includeProjectiles ? { prj: projectilePoses } : {}),
+        ...(data.blocks.length > 0 ? { blocks: data.blocks } : {}),
+        ev: data.events,
+        pp: shed ? [] : this.collectPlayerPoses(this.shardOf(conn), conn.playerId),
+        mp: shed ? [] : data.mobPoses,
+        ...(!shed && data.vehiclePoses.length > 0 ? { vp: data.vehiclePoses } : {}),
+        ...(!shed && data.includeProjectiles ? { prj: data.projectilePoses } : {}),
         ...(day !== undefined ? { day } : {}),
         ...(this.buildSelfDelta(conn) ?? {})
       };
@@ -479,17 +572,25 @@ export class Room {
 
     // Pose anchors between commands keep an offline replay's positions aligned.
     if (this.tickCount % POSE_CHECKPOINT_TICKS === 0) {
-      for (const player of this.engine.state.players.values()) {
-        this.recordLog({
-          tick: this.tickCount,
-          playerId: player.id,
-          pose: { x: player.position.x, y: player.position.y, z: player.position.z, yaw: player.yaw, pitch: player.pitch }
-        });
+      for (const shard of this.shards.values()) {
+        for (const player of shard.engine.state.players.values()) {
+          this.recordLog({
+            tick: this.tickCount,
+            playerId: player.id,
+            dim: shard.dimension,
+            pose: { x: player.position.x, y: player.position.y, z: player.position.z, yaw: player.yaw, pitch: player.pitch }
+          });
+        }
       }
     }
 
     if (this.tickCount % KEYFRAME_INTERVAL_TICKS === 0 && this.clients.size > 0) {
-      this.broadcast({ t: "mobsKeyframe", n: this.tickCount, mobs: this.collectMobPoses(true) });
+      // Keyframes prune by absence, so each one must reach ONLY its own
+      // dimension's clients — a cross-dimension keyframe would mass-delete
+      // every mob on the recipient's replica.
+      for (const shard of this.shards.values()) {
+        this.broadcastToDimension(shard.dimension, { t: "mobsKeyframe", n: this.tickCount, mobs: this.collectMobPoses(shard, true) });
+      }
     }
     if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && this.dirtySinceStore) {
       void this.persist();
@@ -497,10 +598,11 @@ export class Room {
     this.slowestTickMs = Math.max(this.slowestTickMs * 0.99, this.now() - started);
   }
 
+  /** The FULL roster (all dimensions — each entry carries its `dim` tag; clients filter their replicas by it). */
   private roster(): RosterEntry[] {
     const out: RosterEntry[] = [];
     for (const conn of this.clients.values()) {
-      const player = this.engine.state.players.get(conn.playerId);
+      const player = this.shardOf(conn).engine.state.players.get(conn.playerId);
       if (player) out.push(this.rosterEntry(player, conn));
     }
     return out;
@@ -511,7 +613,7 @@ export class Room {
       id: player.id,
       name: conn.name,
       skinId: conn.skinId,
-      dim: this.engine.state.dimension,
+      dim: conn.dimension,
       x: qPos(player.position.x),
       y: qPos(player.position.y),
       z: qPos(player.position.z),
@@ -519,27 +621,27 @@ export class Room {
     };
   }
 
-  private buildWorldSync(): WorldSync {
-    const state = this.engine.state;
+  private buildWorldSync(shard: DimensionShard): WorldSync {
+    const state = shard.engine.state;
     return {
       t: "worldSync",
       tick: this.tickCount,
-      dimension: state.dimension,
+      dimension: shard.dimension,
       dayClock: state.dayClock,
       changes: state.blockChanges.changes(),
       blockEntities: serializeContainers(state.containers),
       lootedChests: serializeLootedChests(state.lootedWorldgenChests),
       mobs: serializeMobs(state.mobs),
-      liveMobs: this.collectMobPoses(true),
-      vehicles: this.collectVehiclePoses(true),
-      projectiles: this.collectProjectilePoses(),
+      liveMobs: this.collectMobPoses(shard, true),
+      vehicles: this.collectVehiclePoses(shard, true),
+      projectiles: this.collectProjectilePoses(shard),
       players: this.roster()
     };
   }
 
-  private collectPlayerPoses(except: string): PlayerPose[] {
+  private collectPlayerPoses(shard: DimensionShard, except: string): PlayerPose[] {
     const out: PlayerPose[] = [];
-    for (const player of this.engine.state.players.values()) {
+    for (const player of shard.engine.state.players.values()) {
       if (player.id === except) continue;
       out.push({
         id: player.id,
@@ -553,17 +655,17 @@ export class Room {
     return out;
   }
 
-  private collectMobPoses(keyframe: boolean): MobPose[] {
+  private collectMobPoses(shard: DimensionShard, keyframe: boolean): MobPose[] {
     const out: MobPose[] = [];
-    for (const mob of this.engine.state.mobs) {
-      const shadow = this.mobShadow.get(mob.id);
+    for (const mob of shard.engine.state.mobs) {
+      const shadow = shard.mobShadow.get(mob.id);
       const moved =
         !shadow ||
         (mob.position.x - shadow.x) ** 2 + (mob.position.y - shadow.y) ** 2 + (mob.position.z - shadow.z) ** 2 > MOB_DEADBAND_SQ ||
         mob.hp !== shadow.hp;
       // Delta frames go at half rate (10 Hz) — keyframes always carry everything.
       if (!keyframe && (!moved || this.tickCount % 2 !== 0)) continue;
-      this.mobShadow.set(mob.id, { x: mob.position.x, y: mob.position.y, z: mob.position.z, hp: mob.hp });
+      shard.mobShadow.set(mob.id, { x: mob.position.x, y: mob.position.y, z: mob.position.z, hp: mob.hp });
       out.push({
         id: mob.id,
         kind: mob.kind,
@@ -577,8 +679,8 @@ export class Room {
       });
     }
     if (keyframe) {
-      const alive = new Set(this.engine.state.mobs.map((m) => m.id));
-      for (const id of this.mobShadow.keys()) if (!alive.has(id)) this.mobShadow.delete(id);
+      const alive = new Set(shard.engine.state.mobs.map((m) => m.id));
+      for (const id of shard.mobShadow.keys()) if (!alive.has(id)) shard.mobShadow.delete(id);
     }
     return out;
   }
@@ -588,18 +690,18 @@ export class Room {
    * whose position/yaw/rider changed since the last broadcast (deadband — a
    * parked raft costs nothing). Vehicles never despawn, so no absence-pruning.
    */
-  private collectVehiclePoses(force: boolean): VehiclePose[] {
+  private collectVehiclePoses(shard: DimensionShard, force: boolean): VehiclePose[] {
     const out: VehiclePose[] = [];
-    for (const vehicle of this.engine.state.vehicles) {
+    for (const vehicle of shard.engine.state.vehicles) {
       const riderId = vehicle.rider;
-      const shadow = this.vehicleShadow.get(vehicle.id);
+      const shadow = shard.vehicleShadow.get(vehicle.id);
       const moved =
         !shadow ||
         (vehicle.position.x - shadow.x) ** 2 + (vehicle.position.y - shadow.y) ** 2 + (vehicle.position.z - shadow.z) ** 2 > MOB_DEADBAND_SQ ||
         vehicle.yaw !== shadow.yaw ||
         riderId !== shadow.riderId;
       if (!force && !moved) continue;
-      this.vehicleShadow.set(vehicle.id, { x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw, riderId });
+      shard.vehicleShadow.set(vehicle.id, { x: vehicle.position.x, y: vehicle.position.y, z: vehicle.position.z, yaw: vehicle.yaw, riderId });
       out.push({
         id: vehicle.id,
         kind: vehicle.kind,
@@ -614,8 +716,8 @@ export class Room {
   }
 
   /** Every live arrow, full state each tick (they're few and fast — no deadband; the client snaps and prunes by absence). */
-  private collectProjectilePoses(): ProjectilePose[] {
-    return this.engine.state.projectiles.map((p) => ({
+  private collectProjectilePoses(shard: DimensionShard): ProjectilePose[] {
+    return shard.engine.state.projectiles.map((p) => ({
       id: p.id,
       x: qPos(p.position.x),
       y: qPos(p.position.y),
@@ -629,7 +731,7 @@ export class Room {
   }
 
   private buildSelfDelta(conn: ClientConn): { self: SelfDelta } | null {
-    const player = this.engine.state.players.get(conn.playerId);
+    const player = this.shardOf(conn).engine.state.players.get(conn.playerId);
     if (!player) return null;
     const effectsKey = JSON.stringify(serializeEffects(player.effects));
     const respawnSeconds = Math.ceil(player.respawnTimer);
@@ -687,6 +789,16 @@ export class Room {
     const encoded = encodeServerMessage(message);
     for (const conn of this.clients.values()) {
       if (conn.playerId === except) continue;
+      this.bytesOut += encoded.length;
+      conn.sink.send(encoded);
+    }
+  }
+
+  /** Broadcast scoped to one dimension's clients (keyframes and other per-space frames). */
+  private broadcastToDimension(dimension: DimensionId, message: ServerMessage, except?: string): void {
+    const encoded = encodeServerMessage(message);
+    for (const conn of this.clients.values()) {
+      if (conn.dimension !== dimension || conn.playerId === except) continue;
       this.bytesOut += encoded.length;
       conn.sink.send(encoded);
     }
