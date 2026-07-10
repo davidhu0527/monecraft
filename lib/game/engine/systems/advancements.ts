@@ -37,6 +37,7 @@ export const STATS: readonly StatMeta[] = [
   { id: "potions_drunk", label: "Potions Drunk", format: "count" },
   { id: "fish_caught", label: "Fish Caught", format: "count" },
   { id: "treasure_unearthed", label: "Treasures Unearthed", format: "count" },
+  { id: "fortress_looted", label: "Fortress Chests Looted", format: "count" },
   { id: "arrows_fired", label: "Arrows Fired", format: "count" },
   { id: "villager_trades", label: "Villager Trades", format: "count" },
   { id: "minecart_rides", label: "Minecart Rides", format: "count" },
