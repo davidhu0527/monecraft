@@ -328,6 +328,27 @@ describe("world content balance", () => {
     },
     { timeout: 60000 }
   );
+
+  test(
+    "redstone ore fills the deep band and never rises above its cap",
+    () => {
+      const world = fullWorld();
+      const layer = world.sizeX * world.sizeZ;
+      let redstone = 0;
+      let maxRedstoneY = -1;
+      for (let i = 0; i < world.blocks.length; i += 1) {
+        if (world.blocks[i] === BlockId.RedstoneOre) {
+          redstone += 1;
+          const y = Math.floor(i / layer);
+          if (y > maxRedstoneY) maxRedstoneY = y;
+        }
+      }
+      expect(redstone).toBeGreaterThan(0);
+      // The pass is band-capped (its own scheme — not the maxYOffset ores').
+      expect(maxRedstoneY).toBeLessThanOrEqual(GEN.redstoneOreConfig.maxY);
+    },
+    { timeout: 60000 }
+  );
 });
 
 describe("ocean flora", () => {

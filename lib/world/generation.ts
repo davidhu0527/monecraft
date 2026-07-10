@@ -78,7 +78,12 @@ export const GEN = Object.freeze({
   shipwreckCount: 45,
   // Buried treasure: lone chests two blocks under a beach, hunted via the
   // treasure map. Attempts too — the beach band is a thin slice of the map.
-  buriedTreasureCount: 90
+  buriedTreasureCount: 90,
+  // Redstone ore: a deep, explicit Y band (unlike the maxYOffset scheme above)
+  // on its own decoupled PRNG (redstoneRand). It replaces STONE ONLY — the pass
+  // runs last, after dungeons and villages, so eating cobblestone would gnaw
+  // their walls. No air-adjacency gate: veins sit embedded, a dedicated dig.
+  redstoneOreConfig: Object.freeze({ attempts: 12000, minY: 2, maxY: 24, minSize: 4, maxSize: 8 })
 });
 
 /**
@@ -188,9 +193,13 @@ export function generateWorld(world: VoxelWorld, worldType: WorldType = "default
   // Ocean flora is hash-gated like cacti (consumes no shared PRNG), so every
   // earlier pass stays byte-identical to a kelp-less world of the same seed.
   placeOceanFlora(world, cfg);
-  // Buried treasure runs last on its own PRNG (treasureRand): its chest cell is
-  // written after every other pass, so nothing can overwrite a derived site.
+  // Buried treasure runs on its own PRNG (treasureRand): its chest cell is
+  // written after every earlier pass, so nothing can overwrite a derived site.
   placeBuriedTreasure(world, cfg);
+  // Redstone ore runs LAST on its own PRNG (redstoneRand) and replaces stone
+  // only, so it can neither shift another stream nor eat a structure's cobble —
+  // every pass above stays byte-identical to a redstone-less world.
+  placeRedstoneOre(world);
 }
 
 function generateTerrain(world: VoxelWorld, cfg: TerrainConfig): void {
@@ -401,6 +410,46 @@ function placeCoal(world: VoxelWorld): void {
     const z = 8 + Math.floor(rand() * (world.sizeZ - 16));
     const block = world.get(x, y, z);
     if (block !== BlockId.Stone && block !== BlockId.Cobblestone) continue;
+    placeVein(x, y, z);
+  }
+}
+
+/** A redstone-only PRNG seeded from the world seed, decoupled from every other stream. */
+function redstoneRand(seed: number): () => number {
+  let t = (seed ^ 0x165667b1) >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Redstone ore veins in the deep band (see GEN.redstoneOreConfig). Embedded in
+ * solid rock — no air-adjacency gate — and STONE-only: the pass runs after the
+ * structure passes, and replacing cobblestone here would eat dungeon walls and
+ * village paths. On its own PRNG so every earlier pass stays byte-identical.
+ */
+function placeRedstoneOre(world: VoxelWorld): void {
+  const rand = redstoneRand(world.seed);
+  const cfg = GEN.redstoneOreConfig;
+  const maxY = Math.min(cfg.maxY, world.sizeY - 2);
+  const placeVein = (x: number, y: number, z: number) => {
+    const size = cfg.minSize + Math.floor(rand() * Math.max(1, cfg.maxSize - cfg.minSize + 1));
+    for (let i = 0; i < size; i += 1) {
+      const vx = x + Math.floor((rand() - 0.5) * 4);
+      const vy = y + Math.floor((rand() - 0.5) * 3);
+      const vz = z + Math.floor((rand() - 0.5) * 4);
+      if (!world.inBounds(vx, vy, vz) || vy <= 1 || vy > maxY) continue;
+      if (world.get(vx, vy, vz) === BlockId.Stone) world.set(vx, vy, vz, BlockId.RedstoneOre);
+    }
+  };
+  for (let i = 0; i < cfg.attempts; i += 1) {
+    const x = 8 + Math.floor(rand() * (world.sizeX - 16));
+    const y = cfg.minY + Math.floor(rand() * Math.max(1, maxY - cfg.minY + 1));
+    const z = 8 + Math.floor(rand() * (world.sizeZ - 16));
+    if (world.get(x, y, z) !== BlockId.Stone) continue;
     placeVein(x, y, z);
   }
 }

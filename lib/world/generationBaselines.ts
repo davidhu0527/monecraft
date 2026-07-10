@@ -13,23 +13,23 @@ import type { WorldType } from "./worldTypes";
  * If a test against these fails after a refactor, THE REFACTOR BROKE SAVE
  * COMPATIBILITY — fix the code, never the hash. Re-baselining is only
  * legitimate for a deliberate, CHANGELOG-flagged worldgen change
- * (WORLDGEN_VERSION bump). Last re-baseline: v10 → v11, the move to
- * bit-portable noise.
+ * (WORLDGEN_VERSION bump). Last re-baseline: v11 → v12, deep redstone ore
+ * (the overworld digests) and nether fortresses (the nether digests).
  */
 export const WORLDGEN_BASELINES = {
   /** Full-size 512×150×512 default world, seed 1337 — the real save-compat surface. */
-  full512Seed1337: "a1892258a5db6e01dc7365ab387439b6297fa2066d0013617a216ae578135f39",
+  full512Seed1337: "c9727ee8c9300ec233e517bfe35d786ae4e2d49036ac2411cffa7e2fbe57adda",
   /** 128×150×128 default worlds per seed. */
   small128: {
-    1337: "69c03ceb293969bc8cd1ba907887c2760ddd734b1de1ab835b9b5a220e935797",
-    1: "f67d37d27cc26e9569cc7ee278fbd00f69cb0e56799be1d7cac0b13f28ec6780",
-    999999937: "012f7a81cab64c254ce54b003d53c2fbadab47f4e245426f86943d990217a554"
+    1337: "6f3db24900b8a1b7b4bfb5ad2a3e76ba1216e71bc103182b86e65868216de16e",
+    1: "fb8c256978a54ad8ca604a17955a04e40726c913dcbc5b0be4a0df0a64409fb1",
+    999999937: "5607005d1f8af064fa135f2545d43a566f27262d31f43505ebe25399531b5ddd"
   },
   /** 128×150×128 non-default world types, seed 1337 — each type is its own contract. */
   typed: {
-    flat: "9e463186e6b5797c80a1d0b50b0f40e93c2ef2f353aadfab27e2171fc246d5d1",
-    amplified: "9361234c1907d43d1551f79e3c35a8c7942419f57b66038feec6e5b2772259d8",
-    islands: "ff1381ffa159aaf02491b55770e0ea513809e8c44b42f8505d5bd0cd7d6d4f1c"
+    flat: "45dc6e00ff1d9b852d473a050b0c9354cb1f29bb2198aee6bf2479859a5d3e88",
+    amplified: "0a724b0294a994c6173b12d0dca67fb0e0e643ee990d8dfaa88b9db3eb54127c",
+    islands: "e586b15f8a0c6103ae0dc8037be54e14522740ab63ec32cbbb238d0015c662d6"
   } satisfies Partial<Record<WorldType, string>>,
   /**
    * The nether (lib/world/netherGeneration.ts) — its own byte contract under
