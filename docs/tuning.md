@@ -530,9 +530,10 @@ None affect single-player, and none are save-sensitive.
 - **`ROOM_CAPACITY`** (`8`, protocol.ts) — max players per world. The v1 co-op
   scale the whole design assumes; raising it grows the per-tick pose/self fan-out
   quadratically, so re-measure with `loadSim` before nudging it.
-- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~74 MB
-  each). Joins beyond it are refused at the door, not thrashed. Tune from
-  `/rooms` p95 tick + peak memory.
+- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~40 MB
+  each; the per-voxel light cache is renderer-only, so headless room engines
+  never allocate it). Joins beyond it are refused at the door, not thrashed.
+  Tune from `/rooms` p95 tick + peak memory.
 - **Tick rate** — `TICK_SECONDS` (`0.05` = 20 Hz, `tickDriver.ts`) is the room
   sim + pose-stream cadence. The whole latency budget hangs off it; not a
   casual dial.
@@ -573,6 +574,11 @@ None affect single-player, and none are save-sensitive.
   → `4008` kick).
 - **Persistence** — `PERSIST_INTERVAL_TICKS` (`1200` = 60 s dirty-persist; also
   the crash-loss bound), idle-evict at 5 min (`roomRegistry.ts`).
+- **Nether shard linger** — `NETHER_SHARD_LINGER_MS` (env, default `60000`):
+  how long a room keeps its EMPTY nether engine before persisting and dropping
+  it (~40 MB back). Longer = snappier there-and-back trips (no worldgen
+  re-boot); shorter = less memory held by abandoned nethers. The shard reboots
+  transparently on the next travel or nether-side rejoin.
 - **Reconnect** — `RECONNECT_DELAYS_MS` (`[1,2,4,8,8] s`, protocol.ts) is the
   client back-off ladder; the join ticket TTL is `TICKET_TTL_SECONDS` (`60`,
   `tickets.ts`).

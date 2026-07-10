@@ -26,6 +26,7 @@ export default function RosterPanel({ session }: { session: NetworkSession }) {
             <span className="roster-name">
               {member.name}
               {member.id === session.playerId ? " (you)" : ""}
+              {member.dimension === "nether" ? <span className="roster-dimension"> · Nether</span> : null}
             </span>
             {session.role === "owner" && member.id !== session.playerId ? (
               <button type="button" className="roster-kick" onClick={() => session.kick(member.id)} aria-label={`Kick ${member.name}`}>

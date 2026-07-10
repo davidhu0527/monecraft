@@ -289,7 +289,9 @@ function interactBed(state: GameState, player: PlayerState, emit: EmitGameEvent,
     }
   }
 
-  player.spawnPoint = { x, y, z };
+  // Stamp the bed's dimension: block coords alone are ambiguous across
+  // worlds, and respawn must not honor an overworld bed while in the nether.
+  player.spawnPoint = { x, y, z, dimension: state.dimension };
   // Into bed; the fade (and the night skip) only engages once EVERY eligible
   // player sleeps — single-player: immediately, exactly the old behavior.
   player.sleeping = true;

@@ -132,6 +132,22 @@ so the replica stops predicting its own motion while mounted rather than
 rubber-banding against the boat. Vehicles and in-flight arrows replicate on
 their own tick channels (`vp`/`prj`), mirroring the mob-pose skeleton.
 
+**The Nether works online (protocol v4).** A room simulates an engine per
+active dimension ("shards"): the overworld always; the nether boots lazily on
+the first portal travel (or a join whose save slice says nether) and is
+persisted + dropped after `NETHER_SHARD_LINGER_MS` (default 60 s) once empty —
+so the second engine's ~40 MB is the price of an _occupied_ nether, not a
+visited-once one. Ignition is an ordinary networked `placeBlock`; dwell runs
+server-side, and travel hands the player between shards, sending the traveler
+`dim` + a fresh worldSync while everyone else gets `playerDim` (the roster's
+"· Nether" tag, and a toast). The client rebuilds its replica and renderer
+around the SAME live socket — no reconnect. Every tick channel is scoped to
+the recipient's dimension; chat and the roster stay global. Mobs (pets
+included) and vehicles are dimension state and stay behind; a mounted player
+can't dwell; sleep skips the night when every **overworld** player is in bed.
+Full wire details: [protocol.md](protocol.md), engine/room architecture:
+[architecture.md](architecture.md#dimensions-swap-on-travel).
+
 Progression is per-player: each player earns their own advancements/stats
 (the engine attributes an emitted event to whoever's step/dispatch is running,
 so a co-op room scores every player independently) and gets credit for their
@@ -248,7 +264,10 @@ tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
   bake it into a dev build. The F3 overlay shows live net stats.
 - **Capacity.** Run `loadSim` at the target player count and watch
   `slowestTickMs`/`kbOutPerSec` in `/rooms`; keep p95 well under 50 ms and set
-  `MAX_ROOMS` so peak memory (~74 MB/room) fits the machine. Net constants
+  `MAX_ROOMS` so peak memory fits the machine: ~40 MB per dimension engine
+  (headless engines skip the renderer-only light cache), so a room is ~40 MB
+  with an idle nether and ~80 MB while one is occupied (the empty-shard
+  linger-evict returns the difference). Net constants
   (deadbands, keyframe/persist intervals, reconnect ladder) live in
   [tuning.md](tuning.md#multiplayer-networking).
 

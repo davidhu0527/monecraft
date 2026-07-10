@@ -365,6 +365,6 @@ export async function mintTicket(
     name = profile.name;
     skinId = profile.skinId ?? null;
   }
-  const ticket = await signTicket({ sub: user.id, wid: worldId, name, skinId, role: member.role, pv: PROTOCOL_VERSION }, secret);
+  const ticket = await signTicket({ sub: user.id, wid: worldId, name, skinId, role: member.role, gm: world.gameMode, pv: PROTOCOL_VERSION }, secret);
   return { ok: true, ticket };
 }

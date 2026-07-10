@@ -70,8 +70,13 @@ export type PlayerState = {
   advancements: Set<string>;
   isDead: boolean;
   respawnTimer: number;
-  /** Bed respawn point (block coords), or null to respawn at a random land point. */
-  spawnPoint: { x: number; y: number; z: number } | null;
+  /**
+   * Bed respawn point (block coords), or null to respawn at a random land
+   * point. `dimension` records where the bed stands (absent on pre-nether
+   * saves = overworld) — respawn honors it only in the matching dimension,
+   * since the same block coords index a different voxel in each world.
+   */
+  spawnPoint: { x: number; y: number; z: number; dimension?: DimensionId } | null;
   mining: MiningState;
   /** The active fishing cast, or null (session-only). */
   fishing: FishingState | null;
@@ -404,7 +409,7 @@ export type GameState = {
   /** Seconds left in the sleep fade; > 0 freezes the sim until time skips. */
   sleepTimer: number;
   /** Bed respawn point (block coords), or null to respawn at a random land point. */
-  spawnPoint: { x: number; y: number; z: number } | null;
+  spawnPoint: { x: number; y: number; z: number; dimension?: DimensionId } | null;
   mining: MiningState;
   timers: GameTimers;
   /** Set when world geometry changed; the renderer rebuilds the mesh and clears it. */
@@ -616,6 +621,9 @@ export type GameEvent =
   | { type: "portalLit" }
   | { type: "portalDenied"; reason: "online" | "invalidFrame" }
   | { type: "dimensionTravel"; target: DimensionId; anchor: { x: number; y: number; z: number } }
+  // Synthesized by the CLIENT session from the wire's playerDim broadcast (never
+  // emitted by an engine) — the shell's toast seam for "X entered the Nether".
+  | { type: "playerDimension"; playerId: PlayerId; dimension: DimensionId }
   | { type: "fishingCast"; x: number; y: number; z: number }
   | { type: "fishingBite"; x: number; y: number; z: number }
   | { type: "fishingCaught"; items: Array<{ itemId: string; count: number }>; x: number; y: number; z: number }

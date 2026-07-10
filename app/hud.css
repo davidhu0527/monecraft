@@ -625,6 +625,12 @@
   white-space: nowrap;
 }
 
+/* Where a player is when it isn't here — muted, nether-tinted. */
+.roster-dimension {
+  color: #e08a5a;
+  opacity: 0.9;
+}
+
 .roster-kick {
   flex: none;
   background: rgba(183, 28, 28, 0.85);

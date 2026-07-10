@@ -1,14 +1,22 @@
 import * as THREE from "three";
 import { GameEngine } from "@/lib/game/engine/GameEngine";
 import type { Command } from "@/lib/game/engine/commands";
-import { createIdleInput, type AttributedGameEvent, type GameEvent, type MobState, type PlayerId } from "@/lib/game/engine/state";
+import {
+  createIdleInput,
+  type AttributedGameEvent,
+  type GameEvent,
+  type GameState,
+  type MobState,
+  type PlayerId,
+  type PlayerState
+} from "@/lib/game/engine/state";
 import { TICK_SECONDS } from "@/lib/game/engine/tickDriver";
 import { adjustSlotCount } from "@/lib/game/inventory";
 import { BlockId } from "@/lib/world";
 import { restoreEffects, restoreEquippedArmor, restoreInventorySlots, restoreSelectedSlot } from "@/lib/game/save";
 import { MOB_TEMPLATES, mobHalfHeight } from "@/lib/game/mobs";
 import { FACTION_BY_KIND } from "@/lib/game/mobs";
-import type { MobKind, VehicleKind } from "@/lib/game/types";
+import type { DimensionId, MobKind, VehicleKind } from "@/lib/game/types";
 import { createClockSync } from "./clock";
 import { createPredictionLedger, type PredictionRefund } from "./prediction";
 import { decodeServerFrame, encodeClientMessage, gunzipWorldSync, qAng, qPos } from "./codec";
@@ -56,6 +64,12 @@ export type NetworkSessionCallbacks = {
   onChat?(entry: { from: string; name: string; text: string }): void;
   /** Server events the shell's drain should also see (toasts, audio, particles). */
   onEvent?(event: GameEvent): void;
+  /**
+   * The LOCAL player's dimension changed (server-initiated travel): the
+   * replica engine was just rebuilt for it, so the shell must rebuild the
+   * renderer (dimension profiles are construction-time) — the ws stays open.
+   */
+  onDimension?(dimension: DimensionId): void;
 };
 
 export type NetworkSessionOptions = {
@@ -80,8 +94,8 @@ const HANDSHAKE_TIMEOUT_MS = 15000;
 /** Ping cadence — 1 Hz keeps the clock's min-RTT window (~16 samples) fresh at ~40 B/s. */
 const PING_INTERVAL_MS = 1000;
 
-/** One player as the roster panel shows them. */
-export type RosterMember = { id: PlayerId; name: string };
+/** One player as the roster panel shows them (dimension drives the "· Nether" tag). */
+export type RosterMember = { id: PlayerId; name: string; dimension: DimensionId };
 
 /** Live connection stats for the F3 overlay (poll, don't subscribe). */
 export type NetStats = {
@@ -97,6 +111,7 @@ export type NetStats = {
 };
 
 export type NetworkSession = {
+  /** The live replica engine. REBOUND on dimension travel — re-read it after onDimension, never cache it across a swap. */
   readonly engine: GameEngine;
   readonly playerId: PlayerId;
   /** The local player's role in this world (from the join ticket) — gates the owner controls. */
@@ -275,29 +290,12 @@ export async function connectNetworkSession(
   const welcome = await handshake(ticket, url);
   setStatus("syncing");
 
-  // The replica: an empty mirror world generated from the server's seed.
-  const engine = new GameEngine({
-    seed: welcome.seed,
-    worldType: welcome.worldType as never,
-    difficulty: welcome.difficulty as never,
-    hardcore: welcome.hardcore,
-    authority: "local",
-    replica: true,
-    bootPlayer: false,
-    ...(options.worldSize ? { worldSize: options.worldSize } : {})
-  });
-  const state = engine.state;
   const playerId = welcome.playerId;
-  state.dayClock = welcome.dayClock;
-  state.primaryPlayerId = playerId;
-  const self = engine.addPlayer({ id: playerId });
-  self.input = createIdleInput();
-  engine.consumeEvents(); // drop the join echo
-  serverTickTimeMs = welcome.tick * TICK_SECONDS * 1000;
 
   // Every dispatch from the UI/input controller routes here (see
   // GameEngine.routeDispatch): presentation stays local, gameplay goes up.
-  engine.routeDispatch = (command) => {
+  // Reinstalled on every replica rebuild (dimension travel).
+  const routeDispatch = (command: Command) => {
     if (LOCAL_COMMANDS.has(command.type)) {
       engine.dispatch(command, playerId);
       return;
@@ -318,6 +316,40 @@ export async function connectNetworkSession(
     sendCmd(command);
   };
 
+  // The replica engine + its aliases are REBINDABLE: dimension travel builds
+  // a fresh mirror world (dimension profiles, worldgen, and the voxel field
+  // are per-engine) and every helper below reads these bindings at call time.
+  // Nothing may capture `engine`/`state`/`self` into a longer-lived closure
+  // of its own — that would silently pin the pre-travel world.
+  let engine!: GameEngine;
+  let state!: GameState;
+  let self!: PlayerState;
+
+  /** (Re)builds the replica: an empty mirror world generated from the server's seed for one dimension. */
+  const buildReplica = (dimension: DimensionId): void => {
+    engine = new GameEngine({
+      seed: welcome.seed,
+      worldType: welcome.worldType as never,
+      difficulty: welcome.difficulty as never,
+      hardcore: welcome.hardcore,
+      dimension,
+      authority: "local",
+      replica: true,
+      bootPlayer: false,
+      ...(options.worldSize ? { worldSize: options.worldSize } : {})
+    });
+    state = engine.state;
+    state.primaryPlayerId = playerId;
+    self = engine.addPlayer({ id: playerId });
+    self.input = createIdleInput();
+    engine.consumeEvents(); // drop the join echo
+    engine.routeDispatch = routeDispatch;
+  };
+
+  buildReplica(welcome.dimension);
+  state.dayClock = welcome.dayClock;
+  serverTickTimeMs = welcome.tick * TICK_SECONDS * 1000;
+
   // Roster changes emit join/leave into the replica's event queue; those are
   // presented via the server's own tick `ev` instead, so drop them — but ONLY
   // them: a predicted blockPlaced emitted in the same frame must survive to
@@ -327,16 +359,33 @@ export async function connectNetworkSession(
     pendingEvents.push(...kept);
   };
 
-  const upsertRemotePlayer = (id: string, name: string) => {
+  /** Every present player's dimension (self included) — the roster panel's source of truth. Replica avatars exist only for OUR dimension. */
+  const dims = new Map<string, DimensionId>();
+
+  const upsertRemotePlayer = (id: string, name: string, dim: DimensionId) => {
     names.set(id, name);
-    if (id === playerId || state.players.has(id)) return;
+    dims.set(id, dim);
+    if (id === playerId) return;
+    if (dim !== state.dimension) {
+      // In the world but not in our space: no replica avatar (the renderer
+      // would draw them at raw coordinates inside the wrong terrain).
+      if (state.players.has(id)) {
+        engine.removePlayer(id);
+        dropRosterEchoes();
+        playerBuffers.delete(id);
+      }
+      notifyRoster();
+      return;
+    }
+    if (state.players.has(id)) return;
     engine.addPlayer({ id });
     dropRosterEchoes();
     notifyRoster();
   };
 
   const applyRoster = (roster: WelcomeMessage["players"]) => {
-    for (const entry of roster) upsertRemotePlayer(entry.id, entry.name);
+    dims.clear(); // the roster is the full present set — playerDim races lose to it
+    for (const entry of roster) upsertRemotePlayer(entry.id, entry.name, entry.dim);
     const present = new Set(roster.map((entry) => entry.id));
     // Anyone who left while we were away is no longer in the roster.
     for (const id of [...state.players.keys()]) {
@@ -348,9 +397,37 @@ export async function connectNetworkSession(
     notifyRoster();
   };
 
-  for (const entry of welcome.players) upsertRemotePlayer(entry.id, entry.name);
+  for (const entry of welcome.players) upsertRemotePlayer(entry.id, entry.name, entry.dim);
+  dims.set(playerId, welcome.dimension);
   const myRoster = welcome.players.find((entry) => entry.id === playerId);
   if (myRoster) self.position.set(myRoster.x, myRoster.y, myRoster.z);
+
+  /**
+   * Server-initiated travel for the LOCAL player: rebuild the replica for the
+   * target dimension in place — the socket stays open, the matching worldSync
+   * (which seats us at the arrival portal) is already on the wire behind the
+   * `dim` frame that triggered this.
+   */
+  let adoptSelfFromSync = false;
+  const adoptDimension = (dimension: DimensionId, tick: number, dayClock: number) => {
+    setStatus("syncing");
+    buildReplica(dimension);
+    state.dayClock = dayClock;
+    serverTickTimeMs = tick * TICK_SECONDS * 1000;
+    dims.set(playerId, dimension);
+    // Nothing from the old space survives: predictions, interpolation
+    // buffers, and the jitter window all described a world we just left.
+    ledger.clear();
+    playerBuffers.clear();
+    mobBuffers.clear();
+    delayCtl.reset();
+    adoptSelfFromSync = true;
+    const ev: GameEvent = { type: "playerDimension", playerId, dimension };
+    pendingEvents.push(ev);
+    callbacks.onEvent?.(ev);
+    callbacks.onDimension?.(dimension);
+    notifyRoster();
+  };
 
   const applyWorldSync = (sync: WorldSync) => {
     // A (re)sync follows a gap that is not jitter — don't let it poison the window.
@@ -377,6 +454,17 @@ export async function connectNetworkSession(
     for (const pose of sync.vehicles) upsertReplicaVehicle(pose);
     applyProjectiles(sync.projectiles);
     applyRoster(sync.players);
+    // Post-travel: the sync's roster carries our arrival-portal position — the
+    // fresh replica seated us at a generic spawn. Ordinary resyncs never snap
+    // (the client owns its own movement).
+    if (adoptSelfFromSync) {
+      adoptSelfFromSync = false;
+      const mine = sync.players.find((entry) => entry.id === playerId);
+      if (mine) {
+        self.position.set(mine.x, mine.y, mine.z);
+        self.velocity.set(0, 0, 0);
+      }
+    }
   };
 
   function upsertReplicaVehicle(pose: VehiclePose): void {
@@ -550,6 +638,10 @@ export async function connectNetworkSession(
     if (typeof data !== "string") {
       const sync = await gunzipWorldSync(new Uint8Array(data as ArrayBuffer));
       if (sync) {
+        // A sync for a dimension we're no longer in is a stale resync that
+        // raced a travel swap — applying it would write the wrong world's
+        // block diff into this replica.
+        if (sync.dimension !== state.dimension) return;
         applyWorldSync(sync);
         setStatus("online");
       }
@@ -565,7 +657,8 @@ export async function connectNetworkSession(
         if (message.day !== undefined) state.dayClock = message.day;
         if (message.self) applySelfDelta(message.self);
         for (const pose of message.pp) {
-          upsertRemotePlayer(pose.id, names.get(pose.id) ?? "player");
+          // Tick poses are dimension-scoped by the server: anyone in `pp` is in OUR space.
+          upsertRemotePlayer(pose.id, names.get(pose.id) ?? "player", state.dimension);
           let buffer = playerBuffers.get(pose.id);
           if (!buffer) {
             buffer = createPoseBuffer();
@@ -612,7 +705,7 @@ export async function connectNetworkSession(
         return;
       }
       case "playerJoined": {
-        upsertRemotePlayer(message.player.id, message.player.name);
+        upsertRemotePlayer(message.player.id, message.player.name, message.player.dim);
         const joined = state.players.get(message.player.id);
         joined?.position.set(message.player.x, message.player.y, message.player.z);
         return;
@@ -620,7 +713,30 @@ export async function connectNetworkSession(
       case "playerLeft": {
         if (message.id !== playerId) engine.removePlayer(message.id);
         playerBuffers.delete(message.id);
+        dims.delete(message.id);
         dropRosterEchoes();
+        notifyRoster();
+        return;
+      }
+      case "dim": {
+        adoptDimension(message.dimension, message.tick, message.dayClock);
+        return;
+      }
+      case "playerDim": {
+        // Someone ELSE changed dimension (our own travel rides the dim +
+        // worldSync pair above). Prune their avatar if they left our space;
+        // if they entered it, the very next tick's pose stream re-adds them
+        // at their real spot (adding here would flash them at world spawn).
+        if (message.id === playerId) return;
+        dims.set(message.id, message.dimension);
+        if (message.dimension !== state.dimension && state.players.has(message.id)) {
+          engine.removePlayer(message.id);
+          dropRosterEchoes();
+        }
+        if (message.dimension !== state.dimension) playerBuffers.delete(message.id);
+        const ev: GameEvent = { type: "playerDimension", playerId: message.id, dimension: message.dimension };
+        pendingEvents.push(ev);
+        callbacks.onEvent?.(ev);
         notifyRoster();
         return;
       }
@@ -683,7 +799,14 @@ export async function connectNetworkSession(
       if (disposed) return;
       // Same room, same id: keep the replica; the world-sync that follows
       // re-seeds it. Just refresh the roster and the server-time anchor.
-      serverTickTimeMs = resumed.tick * TICK_SECONDS * 1000;
+      // EXCEPT when the server has us in another dimension (a drop raced a
+      // travel, or we were moved while away) — then rebuild for it first so
+      // the incoming sync lands in the right world.
+      if (resumed.dimension !== state.dimension) {
+        adoptDimension(resumed.dimension, resumed.tick, resumed.dayClock);
+      } else {
+        serverTickTimeMs = resumed.tick * TICK_SECONDS * 1000;
+      }
       applyRoster(resumed.players);
       reconnectAttempt = 0;
       setStatus("syncing");
@@ -710,6 +833,7 @@ export async function connectNetworkSession(
       encodeClientMessage({
         t: "cmd",
         seq,
+        d: state.dimension,
         cmd: command,
         pose: { x: qPos(self.position.x), y: qPos(self.position.y), z: qPos(self.position.z), yaw: qAng(self.yaw), pitch: qAng(self.pitch) },
         ...(command.type === "attack" && lastRenderTimeMs !== null ? { view: Math.round(Math.max(0, lastRenderTimeMs)) } : {})
@@ -718,7 +842,10 @@ export async function connectNetworkSession(
   };
 
   const session: NetworkSession = {
-    engine,
+    // A getter, not a snapshot: dimension travel rebinds the engine.
+    get engine() {
+      return engine;
+    },
     playerId,
     role: welcome.role,
     subscribeChat(listener) {
@@ -733,7 +860,7 @@ export async function connectNetworkSession(
       rosterListeners.add(listener);
       return () => rosterListeners.delete(listener);
     },
-    roster: () => [...state.players.keys()].map((id) => ({ id, name: names.get(id) ?? "player" })),
+    roster: () => [...dims.entries()].map(([id, dimension]) => ({ id, name: names.get(id) ?? "player", dimension })),
     kick(targetId) {
       if (targetId !== playerId) delayedSend(encodeClientMessage({ t: "kick", targetId }));
     },
@@ -805,14 +932,19 @@ export async function connectNetworkSession(
         state.worldMeshDirty = true;
       }
       const open = socketOpen;
-      // Pose stream at tick rate.
-      if (open && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
+      // Pose stream at tick rate — but NOT while a travel swap awaits its
+      // worldSync: the fresh replica seated `self` at a generic spawn, and
+      // streaming that transient position can walk the server player out of
+      // the arrival portal (clearing the latch — an idle player then re-dwells
+      // and ping-pongs between dimensions).
+      if (open && !adoptSelfFromSync && nowMs - lastPoseSentMs >= TICK_SECONDS * 1000) {
         lastPoseSentMs = nowMs;
         seq += 1;
         delayedSend(
           encodeClientMessage({
             t: "pose",
             seq,
+            d: state.dimension,
             x: qPos(self.position.x),
             y: qPos(self.position.y),
             z: qPos(self.position.z),

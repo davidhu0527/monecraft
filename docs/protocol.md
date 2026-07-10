@@ -1,4 +1,4 @@
-# Wire protocol (v3)
+# Wire protocol (v4)
 
 The client↔game-server protocol, defined in `lib/net/protocol.ts` (single
 source of truth — this page is the narrative). Versioned as a whole via
@@ -52,6 +52,10 @@ the join payload is KBs, not the 37 MB voxel field.
   looked). Validated against a per-type **allow-list**; local-presentation
   commands (pause/debug/camera) never travel. Budget: 60/s (attacks
   additionally 12/s — see the rewind note below).
+- `d` on `pose` and `cmd` (v4, required) — the dimension the sender believes
+  it is in. The **travel race guard**: frames in flight when the server
+  swapped the sender's dimension carry the old stamp and are silently dropped
+  (no `forcePose` fight, no raycast into the wrong world).
 - `view` on `cmd` (v3, optional) — the sender's render-time view of the world:
   ms on the server tick timeline (`tick × 50`), i.e. the instant the
   interpolated mobs on their screen were sampled at. Attacks carry it once the
@@ -93,6 +97,24 @@ carries `mountedVehicleId` (on mount/dismount) plus the authoritative `x/y/z`
 (while mounted). The replica adopts that mount state and snaps to the position,
 skipping its own motion integration until it dismounts.
 
+**Dimensions (v4).** A room simulates one engine **per active dimension**
+(overworld always; the nether lazily), and every tick channel is scoped to
+the recipient's dimension: `blocks`/`ev`/`pp`/`mp`/`vp`/`prj` and
+`mobsKeyframe` describe only the world the recipient is in (a cross-dimension
+keyframe would mass-prune the replica's mobs, since keyframes delete by
+absence). `chat`, `playerJoined`/`playerLeft`, `pong`, and `day` stay global.
+Where each player is rides the roster (`RosterEntry.dim`), the recipient's
+own dimension rides `welcome.dimension`, and every `worldSync` is stamped
+with the dimension it describes (a stale resync racing a travel swap is
+ignored). **Travel** is server-initiated: portal dwell runs in the server
+engine, and on travel the server moves the player between its dimension
+engines, then sends the traveler `dim { dimension, tick, dayClock }` followed
+immediately by a fresh gzipped `worldSync` for the target — the client
+rebuilds its replica engine and renderer in place, **without dropping the
+socket** (the online analog of single-player's save-and-remount). Everyone
+else gets `playerDim { id, dimension }` (roster tag, toast, and replica
+prune/adopt of that player's avatar).
+
 Backpressure: past 256 KB buffered, a client's `pp`/`mp`/`vp`/`prj` are shed
 (events and `self` still flow); sustained >1 MB is a `4008` kick.
 
@@ -108,6 +130,28 @@ same room in place. The server closes the player's _previous_ socket with
 path (a client that's still connected but suspects drift asks for a fresh
 world-sync + keyframe). Fatal closes are not retried; after the ladder is
 exhausted the client shows the disconnect modal.
+
+## Version bump & rollout
+
+`PROTOCOL_VERSION` is compiled into both sides, and a mismatch is a **fatal**
+close (`4001`, or `4000` via the ticket's `pv`), so a bump must ship to the
+web app and the game server together:
+
+1. Land the bump on `main` as part of one commit range — the gated CI
+   pipeline deploys Vercel and Fly **from the same SHA** (see
+   [deploy.md](deploy.md#continuous-deployment-gated-on-ci)); never deploy a
+   protocol bump to one side by hand.
+2. The Fly rollout SIGTERM-drains rooms (persist + close `4005`); clients
+   walk the reconnect ladder.
+3. **The mismatch window is inherent and bounded**: a browser still running
+   the old bundle mints a ticket stamped with the old `pv` and is refused
+   (`4000`/`4001`, no retry) until the page reloads and picks up the new
+   bundle. That refusal is the design — a stale client must never talk a
+   stale dialect to a new server. The disconnect modal's guidance ("reload
+   the page") is the recovery.
+4. Verify `/health`, then a two-browser smoke join.
+5. Add the version's delta to this page (see the v4 section above for the
+   precedent).
 
 ## Close codes
 

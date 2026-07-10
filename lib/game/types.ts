@@ -387,7 +387,8 @@ export type SavedPlayer = {
   xp?: number;
   stats?: SavedStat[];
   advancements?: string[];
-  spawnPoint?: { x: number; y: number; z: number } | null;
+  /** `dimension` (optional, additive — no version bump) records where the bed stands; absent = overworld. */
+  spawnPoint?: { x: number; y: number; z: number; dimension?: DimensionId } | null;
   dimension?: DimensionId;
   portalArrival?: { x: number; y: number; z: number };
 };

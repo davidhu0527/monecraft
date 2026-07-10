@@ -32,13 +32,15 @@ const WELCOME: WelcomeMessage = {
   dayClock: 60,
   tick: 100,
   role: "owner",
-  players: [{ id: "acct-1", name: "Alpha", skinId: null, x: 5, y: 40, z: 5, yaw: 0 }]
+  dimension: "overworld" as const,
+  players: [{ id: "acct-1", name: "Alpha", skinId: null, dim: "overworld" as const, x: 5, y: 40, z: 5, yaw: 0 }]
 };
 
 function worldSync(players: WorldSync["players"], overrides: Partial<WorldSync> = {}): WorldSync {
   return {
     t: "worldSync",
     tick: 100,
+    dimension: "overworld",
     dayClock: 60,
     changes: [],
     blockEntities: [],
@@ -631,4 +633,139 @@ describe("predictive block breaking + instant swing", () => {
     expect("view" in lastCmd()).toBe(false);
     session.dispose();
   });
+});
+
+describe("dimension travel (the nether online)", () => {
+  /** The nether generator needs real vertical room; the engine suite's proven nether test size. */
+  const NETHER_SIZE = { x: 64, y: 150, z: 64 };
+  const netherSync = (players: WorldSync["players"]) => worldSync(players, { dimension: "nether", tick: 200 });
+  const mySpot = (x: number, y: number, z: number, dim: "overworld" | "nether") => [{ id: "acct-1", name: "Alpha", skinId: null, dim, x, y, z, yaw: 0 }];
+
+  test("a dim frame rebuilds the replica in place: engine rebound, socket alive, self seated from the sync", async () => {
+    const { make, instances } = socketFactory();
+    const dims: string[] = [];
+    const session = await connectNetworkSession("ws://game", "ticket-1", { onDimension: (d) => dims.push(d) }, { makeSocket: make, worldSize: NETHER_SIZE });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    expect(session.status()).toBe("online");
+    const engineBefore = session.engine;
+
+    instances[0].emit(JSON.stringify({ t: "dim", dimension: "nether", tick: 200, dayClock: 61 }));
+    // The swap is immediate and in place: new engine, same socket, syncing.
+    expect(session.engine).not.toBe(engineBefore);
+    expect(session.engine.state.dimension).toBe("nether");
+    expect(session.status()).toBe("syncing");
+    expect(instances).toHaveLength(1);
+    expect(dims).toEqual(["nether"]);
+    // The local traveler's toast event fires through the drain.
+    expect(session.drainEvents().some((e) => e.type === "playerDimension" && e.playerId === "acct-1" && e.dimension === "nether")).toBe(true);
+
+    // The matching sync seats us at the arrival portal and flips us online.
+    await pushWorldSync(instances[0], netherSync(mySpot(20, 40, 20, "nether")));
+    expect(session.status()).toBe("online");
+    expect(session.engine.state.player.position.x).toBeCloseTo(20, 5);
+    expect(session.engine.state.player.position.y).toBeCloseTo(40, 5);
+
+    // Outgoing frames now stamp the new dimension.
+    session.afterFrame(10_000);
+    const lastPose = instances[0].sent
+      .map((s) => JSON.parse(s) as { t: string; d?: string })
+      .filter((m) => m.t === "pose")
+      .at(-1);
+    expect(lastPose?.d).toBe("nether");
+    session.dispose();
+  });
+
+  test("the pose stream pauses between the dim swap and its worldSync (the fresh replica's spawn is transient)", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: NETHER_SIZE });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    session.afterFrame(5_000); // baseline: online poses flow
+    const posesBefore = instances[0].sent.filter((s) => (JSON.parse(s) as { t: string }).t === "pose").length;
+    expect(posesBefore).toBeGreaterThan(0);
+
+    instances[0].emit(JSON.stringify({ t: "dim", dimension: "nether", tick: 200, dayClock: 61 }));
+    // Mid-swap: self sits at a generic spawn the sync hasn't corrected yet —
+    // streaming it could walk the server player out of the arrival portal.
+    session.afterFrame(10_000);
+    session.afterFrame(10_100);
+    expect(instances[0].sent.filter((s) => (JSON.parse(s) as { t: string }).t === "pose").length).toBe(posesBefore);
+
+    // The sync seats us; the stream resumes with the new stamp.
+    await pushWorldSync(instances[0], netherSync(mySpot(20, 40, 20, "nether")));
+    session.afterFrame(20_000);
+    const poses = instances[0].sent.map((s) => JSON.parse(s) as { t: string; d?: string }).filter((m) => m.t === "pose");
+    expect(poses.length).toBe(posesBefore + 1);
+    expect(poses.at(-1)?.d).toBe("nether");
+    session.dispose();
+  });
+
+  test("a stale worldSync for the departed dimension is ignored", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: NETHER_SIZE });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    instances[0].emit(JSON.stringify({ t: "dim", dimension: "nether", tick: 200, dayClock: 61 }));
+    // An overworld-stamped sync racing the swap (a resync answered pre-travel)
+    // must not land in the nether replica.
+    await pushWorldSync(instances[0], worldSync(mySpot(9, 40, 9, "overworld")));
+    expect(session.status()).toBe("syncing");
+    expect(session.engine.state.dimension).toBe("nether");
+
+    await pushWorldSync(instances[0], netherSync(mySpot(20, 40, 20, "nether")));
+    expect(session.status()).toBe("online");
+    session.dispose();
+  });
+
+  test("playerDim prunes a remote avatar that left our dimension and the pose stream re-adopts it on return", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    const bob = { id: "acct-2", name: "Bob", skinId: null, dim: "overworld" as const, x: 8, y: 40, z: 8, yaw: 0 };
+    await pushWorldSync(instances[0], worldSync([...WELCOME.players, bob]));
+    expect(session.engine.state.players.has("acct-2")).toBe(true);
+
+    instances[0].emit(JSON.stringify({ t: "playerDim", id: "acct-2", dimension: "nether" }));
+    expect(session.engine.state.players.has("acct-2")).toBe(false); // no avatar in the wrong terrain
+    expect(session.roster().find((m) => m.id === "acct-2")?.dimension).toBe("nether"); // still in the world
+    expect(session.drainEvents().some((e) => e.type === "playerDimension" && e.playerId === "acct-2")).toBe(true);
+
+    // Back to our dimension: the next pose frame re-adds them at their real spot.
+    instances[0].emit(JSON.stringify({ t: "playerDim", id: "acct-2", dimension: "overworld" }));
+    expect(session.engine.state.players.has("acct-2")).toBe(false); // not yet — no flash at world spawn
+    instances[0].emit(tick(undefined, { pp: [{ id: "acct-2", x: 9, y: 40, z: 9, yaw: 0, pitch: 0 }] }));
+    expect(session.engine.state.players.has("acct-2")).toBe(true);
+    session.dispose();
+  });
+
+  test("a welcome that says nether boots a nether replica (rejoin where you left)", async () => {
+    const { make, instances } = socketFactory({ ...WELCOME, dimension: "nether", players: mySpot(20, 40, 20, "nether") });
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: NETHER_SIZE });
+    expect(session.engine.state.dimension).toBe("nether");
+    await pushWorldSync(instances[0], netherSync(mySpot(20, 40, 20, "nether")));
+    expect(session.status()).toBe("online");
+    session.dispose();
+  });
+
+  test("a reconnect whose welcome says another dimension adopts it before the resync", async () => {
+    const welcome = { ...WELCOME, players: [...WELCOME.players] };
+    const { make, instances } = socketFactory(welcome);
+    const session = await connectNetworkSession(
+      "ws://game",
+      "ticket-1",
+      {},
+      { makeSocket: make, worldSize: NETHER_SIZE, reconnect: async () => ({ url: "ws://game", ticket: "ticket-2" }) }
+    );
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    expect(session.engine.state.dimension).toBe("overworld");
+
+    // While we were away the server moved us (drop raced a travel).
+    welcome.dimension = "nether";
+    welcome.players = mySpot(20, 40, 20, "nether");
+    instances[0].emitClose(4004, "idle");
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(instances).toHaveLength(2);
+    expect(session.engine.state.dimension).toBe("nether");
+    await pushWorldSync(instances[1], netherSync(mySpot(20, 40, 20, "nether")));
+    expect(session.status()).toBe("online");
+    session.dispose();
+  }, 10_000);
 });

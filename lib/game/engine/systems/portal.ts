@@ -183,7 +183,10 @@ export function tickPortalDwell(state: GameState, player: PlayerState, dt: numbe
   const fz = Math.floor(player.position.z);
   const feetInPortal = world.get(fx, fy, fz) === BlockId.NetherPortal;
   const bodyInPortal = world.get(fx, fy + 1, fz) === BlockId.NetherPortal;
-  if (!feetInPortal && !bodyInPortal) {
+  // A mounted player reads as outside the portal: travel can't bring the
+  // vehicle along (it belongs to this dimension's state), so a raft drifting
+  // through a frame must never fire — dismounting inside starts a fresh dwell.
+  if (player.mountedVehicleId != null || (!feetInPortal && !bodyInPortal)) {
     player.timers.portalDwellSeconds = 0;
     player.timers.portalLatched = false;
     return;

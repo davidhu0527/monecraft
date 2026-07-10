@@ -865,6 +865,12 @@ describe("stat restoration helpers", () => {
     expect(restoreSpawnPoint({ ...base, spawnPoint: null })).toBeNull();
   });
 
+  test("spawnPoint carries a valid dimension stamp and drops a bogus one", () => {
+    expect(restoreSpawnPoint({ ...base, spawnPoint: { x: 1, y: 2, z: 3, dimension: "nether" } })).toEqual({ x: 1, y: 2, z: 3, dimension: "nether" });
+    // A tampered stamp restores as an unstamped (overworld) bed, not a crash.
+    expect(restoreSpawnPoint({ ...base, spawnPoint: { x: 1, y: 2, z: 3, dimension: "moon" as never } })).toEqual({ x: 1, y: 2, z: 3 });
+  });
+
   test("player position is preserved as floats and rejects non-finite coords", () => {
     // Unlike the floored spawn point, the player position keeps its fractional part.
     expect(restorePlayerPosition(base)).toEqual({ x: 100.5, y: 48, z: 200.25 });
