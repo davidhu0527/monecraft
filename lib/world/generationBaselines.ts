@@ -39,12 +39,12 @@ export const WORLDGEN_BASELINES = {
    */
   nether: {
     /** Full-size 512×150×512, seed 1337 — the real save-compat surface. */
-    full512Seed1337: "3d5e084e0fae1d071c8728f6a49b72698184bd304c504141ab6302841b4bd8a4",
+    full512Seed1337: "dc77fbde804522f80ebb66b722d07fcdefddf3033944d0081e73da9f4aaf3fa2",
     /** 128×150×128 per seed. */
     small128: {
-      1337: "93ecfdda32cc1f6ec517bc7f887b6b8ebba3cb7e93058fbf79f34b5e2b11bd7d",
-      1: "87df8fafea2055299a7749484bee80186d05e7b778ad59a9d28db3e3db027e2f",
-      999999937: "1fb377479c14951aec785122b8fcaf64460abf783ec1ecb02089725390e24fdc"
+      1337: "90829a3a4f8cf0f45fae1168f43b8d3f5c75780f2be977985d7ceac082372051",
+      1: "04963e7ee60d70b300a53eaf1cec12d6db376f544aa288e49fc039bf0de1fe38",
+      999999937: "73d3423d696655623a6dccf7214d28d14d2936e1ac74067f196a3d00c1678625"
     }
   }
 } as const;

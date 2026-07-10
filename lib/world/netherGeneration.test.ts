@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BlockId } from "@/lib/world";
-import { NETHER_GEN, generateNetherWorld } from "@/lib/world/netherGeneration";
+import { NETHER_GEN, collectFortressSites, generateNetherWorld } from "@/lib/world/netherGeneration";
 import { VoxelWorld } from "@/lib/world/voxelWorld";
 import { WORLDGEN_BASELINES } from "@/lib/world/generationBaselines";
 import { createNetherFloorYAt } from "@/lib/game/spawn";
@@ -62,9 +62,11 @@ describe("nether structural probes", () => {
         for (let x = 0; x < world.sizeX; x += 1) {
           if (world.get(x, y, z) !== BlockId.Glowstone) continue;
           clusters += 1;
-          // Every cluster cell is anchored: itself or a neighbor touches netherrack above.
+          // Every cluster cell is anchored: itself or a neighbor touches a
+          // ceiling above — netherrack caverns or a fortress's brick roof.
           const anchored =
             world.get(x, y + 1, z) === BlockId.Netherrack ||
+            world.get(x, y + 1, z) === BlockId.NetherBrick ||
             world.get(x, y + 1, z) === BlockId.Glowstone ||
             world.get(x - 1, y, z) === BlockId.Glowstone ||
             world.get(x + 1, y, z) === BlockId.Glowstone;
@@ -111,5 +113,50 @@ describe("nether structural probes", () => {
     }
     expect(pockets).toBeGreaterThan(10);
     expect(tiny.get(10, tiny.sizeY - 1, 10)).toBe(BlockId.Bedrock);
+  });
+});
+
+describe("nether fortresses", () => {
+  const world = makeNether(128, 150, 128, 1337);
+  const sites = collectFortressSites(world);
+
+  test("at least one fortress stands in a 128³ world", () => {
+    expect(sites.chestIndices.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("collectFortressSites re-derives the exact chest/spawner cells the build wrote", () => {
+    // Derive is a pure replay: every derived index holds the fixture block…
+    for (const idx of sites.chestIndices) expect(world.blocks[idx]).toBe(BlockId.Chest);
+    for (const idx of sites.spawnerIndices) expect(world.blocks[idx]).toBe(BlockId.Spawner);
+    // …and the census closes the loop: every chest and spawner in the whole
+    // nether belongs to a fortress site (nothing else places either block).
+    const chestSet = new Set(sites.chestIndices);
+    const spawnerSet = new Set(sites.spawnerIndices);
+    for (let i = 0; i < world.blocks.length; i += 1) {
+      if (world.blocks[i] === BlockId.Chest) expect(chestSet.has(i)).toBe(true);
+      if (world.blocks[i] === BlockId.Spawner) expect(spawnerSet.has(i)).toBe(true);
+    }
+  });
+
+  test("derivation is deterministic (collect twice is identical)", () => {
+    const again = collectFortressSites(world);
+    expect(again.chestIndices).toEqual(sites.chestIndices);
+    expect(again.spawnerIndices).toEqual(sites.spawnerIndices);
+  });
+
+  test("keep interiors are carved (air stands over every spawner)", () => {
+    const layer = world.sizeX * world.sizeZ;
+    for (const idx of sites.spawnerIndices) {
+      expect(world.blocks[idx + layer]).toBe(BlockId.Air);
+      expect(world.blocks[idx + layer * 2]).toBe(BlockId.Air);
+    }
+  });
+
+  test("fortresses are built of nether brick around their fixtures", () => {
+    const layer = world.sizeX * world.sizeZ;
+    for (const idx of sites.chestIndices) {
+      // The floor pad directly under every chest is fortress brick.
+      expect(world.blocks[idx - layer]).toBe(BlockId.NetherBrick);
+    }
   });
 });

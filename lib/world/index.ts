@@ -43,7 +43,7 @@ export {
   type TreasureSites,
   type VillageSites
 } from "./generation";
-export { generateNetherWorld } from "./netherGeneration";
+export { collectFortressSites, generateNetherWorld, type FortressSites } from "./netherGeneration";
 export { isWorldType, WORLD_TYPE_IDS, type WorldType } from "./worldTypes";
 export { buildGeometryLayersRegion, buildGeometryRegion, type GeometryLayers } from "./meshing";
 export { applyEdit, blockLightAt, computeFullLight, emission, isLightBlocker, MAX_LIGHT, opacity, skyLightAt } from "./lighting";

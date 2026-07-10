@@ -34,7 +34,17 @@ export const NETHER_GEN = Object.freeze({
   glowstoneChance: 0.045,
   // Blazite veins per 512×512, confined to the deep mass.
   blaziteVeinCount: 150,
-  blaziteMaxY: 40
+  blaziteMaxY: 40,
+  // Fortresses: nether-brick keeps with four bridged watchtowers, holding the
+  // dimension's loot chests and spawners. Placement acceptance is PRNG-pure
+  // (bounds + separation only, no block reads — the nether has no seed-pure
+  // surface function), so collectFortressSites re-derives identical sites on
+  // load by replaying the stream. No spawn-distance gate: a portal exits at
+  // its overworld coordinates, so no cell is "the" nether spawn to protect.
+  fortressCount: 10,
+  fortressMinSeparation: 72,
+  // Keeps sit just above the lava seas so their bridges span open chambers.
+  fortressBaseY: 40
 });
 
 function mulberry32(seed: number): () => number {
@@ -58,6 +68,10 @@ export function generateNetherWorld(world: VoxelWorld): void {
   floodLavaSea(world);
   placeGlowstoneClusters(world);
   placeBlaziteOre(world, mulberry32((world.seed >>> 0) ^ 0x3c6ef372));
+  // Fortresses run after the lava flood (their carved bridges must stay air,
+  // never re-flood) and before the defensive cap pass, on their own PRNG
+  // stream (0x7f4a7c15) so every earlier pass stays byte-identical.
+  placeNetherFortresses(world);
   sealBedrockCaps(world);
 }
 
@@ -198,6 +212,188 @@ function placeBlaziteOre(world: VoxelWorld, rand: () => number): void {
       else z = Math.max(1, Math.min(world.sizeZ - 2, z + dir));
     }
   }
+}
+
+// ── Fortresses ──────────────────────────────────────────────────────────────
+// Nether-brick strongholds: an 11×11 central keep, four covered bridges, and a
+// 7×7 watchtower at each bridge's end. Like overworld dungeons, chest CONTENTS
+// are filled lazily by the engine on first open — the world carries only the
+// blocks, and collectFortressSites() re-derives every chest/spawner voxel index
+// on load by replaying this exact placement math. The lockstep invariants
+// mirror buildDungeons: a dedicated PRNG seeded only from world.seed with a
+// FIXED number of draws per attempt, and acceptance that reads no blocks at
+// all (bounds + separation are pure functions of the draws), because the
+// carved nether has no seed-pure surface estimate to validate against.
+
+type FortressSink = { chest: (idx: number) => void; spawner: (idx: number) => void };
+
+const NOOP_FORTRESS_SINK: FortressSink = { chest: () => {}, spawner: () => {} };
+
+const FORTRESS_KEEP_HALF = 5; // 11×11 outer keep
+const FORTRESS_TOWER_HALF = 3; // 7×7 outer towers
+const FORTRESS_ARM_MIN = 12;
+const FORTRESS_ARM_SPAN = 13; // arm length 12–24
+/** Bridge directions in draw order: N, E, S, W. */
+const FORTRESS_DIRECTIONS: ReadonlyArray<readonly [number, number]> = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0]
+];
+
+/** One fortress attempt's up-front draws (fixed count — the stream-alignment invariant). */
+type FortressPlan = {
+  cx: number;
+  cz: number;
+  armLengths: number[];
+  secondChest: boolean;
+  hasSpawner: boolean;
+  towerChests: boolean[];
+};
+
+/** The structure's horizontal reach from center along one arm (keep + bridge + tower). */
+function fortressReach(armLength: number): number {
+  return FORTRESS_KEEP_HALF + armLength + FORTRESS_TOWER_HALF * 2;
+}
+
+function buildNetherFortresses(world: VoxelWorld, write: boolean, sink: FortressSink): void {
+  const rand = mulberry32((world.seed >>> 0) ^ 0x7f4a7c15);
+  const baseY = NETHER_GEN.fortressBaseY;
+  // Small worlds need extra attempts: their bounds reject most draws, and the
+  // engine's tiny headless nether worlds should still usually hold a fortress.
+  const attempts = Math.max(10, scaledByArea(NETHER_GEN.fortressCount, world));
+  // The whole silhouette (floor pad at baseY-1 up to the roof at baseY+4)
+  // must stay well clear of the bedrock ceiling cap.
+  const fits = baseY + 6 <= world.sizeY - 8;
+  const accepted: Array<readonly [number, number]> = [];
+
+  for (let i = 0; i < attempts; i += 1) {
+    // Draw every random up front so the stream advances identically whether or
+    // not this fortress turns out to be placeable (the buildDungeons invariant).
+    const plan: FortressPlan = {
+      cx: 16 + Math.floor(rand() * (world.sizeX - 32)),
+      cz: 16 + Math.floor(rand() * (world.sizeZ - 32)),
+      armLengths: FORTRESS_DIRECTIONS.map(() => FORTRESS_ARM_MIN + Math.floor(rand() * FORTRESS_ARM_SPAN)),
+      secondChest: rand() < 0.5,
+      hasSpawner: rand() < 0.75,
+      towerChests: FORTRESS_DIRECTIONS.map(() => rand() < 0.6)
+    };
+
+    if (!fits) continue;
+    const [n, e, s, w] = plan.armLengths;
+    if (plan.cz - fortressReach(n) < 2 || plan.cz + fortressReach(s) > world.sizeZ - 3) continue;
+    if (plan.cx - fortressReach(w) < 2 || plan.cx + fortressReach(e) > world.sizeX - 3) continue;
+    // Separation keeps two fortresses' longest opposing arms from ever
+    // touching (2 × max reach = 70 < 72), so no build overwrites another's.
+    if (accepted.some(([px, pz]) => Math.hypot(plan.cx - px, plan.cz - pz) < NETHER_GEN.fortressMinSeparation)) continue;
+
+    accepted.push([plan.cx, plan.cz]);
+    buildFortress(world, plan, write, sink);
+  }
+}
+
+/** Shell room: floor pad, windowed walls, roof, interior air, glowstone corner lamps. */
+function buildFortressRoom(world: VoxelWorld, cx: number, cz: number, half: number, baseY: number): void {
+  for (let y = baseY - 1; y <= baseY + 4; y += 1) {
+    for (let x = cx - half; x <= cx + half; x += 1) {
+      for (let z = cz - half; z <= cz + half; z += 1) {
+        if (!world.inBounds(x, y, z)) continue;
+        const interior = Math.abs(x - cx) < half && Math.abs(z - cz) < half && y >= baseY && y <= baseY + 3;
+        if (interior) {
+          world.set(x, y, z, BlockId.Air);
+          continue;
+        }
+        // Window gaps in the mid wall band (never corners), gated per cell by a
+        // seeded position hash — consumes no PRNG, like the glowstone gate.
+        const wallBand = y === baseY + 1 || y === baseY + 2;
+        const corner = Math.abs(x - cx) === half && Math.abs(z - cz) === half;
+        if (wallBand && !corner && cellHash01(x, y, z, world.seed, 0x3ad8025f) < 0.2) {
+          world.set(x, y, z, BlockId.Air);
+        } else {
+          world.set(x, y, z, BlockId.NetherBrick);
+        }
+      }
+    }
+  }
+  // Glowstone lamps tucked into the interior ceiling corners.
+  const lampOffset = half - 2;
+  for (const ox of [-lampOffset, lampOffset]) {
+    for (const oz of [-lampOffset, lampOffset]) {
+      if (world.inBounds(cx + ox, baseY + 3, cz + oz)) world.set(cx + ox, baseY + 3, cz + oz, BlockId.Glowstone);
+    }
+  }
+}
+
+/** Covered bridge from the keep wall to (and through) the tower wall: 5-wide floor, railed edges, 3×3 cleared gallery. */
+function buildFortressBridge(world: VoxelWorld, cx: number, cz: number, dx: number, dz: number, armLength: number, baseY: number): void {
+  const from = FORTRESS_KEEP_HALF;
+  const to = FORTRESS_KEEP_HALF + armLength; // reaches the tower's outer wall
+  for (let step = from; step <= to; step += 1) {
+    for (let p = -2; p <= 2; p += 1) {
+      // Perpendicular offset: for an x-arm the walkway spreads in z, and vice versa.
+      const x = cx + dx * step + (dz !== 0 ? p : 0);
+      const z = cz + dz * step + (dx !== 0 ? p : 0);
+      if (!world.inBounds(x, baseY - 1, z)) continue;
+      world.set(x, baseY - 1, z, BlockId.NetherBrick);
+      if (Math.abs(p) === 2) {
+        // Railing on the outer edges (only along the open span, not in doorways).
+        if (step > from && step < to) world.set(x, baseY, z, BlockId.NetherBrick);
+      } else {
+        // The 3-wide gallery: cleared air punches the doorways through the keep
+        // wall (step === from) and the tower wall (step === to) automatically.
+        for (let y = baseY; y <= baseY + 2; y += 1) world.set(x, y, z, BlockId.Air);
+      }
+    }
+  }
+}
+
+function buildFortress(world: VoxelWorld, plan: FortressPlan, write: boolean, sink: FortressSink): void {
+  const baseY = NETHER_GEN.fortressBaseY;
+  const { cx, cz } = plan;
+  if (write) {
+    buildFortressRoom(world, cx, cz, FORTRESS_KEEP_HALF, baseY);
+    for (let d = 0; d < FORTRESS_DIRECTIONS.length; d += 1) {
+      const [dx, dz] = FORTRESS_DIRECTIONS[d];
+      const armLength = plan.armLengths[d];
+      const towerOffset = FORTRESS_KEEP_HALF + armLength + FORTRESS_TOWER_HALF;
+      buildFortressRoom(world, cx + dx * towerOffset, cz + dz * towerOffset, FORTRESS_TOWER_HALF, baseY);
+      buildFortressBridge(world, cx, cz, dx, dz, armLength, baseY);
+    }
+    // Fixtures land last so no shell/bridge write can overwrite them.
+    world.set(cx - 3, baseY, cz - 3, BlockId.Chest);
+    if (plan.secondChest) world.set(cx + 3, baseY, cz + 3, BlockId.Chest);
+    if (plan.hasSpawner) world.set(cx, baseY, cz, BlockId.Spawner);
+  }
+  sink.chest(world.index(cx - 3, baseY, cz - 3));
+  if (plan.secondChest) sink.chest(world.index(cx + 3, baseY, cz + 3));
+  if (plan.hasSpawner) sink.spawner(world.index(cx, baseY, cz));
+  for (let d = 0; d < FORTRESS_DIRECTIONS.length; d += 1) {
+    if (!plan.towerChests[d]) continue;
+    const [dx, dz] = FORTRESS_DIRECTIONS[d];
+    const towerOffset = FORTRESS_KEEP_HALF + plan.armLengths[d] + FORTRESS_TOWER_HALF;
+    if (write) world.set(cx + dx * towerOffset, baseY, cz + dz * towerOffset, BlockId.Chest);
+    sink.chest(world.index(cx + dx * towerOffset, baseY, cz + dz * towerOffset));
+  }
+}
+
+function placeNetherFortresses(world: VoxelWorld): void {
+  buildNetherFortresses(world, true, NOOP_FORTRESS_SINK);
+}
+
+export type FortressSites = { chestIndices: number[]; spawnerIndices: number[] };
+
+/**
+ * Re-derives the voxel indices of every fortress chest and spawner WITHOUT
+ * writing blocks, by replaying buildNetherFortresses' placement math — the
+ * nether twin of collectDungeonSites. The engine calls this once after
+ * regenerating a nether world on load to rebuild the session-only site sets
+ * that gate lazy loot fill and spawner activation.
+ */
+export function collectFortressSites(world: VoxelWorld): FortressSites {
+  const chestIndices: number[] = [];
+  const spawnerIndices: number[] = [];
+  buildNetherFortresses(world, false, { chest: (idx) => chestIndices.push(idx), spawner: (idx) => spawnerIndices.push(idx) });
+  return { chestIndices, spawnerIndices };
 }
 
 /** Defensive: the caps are load-bearing (skylight zeroing, world border). */
