@@ -190,27 +190,53 @@ export async function connectNetworkSession(
   // one-way delay (round-trip ≈ 2×ms), matching how a player would set it.
   // Jitter randomizes each message's delay (Math.random is fine here: net
   // tooling, never seed-determined bytes) but delivery stays FIFO — TCP never
-  // reorders, and the seq/journal handling downstream assumes order — so each
-  // direction keeps a monotonic delivery cursor.
-  let lastSendDeliveryMs = 0;
-  let lastRecvDeliveryMs = 0;
+  // reorders, and the seq/journal handling downstream assumes order. Each
+  // direction drains through a queued delay line: a monotonic delivery cursor
+  // makes deadlines non-decreasing, and ONE timer chain delivers in queue
+  // order. A setTimeout per message would leave ordering to the timer heap's
+  // tie-breaking, which is not stable for equal deadlines — and the cursor
+  // clamps bursts to exactly-equal deadlines, so ties are the common case.
   const simDelayMs = () => Math.max(0, simulatedLatencyMs + (simulatedJitterMs > 0 ? (Math.random() * 2 - 1) * simulatedJitterMs : 0));
+  const delayLine = () => {
+    const queue: Array<{ deliverAt: number; fire: () => void }> = [];
+    let cursor = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const drain = () => {
+      timer = null;
+      const now = performance.now();
+      while (queue.length > 0 && queue[0].deliverAt <= now) queue.shift()!.fire();
+      if (queue.length > 0) timer = setTimeout(drain, Math.max(0, queue[0].deliverAt - now));
+    };
+    return {
+      push(fire: () => void) {
+        const now = performance.now();
+        const deliverAt = Math.max(now + simDelayMs(), cursor);
+        cursor = deliverAt;
+        queue.push({ deliverAt, fire });
+        if (timer === null) timer = setTimeout(drain, deliverAt - now);
+      },
+      clear() {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        queue.length = 0;
+      }
+    };
+  };
+  const sendLine = delayLine();
+  const recvLine = delayLine();
 
   const delayedSend = (data: string) => {
     const socket = ws;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     traffic.outBytes += data.length;
     if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
-      const now = performance.now();
-      const deliverAt = Math.max(now + simDelayMs(), lastSendDeliveryMs);
-      lastSendDeliveryMs = deliverAt;
-      setTimeout(() => {
+      sendLine.push(() => {
         try {
           if (socket.readyState === WebSocket.OPEN) socket.send(data);
         } catch {
           /* socket closed under us */
         }
-      }, deliverAt - now);
+      });
       return;
     }
     socket.send(data);
@@ -514,10 +540,7 @@ export async function connectNetworkSession(
   const onServerFrame = (data: unknown) => {
     traffic.inBytes += typeof data === "string" ? data.length : ((data as ArrayBuffer).byteLength ?? 0);
     if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
-      const now = performance.now();
-      const deliverAt = Math.max(now + simDelayMs(), lastRecvDeliveryMs);
-      lastRecvDeliveryMs = deliverAt;
-      setTimeout(() => void processServerFrame(data), deliverAt - now);
+      recvLine.push(() => void processServerFrame(data));
       return;
     }
     void processServerFrame(data);
@@ -834,6 +857,8 @@ export async function connectNetworkSession(
     dispose() {
       disposed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      sendLine.clear();
+      recvLine.clear();
       setStatus("closed", "left world");
       try {
         ws?.close(1000, "leaving");
