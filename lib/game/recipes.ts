@@ -150,6 +150,19 @@ const CRAFTING_RECIPES: Recipe[] = [
   { id: "plank_stairs", label: "6 Planks -> 4 Plank Stairs", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "plank_stairs", count: 4 } },
   { id: "stone_stairs", label: "6 Stone -> 4 Stone Stairs", cost: [{ slotId: "stone", count: 6 }], result: { slotId: "stone_stairs", count: 4 } },
   { id: "cobble_stairs", label: "6 Cobble -> 4 Cobble Stairs", cost: [{ slotId: "cobble", count: 6 }], result: { slotId: "cobble_stairs", count: 4 } },
+  // The fortress material joins the half-block family at the same ratios.
+  {
+    id: "nether_brick_slab",
+    label: "3 Nether Brick -> 6 Nether Brick Slab",
+    cost: [{ slotId: "nether_brick", count: 3 }],
+    result: { slotId: "nether_brick_slab", count: 6 }
+  },
+  {
+    id: "nether_brick_stairs",
+    label: "6 Nether Brick -> 4 Nether Brick Stairs",
+    cost: [{ slotId: "nether_brick", count: 6 }],
+    result: { slotId: "nether_brick_stairs", count: 4 }
+  },
   {
     id: "torch",
     label: "1 Coal + 1 Wood -> 4 Torch",

@@ -68,12 +68,16 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
 
         if (block === BlockId.Grass && face === "side" && y < 4) c = tone(BLOCK_COLORS[BlockId.Grass], 0.95 + n * 0.15);
         // Slabs/stairs inherit their material's accent so cut blocks read as
-        // the same substance (plank grain / stone-cobble speckle).
+        // the same substance (plank grain / stone-cobble speckle / brick mortar).
+        const netherBrickLike = block === BlockId.NetherBrick || (block >= BlockId.NetherBrickSlab && block <= BlockId.NetherBrickStairsWest);
         const stoneLike =
           block === BlockId.Stone ||
           block === BlockId.Cobblestone ||
           block === BlockId.Bedrock ||
-          (isPartialBlock(block) && block !== BlockId.PlankSlab && !(block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest));
+          (isPartialBlock(block) &&
+            !netherBrickLike &&
+            block !== BlockId.PlankSlab &&
+            !(block >= BlockId.PlankStairsNorth && block <= BlockId.PlankStairsWest));
         const plankLike =
           block === BlockId.Wood ||
           block === BlockId.Planks ||
@@ -157,9 +161,10 @@ export function createBlockAtlasTexture(): THREE.CanvasTexture {
           if (n < 0.22) c = tone([0.3, 0.1, 0.09], 0.85 + n * 0.4);
           if (n > 0.8) c = tone([1, 0.55, 0.12], 0.9 + n * 0.25);
         }
-        if (block === BlockId.NetherBrick) {
+        if (netherBrickLike) {
           // Dressed fortress brick: dark mortar seams on a staggered 8x4 grid
           // (offset alternate courses like real brickwork) over the maroon base.
+          // The slab/stair variants carry the same coursework.
           const course = Math.floor(y / 4);
           const seam = y % 4 === 0 || (x + (course % 2 === 0 ? 0 : 4)) % 8 === 0;
           if (seam) c = tone([0.12, 0.06, 0.07], 0.9 + n * 0.2);

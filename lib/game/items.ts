@@ -126,7 +126,13 @@ export const BREAK_HARDNESS: Partial<Record<BlockId, number>> = {
   // Fired brick breaks like the enchanting table — sturdier than raw netherrack.
   [BlockId.NetherBrick]: 6,
   // Between ruby (9) and sliver (7): a mid-tier ore worth a dedicated dig.
-  [BlockId.RedstoneOre]: 8
+  [BlockId.RedstoneOre]: 8,
+  // Half-blocks break a touch faster than their full material (the 75-89 rule).
+  [BlockId.NetherBrickSlab]: 4,
+  [BlockId.NetherBrickStairsNorth]: 4,
+  [BlockId.NetherBrickStairsEast]: 4,
+  [BlockId.NetherBrickStairsSouth]: 4,
+  [BlockId.NetherBrickStairsWest]: 4
 };
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -184,6 +190,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: "glowstone", label: "Glowstone", kind: "block", blockId: BlockId.Glowstone },
   // The fortress material — smelt netherrack in a furnace to make more.
   { id: "nether_brick", label: "Nether Brick", kind: "block", blockId: BlockId.NetherBrick },
+  { id: "nether_brick_slab", label: "Nether Brick Slab", kind: "block", blockId: BlockId.NetherBrickSlab },
+  { id: "nether_brick_stairs", label: "Nether Brick Stairs", kind: "block", blockId: BlockId.NetherBrickStairsNorth },
   { id: "wood_pickaxe", label: "Wood Pickaxe", kind: "tool", minePower: 1.05, mineTier: 1, maxDurability: 70 },
   { id: "stone_pickaxe", label: "Stone Pickaxe", kind: "tool", minePower: 1.55, mineTier: 2, maxDurability: 140 },
   { id: "sliver_pickaxe", label: "Sliver Pickaxe", kind: "tool", minePower: 2.2, mineTier: 3, maxDurability: 240 },
@@ -545,6 +553,11 @@ export const BLOCK_TO_SLOT: Partial<Record<BlockId, string>> = {
   [BlockId.Obsidian]: "obsidian",
   [BlockId.Netherrack]: "netherrack",
   [BlockId.NetherBrick]: "nether_brick",
+  [BlockId.NetherBrickSlab]: "nether_brick_slab",
+  [BlockId.NetherBrickStairsNorth]: "nether_brick_stairs",
+  [BlockId.NetherBrickStairsEast]: "nether_brick_stairs",
+  [BlockId.NetherBrickStairsSouth]: "nether_brick_stairs",
+  [BlockId.NetherBrickStairsWest]: "nether_brick_stairs",
   // Glowstone drops 2-4 dust — handled in rollBlockDrops, not here.
   // Redstone ore shatters into 4-5 dust — also handled in rollBlockDrops.
   // Blazite ore drops the smeltable material item (the coal-ore pattern).
