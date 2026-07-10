@@ -298,10 +298,11 @@ export class GameEngine {
     // The local player's persisted record (v17+ saves hold one entry per player;
     // a downloaded multiplayer world played solo falls back to any first entry).
     const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
-    // Which dimension this engine simulates: where the save left the local
-    // player (swap-on-travel writes it before the remount), else the requested
-    // override, else the overworld.
-    const dimension: DimensionId = savedLocal ? restorePlayerDimension(savedLocal) : (options.dimension ?? "overworld");
+    // Which dimension this engine simulates: an explicit override wins (a
+    // server room boots a nether engine from a save whose players may all sit
+    // in the overworld), else where the save left the local player
+    // (swap-on-travel writes it before the remount), else the overworld.
+    const dimension: DimensionId = options.dimension ?? (savedLocal ? restorePlayerDimension(savedLocal) : "overworld");
     // The world half this engine simulates; foreign halves ride through serialize().
     const section = save ? dimensionSectionOf(save, dimension) : null;
     this.foreignDimensions = dimension === "overworld" ? save?.dimensions : undefined;
@@ -1344,6 +1345,20 @@ export class GameEngine {
   }
 
   /**
+   * Runtime arrival for a server-driven travel handoff: finds or builds the
+   * arrival portal near the anchor. Unlike the boot-time path (which runs
+   * before the light bake), every write journals through blockChanges, so
+   * clients already in this dimension see a built portal replicate as
+   * ordinary tick edits. The caller seats the traveler at the returned cell
+   * and latches their dwell.
+   */
+  ensureArrival(anchor: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+    const pos = ensureArrivalPortal(this.state.world, this.state.blockChanges, this.surfaceYAt, anchor);
+    this.state.worldMeshDirty = true;
+    return pos;
+  }
+
+  /**
    * Detailed progression read for the advancements overlay. Pulled on render via
    * the snapshot's stable `api` handle (not projected per-frame into the snapshot),
    * so play never churns the snapshot with stat values the HUD doesn't show.
@@ -1716,6 +1731,15 @@ export class GameEngine {
    * has no respawn-coupled state to guard, so it is allowed even while dead — a
    * player should be able to flip to Peaceful to stop a hostile pile-on.
    */
+  /**
+   * World-level difficulty switch for callers that aren't a player command —
+   * a multiplayer room mirrors the owner's setDifficulty into every dimension
+   * engine so e.g. Peaceful despawns hostiles everywhere at once.
+   */
+  setWorldDifficulty(next: Difficulty): void {
+    this.switchDifficulty(next);
+  }
+
   private switchDifficulty(next: Difficulty): void {
     const state = this.state;
     if (state.hardcore) return; // locked to Hard for the world's life

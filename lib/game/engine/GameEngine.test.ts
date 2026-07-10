@@ -3336,6 +3336,19 @@ describe("dimension-aware boot (the nether)", () => {
     expect(e.state.daylight).toBe(NETHER_DAYLIGHT);
   });
 
+  test("an explicit dimension override outranks the save's player dimension (the server shard boot)", () => {
+    // A room's nether engine boots from the shared save even though every
+    // player entry in it may sit in the overworld — the option must win.
+    const over = makeEngine();
+    over.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    const save = over.serialize();
+    expect(save.players[0].dimension ?? "overworld").toBe("overworld");
+    const nether = makeNetherEngine(save);
+    expect(nether.state.dimension).toBe("nether");
+    // …and it still round-trips the overworld half verbatim.
+    expect(nether.serialize().changes).toEqual(save.changes);
+  });
+
   test("a save round-trips overworld and nether world halves independently", () => {
     // An overworld world with an edit…
     const over = makeEngine();
@@ -3401,6 +3414,19 @@ describe("portal travel (swap-on-travel)", () => {
     const reload = new GameEngine({ save: nether.serialize(), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
     expect(reload.state.dimension).toBe("nether");
     expect(reload.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
+  });
+
+  test("ensureArrival journals its writes so a built portal replicates as tick edits", () => {
+    const engine = makeEngine();
+    engine.state.blockChanges.drainEdits(); // clear boot noise
+    const pos = engine.ensureArrival({ x: 30, y: 41, z: 30 });
+    expect(engine.state.world.get(pos.x, pos.y, pos.z)).toBe(BlockId.NetherPortal);
+    expect(engine.state.worldMeshDirty).toBe(true);
+    const edits = engine.state.blockChanges.drainEdits();
+    expect(edits.some(([idx, block]) => block === BlockId.NetherPortal && idx === engine.state.world.index(pos.x, pos.y, pos.z))).toBe(true);
+    // A second arrival at the same anchor reuses the portal — zero new writes.
+    expect(engine.ensureArrival({ x: 30, y: 41, z: 30 })).toEqual(pos);
+    expect(engine.state.blockChanges.drainEdits()).toHaveLength(0);
   });
 
   test("the return trip reuses the departure-side portal", () => {
