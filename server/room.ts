@@ -231,6 +231,11 @@ export class Room {
           worldType: record.worldType as never,
           difficulty: record.difficulty as never,
           hardcore: record.hardcore,
+          // Explicit: without the override the engine falls back to the
+          // save's FIRST player slice, and a world persisted while everyone
+          // was in the nether would boot its "overworld" shard as a nether
+          // engine — corrupting both world halves on the next persist.
+          dimension: "overworld",
           authority: "server",
           headless: true,
           bootPlayer: false
@@ -345,6 +350,13 @@ export class Room {
       .then((bytes) => {
         this.bytesOut += bytes.length;
         conn.sink.send(bytes);
+      })
+      .catch(() => {
+        // No sync means the client's fresh replica has no world state —
+        // resuming tick frames would corrupt it. Drop the socket with a
+        // NON-fatal code instead: the reconnect ladder re-joins into the
+        // right dimension with a full welcome + worldSync.
+        conn.sink.close(1011, "travel sync failed");
       })
       .finally(() => {
         conn.pendingDimensionSync = false;
@@ -496,10 +508,17 @@ export class Room {
     return true;
   }
 
-  /** Removes a player (socket closed or kicked); persists their slice into the offline set. */
-  leave(playerId: string): void {
+  /**
+   * Removes a player (socket closed or kicked); persists their slice into the
+   * offline set. `sink` scopes the leave to one SOCKET: a reconnect replaces
+   * the old conn before the old socket's close event fires, and that stale
+   * close must not tear down the fresh session it no longer owns. No sink
+   * (a kick, shutdown) always removes.
+   */
+  leave(playerId: string, sink?: ClientSink): void {
     const conn = this.clients.get(playerId);
     if (!conn) return;
+    if (sink && conn.sink !== sink) return; // a replaced socket's late close
     this.clients.delete(playerId);
     // Remove from THEIR shard — the slice self-stamps its dimension, so a
     // player who leaves in the nether rejoins there.

@@ -847,4 +847,45 @@ describe("dimension shards (the nether online)", () => {
     expect(nether.engine.state.difficulty).toBe("peaceful");
     expect(nether.engine.state.mobs.some((m) => m.hostile)).toBe(false);
   }, 120_000);
+
+  test("a room persisted while everyone was in the nether still boots its overworld shard as the OVERWORLD", async () => {
+    const persistence = createMemoryPersistence();
+    const record = await persistence.loadWorld("w-boot");
+    const room = new Room(record!, persistence, () => 0);
+    const tick = tickOf(room);
+    await room.join(claimsFor("alice", "w-boot", "owner"), fakeSink());
+    const portal = room.engine.ensureArrival({ x: 100, y: 40, z: 100 });
+    dwellThroughPortal(room, "alice", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The ONLY player slice in the persisted save now says nether…
+    await room.persist();
+    const stored = await persistence.loadWorld("w-boot");
+    expect(stored!.save!.players[0]?.dimension).toBe("nether");
+    // …and the reboot must not let that slice pick the anchor shard's dimension.
+    const reboot = new Room(stored!, persistence, () => 0);
+    expect(reboot.engine.state.dimension).toBe("overworld");
+    // The rejoin still lands them in the nether, via the shard machinery.
+    const a2 = fakeSink();
+    await reboot.join(claimsFor("alice", "w-boot", "owner"), a2);
+    expect(a2.messagesOf("welcome")[0]?.dimension).toBe("nether");
+  }, 120_000);
+
+  test("a replaced socket's late close cannot tear down the fresh session (leave is sink-scoped)", async () => {
+    const { room } = await makeRoom();
+    const oldSink = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), oldSink);
+    // Reconnect: a new socket takes over; the room closes the old one.
+    const newSink = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), newSink);
+    expect(oldSink.frames.some((f) => f.kind === "close")).toBe(true);
+
+    // The old socket's close event fires late, scoped to ITS sink — a no-op.
+    room.leave("alice", oldSink as never);
+    expect(room.playerCount()).toBe(1);
+    expect(room.engine.state.players.has("alice")).toBe(true);
+
+    // The live socket's close still leaves normally.
+    room.leave("alice", newSink as never);
+    expect(room.playerCount()).toBe(0);
+  });
 });
