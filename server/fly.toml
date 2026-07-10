@@ -15,8 +15,9 @@ primary_region = 'sjc'
   dockerfile = 'Dockerfile'
 
 [env]
-  # Sized to the 512 MB VM below: ~74 MB/room + the Bun runtime. Raise memory
-  # and MAX_ROOMS together (docs/deploy.md) — 6 rooms needs ~1 GB.
+  # Sized to the 512 MB VM below: ~40 MB/room (headless engines skip the
+  # renderer-only light cache) + the Bun runtime. Raise memory and MAX_ROOMS
+  # together (docs/deploy.md).
   MAX_ROOMS = '3'
   PERSISTENCE = 'postgres'
 

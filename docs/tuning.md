@@ -530,9 +530,10 @@ None affect single-player, and none are save-sensitive.
 - **`ROOM_CAPACITY`** (`8`, protocol.ts) — max players per world. The v1 co-op
   scale the whole design assumes; raising it grows the per-tick pose/self fan-out
   quadratically, so re-measure with `loadSim` before nudging it.
-- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~74 MB
-  each). Joins beyond it are refused at the door, not thrashed. Tune from
-  `/rooms` p95 tick + peak memory.
+- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~40 MB
+  each; the per-voxel light cache is renderer-only, so headless room engines
+  never allocate it). Joins beyond it are refused at the door, not thrashed.
+  Tune from `/rooms` p95 tick + peak memory.
 - **Tick rate** — `TICK_SECONDS` (`0.05` = 20 Hz, `tickDriver.ts`) is the room
   sim + pose-stream cadence. The whole latency budget hangs off it; not a
   casual dial.

@@ -22,7 +22,9 @@ export class VoxelWorld {
    * Per-voxel light, packed (skyLight << 4) | blockLight, 0..15 each. A DERIVED
    * cache (never serialized): computeFullLight bakes it from blocks at load and
    * applyEdit patches it on block edits — see lighting.ts. Starts dark; the
-   * engine bakes it once the block grid is final.
+   * engine bakes it once the block grid is final. Renderer-only: a headless
+   * engine replaces it with a zero-length array (getSky/getBlockLight then
+   * read 0, which nothing server-side consumes).
    */
   light: Uint8Array;
 

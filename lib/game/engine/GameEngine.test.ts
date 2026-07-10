@@ -167,6 +167,31 @@ describe("boot", () => {
     expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(true);
   });
 
+  test("a headless engine skips the light bake but still tracks and journals edits", () => {
+    const engine = new GameEngine({
+      seed: 1337,
+      rng: mulberry32(42),
+      worldSize: { x: 64, y: 150, z: 64 },
+      authority: "server",
+      headless: true,
+      bootPlayer: false
+    });
+    const { state } = engine;
+    const { world } = state;
+    // No light cache at all — the ~39 MB allocation and the full-world BFS
+    // bake are renderer-only costs a server room never pays.
+    expect(world.light).toHaveLength(0);
+    // The block-change chokepoint still works without a light patch: deltas
+    // accumulate and the per-tick journal drains (the server's broadcast).
+    const y = world.highestSolidY(20, 20) + 1;
+    state.blockChanges.set(20, y, 20, BlockId.Stone);
+    expect(world.get(20, y, 20)).toBe(BlockId.Stone);
+    expect(state.blockChanges.changes()).toContainEqual([world.index(20, y, 20), BlockId.Stone]);
+    expect(state.blockChanges.drainEdits()).toContainEqual([world.index(20, y, 20), BlockId.Stone]);
+    // Light queries degrade to darkness instead of throwing.
+    expect(world.getSky(20, world.sizeY - 1, 20)).toBe(0);
+  });
+
   test("block edits relight locally: placing darkens the cell, mining restores sky", () => {
     const { state } = makeEngine();
     const { world } = state;

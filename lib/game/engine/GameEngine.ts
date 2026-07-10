@@ -351,7 +351,10 @@ export class GameEngine {
 
     // Bake per-voxel light now the block grid is final (worldgen + saved edits).
     // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
-    world.light = computeFullLight(world);
+    // Only the renderer's mesher reads it, so a headless engine (a server room)
+    // skips both the full-world BFS bake and the ~39 MB allocation — that
+    // saving is what lets a room hold an engine per dimension on the same VM.
+    world.light = this.headless ? new Uint8Array(0) : computeFullLight(world);
 
     const firstSpawn =
       dimension === "nether"

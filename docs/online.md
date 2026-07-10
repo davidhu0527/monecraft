@@ -248,7 +248,8 @@ tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
   bake it into a dev build. The F3 overlay shows live net stats.
 - **Capacity.** Run `loadSim` at the target player count and watch
   `slowestTickMs`/`kbOutPerSec` in `/rooms`; keep p95 well under 50 ms and set
-  `MAX_ROOMS` so peak memory (~74 MB/room) fits the machine. Net constants
+  `MAX_ROOMS` so peak memory (~40 MB/room — headless engines skip the
+  renderer-only light cache) fits the machine. Net constants
   (deadbands, keyframe/persist intervals, reconnect ladder) live in
   [tuning.md](tuning.md#multiplayer-networking).
 

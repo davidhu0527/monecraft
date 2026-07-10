@@ -44,7 +44,9 @@ export function createBlockChangeTracker(world: VoxelWorld): BlockChangeTracker 
       // chokepoint for every gameplay edit (mining, doors, farming, crop
       // growth), so each one relights without the renderer doing anything; the
       // load path (applySavedChanges) bypasses this and the full bake covers it.
-      applyEdit(world, world.light, x, y, z);
+      // A headless engine carries no light cache (zero-length — nothing reads
+      // light server-side), so there is nothing to patch.
+      if (world.light.length !== 0) applyEdit(world, world.light, x, y, z);
       const baseline = baselineByIndex.get(idx) ?? BlockId.Air;
       if (block === baseline) changedBlocks.delete(idx);
       else changedBlocks.set(idx, block);
