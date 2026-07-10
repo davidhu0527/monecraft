@@ -191,7 +191,10 @@ Platform on-push auto-deploys are **off** on purpose (Vercel via `vercel.json`'s
 `git.deploymentEnabled: { "main": false }`; Fly's GitHub auto-deploy disabled in its
 dashboard), so the only trigger is the `deploy-web` / `deploy-server` jobs in
 `.github/workflows/ci.yml`. They `needs: [verify, e2e]` and run only on a push to
-`main`, so a merge deploys **after** lint/typecheck/test/build **and** the browser
+`main` **in `hutusi/monecraft`** (a `github.repository` guard — forks and the
+upstream repo sync this workflow but hold none of the deploy secrets, so without
+the guard their pushes would fail the deploy jobs red instead of skipping them),
+so a merge deploys **after** lint/typecheck/test/build **and** the browser
 e2e all pass (≈30 min; an e2e flake blocks the deploy — re-run the failed job to
 release). `deploy-web` fires a **Vercel Deploy Hook** (the build stays Git-connected,
 so `VERCEL_GIT_COMMIT_SHA` — the menu version badge — is still set); `deploy-server`

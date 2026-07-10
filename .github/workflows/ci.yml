@@ -52,14 +52,17 @@ jobs:
           retention-days: 7
 
   # ── Deploy only after the whole gate is green (verify AND e2e), and only on a
-  # push to main. A red CI never ships. Platform on-push auto-deploys are OFF
-  # (Vercel via vercel.json git.deploymentEnabled; Fly in its dashboard), so
-  # these jobs are the sole deploy trigger. Each serializes across pushes on its
-  # own concurrency group so overlapping merges release in order, not on top of
-  # each other. See docs/deploy.md.
+  # push to main in THIS repo — the repository guard keeps forks and the
+  # upstream repo (which sync this workflow but hold none of the deploy
+  # secrets) from attempting a deploy and failing red on every push. A red CI
+  # never ships. Platform on-push auto-deploys are OFF (Vercel via vercel.json
+  # git.deploymentEnabled; Fly in its dashboard), so these jobs are the sole
+  # deploy trigger. Each serializes across pushes on its own concurrency group
+  # so overlapping merges release in order, not on top of each other. See
+  # docs/deploy.md.
   deploy-web:
     needs: [verify, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'hutusi/monecraft'
     runs-on: ubuntu-latest
     timeout-minutes: 5 # a hung deploy must not squat the (never-cancelled) slot
     permissions: {} # only curls an external hook — no repo-scoped token needed
@@ -74,7 +77,7 @@ jobs:
 
   deploy-server:
     needs: [verify, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'hutusi/monecraft'
     runs-on: ubuntu-latest
     timeout-minutes: 20 # remote Fly build + rollout; bounds a hung deploy
     permissions:
