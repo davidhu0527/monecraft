@@ -4,9 +4,10 @@ import type { Persistence } from "./persistence";
 /**
  * The rooms this process hosts: loaded on first join, evicted (persist +
  * stop) after sitting empty. MAX_ROOMS bounds memory (~40 MB of world per
- * room — headless engines skip the renderer-only light cache); joins beyond
- * it are refused at the door so an overloaded process degrades by rejecting,
- * never by thrashing.
+ * dimension engine — headless engines skip the renderer-only light cache;
+ * ~80 MB while a room's nether shard is occupied); joins beyond it are
+ * refused at the door so an overloaded process degrades by rejecting, never
+ * by thrashing.
  */
 
 const IDLE_EVICT_MS = 5 * 60 * 1000;

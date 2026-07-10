@@ -217,9 +217,10 @@ come out at the **same coordinates** in the other world.
 
 Mind the frame: breaking any of its obsidian extinguishes the surface, and a
 portal that somehow lost its frame will refuse to carry you (it clears instead).
-Beds don't work in the Nether — there is no morning to skip to — and portals
-are **not yet available in online worlds** (the game will say so if you try to
-light one there).
+Beds don't work in the Nether — there is no morning to skip to. Portals work
+in **online worlds** too: the party can split across dimensions (the player
+list tags who's in the Nether), and you can't ride a boat or minecart through
+— step off first. Pets stay behind and resume following when you return.
 
 ### Surviving the Nether
 
@@ -854,6 +855,13 @@ A few things work differently online, and the rest is the same game:
   **Revoke links** from the world's menu card.
 - **Boats are shared.** Rafts and ships are boardable online — pile into one
   together.
+- **The Nether is shared too.** Light a portal and step through like in
+  single-player; the world keeps running on both sides, so the party can
+  split — the player list tags anyone who's "· Nether", and a toast announces
+  each crossing. Mobs, pets, and vehicles belong to the dimension they're in
+  (your wolf waits by the portal; it resumes following when you return).
+  Sleeping skips the night when every **overworld** player is in bed — friends
+  in the Nether don't block the skip.
 - The world saves on the server automatically; there's nothing to manage.
 
 ### Cloud saves — your single-player worlds across devices

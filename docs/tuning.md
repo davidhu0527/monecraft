@@ -574,6 +574,11 @@ None affect single-player, and none are save-sensitive.
   → `4008` kick).
 - **Persistence** — `PERSIST_INTERVAL_TICKS` (`1200` = 60 s dirty-persist; also
   the crash-loss bound), idle-evict at 5 min (`roomRegistry.ts`).
+- **Nether shard linger** — `NETHER_SHARD_LINGER_MS` (env, default `60000`):
+  how long a room keeps its EMPTY nether engine before persisting and dropping
+  it (~40 MB back). Longer = snappier there-and-back trips (no worldgen
+  re-boot); shorter = less memory held by abandoned nethers. The shard reboots
+  transparently on the next travel or nether-side rejoin.
 - **Reconnect** — `RECONNECT_DELAYS_MS` (`[1,2,4,8,8] s`, protocol.ts) is the
   client back-off ladder; the join ticket TTL is `TICKET_TTL_SECONDS` (`60`,
   `tickets.ts`).

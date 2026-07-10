@@ -131,6 +131,28 @@ path (a client that's still connected but suspects drift asks for a fresh
 world-sync + keyframe). Fatal closes are not retried; after the ladder is
 exhausted the client shows the disconnect modal.
 
+## Version bump & rollout
+
+`PROTOCOL_VERSION` is compiled into both sides, and a mismatch is a **fatal**
+close (`4001`, or `4000` via the ticket's `pv`), so a bump must ship to the
+web app and the game server together:
+
+1. Land the bump on `main` as part of one commit range — the gated CI
+   pipeline deploys Vercel and Fly **from the same SHA** (see
+   [deploy.md](deploy.md#continuous-deployment-gated-on-ci)); never deploy a
+   protocol bump to one side by hand.
+2. The Fly rollout SIGTERM-drains rooms (persist + close `4005`); clients
+   walk the reconnect ladder.
+3. **The mismatch window is inherent and bounded**: a browser still running
+   the old bundle mints a ticket stamped with the old `pv` and is refused
+   (`4000`/`4001`, no retry) until the page reloads and picks up the new
+   bundle. That refusal is the design — a stale client must never talk a
+   stale dialect to a new server. The disconnect modal's guidance ("reload
+   the page") is the recovery.
+4. Verify `/health`, then a two-browser smoke join.
+5. Add the version's delta to this page (see the v4 section above for the
+   precedent).
+
 ## Close codes
 
 | Code | Meaning                                           | Client retries? |

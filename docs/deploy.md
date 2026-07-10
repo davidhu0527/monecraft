@@ -223,6 +223,12 @@ Two repo secrets drive it (GitHub → Settings → Secrets and variables → Act
   web-app image (`bun run start`, port 3000) and ships _that_ to the game-server
   app — it crash-loops with exit 127 (`next` needs `node`, absent from the `oven/bun`
   base) and takes online play down until a correct redeploy.
+- **Protocol bump (`PROTOCOL_VERSION`):** always the normal path — the number is
+  compiled into both sides and a mismatch is a fatal close, so web and game
+  server must ship **from the same SHA** (the gated deploy does exactly that;
+  never bump one side via an escape hatch). Browsers still on the old bundle
+  are refused until a page reload — expected and bounded. Full runbook:
+  [protocol.md](protocol.md#version-bump--rollout).
 - **Schema change:** land the new migration, then run `bun run db:migrate`
   against production **before** deploying the code that depends on it —
   **unless the migration removes something the old code reads** (a dropped
