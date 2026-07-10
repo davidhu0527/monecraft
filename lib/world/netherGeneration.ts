@@ -327,7 +327,7 @@ function buildFortressRoom(world: VoxelWorld, cx: number, cz: number, half: numb
 /** Covered bridge from the keep wall to (and through) the tower wall: 5-wide floor, railed edges, 3×3 cleared gallery. */
 function buildFortressBridge(world: VoxelWorld, cx: number, cz: number, dx: number, dz: number, armLength: number, baseY: number): void {
   const from = FORTRESS_KEEP_HALF;
-  const to = FORTRESS_KEEP_HALF + armLength; // reaches the tower's outer wall
+  const to = FORTRESS_KEEP_HALF + armLength; // reaches the tower's inner wall (the doorway end)
   for (let step = from; step <= to; step += 1) {
     for (let p = -2; p <= 2; p += 1) {
       // Perpendicular offset: for an x-arm the walkway spreads in z, and vice versa.
