@@ -37,6 +37,17 @@ describe("RosterPanel", () => {
     expect(screen.queryByRole("button", { name: /Kick/ })).toBeNull();
   });
 
+  test("a player in the nether wears the dimension tag; overworld players don't", () => {
+    const { session } = fakeSession("member", [
+      { id: "me", name: "Alpha", dimension: "overworld" },
+      { id: "acct-2", name: "Beta", dimension: "nether" }
+    ]);
+    render(<RosterPanel session={session} />);
+    const panel = screen.getByLabelText("Players in this world");
+    expect(panel.textContent).toContain("Beta · Nether");
+    expect(panel.textContent).not.toContain("Alpha (you) · Nether");
+  });
+
   test("an owner can kick another player, but there is no kick button for themselves", () => {
     const { session, kicked } = fakeSession("owner", members);
     render(<RosterPanel session={session} />);
