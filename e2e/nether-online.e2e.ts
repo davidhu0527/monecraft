@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createOnlineProfile, signUp, waitForOnlineGame, watchErrors } from "./onlineHelpers";
+import { createOnlineProfile, signUp, TWO_BROWSER_VIEWPORT, waitForOnlineGame, watchErrors } from "./onlineHelpers";
 
 /**
  * Nether travel in an ONLINE world, end-to-end through the real stack: the
@@ -224,7 +224,7 @@ test("two players cross a nether portal in an online world and come back", async
   const runTag = Date.now().toString(36);
 
   // ── host: account → online profile → SUPERFLAT CREATIVE world ─────────────
-  const hostContext = await browser.newContext();
+  const hostContext = await browser.newContext({ viewport: TWO_BROWSER_VIEWPORT });
   const host = await hostContext.newPage();
   watchErrors(host, errors);
   await host.goto("/");
@@ -249,7 +249,7 @@ test("two players cross a nether portal in an online world and come back", async
     const { token } = (await response.json()) as { token: string };
     return token;
   }, worldId);
-  const friendContext = await browser.newContext();
+  const friendContext = await browser.newContext({ viewport: TWO_BROWSER_VIEWPORT });
   const friend = await friendContext.newPage();
   watchErrors(friend, errors);
   await friend.goto(`/join/${inviteToken}`);

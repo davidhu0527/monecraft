@@ -7,6 +7,18 @@ import { expect, type Page } from "@playwright/test";
  * the co-op journey so both specs drive the identical real stack.
  */
 
+/**
+ * Context viewport for the two-browser journeys. They run TWO live software-GL
+ * render loops at once on the CI runner (which has no GPU), and raster cost
+ * scales with pixels — a reduced viewport vs the 1280×720 default cuts each
+ * page's render CPU ~2.6×, which is what keeps the rAF-driven pose stream,
+ * mining progress, and prediction reconciliation running at real time under
+ * load. These specs assert on `window.__monecraft` engine state, never pixels.
+ * 640×360 proved TOO small — the Create World menu flow breaks below the
+ * short-viewport breakpoints — so 800×450 is the floor that still menus.
+ */
+export const TWO_BROWSER_VIEWPORT = { width: 800, height: 450 };
+
 /** Console/page errors collected like the smoke fixture does (favicon 404 is noise). */
 export function watchErrors(page: Page, sink: string[]): void {
   page.on("console", (message) => {

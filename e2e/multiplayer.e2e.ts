@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createOnlineProfile, signUp, waitForOnlineGame, watchErrors } from "./onlineHelpers";
+import { createOnlineProfile, signUp, TWO_BROWSER_VIEWPORT, waitForOnlineGame, watchErrors } from "./onlineHelpers";
 
 /**
  * The full co-op journey against the real online stack: the Next app backed
@@ -31,7 +31,19 @@ async function forceDigStraightDown(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__monecraft!.engine.state.player.onGround === true, undefined, { timeout: 20000 });
   await page.evaluate(() => {
     window.__monecraft!.input.forcePointerLock(true);
-    window.__monecraft!.engine.state.player.pitch = -Math.PI / 2 + 0.02;
+    // Aim at the CENTER of the block underfoot — never a fixed straight-down
+    // pitch. A fresh joiner is seated at exact integer coordinates (ON the
+    // cell boundary), where a fixed slightly-tilted pitch legitimately rays
+    // along the boundary into the NEIGHBOR column, which can hold nothing in
+    // reach (a cliff edge, or the other player's earlier shaft). The center
+    // aim keeps the dig in the player's own column from any seating.
+    const p = window.__monecraft!.engine.state.player;
+    const dx = Math.floor(p.position.x) + 0.5 - p.position.x;
+    const dy = Math.floor(p.position.y) - 0.5 - (p.position.y + 1.62);
+    const dz = Math.floor(p.position.z) + 0.5 - p.position.z;
+    const len = Math.hypot(dx, dy, dz);
+    p.pitch = Math.asin(dy / len);
+    p.yaw = Math.atan2(-dx, -dz);
   });
 }
 
@@ -47,7 +59,7 @@ test("two accounts share an online world via an invite link", async ({ browser }
   const runTag = Date.now().toString(36);
 
   // ── the host: register → online profile → online world → in-game ─────────
-  const hostContext = await browser.newContext();
+  const hostContext = await browser.newContext({ viewport: TWO_BROWSER_VIEWPORT });
   const host = await hostContext.newPage();
   watchErrors(host, errors);
   await host.goto("/");
@@ -80,7 +92,7 @@ test("two accounts share an online world via an invite link", async ({ browser }
   }, worldId);
 
   // ── the friend: invite link → register on the landing page → same world ──
-  const friendContext = await browser.newContext();
+  const friendContext = await browser.newContext({ viewport: TWO_BROWSER_VIEWPORT });
   const friend = await friendContext.newPage();
   watchErrors(friend, errors);
   await friend.goto(`/join/${inviteToken}`);
