@@ -95,13 +95,48 @@ async function flyTo(page: Page, target: { x: number; y: number; z: number }, st
 const walkTo = (page: Page, target: { x: number; y: number; z: number }) => flyTo(page, target, 0.8, true);
 
 /**
+ * Waits until the WITNESS's replica shows the placer at the placer's own local
+ * pose — proof the pose has round-tripped placer → server → witness, so the
+ * server's next command raycast runs from the very aim the script computed.
+ * A blind post-aim sleep is NOT enough on a loaded CI runner: the 20 Hz pose
+ * stream can lag the scripted aim by whole seconds, and the server then
+ * raycasts with a STALE look direction and places (or refuses) elsewhere —
+ * the exact flake that shipped three red main runs. Tolerances sit well above
+ * the wire quantization (2 decimals position, 3 decimals angles); yaw compares
+ * wrap-aware. The witness renders remotes 125–450 ms in the past, which the
+ * poll simply rides out.
+ */
+async function poseSettled(placer: Page, witness: Page): Promise<void> {
+  const want = await placer.evaluate(() => {
+    const p = window.__monecraft!.engine.state.player;
+    return { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw, pitch: p.pitch };
+  });
+  await expect
+    .poll(
+      () =>
+        witness.evaluate((w) => {
+          const s = window.__monecraft!.engine.state;
+          // With exactly two players, "the other one" is the placer — no id plumbing.
+          const remote = [...s.players.values()].find((p) => p !== s.player);
+          if (!remote) return Number.POSITIVE_INFINITY;
+          const wrap = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+          const posDrift = Math.hypot(remote.position.x - w.x, remote.position.y - w.y, remote.position.z - w.z);
+          return posDrift + wrap(remote.yaw, w.yaw) + wrap(remote.pitch, w.pitch);
+        }, want),
+      { timeout: 15000 }
+    )
+    .toBeLessThan(0.08);
+}
+
+/**
  * Places the selected block at a cell through the REAL wire path (aim → the
  * routed placeBlock cmd → server raycast → journal broadcast) and confirms it
  * on the OTHER player's replica — the placer's own world can briefly show an
  * optimistic prediction the server rejected, but only a server-confirmed edit
  * ever reaches the witness. Aim candidates cover the two support geometries:
  * onto the top face of the block below, or out of a horizontal neighbor's
- * side face.
+ * side face. Each dispatch is gated on poseSettled (see above), and the whole
+ * candidate list gets three rounds before giving up.
  */
 async function placeAt(
   placer: Page,
@@ -110,18 +145,34 @@ async function placeAt(
   blockId: number,
   aims: Array<{ x: number; y: number; z: number }>
 ): Promise<void> {
-  for (const aim of aims) {
-    await aimAt(placer, aim);
-    await placer.waitForTimeout(150); // the cmd carries the claimed pose; let the stream settle first
-    await placer.evaluate(() => window.__monecraft!.net!.dispatch({ type: "placeBlock" }));
-    try {
-      await expect.poll(() => witness.evaluate((c) => window.__monecraft!.engine.state.world.get(c.x, c.y, c.z), cell), { timeout: 8000 }).toBe(blockId);
-      return;
-    } catch {
-      /* the ray clipped a different face — try the next candidate */
+  for (let round = 0; round < 3; round += 1) {
+    for (const aim of aims) {
+      await aimAt(placer, aim);
+      try {
+        await poseSettled(placer, witness);
+      } catch {
+        /* stream is crawling — the dispatch below still gets its chance */
+      }
+      await placer.evaluate(() => window.__monecraft!.net!.dispatch({ type: "placeBlock" }));
+      try {
+        await expect.poll(() => witness.evaluate((c) => window.__monecraft!.engine.state.world.get(c.x, c.y, c.z), cell), { timeout: 8000 }).toBe(blockId);
+        return;
+      } catch {
+        /* the ray clipped a different face — try the next candidate */
+      }
     }
   }
-  throw new Error(`could not place block ${blockId} at ${JSON.stringify(cell)}`);
+  const debug = await placer.evaluate((c) => {
+    const s = window.__monecraft!.engine.state;
+    const p = s.player;
+    return {
+      pose: { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw, pitch: p.pitch },
+      placerSees: s.world.get(c.x, c.y, c.z),
+      held: p.inventory[p.selectedSlot]?.id ?? null,
+      net: window.__monecraft!.net?.status()
+    };
+  }, cell);
+  throw new Error(`could not place block ${blockId} at ${JSON.stringify(cell)}; placer=${JSON.stringify(debug)}`);
 }
 
 /** Polls the (possibly mid-remount) game handle for the current dimension. */
@@ -304,7 +355,11 @@ test("two players cross a nether portal in an online world and come back", async
   // Aim at the bottom bar's TOP face under an interior cell: the raycast's
   // previous cell is the interior candidate ignition validates.
   await aimAt(host, { x: px + 0.5, y: g + 1.95, z: zp + 0.5 });
-  await host.waitForTimeout(200);
+  try {
+    await poseSettled(host, friend); // the server must ignite from THIS aim, not a stale one
+  } catch {
+    /* dispatch anyway — the 30 s portal poll below is the real arbiter */
+  }
   await host.evaluate(() => window.__monecraft!.net!.dispatch({ type: "placeBlock" }));
   for (const page of [host, friend]) {
     await expect.poll(() => page.evaluate((c) => window.__monecraft!.engine.state.world.get(c.px, c.g + 2, c.zp), { px, g, zp }), { timeout: 30000 }).toBe(91); // NetherPortal replicated through the ordinary journal
