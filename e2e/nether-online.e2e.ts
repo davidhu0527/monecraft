@@ -123,7 +123,7 @@ async function poseSettled(placer: Page, witness: Page): Promise<void> {
           const posDrift = Math.hypot(remote.position.x - w.x, remote.position.y - w.y, remote.position.z - w.z);
           return posDrift + wrap(remote.yaw, w.yaw) + wrap(remote.pitch, w.pitch);
         }, want),
-      { timeout: 15000 }
+      { timeout: 5000 }
     )
     .toBeLessThan(0.08);
 }
@@ -154,11 +154,22 @@ async function placeAt(
         /* stream is crawling — the dispatch below still gets its chance */
       }
       await placer.evaluate(() => window.__monecraft!.net!.dispatch({ type: "placeBlock" }));
+      // Fast path: the witness's replica saw the journal broadcast.
       try {
-        await expect.poll(() => witness.evaluate((c) => window.__monecraft!.engine.state.world.get(c.x, c.y, c.z), cell), { timeout: 8000 }).toBe(blockId);
+        await expect.poll(() => witness.evaluate((c) => window.__monecraft!.engine.state.world.get(c.x, c.y, c.z), cell), { timeout: 6000 }).toBe(blockId);
         return;
       } catch {
-        /* the ray clipped a different face — try the next candidate */
+        /* the ray clipped a different face — or the witness is sluggish */
+      }
+      // Fallback: the placer's own view is server-confirmed once the block
+      // outlives the prediction window (PREDICTION_TIMEOUT_MAX_MS) — an
+      // unconfirmed optimistic edit reverts by then, so a survivor is truth
+      // even when the witness page is being starved by the runner. Ignition's
+      // two-page portal poll still guarantees end-to-end replication.
+      const readCell = () => placer.evaluate((c) => window.__monecraft!.engine.state.world.get(c.x, c.y, c.z), cell);
+      if ((await readCell()) === blockId) {
+        await placer.waitForTimeout(5500);
+        if ((await readCell()) === blockId) return;
       }
     }
   }
@@ -208,7 +219,7 @@ test("two players cross a nether portal in an online world and come back", async
   // Two production builds, a ws handshake each, ~15 confirmed server-side
   // block placements, and TWO full nether worldgens (server shard + each
   // client replica) — the most machinery any e2e here drives.
-  test.setTimeout(360000);
+  test.setTimeout(480000);
   const errors: string[] = [];
   const runTag = Date.now().toString(36);
 

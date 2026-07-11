@@ -23,7 +23,24 @@ export default defineConfig({
   },
   // channel "chromium" runs the full browser in new-headless mode: the default
   // headless shell rejects requestPointerLock (WrongDocumentError).
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], channel: "chromium" } }],
+  //
+  // The no-throttling args are load-bearing for the two-browser multiplayer
+  // specs: they assert on a "witness" page's replica while the other page
+  // holds focus (bringToFront), and Chromium throttles rAF in backgrounded/
+  // occluded pages — a throttled witness stops applying server ticks, so
+  // confirmations that pass in seconds locally starve on the CI runner.
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        channel: "chromium",
+        launchOptions: {
+          args: ["--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding"]
+        }
+      }
+    }
+  ],
   webServer: [
     {
       // The web app with a full online stack and ZERO external services: an
