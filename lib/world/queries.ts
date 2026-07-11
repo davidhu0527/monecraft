@@ -27,13 +27,22 @@ export function voxelRaycast(world: VoxelWorld, origin: THREE.Vector3, direction
   const stepY = dir.y > 0 ? 1 : -1;
   const stepZ = dir.z > 0 ? 1 : -1;
 
-  const invDx = Math.abs(1 / (dir.x || 1e-6));
-  const invDy = Math.abs(1 / (dir.y || 1e-6));
-  const invDz = Math.abs(1 / (dir.z || 1e-6));
+  // An axis the ray doesn't travel must NEVER step: its tMax is Infinity.
+  // The old `dir.x || 1e-6` fallback broke this two ways for a (near-)zero
+  // component — `-0` is falsy, so the epsilon could carry the WRONG SIGN vs
+  // the already-chosen step, and an origin exactly on a cell boundary made
+  // tMax compute to 0, walking the ray sideways into a neighbor column at
+  // t=0. A player seated at exact integer coordinates (the server spawn)
+  // aiming straight down then mined the DIAGONAL column — or, once that
+  // column was hollow, nothing at all.
+  const flat = 1e-9;
+  const invDx = Math.abs(dir.x) < flat ? Infinity : Math.abs(1 / dir.x);
+  const invDy = Math.abs(dir.y) < flat ? Infinity : Math.abs(1 / dir.y);
+  const invDz = Math.abs(dir.z) < flat ? Infinity : Math.abs(1 / dir.z);
 
-  let tMaxX = ((stepX > 0 ? x + 1 : x) - pos.x) / (dir.x || 1e-6);
-  let tMaxY = ((stepY > 0 ? y + 1 : y) - pos.y) / (dir.y || 1e-6);
-  let tMaxZ = ((stepZ > 0 ? z + 1 : z) - pos.z) / (dir.z || 1e-6);
+  let tMaxX = Math.abs(dir.x) < flat ? Infinity : ((stepX > 0 ? x + 1 : x) - pos.x) / dir.x;
+  let tMaxY = Math.abs(dir.y) < flat ? Infinity : ((stepY > 0 ? y + 1 : y) - pos.y) / dir.y;
+  let tMaxZ = Math.abs(dir.z) < flat ? Infinity : ((stepZ > 0 ? z + 1 : z) - pos.z) / dir.z;
   if (tMaxX < 0) tMaxX += invDx;
   if (tMaxY < 0) tMaxY += invDy;
   if (tMaxZ < 0) tMaxZ += invDz;
@@ -88,13 +97,22 @@ export function waterSurfaceRaycast(world: VoxelWorld, origin: THREE.Vector3, di
   const stepY = dir.y > 0 ? 1 : -1;
   const stepZ = dir.z > 0 ? 1 : -1;
 
-  const invDx = Math.abs(1 / (dir.x || 1e-6));
-  const invDy = Math.abs(1 / (dir.y || 1e-6));
-  const invDz = Math.abs(1 / (dir.z || 1e-6));
+  // An axis the ray doesn't travel must NEVER step: its tMax is Infinity.
+  // The old `dir.x || 1e-6` fallback broke this two ways for a (near-)zero
+  // component — `-0` is falsy, so the epsilon could carry the WRONG SIGN vs
+  // the already-chosen step, and an origin exactly on a cell boundary made
+  // tMax compute to 0, walking the ray sideways into a neighbor column at
+  // t=0. A player seated at exact integer coordinates (the server spawn)
+  // aiming straight down then mined the DIAGONAL column — or, once that
+  // column was hollow, nothing at all.
+  const flat = 1e-9;
+  const invDx = Math.abs(dir.x) < flat ? Infinity : Math.abs(1 / dir.x);
+  const invDy = Math.abs(dir.y) < flat ? Infinity : Math.abs(1 / dir.y);
+  const invDz = Math.abs(dir.z) < flat ? Infinity : Math.abs(1 / dir.z);
 
-  let tMaxX = ((stepX > 0 ? x + 1 : x) - pos.x) / (dir.x || 1e-6);
-  let tMaxY = ((stepY > 0 ? y + 1 : y) - pos.y) / (dir.y || 1e-6);
-  let tMaxZ = ((stepZ > 0 ? z + 1 : z) - pos.z) / (dir.z || 1e-6);
+  let tMaxX = Math.abs(dir.x) < flat ? Infinity : ((stepX > 0 ? x + 1 : x) - pos.x) / dir.x;
+  let tMaxY = Math.abs(dir.y) < flat ? Infinity : ((stepY > 0 ? y + 1 : y) - pos.y) / dir.y;
+  let tMaxZ = Math.abs(dir.z) < flat ? Infinity : ((stepZ > 0 ? z + 1 : z) - pos.z) / dir.z;
   if (tMaxX < 0) tMaxX += invDx;
   if (tMaxY < 0) tMaxY += invDy;
   if (tMaxZ < 0) tMaxZ += invDz;
