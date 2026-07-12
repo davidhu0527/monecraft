@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createOnlineProfile, signUp, TWO_BROWSER_VIEWPORT, waitForOnlineGame, watchErrors } from "./onlineHelpers";
+import { createOnlineProfile, poseSettled, signUp, TWO_BROWSER_VIEWPORT, waitForOnlineGame, walkToDiggableGround, watchErrors } from "./onlineHelpers";
 
 /**
  * The full co-op journey against the real online stack: the Next app backed
@@ -118,12 +118,28 @@ test("two accounts share an online world via an invite link", async ({ browser }
     await page.waitForFunction(() => window.__monecraft!.engine.state.players.size === 2, undefined, { timeout: 15000 });
   }
 
+  // Both accounts spawn at the SAME deterministic center-land point, so once the
+  // host digs its shaft the friend — still standing there — falls into it, over
+  // the aquifer the shaft reached; digging straight down then finds only air and
+  // water, and the friend's dig below can never break a block. Walk the friend
+  // onto its own pristine column now, while the ground is untouched and before
+  // any latency, so its later dig has real solid ground under it.
+  await walkToDiggableGround(friend);
+
   // ── a block edit crosses the wire ─────────────────────────────────────────
   // The host digs straight down. The host's own journal entry may be its
   // PREDICTED break (replica mining commits locally now), so the proof that
   // the server decided and broadcast it is the FRIEND's journal changing.
   await forceDigStraightDown(host);
-  await host.waitForTimeout(1000); // settle (slow CI renderers need the margin)
+  // Gate the dig on the aim having round-tripped host → server → friend, so the
+  // server raycasts from the straight-down aim rather than a stale pose. Best
+  // effort: the held dig below (mineHeld streams until BOTH pages confirm) is the
+  // real guarantee, so a crawling pose stream must not fail here.
+  try {
+    await poseSettled(host, friend);
+  } catch {
+    /* pose stream is crawling — the held dig streams the aim anyway */
+  }
   await host.mouse.down();
   for (const page of [host, friend]) {
     // 45s: the friend's copy arrives over the wire, and a slammed runner (the
@@ -142,7 +158,9 @@ test("two accounts share an online world via an invite link", async ({ browser }
 
   // ── the roster lists both players; only the owner (host) gets a Kick control ─
   for (const page of [host, friend]) {
-    expect(await page.evaluate(() => window.__monecraft!.net!.roster().length)).toBe(2);
+    // Poll, don't snapshot: the roster is network-derived and a member's
+    // roster-add can trail its players.size bump by a tick on a loaded runner.
+    await expect.poll(() => page.evaluate(() => window.__monecraft!.net!.roster().length), { timeout: 30000 }).toBe(2);
   }
   await expect(host.getByRole("button", { name: /^Kick / })).toBeVisible(); // owner sees it
   expect(await friend.getByRole("button", { name: /^Kick / }).count()).toBe(0); // a member does not
@@ -180,18 +198,30 @@ test("two accounts share an online world via an invite link", async ({ browser }
   // pre-existing host edit rather than the friend's.
   const hostEditsBefore = await host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length);
   await forceDigStraightDown(friend);
-  await friend.waitForTimeout(1000); // settle (slow CI renderers need the margin — same as the host break)
+  // Gate the dig on the dug-down aim reaching the server (best effort; the held
+  // dig below is the real guarantee — same as the host dig above).
+  try {
+    await poseSettled(friend, host);
+  } catch {
+    /* pose stream is crawling — the held dig streams the aim anyway */
+  }
   await friend.mouse.down();
-  // The break commits on the FRIEND's own screen despite the lag — its journal
-  // grows before a server round trip could have returned the edit.
+  // Local-first: the friend's replica commits the break ahead of the server, so
+  // its own journal grows before a server round trip could have returned it.
   await expect
     .poll(() => friend.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 45000 })
     .toBeGreaterThan(friendEdits);
-  await friend.mouse.up();
-  // …and still crosses the deliberately lagged link to the host.
+  // …and it still crosses the deliberately lagged link to the host. HOLD the dig
+  // until the host confirms: mining is not a discrete command — it rides the
+  // 20 Hz `mineHeld` pose stream. Releasing on the local prediction alone can
+  // leave the whole down→up window between two lag-delayed pose frames, so no
+  // frame ever carries mineHeld to the server; it never mines, never broadcasts,
+  // and this poll times out (the historic flake). Keeping the button down streams
+  // mineHeld until the server acts, then release.
   await expect
     .poll(() => host.evaluate(() => window.__monecraft!.engine.state.blockChanges.changes().length), { timeout: 45000 })
     .toBeGreaterThan(hostEditsBefore);
+  await friend.mouse.up();
   await friend.evaluate(() => window.__monecraft!.net!.setSimulatedLatency(0));
 
   // ── the owner kicks the friend, who drops to the disconnect modal (LAST: it

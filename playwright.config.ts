@@ -28,7 +28,13 @@ export default defineConfig({
   // those invariants (see docs/testing.md).
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // No retries, on CI too: fail is fail, success is success. Retries were a
+  // stopgap walked 3→2 as the two-browser specs were made deterministic; a
+  // retry-only pass masks a flake as green. Every remaining flake must be fixed
+  // at the root (the specs' own deflake history — throttling args, chained
+  // projects, pose-settle gates, an actual engine bug in 4b4d58d — is that
+  // policy applied). A rare genuine runner one-off is a re-run, not a retry.
+  retries: 0,
   workers: 2,
   // The list reporter runs on CI too: the github reporter records no per-spec
   // durations, which makes slow-suite diagnosis needlessly blind.
@@ -36,10 +42,14 @@ export default defineConfig({
   timeout: 60000,
   use: {
     baseURL: "http://localhost:3000",
-    // Trace only from the first retry: continuous recording taxes the CPU-bound
-    // CI runner on every green first attempt (and failed heavy specs produced
-    // 600+ MB artifacts); a retry is exactly when a trace is worth its cost.
-    trace: "on-first-retry"
+    // No trace. With retries: 0 there is no retry for "on-first-retry" to fire
+    // on, and "retain-on-failure" would record continuously for EVERY test
+    // (discarding on pass) — the CPU tax that, on this software-GL runner,
+    // starved the rAF-driven light specs (touch, mining) into 60 s timeouts.
+    // Failures still get Playwright's auto error-context page snapshot at no
+    // continuous cost; enable a trace ad hoc (locally, or a throwaway CI edit)
+    // when one is genuinely needed.
+    trace: "off"
   },
   // channel "chromium" runs the full browser in new-headless mode: the default
   // headless shell rejects requestPointerLock (WrongDocumentError).
@@ -103,8 +113,8 @@ export default defineConfig({
         PERSISTENCE: "memory",
         GAME_TICKET_SECRET: "e2e-ticket-secret",
         // Headroom over the default 6: with two workers, both room-consuming
-        // spec files can hold a live room at once, and CI retries can pile
-        // idle rooms for up to the 5-minute eviction window.
+        // spec files can hold a live room at once, and an emptied room lingers
+        // up to the 5-minute idle-eviction window before it frees its slot.
         MAX_ROOMS: "8"
       }
     }

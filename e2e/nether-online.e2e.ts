@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createOnlineProfile, signUp, TWO_BROWSER_VIEWPORT, waitForOnlineGame, watchErrors } from "./onlineHelpers";
+import { createOnlineProfile, flyTo, poseSettled, signUp, TWO_BROWSER_VIEWPORT, waitForOnlineGame, walkTo, watchErrors } from "./onlineHelpers";
 
 /**
  * Nether travel in an ONLINE world, end-to-end through the real stack: the
@@ -26,106 +26,6 @@ async function aimAt(page: Page, target: { x: number; y: number; z: number }): P
     s.player.pitch = Math.asin(dy / len);
     s.player.yaw = Math.atan2(-dx, -dz);
   }, target);
-}
-
-/**
- * Moves the (flying) player in ≤1-block hops. The 20 Hz pose stream keeps
- * `elapsed` at one tick server-side, so each pose may move at most
- * ~FLY_SPEED×1.6×0.05+0.5 ≈ 1.3 blocks — a bigger hop is refused and
- * force-posed back, which is exactly the stall this helper must avoid.
- */
-async function flyTo(page: Page, target: { x: number; y: number; z: number }, stepSize = 1, ignoreY = false): Promise<void> {
-  let lastDist = Infinity;
-  let stalled = 0;
-  for (let hop = 0; hop < 400; hop += 1) {
-    const dist = await page.evaluate(
-      ({ t, stepSize: size, ignoreY: flat }) => {
-        const p = window.__monecraft!.engine.state.player;
-        const dx = t.x - p.position.x;
-        const dy = flat ? 0 : t.y - p.position.y;
-        const dz = t.z - p.position.z;
-        const d = Math.hypot(dx, dy, dz);
-        if (d < 0.3) return 0;
-        const step = Math.min(size, d);
-        p.position.set(p.position.x + (dx / d) * step, p.position.y + (dy / d) * step, p.position.z + (dz / d) * step);
-        p.velocity.set(0, 0, 0);
-        return d;
-      },
-      { t: target, stepSize, ignoreY }
-    );
-    if (dist === 0) return;
-    // Collision stall (a canopy or ledge the site scan couldn't see): the
-    // physics keeps pushing the hop back. Dodge up-and-sideways and re-run —
-    // the straight line re-forms from the new spot.
-    stalled = lastDist - dist < 0.05 ? stalled + 1 : 0;
-    lastDist = dist;
-    if (stalled >= 5) {
-      stalled = 0;
-      lastDist = Infinity;
-      await page.evaluate((h) => {
-        const p = window.__monecraft!.engine.state.player;
-        p.position.set(p.position.x + (h % 2 === 0 ? 0.8 : -0.8), p.position.y + 1.5, p.position.z);
-        p.velocity.set(0, 0, 0);
-      }, hop);
-    }
-    await page.waitForTimeout(120); // let the pose stream carry the hop
-  }
-  const debug = await page.evaluate(() => {
-    const s = window.__monecraft!.engine.state;
-    const p = s.player;
-    const cell = { x: Math.floor(p.position.x), y: Math.floor(p.position.y), z: Math.floor(p.position.z) };
-    return {
-      pos: { x: p.position.x, y: p.position.y, z: p.position.z },
-      isFlying: p.isFlying,
-      dimension: s.dimension,
-      status: window.__monecraft!.net?.status(),
-      blockAt: s.world.get(cell.x, cell.y, cell.z),
-      blockBelow: s.world.get(cell.x, cell.y - 1, cell.z)
-    };
-  });
-  throw new Error(`could not reach ${JSON.stringify(target)}; player=${JSON.stringify(debug)}`);
-}
-
-/**
- * Ground movement: sub-clamp steps (a NON-flying player's per-pose allowance
- * is under a block at the 20 Hz cadence) on the XZ plane only — gravity owns
- * y, and chasing a captured y that physics has since settled away from would
- * stall forever against the ground.
- */
-const walkTo = (page: Page, target: { x: number; y: number; z: number }) => flyTo(page, target, 0.8, true);
-
-/**
- * Waits until the WITNESS's replica shows the placer at the placer's own local
- * pose — proof the pose has round-tripped placer → server → witness, so the
- * server's next command raycast runs from the very aim the script computed.
- * A blind post-aim sleep is NOT enough on a loaded CI runner: the 20 Hz pose
- * stream can lag the scripted aim by whole seconds, and the server then
- * raycasts with a STALE look direction and places (or refuses) elsewhere —
- * the exact flake that shipped three red main runs. Tolerances sit well above
- * the wire quantization (2 decimals position, 3 decimals angles); yaw compares
- * wrap-aware. The witness renders remotes 125–450 ms in the past, which the
- * poll simply rides out.
- */
-async function poseSettled(placer: Page, witness: Page): Promise<void> {
-  const want = await placer.evaluate(() => {
-    const p = window.__monecraft!.engine.state.player;
-    return { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw, pitch: p.pitch };
-  });
-  await expect
-    .poll(
-      () =>
-        witness.evaluate((w) => {
-          const s = window.__monecraft!.engine.state;
-          // With exactly two players, "the other one" is the placer — no id plumbing.
-          const remote = [...s.players.values()].find((p) => p !== s.player);
-          if (!remote) return Number.POSITIVE_INFINITY;
-          const wrap = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-          const posDrift = Math.hypot(remote.position.x - w.x, remote.position.y - w.y, remote.position.z - w.z);
-          return posDrift + wrap(remote.yaw, w.yaw) + wrap(remote.pitch, w.pitch);
-        }, want),
-      { timeout: 5000 }
-    )
-    .toBeLessThan(0.08);
 }
 
 /**
@@ -197,10 +97,25 @@ const dimensionOf = (page: Page) => page.evaluate(() => window.__monecraft?.engi
  * step round-trips the server (the SelfDelta echoes confirm).
  */
 async function holdItem(page: Page, itemId: string, hotbarIndex: number): Promise<void> {
-  await page.evaluate((id) => window.__monecraft!.net!.dispatch({ type: "creativeGiveItem", itemId: id }), itemId);
-  await expect
-    .poll(() => page.evaluate((id) => window.__monecraft!.engine.state.player.inventory.findIndex((slot) => slot?.id === id), itemId), { timeout: 10000 })
-    .toBeGreaterThanOrEqual(0);
+  // creativeGiveItem is not a LOCAL_COMMAND and has no optimistic path, so the
+  // item appears only after a full cmd → server → SelfDelta → client round-trip.
+  // On a build-slammed shared runner that echo can lag well past the 10 s a
+  // single poll once allowed (the rest of the suite budgets 30–45 s for such
+  // hops). Re-dispatch across three ~10 s rounds — the way placeAt retries — so
+  // one slow or dropped echo self-heals instead of failing the run. A duplicate
+  // give (if the first was merely slow) is harmless: it fills another slot and
+  // findIndex still returns the first.
+  const slotOf = () => page.evaluate((id) => window.__monecraft!.engine.state.player.inventory.findIndex((slot) => slot?.id === id), itemId);
+  let gave = false;
+  for (let round = 0; round < 3 && !gave; round += 1) {
+    await page.evaluate((id) => window.__monecraft!.net!.dispatch({ type: "creativeGiveItem", itemId: id }), itemId);
+    try {
+      await expect.poll(slotOf, { timeout: 10000 }).toBeGreaterThanOrEqual(0);
+      gave = true;
+    } catch {
+      if (round === 2) throw new Error(`creativeGiveItem "${itemId}" never echoed after 3 dispatches`);
+    }
+  }
   await page.evaluate(
     ({ id, to }) => {
       const s = window.__monecraft!.engine.state;
@@ -210,8 +125,11 @@ async function holdItem(page: Page, itemId: string, hotbarIndex: number): Promis
     },
     { id: itemId, to: hotbarIndex }
   );
+  // 30 s like the suite's other network-hop polls: the swap + select is another
+  // server round-trip, and this fires right after the portal build has hammered
+  // the shared server.
   await expect
-    .poll(() => page.evaluate((to) => window.__monecraft!.engine.state.player.inventory[to]?.id ?? null, hotbarIndex), { timeout: 10000 })
+    .poll(() => page.evaluate((to) => window.__monecraft!.engine.state.player.inventory[to]?.id ?? null, hotbarIndex), { timeout: 30000 })
     .toBe(itemId);
 }
 
