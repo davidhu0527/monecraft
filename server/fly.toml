@@ -4,12 +4,16 @@
 #
 
 app = 'monecraft-server'
-# San Jose: the transpacific compromise for a mixed NA/Asia player group —
-# NA stays ~60-100 ms while Asia drops from 700+ ms (Chicago) to route-
-# dependent 200-400 ms. After a region deploy, verify `fly machine list`
-# still shows EXACTLY ONE machine (see docs/deploy.md — two split-brains
-# every room) and that no machine lingers in the old region.
-primary_region = 'sjc'
+# Chicago, chosen by MEASURED round-trip latency, not a geography guess.
+# sjc looked better on paper for a mixed NA/Asia group but was 3-10x worse
+# in production for our players' actual ISP routes: Asia ~2000 ms & NA
+# ~200 ms on sjc, vs Asia ~1000 ms & NA ~60 ms on ord. Fly peering/routing
+# to sjc is simply poor for these users, so ord wins for BOTH groups — do
+# not "fix" this back to a west-coast region on a map hunch; re-measure F3
+# rttMs first. After a region deploy, verify `fly machine list` still shows
+# EXACTLY ONE machine (see docs/deploy.md — two = split-brains every room)
+# and that no machine lingers in the old region.
+primary_region = 'ord'
 
 [build]
   dockerfile = 'Dockerfile'
