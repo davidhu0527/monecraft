@@ -239,6 +239,7 @@ describe("evaluateAdvancements", () => {
       { type: "drankPotion" },
       { type: "sleepStarted" },
       { type: "treasureUnearthed" },
+      { type: "fortressLooted" },
       { type: "leverToggled", on: true },
       { type: "vehicleBoarded", kind: "minecart" },
       { type: "mobDied", kind: "drowned", x: 0, y: 0, z: 0 },

@@ -167,6 +167,31 @@ describe("boot", () => {
     expect(world.light.some((v) => (v & 0x0f) !== 0)).toBe(true);
   });
 
+  test("a headless engine skips the light bake but still tracks and journals edits", () => {
+    const engine = new GameEngine({
+      seed: 1337,
+      rng: mulberry32(42),
+      worldSize: { x: 64, y: 150, z: 64 },
+      authority: "server",
+      headless: true,
+      bootPlayer: false
+    });
+    const { state } = engine;
+    const { world } = state;
+    // No light cache at all — the ~39 MB allocation and the full-world BFS
+    // bake are renderer-only costs a server room never pays.
+    expect(world.light).toHaveLength(0);
+    // The block-change chokepoint still works without a light patch: deltas
+    // accumulate and the per-tick journal drains (the server's broadcast).
+    const y = world.highestSolidY(20, 20) + 1;
+    state.blockChanges.set(20, y, 20, BlockId.Stone);
+    expect(world.get(20, y, 20)).toBe(BlockId.Stone);
+    expect(state.blockChanges.changes()).toContainEqual([world.index(20, y, 20), BlockId.Stone]);
+    expect(state.blockChanges.drainEdits()).toContainEqual([world.index(20, y, 20), BlockId.Stone]);
+    // Light queries degrade to darkness instead of throwing.
+    expect(world.getSky(20, world.sizeY - 1, 20)).toBe(0);
+  });
+
   test("block edits relight locally: placing darkens the cell, mining restores sky", () => {
     const { state } = makeEngine();
     const { world } = state;
@@ -807,6 +832,41 @@ describe("chests", () => {
     fillWorldgenChestIfUnlooted(engine.state, idx);
     expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
   });
+
+  test("a fortress chest fills from the fortress table, once, emitting fortressLooted", () => {
+    const engine = makeEngine();
+    const idx = engine.state.world.index(26, 40, 26);
+    engine.state.fortressChestIndices.add(idx);
+
+    const events: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(engine.state, idx, (e) => events.push(e));
+    expect(engine.state.lootedWorldgenChests.has(idx)).toBe(true);
+    expect(events.some((e) => e.type === "fortressLooted")).toBe(true);
+    // Nether brick is the fortress table's guaranteed salvage.
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id === "nether_brick" && slot.count > 0)).toBe(true);
+
+    // Re-access after emptying never re-rolls, and never re-fires the event.
+    engine.state.containers.set(
+      idx,
+      Array.from({ length: CHEST_SLOTS }, () => createEmptySlot())
+    );
+    const again: GameEvent[] = [];
+    fillWorldgenChestIfUnlooted(engine.state, idx, (e) => again.push(e));
+    expect(engine.state.containers.get(idx)!.some((slot) => slot.id && slot.count > 0)).toBe(false);
+    expect(again).toHaveLength(0);
+  });
+
+  test("a nether engine derives fortress sites from the seed; the overworld derives none", () => {
+    const nether = new GameEngine({ dimension: "nether", seed: 1337, rng: mulberry32(42), worldSize: { x: 128, y: 150, z: 128 } });
+    expect(nether.state.fortressChestIndices.size).toBeGreaterThan(0);
+    // Every derived site holds the chest the fortress build wrote.
+    for (const idx of nether.state.fortressChestIndices) {
+      expect(nether.state.world.blocks[idx]).toBe(BlockId.Chest);
+    }
+    const overworld = makeEngine();
+    expect(overworld.state.fortressChestIndices.size).toBe(0);
+    expect(overworld.state.fortressSpawnerIndices.size).toBe(0);
+  });
 });
 
 describe("dungeon spawners", () => {
@@ -869,6 +929,26 @@ describe("dungeon spawners", () => {
     for (let i = 0; i < 10; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
 
     expect(state.mobs.length).toBe(0);
+  });
+
+  test("a fortress spawner drips only the nether's hostiles", () => {
+    const engine = makeEngine();
+    const { state } = engine;
+    // Register the spawner under the FORTRESS set — membership picks the mob table.
+    const idx = placeSpawner(engine);
+    state.dungeonSpawnerIndices.delete(idx);
+    state.fortressSpawnerIndices.add(idx);
+    const [sx, sy, sz] = indexToXYZ(state, idx);
+    state.player.position.set(sx + 1, sy, sz + 1);
+
+    const rng = mulberry32(7);
+    for (let i = 0; i < 20; i += 1) tickSpawnerDirector(state, SPAWNER_INTERVAL_SECONDS, rng, () => {});
+
+    expect(state.mobs.length).toBeGreaterThan(0);
+    for (const mob of state.mobs) {
+      expect(["imp", "scorcher"]).toContain(mob.kind);
+      expect(mob.hostile).toBe(true);
+    }
   });
 });
 
@@ -1240,6 +1320,48 @@ describe("death and respawn", () => {
     expect(engine.state.hearts).toBe(MAX_HEARTS);
     expect(engine.state.player.position.y).toBeGreaterThan(0);
     expect(engine.consumeEvents().some((event) => event.type === "respawned")).toBe(true);
+  });
+
+  test("a bed respawn point is honored only in its own dimension", () => {
+    // Same block coords index a DIFFERENT voxel in each dimension, so a bed
+    // stamped for another world must not be honored even when this world
+    // coincidentally has a bed at those coords.
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 0.5);
+    const { world } = engine.state;
+    const bx = 30;
+    const bz = 30;
+    const by = world.highestSolidY(bx, bz) + 1;
+    engine.state.blockChanges.set(bx, by, bz, BlockId.Bed);
+    engine.state.player.spawnPoint = { x: bx, y: by, z: bz, dimension: "nether" };
+    engine.state.hearts = 1;
+    engine.state.player.position.y = -10; // into the void
+    run(engine, 5.5);
+    expect(engine.state.isDead).toBe(false);
+    // A honored bed lands exactly on it (y = bed + 1.05); a foreign bed falls
+    // through to the random land point (y = surface + 2, whole-numbered).
+    expect(engine.state.player.position.y).not.toBeCloseTo(by + 1.05, 5);
+  });
+
+  test("a bed with no dimension stamp (a pre-nether save) is honored in the overworld", () => {
+    const engine = makeEngine();
+    calmDaytime(engine);
+    run(engine, 0.5);
+    const { world } = engine.state;
+    const bx = 30;
+    const bz = 30;
+    const by = world.highestSolidY(bx, bz) + 1;
+    engine.state.blockChanges.set(bx, by, bz, BlockId.Bed);
+    engine.state.player.spawnPoint = { x: bx, y: by, z: bz };
+    engine.state.hearts = 1;
+    engine.state.player.position.y = -10;
+    run(engine, 5.5);
+    expect(engine.state.isDead).toBe(false);
+    expect(engine.state.player.position.x).toBeCloseTo(bx + 0.5, 5);
+    // Gravity settles the fresh spawn a fraction onto the bed surface.
+    expect(engine.state.player.position.y).toBeCloseTo(by + 1.05, 0);
+    expect(engine.state.player.position.z).toBeCloseTo(bz + 0.5, 5);
   });
 });
 
@@ -1943,7 +2065,7 @@ describe("beds and sleep", () => {
     expect(engine.consumeEvents().some((event) => event.type === "sleepStarted")).toBe(true);
     expect(engine.state.sleepTimer).toBeGreaterThan(0);
     expect(engine.getSnapshot().sleeping).toBe(true);
-    expect(engine.state.spawnPoint).toEqual(bed);
+    expect(engine.state.spawnPoint).toEqual({ ...bed, dimension: "overworld" });
 
     run(engine, 2); // let the fade complete and the clock jump
     expect(engine.state.sleepTimer).toBe(0);
@@ -3269,6 +3391,19 @@ describe("dimension-aware boot (the nether)", () => {
     expect(e.state.daylight).toBe(NETHER_DAYLIGHT);
   });
 
+  test("an explicit dimension override outranks the save's player dimension (the server shard boot)", () => {
+    // A room's nether engine boots from the shared save even though every
+    // player entry in it may sit in the overworld — the option must win.
+    const over = makeEngine();
+    over.state.blockChanges.set(10, 40, 10, BlockId.Brick);
+    const save = over.serialize();
+    expect(save.players[0].dimension ?? "overworld").toBe("overworld");
+    const nether = makeNetherEngine(save);
+    expect(nether.state.dimension).toBe("nether");
+    // …and it still round-trips the overworld half verbatim.
+    expect(nether.serialize().changes).toEqual(save.changes);
+  });
+
   test("a save round-trips overworld and nether world halves independently", () => {
     // An overworld world with an edit…
     const over = makeEngine();
@@ -3334,6 +3469,33 @@ describe("portal travel (swap-on-travel)", () => {
     const reload = new GameEngine({ save: nether.serialize(), rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
     expect(reload.state.dimension).toBe("nether");
     expect(reload.state.world.get(Math.floor(feet.x), Math.floor(feet.y), Math.floor(feet.z))).toBe(BlockId.NetherPortal);
+  });
+
+  test("ensureArrival journals its writes so a built portal replicates as tick edits", () => {
+    const engine = makeEngine();
+    engine.state.blockChanges.drainEdits(); // clear boot noise
+    const pos = engine.ensureArrival({ x: 30, y: 41, z: 30 });
+    expect(engine.state.world.get(pos.x, pos.y, pos.z)).toBe(BlockId.NetherPortal);
+    expect(engine.state.worldMeshDirty).toBe(true);
+    const edits = engine.state.blockChanges.drainEdits();
+    expect(edits.some(([idx, block]) => block === BlockId.NetherPortal && idx === engine.state.world.index(pos.x, pos.y, pos.z))).toBe(true);
+    // A second arrival at the same anchor reuses the portal — zero new writes.
+    expect(engine.ensureArrival({ x: 30, y: 41, z: 30 })).toEqual(pos);
+    expect(engine.state.blockChanges.drainEdits()).toHaveLength(0);
+  });
+
+  test("a player who APPEARS inside a portal boots latched (rejoin/handoff must not re-travel)", () => {
+    const engine = makeEngine();
+    const pos = engine.ensureArrival({ x: 30, y: 41, z: 30 });
+    const player = engine.addPlayer({
+      id: "p2",
+      restore: { id: "p2", position: { x: pos.x + 0.5, y: pos.y, z: pos.z + 0.5 } }
+    });
+    expect(player.timers.portalLatched).toBe(true);
+    // Standing put through several dwell windows never fires travel for them.
+    engine.consumeEvents();
+    run(engine, 8);
+    expect(engine.consumeEvents().some((e) => e.type === "dimensionTravel")).toBe(false);
   });
 
   test("the return trip reuses the departure-side portal", () => {

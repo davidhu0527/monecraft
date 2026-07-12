@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { calmDaytime, expect, playerPosition, test } from "./helpers";
 
 /**
@@ -10,14 +10,15 @@ import { calmDaytime, expect, playerPosition, test } from "./helpers";
  *
  * Input driving, by reliability on the headless software-GL CI runner:
  *   - discrete taps/clicks (tap-to-play, buttons): page click — fine.
- *   - press-and-hold (hold-to-mine): a single dispatched pointerdown — fine.
- *   - sustained MOVE gestures (joystick push, look drag): neither page.mouse nor
- *     dispatchEvent can deliver a pointermove to the overlay's React handler in
- *     CI (proven: the move intent stayed all-false, yaw stayed 0), so these are
+ *   - EVERY sustained gesture (joystick push, look drag, press-and-hold):
  *     driven at the controller API the overlay itself calls
- *     (window.__monecraft.input.controls). The DOM pointer→controls wiring is
- *     covered by TouchControls.test.tsx; here we still exercise the real
- *     controller→engine→movement/look integration in the running app.
+ *     (window.__monecraft.input.controls). Neither page.mouse nor
+ *     dispatchEvent delivers pointer events to the overlay's React handlers
+ *     reliably in CI — pointermove provably never arrives, and the
+ *     press-and-hold pointerdown was the last holdout, flaking for months
+ *     before failing whole runs under 2-worker load. The DOM pointer→controls
+ *     wiring is covered by TouchControls.test.tsx; here we still exercise the
+ *     real controller→engine integration (timers included) in the running app.
  */
 
 type TouchPoint = { pointerId: number; x: number; y: number };
@@ -43,21 +44,6 @@ async function menuClick(page: Page, name: string): Promise<void> {
   const button = page.getByRole("button", { name });
   await expect(button).toBeVisible();
   await button.dispatchEvent("click");
-}
-
-/** Fire a PointerEvent straight at an overlay element (see the file header). */
-async function pointer(target: Locator, type: "pointerdown" | "pointermove" | "pointerup", x: number, y: number): Promise<void> {
-  await target.dispatchEvent(type, {
-    pointerId: 1,
-    pointerType: "touch",
-    isPrimary: true,
-    clientX: x,
-    clientY: y,
-    button: type === "pointermove" ? -1 : 0,
-    buttons: type === "pointerup" ? 0 : 1,
-    bubbles: true,
-    cancelable: true
-  });
 }
 
 /** The world boots unlocked; on touch the click-hint is a full-screen tap target. */
@@ -124,14 +110,19 @@ test("press-and-hold on the world mines; lifting stops", async ({ gamePage: page
   await tapToPlay(page);
   await page.waitForTimeout(1000); // settle (see the drag test)
 
-  const lookpad = page.getByTestId("touch-lookpad");
   // Press and hold within slop — no move, so it classifies as a mine after
-  // TOUCH_HOLD_MINE_MS. mineHeld flips on a setTimeout; poll for it (CI timer
-  // throttling can land it late) — the reads don't move the pointer, so the
-  // still-hold keeps counting.
-  await pointer(lookpad, "pointerdown", 400, 180);
+  // TOUCH_HOLD_MINE_MS (a real setTimeout in the controller; poll for it).
+  // Driven at the controller API like the joystick/drag tests: this was the
+  // last touch test on a dispatched DOM pointer event, and it graduated from
+  // "flaky" to failing whole CI runs — the pointerdown→lookDown DOM wiring is
+  // pinned by TouchControls.test.tsx, and the hold-vs-look classification
+  // windows by touchInputController.test.ts; here we prove the live
+  // controller→input→engine seam with the real timer.
+  await page.evaluate(() => {
+    (window.__monecraft!.input as unknown as { controls: TouchControls }).controls.lookDown({ pointerId: 1, x: 400, y: 180 });
+  });
   await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(true);
-  await pointer(lookpad, "pointerup", 400, 180);
+  await page.evaluate(() => (window.__monecraft!.input as unknown as { controls: TouchControls }).controls.lookUp(1));
   await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(false);
 });
 

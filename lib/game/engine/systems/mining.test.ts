@@ -119,4 +119,11 @@ describe("nether block tool tiers", () => {
     expect(canMineBlock(BlockId.BlaziteOre, 6)).toBe(false);
     expect(canMineBlock(BlockId.BlaziteOre, 7)).toBe(true);
   });
+
+  test("nether brick needs any pickaxe; redstone ore is sliver-gated like ruby", () => {
+    expect(canMineBlock(BlockId.NetherBrick, 0)).toBe(false);
+    expect(canMineBlock(BlockId.NetherBrick, 1)).toBe(true);
+    expect(canMineBlock(BlockId.RedstoneOre, 2)).toBe(false);
+    expect(canMineBlock(BlockId.RedstoneOre, 3)).toBe(true);
+  });
 });

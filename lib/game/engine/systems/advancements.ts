@@ -37,6 +37,7 @@ export const STATS: readonly StatMeta[] = [
   { id: "potions_drunk", label: "Potions Drunk", format: "count" },
   { id: "fish_caught", label: "Fish Caught", format: "count" },
   { id: "treasure_unearthed", label: "Treasures Unearthed", format: "count" },
+  { id: "fortress_looted", label: "Fortress Chests Looted", format: "count" },
   { id: "arrows_fired", label: "Arrows Fired", format: "count" },
   { id: "villager_trades", label: "Villager Trades", format: "count" },
   { id: "minecart_rides", label: "Minecart Rides", format: "count" },
@@ -58,7 +59,8 @@ const MINED_STAT_BY_BLOCK: Partial<Record<BlockId, string>> = {
   [BlockId.DiamondOre]: "diamond_ore_mined",
   [BlockId.WheatStage3]: "wheat_harvested",
   [BlockId.Glowstone]: "glowstone_mined",
-  [BlockId.BlaziteOre]: "blazite_ore_mined"
+  [BlockId.BlaziteOre]: "blazite_ore_mined",
+  [BlockId.RedstoneOre]: "redstone_ore_mined"
 };
 
 const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
@@ -113,6 +115,9 @@ export function recordEvent(player: PlayerState, event: GameEvent): void {
       break;
     case "treasureUnearthed":
       bump(player, "treasure_unearthed");
+      break;
+    case "fortressLooted":
+      bump(player, "fortress_looted");
       break;
     case "leverToggled":
       bump(player, "levers_flipped");
@@ -248,6 +253,15 @@ export const ADVANCEMENTS: readonly Advancement[] = [
     icon: "treasure_map",
     category: "Adventure",
     stat: "treasure_unearthed",
+    threshold: 1
+  },
+  {
+    id: "fortress_raider",
+    title: "Fortress Raider",
+    description: "Loot a chest in a nether fortress.",
+    icon: "nether_brick",
+    category: "Adventure",
+    stat: "fortress_looted",
     threshold: 1
   },
   {

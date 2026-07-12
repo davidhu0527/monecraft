@@ -144,6 +144,11 @@ export default function GameShell() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<Screen>({ name: "welcome" });
   const [reloadNonce, setReloadNonce] = useState(0);
+  // Bumped on every ONLINE dimension travel: keys the play-online mount so the
+  // game (engine consumers + renderer, whose dimension profile is
+  // construction-time) rebuilds around the session's freshly-swapped replica.
+  // The session itself — and its socket — live OUTSIDE the mount and survive.
+  const [dimensionNonce, setDimensionNonce] = useState(0);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   // A join is in flight — guards against a double-click opening (and leaking) a
@@ -278,12 +283,21 @@ export default function GameShell() {
       if (!grant) throw new Error("could not get a join ticket — are you still signed in, and is the game server configured?");
       // The reconnect ladder mints a fresh short-lived ticket each retry — the
       // 60 s TTL means a stale one is useless a minute after a drop.
-      const session = await connectNetworkSession(grant.gameServerUrl, grant.ticket, undefined, {
-        reconnect: async () => {
-          const next = await requestJoinTicket(world.id, ticketProfileId);
-          return next ? { url: next.gameServerUrl, ticket: next.ticket } : null;
+      const session = await connectNetworkSession(
+        grant.gameServerUrl,
+        grant.ticket,
+        {
+          // Server-initiated dimension travel: the session already swapped its
+          // replica; remount the game around it so the renderer rebuilds too.
+          onDimension: () => setDimensionNonce((nonce) => nonce + 1)
+        },
+        {
+          reconnect: async () => {
+            const next = await requestJoinTicket(world.id, ticketProfileId);
+            return next ? { url: next.gameServerUrl, ticket: next.ticket } : null;
+          }
         }
-      });
+      );
       setScreen({ name: "play-online", profile, world, session, onlineProfile });
     } catch (error) {
       setConnectError(error instanceof Error ? error.message : "connection failed");
@@ -404,16 +418,21 @@ export default function GameShell() {
   }
 
   if (screen.name === "play-online") {
-    // Quit returns to the account profile's online worlds.
+    // Quit returns to the account profile's online worlds. The shell owns the
+    // session's lifetime (dimension travel remounts the game around the SAME
+    // live socket), so every exit path disposes it here — never on unmount.
     const backToWorlds: Screen = { name: "online-worlds", profile: screen.onlineProfile };
     return (
       <MinecraftGame
-        key={`online:${screen.world.id}`}
+        key={`online:${screen.world.id}:${dimensionNonce}`}
         world={onlineWorldMeta(screen.world, screen.profile.id)}
         profile={screen.profile}
         initialSave={null} // the server owns the world; nothing is read locally
         online={screen.session}
-        onQuitToWorlds={() => setScreen(backToWorlds)}
+        onQuitToWorlds={() => {
+          screen.session.dispose();
+          setScreen(backToWorlds);
+        }}
         onDeleteWorld={() => {
           // Hardcore game-over: actually delete the shared world on the server
           // (owner-gated; a member just leaves), then return to the list.
@@ -421,7 +440,10 @@ export default function GameShell() {
           void deleteOnlineWorld(screen.world.id);
           setScreen(backToWorlds);
         }}
-        onReloadWorld={() => setScreen(backToWorlds)}
+        onReloadWorld={() => {
+          screen.session.dispose();
+          setScreen(backToWorlds);
+        }}
       />
     );
   }

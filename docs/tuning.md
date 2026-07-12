@@ -530,9 +530,10 @@ None affect single-player, and none are save-sensitive.
 - **`ROOM_CAPACITY`** (`8`, protocol.ts) — max players per world. The v1 co-op
   scale the whole design assumes; raising it grows the per-tick pose/self fan-out
   quadratically, so re-measure with `loadSim` before nudging it.
-- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~74 MB
-  each). Joins beyond it are refused at the door, not thrashed. Tune from
-  `/rooms` p95 tick + peak memory.
+- **`MAX_ROOMS`** (env, default `6`) — worlds one process hosts (memory: ~40 MB
+  each; the per-voxel light cache is renderer-only, so headless room engines
+  never allocate it). Joins beyond it are refused at the door, not thrashed.
+  Tune from `/rooms` p95 tick + peak memory.
 - **Tick rate** — `TICK_SECONDS` (`0.05` = 20 Hz, `tickDriver.ts`) is the room
   sim + pose-stream cadence. The whole latency budget hangs off it; not a
   casual dial.
@@ -573,6 +574,11 @@ None affect single-player, and none are save-sensitive.
   → `4008` kick).
 - **Persistence** — `PERSIST_INTERVAL_TICKS` (`1200` = 60 s dirty-persist; also
   the crash-loss bound), idle-evict at 5 min (`roomRegistry.ts`).
+- **Nether shard linger** — `NETHER_SHARD_LINGER_MS` (env, default `60000`):
+  how long a room keeps its EMPTY nether engine before persisting and dropping
+  it (~40 MB back). Longer = snappier there-and-back trips (no worldgen
+  re-boot); shorter = less memory held by abandoned nethers. The shard reboots
+  transparently on the next travel or nether-side rejoin.
 - **Reconnect** — `RECONNECT_DELAYS_MS` (`[1,2,4,8,8] s`, protocol.ts) is the
   client back-off ladder; the join ticket TTL is `TICKET_TTL_SECONDS` (`60`,
   `tickets.ts`).
@@ -603,7 +609,7 @@ surfaces a friendly "limit reached"); they don't affect single-player.
 
 Change these only with care:
 
-- **`WORLDGEN_VERSION`** (`11`) is the worldgen baseline each world records at
+- **`WORLDGEN_VERSION`** (`12`) is the worldgen baseline each world records at
   creation. When a deliberate terrain change invalidates old block-diffs, bump this:
   every world whose recorded version differs discards its stale diffs and reboots from
   its seed — per-world, without renaming any key (see [save-format.md](save-format.md)).
@@ -626,10 +632,13 @@ Change these only with care:
   coal is placed on its own PRNG in `placeCoal`, so retuning it shifts only coal,
   not the rest of the terrain), **`GEN.oceanFlora`** (kelp/coral density, stalk
   height cap, and the surface-clearance invariant), **`GEN.shipwreckCount`** (45
-  attempts) and **`GEN.buriedTreasureCount`** (90 attempts) — each on its own
-  decoupled PRNG, so retuning one shifts only that pass — and the worldgen-chest
-  loot tables / tier odds in `lib/game/dungeonLoot.ts` / `shipwreckLoot.ts` /
-  `buriedTreasureLoot.ts` (loot is pure logic, not a worldgen byte contract, but
+  attempts), **`GEN.buriedTreasureCount`** (90 attempts) and
+  **`GEN.redstoneOreConfig`** (12000 attempts in the explicit deep band Y 2–24,
+  vein size 4–8 — stone-only replacement because the pass runs last, after the
+  structure passes) — each on its own decoupled PRNG, so retuning one shifts
+  only that pass — and the worldgen-chest loot tables / tier odds in
+  `lib/game/dungeonLoot.ts` / `shipwreckLoot.ts` / `buriedTreasureLoot.ts` /
+  `fortressLoot.ts` (loot is pure logic, not a worldgen byte contract, but
   changing the _placement_ count or geometry is).
 - **World types** (Default / Superflat / Amplified / Islands) are terrain-config
   variations of `GEN` in **`terrainConfigFor`** (`generation.ts`) — they change
@@ -666,9 +675,15 @@ Change these only with care:
   ignoring it doesn't pay. Difficulty scales the damage like every mob hit.
 - **Nether worldgen** lives in the frozen `NETHER_GEN` (`netherGeneration.ts`):
   `lavaSeaLevel` (32), worm/sea-chamber/vein counts (scaled by world area), the
-  per-cell `glowstoneChance`, and `blaziteMaxY` (40). Any change is a deliberate
-  worldgen re-baseline: bump `WORLDGEN_VERSION` and re-pin the nether hashes —
-  the one stamp discards BOTH dimensions' saved diffs (see docs/save-format.md).
+  per-cell `glowstoneChance`, and `blaziteMaxY` (40) — plus the fortress dials:
+  `fortressCount` (10 area-scaled attempts, floored at 10 so tiny worlds still
+  usually hold one), `fortressMinSeparation` (72 — two fortresses' longest
+  opposing arms reach 2 × 35 = 70, so 72 keeps builds from ever touching; lower
+  it and one fortress can overwrite another's chests) and `fortressBaseY` (40,
+  lava sea level + 8, so bridges span open sea chambers). Any change is a
+  deliberate worldgen re-baseline: bump `WORLDGEN_VERSION` and re-pin the
+  nether hashes — the one stamp discards BOTH dimensions' saved diffs (see
+  docs/save-format.md).
 - The nether's _look_ (sky, fog, the raised sky-light floor that is its ambient
   glow) is the renderer's `DIMENSION_PROFILES.nether`
   (`lib/game/render/dimensionProfiles.ts`) — visual-only, no save impact.

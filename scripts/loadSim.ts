@@ -65,10 +65,11 @@ async function spawnClient(index: number): Promise<ClientStat> {
     const t = seq / 20;
     const x = center.x + Math.cos(t + phase) * 6;
     const z = center.z + Math.sin(t + phase) * 6;
-    ws.send(JSON.stringify({ t: "pose", seq, x, y: center.y, z, yaw: t, pitch: 0, onGround: true, move, mineHeld: seq % 40 < 10 }));
+    ws.send(JSON.stringify({ t: "pose", seq, d: "overworld", x, y: center.y, z, yaw: t, pitch: 0, onGround: true, move, mineHeld: seq % 40 < 10 }));
     if (seq % 20 === 0) ws.send(JSON.stringify({ t: "ping", id: seq, tMs: Date.now() }));
     // A block break every ~3s so the edit/journal path is exercised under load.
-    if (seq % 60 === 0) ws.send(JSON.stringify({ t: "cmd", seq, cmd: { type: "attack" }, pose: { x, y: center.y + 1.6, z, yaw: t, pitch: -1.4 } }));
+    if (seq % 60 === 0)
+      ws.send(JSON.stringify({ t: "cmd", seq, d: "overworld", cmd: { type: "attack" }, pose: { x, y: center.y + 1.6, z, yaw: t, pitch: -1.4 } }));
   }, 50);
 
   setTimeout(() => {

@@ -45,6 +45,8 @@ type SocketData = {
   helloTimer: ReturnType<typeof setTimeout> | null;
   room: Room | null;
   playerId: string | null;
+  /** THIS socket's sink identity — scopes the close-time leave so a replaced socket's late close can't tear down its successor. */
+  sink: ClientSink | null;
 };
 
 const server = Bun.serve<SocketData>({
@@ -72,7 +74,7 @@ const server = Bun.serve<SocketData>({
       return Response.json({ kicked });
     }
     if (url.pathname === "/ws") {
-      const upgraded = bunServer.upgrade(request, { data: { helloTimer: null, room: null, playerId: null } satisfies SocketData });
+      const upgraded = bunServer.upgrade(request, { data: { helloTimer: null, room: null, playerId: null, sink: null } satisfies SocketData });
       if (upgraded) return undefined as unknown as Response;
       return new Response("expected a websocket", { status: 426 });
     }
@@ -107,6 +109,7 @@ const server = Bun.serve<SocketData>({
         if (await room.join(claims, sink)) {
           ws.data.room = room;
           ws.data.playerId = claims.sub;
+          ws.data.sink = sink;
         }
         return;
       }
@@ -115,7 +118,10 @@ const server = Bun.serve<SocketData>({
     },
     close(ws) {
       if (ws.data.helloTimer) clearTimeout(ws.data.helloTimer);
-      if (ws.data.room && ws.data.playerId) ws.data.room.leave(ws.data.playerId);
+      // Scoped to THIS socket's sink: a reconnect replaces the conn before the
+      // old socket's close fires, and that late close must not evict the
+      // fresh session (leave would otherwise match by playerId alone).
+      if (ws.data.room && ws.data.playerId && ws.data.sink) ws.data.room.leave(ws.data.playerId, ws.data.sink);
     }
   }
 });

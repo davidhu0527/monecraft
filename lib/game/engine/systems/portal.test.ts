@@ -276,6 +276,19 @@ describe("tickPortalDwell", () => {
     expect(events.filter((e) => e.type === "dimensionTravel")).toHaveLength(2);
   });
 
+  test("a mounted player never accrues dwell — a vehicle can't ride through a portal", () => {
+    const { state, player, events } = dwellFixture();
+    const emit = (e: GameEvent) => events.push(e);
+    player.mountedVehicleId = 7;
+    for (let t = 0; t < 5; t += 0.1) tickPortalDwell(state, player, 0.1, emit);
+    expect(events.some((e) => e.type === "dimensionTravel")).toBe(false);
+    expect(player.timers.portalDwellSeconds).toBe(0);
+    // Dismounting inside the surface starts a fresh dwell and then travels.
+    player.mountedVehicleId = null;
+    for (let t = 0; t < 4; t += 0.1) tickPortalDwell(state, player, 0.1, emit);
+    expect(events.filter((e) => e.type === "dimensionTravel")).toHaveLength(1);
+  });
+
   test("a nether-side portal targets the overworld", () => {
     const { state, player, events } = dwellFixture();
     (state as { dimension: string }).dimension = "nether";

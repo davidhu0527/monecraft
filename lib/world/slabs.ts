@@ -16,37 +16,49 @@ export type StairFacing = DoorFacing;
 /** One axis-aligned box in local cell coordinates (0..1 on each axis). */
 export type ShapeBox = { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
 
-export type SlabMaterial = "plank" | "stone" | "cobble";
+export type SlabMaterial = "plank" | "stone" | "cobble" | "nether_brick";
 
+// Two contiguous id ranges share the offset math: the original 75-89 batch
+// (slabs then stairs) and the appended nether-brick batch 97-101 (its slab
+// then its 4 stair facings). BlockIds are append-only, so a later material
+// can never extend an existing range — it adds a range instead.
 const SLAB_FIRST = BlockId.PlankSlab;
 const SLAB_LAST = BlockId.CobbleSlab;
 const STAIR_FIRST = BlockId.PlankStairsNorth;
 const STAIR_LAST = BlockId.CobbleStairsWest;
+const NETHER_STAIR_FIRST = BlockId.NetherBrickStairsNorth;
+const NETHER_STAIR_LAST = BlockId.NetherBrickStairsWest;
 
 const FACING_ORDER: readonly StairFacing[] = ["north", "east", "south", "west"];
 
 const STAIR_FIRST_BY_MATERIAL: Record<SlabMaterial, BlockId> = {
   plank: BlockId.PlankStairsNorth,
   stone: BlockId.StoneStairsNorth,
-  cobble: BlockId.CobbleStairsNorth
+  cobble: BlockId.CobbleStairsNorth,
+  nether_brick: BlockId.NetherBrickStairsNorth
 };
 
 export function isSlabBlock(block: number): block is BlockId {
-  return block >= SLAB_FIRST && block <= SLAB_LAST;
+  return (block >= SLAB_FIRST && block <= SLAB_LAST) || block === BlockId.NetherBrickSlab;
 }
 
 export function isStairBlock(block: number): block is BlockId {
-  return block >= STAIR_FIRST && block <= STAIR_LAST;
+  return (block >= STAIR_FIRST && block <= STAIR_LAST) || (block >= NETHER_STAIR_FIRST && block <= NETHER_STAIR_LAST);
 }
 
 /** Any half-shape building block — the mesher/collision partial-box path. */
 export function isPartialBlock(block: number): boolean {
-  return block >= SLAB_FIRST && block <= STAIR_LAST;
+  return isSlabBlock(block) || isStairBlock(block);
+}
+
+/** The north id of the stair range holding `block` (facing math is per range). */
+function stairRangeFirst(block: number): BlockId {
+  return block >= NETHER_STAIR_FIRST ? NETHER_STAIR_FIRST : STAIR_FIRST;
 }
 
 export function stairFacing(block: number): StairFacing | null {
   if (!isStairBlock(block)) return null;
-  return FACING_ORDER[(block - STAIR_FIRST) % 4];
+  return FACING_ORDER[(block - stairRangeFirst(block)) % 4];
 }
 
 export function stairBlock(material: SlabMaterial, facing: StairFacing): BlockId {
@@ -56,7 +68,7 @@ export function stairBlock(material: SlabMaterial, facing: StairFacing): BlockId
 /** The same stair re-oriented — placement turns the item's base (north) id by player yaw. */
 export function orientStair(block: BlockId, facing: StairFacing): BlockId {
   if (!isStairBlock(block)) return block;
-  return (block - ((block - STAIR_FIRST) % 4) + FACING_ORDER.indexOf(facing)) as BlockId;
+  return (block - ((block - stairRangeFirst(block)) % 4) + FACING_ORDER.indexOf(facing)) as BlockId;
 }
 
 const BOTTOM_HALF: ShapeBox = Object.freeze({ minX: 0, maxX: 1, minY: 0, maxY: 0.5, minZ: 0, maxZ: 1 });

@@ -8,6 +8,7 @@ import { FACTION_BY_KIND } from "@/lib/game/mobs";
 import type { MobState } from "@/lib/game/engine/state";
 import { createMemoryPersistence, parseSaveBlob } from "./persistence";
 import { MELEE_REWIND_MAX_TICKS } from "./mobHistory";
+import { pushMob } from "@/lib/game/engine/systems/spawnDirector";
 import { Room, type ClientSink } from "./room";
 
 /**
@@ -121,7 +122,7 @@ describe("room lifecycle", () => {
     const alice = room.engine.state.players.get("alice")!;
 
     const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose });
     (room as unknown as { tick(dt: number): void }).tick(0.05);
 
     const swungAtB = b
@@ -139,17 +140,54 @@ describe("room lifecycle", () => {
     const alice = room.engine.state.players.get("alice")!;
     const { x, y, z } = alice.position;
 
-    await room.handleMessage("alice", { t: "pose", seq: 1, x: x + 0.4, y, z, yaw: 0.3, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 1, x: x + 0.4, y, z, yaw: 0.3, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6);
     expect(a.messagesOf("forcePose")).toHaveLength(0);
 
-    await room.handleMessage("alice", { t: "pose", seq: 2, x: x + 90, y, z: z + 90, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 2, x: x + 90, y, z: z + 90, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6); // unmoved
     expect(a.messagesOf("forcePose")).toHaveLength(1);
 
     // Stale seq replay is silently dropped.
-    await room.handleMessage("alice", { t: "pose", seq: 2, x: x + 1, y, z, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 2, x: x + 1, y, z, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(x + 0.4, 6);
+  });
+
+  test("a first-time joiner takes the world's game mode from the ticket; a returning slice outranks it", async () => {
+    const { room } = await makeRoom();
+    await room.join({ ...claimsFor("alice", "w1", "owner"), gm: "creative" }, fakeSink());
+    const alice = room.engine.state.players.get("alice")!;
+    expect(alice.gameMode).toBe("creative");
+    // The player switched modes in-game; their slice outranks the ticket on rejoin.
+    alice.gameMode = "survival";
+    room.leave("alice");
+    await room.join({ ...claimsFor("alice", "w1", "owner"), gm: "creative" }, fakeSink());
+    expect(room.engine.state.players.get("alice")!.gameMode).toBe("survival");
+    // A bogus claim (or a ticket without one) falls back to survival.
+    await room.join({ ...claimsFor("bob", "w1"), gm: "godmode" }, fakeSink());
+    expect(room.engine.state.players.get("bob")!.gameMode).toBe("survival");
+  });
+
+  test("a pose or cmd stamped with the wrong dimension is dropped silently (travel race guard)", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const alice = room.engine.state.players.get("alice")!;
+    const { x, y, z } = alice.position;
+
+    // A frame from the world the sender "left": no movement, no forcePose fight.
+    await room.handleMessage("alice", { t: "pose", d: "nether", seq: 1, x: x + 0.4, y, z, yaw: 0.3, pitch: 0, onGround: true, move, mineHeld: false });
+    expect(alice.position.x).toBeCloseTo(x, 6);
+    expect(a.messagesOf("forcePose")).toHaveLength(0);
+    // …and a mis-stamped cmd never dispatches (no swing event).
+    await room.handleMessage("alice", { t: "cmd", d: "nether", seq: 2, cmd: { type: "attack" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
+    (room as unknown as { tick(dt: number): void }).tick(0.05);
+    expect(
+      a
+        .messagesOf("tick")
+        .at(-1)
+        ?.ev.some((e) => e.type === "attackSwung")
+    ).toBe(false);
   });
 
   test("self-deltas ship only on change; chat is rate-limited and broadcast", async () => {
@@ -285,7 +323,7 @@ describe("room lifecycle", () => {
     // A pose while mounted is ignored (position is server-owned) and must NOT be
     // answered with forcePose — that reject means "ignore the stream", not "desync".
     a.frames.length = 0;
-    await room.handleMessage("alice", { t: "pose", seq: 1, x: 999, y: 41, z: 999, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
+    await room.handleMessage("alice", { t: "pose", d: "overworld", seq: 1, x: 999, y: 41, z: 999, yaw: 0, pitch: 0, onGround: true, move, mineHeld: false });
     expect(alice.position.x).toBeCloseTo(10, 6);
     expect(a.messagesOf("forcePose")).toHaveLength(0);
   });
@@ -332,7 +370,7 @@ describe("ops surface", () => {
     const a = fakeSink();
     await room.join(claimsFor("alice", "w1"), a);
 
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "toggleInventory" }, pose: eyePose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "toggleInventory" }, pose: eyePose });
     for (let i = 0; i < 20; i += 1) (room as unknown as { tick(dt: number): void }).tick(0.05); // triggers a pose checkpoint at tick 20
 
     const dump = room.logDump();
@@ -350,7 +388,8 @@ describe("ops surface", () => {
     const room = new Room(record!, persistence, () => 0, 5); // tiny log
     const a = fakeSink();
     await room.join(claimsFor("alice", "w1"), a);
-    for (let i = 0; i < 30; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "toggleInventory" }, pose: eyePose });
+    for (let i = 0; i < 30; i += 1)
+      await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: i + 1, cmd: { type: "toggleInventory" }, pose: eyePose });
     expect(room.logDump().entries.length).toBeLessThanOrEqual(5);
   });
 
@@ -413,10 +452,10 @@ describe("ops surface", () => {
     await room.join(claimsFor("bob", "w1", "member"), member);
     const pose = { x: 0, y: 40, z: 0, yaw: 0, pitch: 0 };
 
-    await room.handleMessage("bob", { t: "cmd", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    await room.handleMessage("bob", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
     expect(room.engine.state.difficulty).not.toBe("peaceful"); // member ignored
 
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
     expect(room.engine.state.difficulty).toBe("peaceful"); // owner honored
   });
 
@@ -449,10 +488,10 @@ describe("ops surface", () => {
     // each advances lastPoseTick. Then a teleport-sized cmd pose must be rejected.
     for (let i = 0; i < 40; i += 1) {
       tickRoom();
-      await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "toggleInventory" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
+      await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: i + 1, cmd: { type: "toggleInventory" }, pose: { x, y, z, yaw: 0, pitch: 0 } });
     }
     a.frames.length = 0;
-    await room.handleMessage("alice", { t: "cmd", seq: 999, cmd: { type: "attack" }, pose: { x: x + 60, y, z: z + 60, yaw: 0, pitch: 0 } });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 999, cmd: { type: "attack" }, pose: { x: x + 60, y, z: z + 60, yaw: 0, pitch: 0 } });
     expect(alice.position.x).toBeCloseTo(x, 3); // the jump was clamped, not admitted
   });
 });
@@ -531,11 +570,11 @@ describe("melee lag compensation (view-stamped attacks)", () => {
 
     const pose = poseAiming(seen);
     // Unstamped: judged at the live (far) position — a whiff.
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose });
     expect(sheep.hp).toBe(50);
 
     // Stamped with the tick alice was rendering: judged where she SAW it.
-    await room.handleMessage("alice", { t: "cmd", seq: 2, cmd: { type: "attack" }, pose, view: seenAt * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 2, cmd: { type: "attack" }, pose, view: seenAt * 50 });
     expect(sheep.hp).toBeLessThan(50);
   });
 
@@ -558,10 +597,10 @@ describe("melee lag compensation (view-stamped attacks)", () => {
 
     const pose = poseAiming(seen);
     // The in-front tick is beyond the clamp: floored inside the far window → miss.
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose, view: seenAt * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose, view: seenAt * 50 });
     expect(sheep.hp).toBe(50);
     // A future stamp clamps to the current tick → plain live selection → miss.
-    await room.handleMessage("alice", { t: "cmd", seq: 2, cmd: { type: "attack" }, pose, view: (tickCount() + 100) * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 2, cmd: { type: "attack" }, pose, view: (tickCount() + 100) * 50 });
     expect(sheep.hp).toBe(50);
   });
 
@@ -576,7 +615,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     const live = sheep.position.clone();
 
     // The stamp predates the mob's existence: selection falls back to live → hit.
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "attack" }, pose: poseAiming(live), view: viewTick * 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "attack" }, pose: poseAiming(live), view: viewTick * 50 });
     expect(sheep.hp).toBeLessThan(50);
   });
 
@@ -591,7 +630,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
 
     // A 20-attack burst inside one second: only 12 swings make it through.
-    for (let i = 0; i < 20; i += 1) await room.handleMessage("alice", { t: "cmd", seq: i + 1, cmd: { type: "attack" }, pose });
+    for (let i = 0; i < 20; i += 1) await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: i + 1, cmd: { type: "attack" }, pose });
     tick();
     const swings = b
       .messagesOf("tick")
@@ -601,7 +640,7 @@ describe("melee lag compensation (view-stamped attacks)", () => {
 
     // Cross a second boundary (budgets reset every 20th tick) and swing again.
     for (let i = 0; i < 20; i += 1) tick();
-    await room.handleMessage("alice", { t: "cmd", seq: 99, cmd: { type: "attack" }, pose });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 99, cmd: { type: "attack" }, pose });
     tick();
     expect(
       b
@@ -615,7 +654,238 @@ describe("melee lag compensation (view-stamped attacks)", () => {
     const { room, alice, tick } = await setup();
     tick();
     const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
-    await room.handleMessage("alice", { t: "cmd", seq: 1, cmd: { type: "selectSlot", index: 4 }, pose, view: 50 });
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "selectSlot", index: 4 }, pose, view: 50 });
     expect(alice.selectedSlot).toBe(4);
+  });
+});
+
+describe("dimension shards (the nether online)", () => {
+  type ShardMap = Map<
+    string,
+    {
+      dimension: string;
+      engine: {
+        state: import("@/lib/game/engine/state").GameState;
+        ensureArrival(a: { x: number; y: number; z: number }): { x: number; y: number; z: number };
+      };
+    }
+  >;
+  const shardsOf = (room: Room) => (room as unknown as { shards: ShardMap }).shards;
+  const tickOf = (room: Room) => () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+  /** Walks a joined player into a lit overworld portal and dwells until the handoff fires. */
+  function dwellThroughPortal(room: Room, playerId: string, portalCell: { x: number; y: number; z: number }, tick: () => void): void {
+    const player = shardsOf(room).get("overworld")!.engine.state.players.get(playerId)!;
+    player.position.set(portalCell.x + 0.5, portalCell.y, portalCell.z + 0.5);
+    for (let i = 0; i < 70 && shardsOf(room).get("overworld")!.engine.state.players.has(playerId); i += 1) tick();
+  }
+
+  test("the full journey: dwell hands the player to a lazily-born nether shard; channels split; the return trip reuses the portal", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const tick = tickOf(room);
+    // Peaceful keeps the journey deterministic — a nether imp knocking the
+    // dweller out of the frame would make the dwell timings flaky.
+    const alicePos = room.engine.state.players.get("alice")!.position;
+    await room.handleMessage("alice", {
+      t: "cmd",
+      d: "overworld",
+      seq: 1,
+      cmd: { type: "setDifficulty", difficulty: "peaceful" },
+      pose: { x: alicePos.x, y: alicePos.y, z: alicePos.z, yaw: 0, pitch: 0 }
+    });
+
+    // A lit overworld portal (what ignition would have produced).
+    const portal = room.engine.ensureArrival({ x: 100, y: 40, z: 100 });
+    expect(shardsOf(room).has("nether")).toBe(false);
+
+    dwellThroughPortal(room, "alice", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20)); // let the async gzip'd travel sync flush
+
+    // The handoff: alice left the overworld engine and lives in the nether shard, latched.
+    expect(room.engine.state.players.has("alice")).toBe(false);
+    const nether = shardsOf(room).get("nether")!;
+    expect(nether).toBeDefined();
+    const aliceNether = nether.engine.state.players.get("alice")!;
+    expect(aliceNether).toBeDefined();
+    expect(aliceNether.timers.portalLatched).toBe(true);
+    // She stands inside the nether-side arrival portal. Snapshot the cell —
+    // position is a LIVE vector and she moves again below.
+    const netherCell = { x: Math.floor(aliceNether.position.x), y: Math.floor(aliceNether.position.y), z: Math.floor(aliceNether.position.z) };
+    expect(nether.engine.state.world.get(netherCell.x, netherCell.y, netherCell.z)).toBe(91); // NetherPortal
+
+    // The traveler got dim + a nether worldSync; everyone got playerDim.
+    expect(a.messagesOf("dim").at(-1)).toMatchObject({ dimension: "nether" });
+    const lastSync = await (a.frames.filter((f) => f.kind === "binary").at(-1) as Extract<Frame, { kind: "binary" }>).sync;
+    expect(lastSync?.dimension).toBe("nether");
+    expect(lastSync?.players.find((p) => p.id === "alice")?.dim).toBe("nether");
+    expect(b.messagesOf("playerDim").at(-1)).toMatchObject({ id: "alice", dimension: "nether" });
+
+    // Channels split: bob's ticks no longer carry alice's pose, and a keyframe
+    // window later each side's keyframe describes only its own dimension.
+    for (let i = 0; i < 101; i += 1) tick();
+    expect(
+      b
+        .messagesOf("tick")
+        .at(-1)
+        ?.pp.some((p) => p.id === "alice")
+    ).toBe(false);
+    const aliceKey = a.messagesOf("mobsKeyframe").at(-1)!;
+    expect(aliceKey.mobs.every((m) => m.kind === "imp" || m.kind === "scorcher")).toBe(true);
+    const bobKey = b.messagesOf("mobsKeyframe").at(-1)!;
+    expect(bobKey.mobs.some((m) => m.kind !== "imp" && m.kind !== "scorcher")).toBe(true);
+
+    // Bob follows through the same portal — the shard already exists.
+    dwellThroughPortal(room, "bob", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(nether.engine.state.players.has("bob")).toBe(true);
+    tick();
+    tick();
+    expect(
+      a
+        .messagesOf("tick")
+        .at(-1)
+        ?.pp.some((p) => p.id === "bob")
+    ).toBe(true);
+
+    // The return trip: step out (unlatch), back in, dwell — and the overworld
+    // arrival scan finds the ORIGINAL portal (1:1 coordinates) instead of building.
+    const overworldChangesBefore = room.engine.state.blockChanges.changes().length;
+    aliceNether.position.set(netherCell.x + 6.5, netherCell.y, netherCell.z + 6.5);
+    tick();
+    expect(aliceNether.timers.portalLatched).toBe(false);
+    aliceNether.position.set(netherCell.x + 0.5, netherCell.y, netherCell.z + 0.5);
+    for (let i = 0; i < 70 && nether.engine.state.players.has("alice"); i += 1) tick();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const aliceHome = room.engine.state.players.get("alice")!;
+    expect(aliceHome).toBeDefined();
+    expect(a.messagesOf("dim").at(-1)).toMatchObject({ dimension: "overworld" });
+    expect(room.engine.state.blockChanges.changes().length).toBe(overworldChangesBefore); // reused, not rebuilt
+    const homeFeet = aliceHome.position;
+    expect(room.engine.state.world.get(Math.floor(homeFeet.x), Math.floor(homeFeet.y), Math.floor(homeFeet.z))).toBe(91);
+  }, 120_000);
+
+  test("persistence composes both halves; leaving in the nether rejoins there", async () => {
+    const { room, persistence } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    const tick = tickOf(room);
+    const portal = room.engine.ensureArrival({ x: 100, y: 40, z: 100 });
+    dwellThroughPortal(room, "alice", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const nether = shardsOf(room).get("nether")!;
+
+    // A nether build persists under dimensions.nether with alice's slice stamped nether…
+    nether.engine.state.blockChanges.set(20, 40, 20, 3);
+    await room.persist();
+    const stored = await persistence.loadWorld("w1");
+    const save = stored!.save!;
+    expect(save.dimensions?.nether?.changes.some(([, block]) => block === 3)).toBe(true);
+    expect(save.players.find((p) => p.id === "alice")?.dimension).toBe("nether");
+    // …and the overworld half still carries the departure portal's obsidian.
+    expect(save.changes.length).toBeGreaterThan(0);
+
+    // Leave in the nether → the offline slice seats the rejoin there.
+    room.leave("alice");
+    const a2 = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a2);
+    expect(a2.messagesOf("welcome")[0]?.dimension).toBe("nether");
+    expect(nether.engine.state.players.has("alice")).toBe(true);
+  }, 120_000);
+
+  test("an empty nether shard is persisted and dropped after the linger window, then reboots with its builds intact", async () => {
+    const persistence = createMemoryPersistence();
+    const record = await persistence.loadWorld("w-linger");
+    let clock = 0;
+    const room = new Room(record!, persistence, () => clock);
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w-linger", "owner"), a);
+    const tick = tickOf(room);
+    const portal = room.engine.ensureArrival({ x: 100, y: 40, z: 100 });
+    dwellThroughPortal(room, "alice", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const nether = shardsOf(room).get("nether")!;
+    nether.engine.state.blockChanges.set(20, 40, 20, 3);
+
+    // Alice leaves; the shard lingers, then drops once the window passes.
+    room.leave("alice");
+    tick();
+    expect(shardsOf(room).has("nether")).toBe(true);
+    clock += 61_000;
+    tick();
+    expect(shardsOf(room).has("nether")).toBe(false);
+
+    // Rejoining (slice says nether) reboots the shard from the dormant section — the build survived.
+    const a2 = fakeSink();
+    await room.join(claimsFor("alice", "w-linger", "owner"), a2);
+    expect(a2.messagesOf("welcome")[0]?.dimension).toBe("nether");
+    expect(shardsOf(room).get("nether")!.engine.state.world.get(20, 40, 20)).toBe(3);
+  }, 120_000);
+
+  test("the owner's Peaceful switch despawns hostiles in every shard", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    const b = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), a);
+    await room.join(claimsFor("bob", "w1"), b);
+    const tick = tickOf(room);
+    const portal = room.engine.ensureArrival({ x: 100, y: 40, z: 100 });
+    dwellThroughPortal(room, "bob", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const nether = shardsOf(room).get("nether")!;
+    // The nether spawns hostiles on its own, but make it deterministic.
+    pushMob(nether.engine.state as never, "imp", true, 30, 40, 30, () => 0.5);
+    expect(nether.engine.state.mobs.some((m) => m.hostile)).toBe(true);
+
+    const alice = room.engine.state.players.get("alice")!;
+    const pose = { x: alice.position.x, y: alice.position.y, z: alice.position.z, yaw: 0, pitch: 0 };
+    await room.handleMessage("alice", { t: "cmd", d: "overworld", seq: 1, cmd: { type: "setDifficulty", difficulty: "peaceful" }, pose });
+    expect(room.engine.state.difficulty).toBe("peaceful");
+    expect(nether.engine.state.difficulty).toBe("peaceful");
+    expect(nether.engine.state.mobs.some((m) => m.hostile)).toBe(false);
+  }, 120_000);
+
+  test("a room persisted while everyone was in the nether still boots its overworld shard as the OVERWORLD", async () => {
+    const persistence = createMemoryPersistence();
+    const record = await persistence.loadWorld("w-boot");
+    const room = new Room(record!, persistence, () => 0);
+    const tick = tickOf(room);
+    await room.join(claimsFor("alice", "w-boot", "owner"), fakeSink());
+    const portal = room.engine.ensureArrival({ x: 100, y: 40, z: 100 });
+    dwellThroughPortal(room, "alice", portal, tick);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The ONLY player slice in the persisted save now says nether…
+    await room.persist();
+    const stored = await persistence.loadWorld("w-boot");
+    expect(stored!.save!.players[0]?.dimension).toBe("nether");
+    // …and the reboot must not let that slice pick the anchor shard's dimension.
+    const reboot = new Room(stored!, persistence, () => 0);
+    expect(reboot.engine.state.dimension).toBe("overworld");
+    // The rejoin still lands them in the nether, via the shard machinery.
+    const a2 = fakeSink();
+    await reboot.join(claimsFor("alice", "w-boot", "owner"), a2);
+    expect(a2.messagesOf("welcome")[0]?.dimension).toBe("nether");
+  }, 120_000);
+
+  test("a replaced socket's late close cannot tear down the fresh session (leave is sink-scoped)", async () => {
+    const { room } = await makeRoom();
+    const oldSink = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), oldSink);
+    // Reconnect: a new socket takes over; the room closes the old one.
+    const newSink = fakeSink();
+    await room.join(claimsFor("alice", "w1", "owner"), newSink);
+    expect(oldSink.frames.some((f) => f.kind === "close")).toBe(true);
+
+    // The old socket's close event fires late, scoped to ITS sink — a no-op.
+    room.leave("alice", oldSink as never);
+    expect(room.playerCount()).toBe(1);
+    expect(room.engine.state.players.has("alice")).toBe(true);
+
+    // The live socket's close still leaves normally.
+    room.leave("alice", newSink as never);
+    expect(room.playerCount()).toBe(0);
   });
 });

@@ -1,7 +1,7 @@
 import type { Command } from "@/lib/game/engine/commands";
 import type { GameEvent } from "@/lib/game/engine/state";
 import { ENCHANTMENT_DEFS } from "@/lib/game/enchantments";
-import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedStat } from "@/lib/game/types";
+import type { DimensionId, EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedStat } from "@/lib/game/types";
 
 /**
  * The client↔game-server wire protocol. Versioned as a whole: a client built
@@ -13,11 +13,19 @@ import type { EnchantmentId, SavedContainer, SavedMob, SavedPlayer, SavedStat } 
  * codec.ts). The envelope layout deliberately leaves room to move the hot
  * paths (pose/tick) to packed binary later without renegotiating anything.
  *
+ * v4 puts the DIMENSION on the wire: every pose/cmd is stamped with the
+ * sender's dimension (`d` — the travel race guard: the server drops frames
+ * from the world the sender just left), the welcome/worldSync/roster carry
+ * where each player is, and `dim`/`playerDim` drive server-initiated
+ * dimension travel. Poses and tick contents are otherwise coordinates in ONE
+ * dimension's voxel space — the recipient's — so everything else is
+ * unchanged.
+ *
  * Validation is hand-rolled and TOTAL (the save.ts house style): the server
  * feeds hostile bytes through these readers and gets a typed message or
  * null — never an exception, never a partially-checked object.
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 // ── close codes (WebSocket application range) ────────────────────────────────
 export const CLOSE_BAD_TICKET = 4000;
@@ -47,6 +55,8 @@ export type HelloMessage = { t: "hello"; ticket: string; protocol: number };
 export type PoseMessage = {
   t: "pose";
   seq: number;
+  /** The dimension the sender believes it is in — the server silently drops a mismatch (frames in flight across a travel swap). */
+  d: DimensionId;
   x: number;
   y: number;
   z: number;
@@ -68,7 +78,15 @@ export type PoseMessage = {
  * server rewind melee target selection to what the player saw. Absent while
  * the clock isn't synced; the server clamps it, never trusts it.
  */
-export type CmdMessage = { t: "cmd"; seq: number; cmd: Command; pose: { x: number; y: number; z: number; yaw: number; pitch: number }; view?: number };
+export type CmdMessage = {
+  t: "cmd";
+  seq: number;
+  /** Same travel race guard as PoseMessage.d — a command aimed in the world the sender just left must not raycast into this one. */
+  d: DimensionId;
+  cmd: Command;
+  pose: { x: number; y: number; z: number; yaw: number; pitch: number };
+  view?: number;
+};
 
 export type ChatMessage = { t: "chat"; text: string };
 export type PingMessage = { t: "ping"; id: number; tMs: number };
@@ -81,7 +99,7 @@ export type ClientMessage = HelloMessage | PoseMessage | CmdMessage | ChatMessag
 
 // ── server → client ──────────────────────────────────────────────────────────
 
-export type RosterEntry = { id: string; name: string; skinId: string | null; x: number; y: number; z: number; yaw: number };
+export type RosterEntry = { id: string; name: string; skinId: string | null; dim: DimensionId; x: number; y: number; z: number; yaw: number };
 
 export type WelcomeMessage = {
   t: "welcome";
@@ -96,6 +114,8 @@ export type WelcomeMessage = {
   tick: number;
   /** The recipient's own role in this world (from the join ticket) — gates the in-game owner controls. */
   role: "owner" | "member";
+  /** The recipient's own dimension (a player who left in the nether rejoins there). */
+  dimension: DimensionId;
   players: RosterEntry[];
 };
 
@@ -107,6 +127,8 @@ export type WelcomeMessage = {
 export type WorldSync = {
   t: "worldSync";
   tick: number;
+  /** Which dimension's world half this sync describes — the recipient ignores a sync for a dimension it is no longer in (a stale resync racing a travel swap). */
+  dimension: DimensionId;
   dayClock: number;
   changes: Array<[number, number]>;
   blockEntities: SavedContainer[];
@@ -193,6 +215,14 @@ export type TickMessage = {
 export type MobsKeyframeMessage = { t: "mobsKeyframe"; n: number; mobs: MobPose[] };
 export type PlayerJoinedMessage = { t: "playerJoined"; player: RosterEntry };
 export type PlayerLeftMessage = { t: "playerLeft"; id: string };
+/**
+ * Server-initiated dimension travel for the RECIPIENT: rebuild your replica
+ * for `dimension` — the matching gzipped worldSync frame follows immediately.
+ * The socket stays open; this is the online analog of the SP save-and-remount.
+ */
+export type DimensionMessage = { t: "dim"; dimension: DimensionId; tick: number; dayClock: number };
+/** Broadcast whenever ANY player changes dimension (roster tags, toasts, replica prune/adopt of that player). */
+export type PlayerDimensionMessage = { t: "playerDim"; id: string; dimension: DimensionId };
 export type ContainerMessage = { t: "container"; index: number; slots: SavedContainer["slots"] };
 export type ChatBroadcastMessage = { t: "chat"; from: string; name: string; text: string };
 export type PongMessage = { t: "pong"; id: number; tMs: number; serverTick: number };
@@ -205,6 +235,8 @@ export type ServerMessage =
   | MobsKeyframeMessage
   | PlayerJoinedMessage
   | PlayerLeftMessage
+  | DimensionMessage
+  | PlayerDimensionMessage
   | ContainerMessage
   | ChatBroadcastMessage
   | PongMessage
@@ -215,6 +247,7 @@ export type ServerMessage =
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
 const isStr = (v: unknown): v is string => typeof v === "string";
+const isDimension = (v: unknown): v is DimensionId => v === "overworld" || v === "nether";
 
 function readMove(v: unknown): PoseMessage["move"] | null {
   if (!v || typeof v !== "object") return null;
@@ -299,18 +332,19 @@ export function readClientMessage(v: unknown): ClientMessage | null {
     case "hello":
       return isStr(m.ticket) && isNum(m.protocol) ? { t: "hello", ticket: m.ticket, protocol: m.protocol } : null;
     case "pose": {
-      if (!isNum(m.seq) || !isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw) || !isNum(m.pitch) || !isBool(m.onGround)) return null;
+      if (!isNum(m.seq) || !isDimension(m.d) || !isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw) || !isNum(m.pitch) || !isBool(m.onGround))
+        return null;
       const move = readMove(m.move);
       if (!move || !isBool(m.mineHeld)) return null;
-      return { t: "pose", seq: m.seq, x: m.x, y: m.y, z: m.z, yaw: m.yaw, pitch: m.pitch, onGround: m.onGround, move, mineHeld: m.mineHeld };
+      return { t: "pose", seq: m.seq, d: m.d, x: m.x, y: m.y, z: m.z, yaw: m.yaw, pitch: m.pitch, onGround: m.onGround, move, mineHeld: m.mineHeld };
     }
     case "cmd": {
-      if (!isNum(m.seq)) return null;
+      if (!isNum(m.seq) || !isDimension(m.d)) return null;
       if (m.view !== undefined && !isNum(m.view)) return null;
       const cmd = readCommand(m.cmd);
       const pose = readEyePose(m.pose);
       if (!cmd || !pose) return null;
-      return { t: "cmd", seq: m.seq, cmd, pose, ...(m.view !== undefined ? { view: m.view } : {}) };
+      return { t: "cmd", seq: m.seq, d: m.d, cmd, pose, ...(m.view !== undefined ? { view: m.view } : {}) };
     }
     case "chat":
       return isStr(m.text) && m.text.trim().length > 0 ? { t: "chat", text: m.text.slice(0, 256) } : null;

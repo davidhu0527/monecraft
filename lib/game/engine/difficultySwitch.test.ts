@@ -75,6 +75,18 @@ describe("setDifficulty", () => {
     expect(e.state.mobs.filter((m) => m.hostile)).toHaveLength(0); // the switch itself spawns nothing; directors trickle later
   });
 
+  test("setWorldDifficulty mirrors the switch without a player command (the room's cross-dimension seam)", () => {
+    // A multiplayer room mirrors the owner's setDifficulty into every
+    // dimension engine — including one that doesn't contain the commanding
+    // player, so it can't go through dispatch.
+    const e = makeEngine("normal");
+    seedMobs(e);
+    e.setWorldDifficulty("peaceful");
+    expect(e.state.difficulty).toBe("peaceful");
+    expect(e.state.mobs.some((m) => m.hostile)).toBe(false);
+    expect(e.state.mobs.filter((m) => !m.hostile)).toHaveLength(2);
+  });
+
   test("the switched difficulty persists through serialize/restore", () => {
     const e = makeEngine("normal");
     e.dispatch({ type: "setDifficulty", difficulty: "easy" });

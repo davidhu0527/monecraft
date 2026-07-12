@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { BlockId, isPartialBlock, isSlabBlock, isStairBlock, shapeBoxes, stairBlock, stairFacing, type StairFacing } from "@/lib/world";
+import { BlockId, isPartialBlock, isSlabBlock, isStairBlock, orientStair, shapeBoxes, stairBlock, stairFacing, type StairFacing } from "@/lib/world";
 
-const ALL_SLABS: BlockId[] = [BlockId.PlankSlab, BlockId.StoneSlab, BlockId.CobbleSlab];
+// Spans BOTH id ranges: the original 75-89 batch and the appended
+// nether-brick batch 97-101 (whose facing math anchors on its own range).
+const ALL_SLABS: BlockId[] = [BlockId.PlankSlab, BlockId.StoneSlab, BlockId.CobbleSlab, BlockId.NetherBrickSlab];
 const ALL_STAIRS: BlockId[] = [
   BlockId.PlankStairsNorth,
   BlockId.PlankStairsEast,
@@ -14,7 +16,11 @@ const ALL_STAIRS: BlockId[] = [
   BlockId.CobbleStairsNorth,
   BlockId.CobbleStairsEast,
   BlockId.CobbleStairsSouth,
-  BlockId.CobbleStairsWest
+  BlockId.CobbleStairsWest,
+  BlockId.NetherBrickStairsNorth,
+  BlockId.NetherBrickStairsEast,
+  BlockId.NetherBrickStairsSouth,
+  BlockId.NetherBrickStairsWest
 ];
 const FACINGS: readonly StairFacing[] = ["north", "east", "south", "west"];
 
@@ -35,7 +41,7 @@ describe("slab and stair block ids", () => {
   });
 
   test("stair id ↔ facing round-trips for every material", () => {
-    for (const material of ["plank", "stone", "cobble"] as const) {
+    for (const material of ["plank", "stone", "cobble", "nether_brick"] as const) {
       for (const facing of FACINGS) {
         const block = stairBlock(material, facing);
         expect(isStairBlock(block)).toBe(true);
@@ -43,7 +49,24 @@ describe("slab and stair block ids", () => {
       }
     }
     expect(stairFacing(BlockId.PlankSlab)).toBeNull();
+    expect(stairFacing(BlockId.NetherBrickSlab)).toBeNull();
     expect(stairFacing(BlockId.Stone)).toBeNull();
+  });
+
+  test("the id gap between the two ranges is no one's stair", () => {
+    // 90-96 (obsidian through redstone ore) sit between the ranges — the
+    // range predicates must not leak onto them.
+    for (let block = BlockId.Obsidian; block < BlockId.NetherBrickSlab; block += 1) {
+      expect(isPartialBlock(block)).toBe(false);
+      expect(stairFacing(block)).toBeNull();
+    }
+  });
+
+  test("orientStair turns within its own range only", () => {
+    expect(orientStair(BlockId.NetherBrickStairsNorth, "west")).toBe(BlockId.NetherBrickStairsWest);
+    expect(orientStair(BlockId.NetherBrickStairsSouth, "north")).toBe(BlockId.NetherBrickStairsNorth);
+    expect(orientStair(BlockId.CobbleStairsWest, "east")).toBe(BlockId.CobbleStairsEast);
+    expect(orientStair(BlockId.NetherBrickSlab, "east")).toBe(BlockId.NetherBrickSlab); // not a stair — unchanged
   });
 });
 

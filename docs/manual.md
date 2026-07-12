@@ -217,9 +217,10 @@ come out at the **same coordinates** in the other world.
 
 Mind the frame: breaking any of its obsidian extinguishes the surface, and a
 portal that somehow lost its frame will refuse to carry you (it clears instead).
-Beds don't work in the Nether — there is no morning to skip to — and portals
-are **not yet available in online worlds** (the game will say so if you try to
-light one there).
+Beds don't work in the Nether — there is no morning to skip to. Portals work
+in **online worlds** too: the party can split across dimensions (the player
+list tags who's in the Nether), and you can't ride a boat or minecart through
+— step off first. Pets stay behind and resume following when you return.
 
 ### Surviving the Nether
 
@@ -231,14 +232,32 @@ fireballs) spawn near you _constantly_ — the darkness that summons monsters
 never lifts here. Come armed, wall yourself in when you mine, and consider a
 Fire Resistance potion before working near the seas.
 
-Why go? Three exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
+Why go? Four exports. **Glowstone dust** (mine the ceiling clusters; 4 dust
 recombine into a placeable glowstone block — a torch-strength light source for
-your builds). **Blazite ore** — the post-diamond ore, found deep (below Y≈40)
+your builds). **Nether brick** — the fortress building stone, smelted from
+netherrack (see [Nether fortresses](#nether-fortresses) below). **Blazite
+ore** — the post-diamond ore, found deep (below Y≈40)
 and gated behind a diamond pickaxe like the obsidian you came through. Smelt 2
 raw ore into a **blazite ingot** and forge the game's best craftable gear: the
 **blazite pickaxe** (faster than diamond, and it chews obsidian), **sword**
-(stronger than diamond, shy of the Dragon Sword), and **spear**. And bragging
-rights: four advancements live down here.
+(stronger than diamond, shy of the Dragon Sword), and **spear**. **Fortress
+loot** — see below. And bragging rights: five advancements live down here.
+
+### Nether fortresses
+
+Watch the horizon for dark **nether-brick** silhouettes: a walled keep whose
+four covered bridges stride out over the lava seas to watchtowers. Fortresses
+hold the Nether's **loot chests** — the keep usually 1–2 plus most towers one —
+filled on first open like dungeon chests (nether brick salvage, glowstone dust,
+gold, coal, bread, redstone dust; rarely blazite ore, **obsidian**, diamond
+ore, or a sapphire sword). The catch: the keep usually houses a **spawner**
+that drips imps (and the odd scorcher) while you're near — clear it or mine it
+out before you shop. Your first fortress chest unlocks the **Fortress Raider**
+advancement.
+
+The brick itself is worth carrying home: smelt **1 netherrack → 1 nether
+brick** in a furnace (no fuel needed) and craft its **slabs and stairs** — the
+fortress look for your own builds.
 
 Your arrival portal is your lifeline home — its frame is ordinary obsidian, so
 keep a spare flint & steel (and ideally frame material) on you. And know this
@@ -445,7 +464,7 @@ require a **furnace**: craft one from 8 cobble, place it, and right-click it to 
 the panel in furnace mode — the cooking recipes unlock while a furnace is open and
 show as "Requires Furnace" otherwise.
 
-See the full list of **74 recipes** in the [reference](reference.md#recipes).
+See the full list of **102 recipes** in the [reference](reference.md#recipes).
 
 ## Brewing and potions
 
@@ -563,9 +582,10 @@ Breaking either half removes the whole door and returns one door item.
 
 ## Redstone
 
-Build **power circuits** that open doors, light lamps, and set off TNT. Craft
-**Redstone Dust** from **1 gold ore + 1 coal** (→ 8 dust — you'll need a
-sliver-tier pickaxe to reach gold), then wire up:
+Build **power circuits** that open doors, light lamps, and set off TNT. Mine
+**Redstone Dust** from deep **redstone ore** (below Y≈24; each block shatters
+into 4–5 dust, and you'll need a sliver-tier pickaxe — fortress chests in the
+Nether also carry dust), then wire up:
 
 - **Sources** make power: a **lever** (right-click to toggle), a **stone button**
   (right-click for a ~1-second pulse), a **pressure plate** (press by standing on
@@ -854,6 +874,13 @@ A few things work differently online, and the rest is the same game:
   **Revoke links** from the world's menu card.
 - **Boats are shared.** Rafts and ships are boardable online — pile into one
   together.
+- **The Nether is shared too.** Light a portal and step through like in
+  single-player; the world keeps running on both sides, so the party can
+  split — the player list tags anyone who's "· Nether", and a toast announces
+  each crossing. Mobs, pets, and vehicles belong to the dimension they're in
+  (your wolf waits by the portal; it resumes following when you return).
+  Sleeping skips the night when every **overworld** player is in bed — friends
+  in the Nether don't block the skip.
 - The world saves on the server automatically; there's nothing to manage.
 
 ### Cloud saves — your single-player worlds across devices

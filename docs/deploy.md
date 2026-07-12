@@ -191,7 +191,10 @@ Platform on-push auto-deploys are **off** on purpose (Vercel via `vercel.json`'s
 `git.deploymentEnabled: { "main": false }`; Fly's GitHub auto-deploy disabled in its
 dashboard), so the only trigger is the `deploy-web` / `deploy-server` jobs in
 `.github/workflows/ci.yml`. They `needs: [verify, e2e]` and run only on a push to
-`main`, so a merge deploys **after** lint/typecheck/test/build **and** the browser
+`main` **in `hutusi/monecraft`** (a `github.repository` guard — forks and the
+upstream repo sync this workflow but hold none of the deploy secrets, so without
+the guard their pushes would fail the deploy jobs red instead of skipping them),
+so a merge deploys **after** lint/typecheck/test/build **and** the browser
 e2e all pass (≈30 min; an e2e flake blocks the deploy — re-run the failed job to
 release). `deploy-web` fires a **Vercel Deploy Hook** (the build stays Git-connected,
 so `VERCEL_GIT_COMMIT_SHA` — the menu version badge — is still set); `deploy-server`
@@ -220,6 +223,12 @@ Two repo secrets drive it (GitHub → Settings → Secrets and variables → Act
   web-app image (`bun run start`, port 3000) and ships _that_ to the game-server
   app — it crash-loops with exit 127 (`next` needs `node`, absent from the `oven/bun`
   base) and takes online play down until a correct redeploy.
+- **Protocol bump (`PROTOCOL_VERSION`):** always the normal path — the number is
+  compiled into both sides and a mismatch is a fatal close, so web and game
+  server must ship **from the same SHA** (the gated deploy does exactly that;
+  never bump one side via an escape hatch). Browsers still on the old bundle
+  are refused until a page reload — expected and bounded. Full runbook:
+  [protocol.md](protocol.md#version-bump--rollout).
 - **Schema change:** land the new migration, then run `bun run db:migrate`
   against production **before** deploying the code that depends on it —
   **unless the migration removes something the old code reads** (a dropped

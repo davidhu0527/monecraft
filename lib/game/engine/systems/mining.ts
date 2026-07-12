@@ -54,6 +54,9 @@ export function canMineBlock(block: BlockId, toolTier: number): boolean {
   // Nether rock needs any pickaxe; its deep ore is diamond-gated like obsidian.
   if (block === BlockId.Netherrack) return toolTier >= 1;
   if (block === BlockId.BlaziteOre) return toolTier >= 7;
+  if (block === BlockId.NetherBrick) return toolTier >= 1;
+  // Redstone ore matches the ruby/gold gate: the sliver pickaxe (tier 3).
+  if (block === BlockId.RedstoneOre) return toolTier >= 3;
   return true;
 }
 

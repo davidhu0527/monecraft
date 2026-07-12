@@ -146,7 +146,21 @@ export const enum BlockId {
   Glowstone = 93,
   // The nether's deep ore, the post-diamond tier: diamond-pickaxe-gated,
   // smelts into blazite ingots (see recipes.ts).
-  BlaziteOre = 94
+  BlaziteOre = 94,
+  // The nether fortress material (netherGeneration.ts), also smelted from
+  // netherrack in a furnace — the dimension's dressed building stone.
+  NetherBrick = 95,
+  // Deep overworld ore: sliver-pickaxe-gated, shatters into redstone dust
+  // (the circuit conductor — see rollBlockDrops in items.ts).
+  RedstoneOre = 96,
+  // Nether-brick half-blocks (craft-only; see slabs.ts). A SECOND partial
+  // range — the slab then the 4 stair facings in the same north/east/south/
+  // west order as ids 75-89, so the shared offset math applies per range.
+  NetherBrickSlab = 97,
+  NetherBrickStairsNorth = 98,
+  NetherBrickStairsEast = 99,
+  NetherBrickStairsSouth = 100,
+  NetherBrickStairsWest = 101
 }
 
 export enum BiomeId {
@@ -209,7 +223,10 @@ export const HELD_BLOCK_COLORS: Partial<Record<BlockId, number>> = {
   [BlockId.CobbleStairsNorth]: 0x787c82,
   [BlockId.Obsidian]: 0x241c38,
   [BlockId.Netherrack]: 0x8a3d34,
-  [BlockId.Glowstone]: 0xf2c957
+  [BlockId.Glowstone]: 0xf2c957,
+  [BlockId.NetherBrick]: 0x5c2a2a,
+  [BlockId.NetherBrickSlab]: 0x5c2a2a,
+  [BlockId.NetherBrickStairsNorth]: 0x5c2a2a
 };
 
 export const HELD_BLOCK_FALLBACK_COLOR = 0xbababa;
@@ -330,5 +347,15 @@ export const BLOCK_COLORS: Record<number, [number, number, number]> = {
   // A glowing amber crystal cluster (painted in atlas.ts; emits block light).
   [BlockId.Glowstone]: [0.9, 0.72, 0.32],
   // Netherrack-toned rock with ember speckles (painted in atlas.ts).
-  [BlockId.BlaziteOre]: [0.48, 0.2, 0.17]
+  [BlockId.BlaziteOre]: [0.48, 0.2, 0.17],
+  // Dark maroon dressed brick with mortar seams (painted in atlas.ts).
+  [BlockId.NetherBrick]: [0.25, 0.11, 0.12],
+  // Stone-gray like every ore; the red flecks are painted in atlas.ts.
+  [BlockId.RedstoneOre]: [0.54, 0.56, 0.58],
+  // Nether-brick half-blocks reuse the full block's tone and mortar accent.
+  [BlockId.NetherBrickSlab]: [0.25, 0.11, 0.12],
+  [BlockId.NetherBrickStairsNorth]: [0.25, 0.11, 0.12],
+  [BlockId.NetherBrickStairsEast]: [0.25, 0.11, 0.12],
+  [BlockId.NetherBrickStairsSouth]: [0.25, 0.11, 0.12],
+  [BlockId.NetherBrickStairsWest]: [0.25, 0.11, 0.12]
 };

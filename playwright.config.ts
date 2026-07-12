@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
+/** Shared browser setup for every project (see the projects comment below). */
+const CHROMIUM = {
+  ...devices["Desktop Chrome"],
+  channel: "chromium",
+  launchOptions: {
+    args: ["--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding"]
+  }
+};
+
 /**
  * E2E smoke tests run against the production build (next start) — the dev
  * server's React StrictMode double-mounts the game engine and would make
@@ -11,19 +20,61 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   testMatch: "**/*.e2e.ts",
+  // Two workers, file-level parallelism only (fullyParallel stays false): a
+  // parallel-safety audit cleared every spec file for concurrent execution —
+  // distinct signup-email prefixes per file, account-scoped /api/worlds, only
+  // two room-consuming files against the game server's room cap, per-context
+  // storage/service worker, no cross-file ordering. New spec files must keep
+  // those invariants (see docs/testing.md).
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 3 : 0,
-  workers: 1,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
+  retries: process.env.CI ? 2 : 0,
+  workers: 2,
+  // The list reporter runs on CI too: the github reporter records no per-spec
+  // durations, which makes slow-suite diagnosis needlessly blind.
+  reporter: process.env.CI ? [["github"], ["list"], ["html", { open: "never" }]] : "list",
   timeout: 60000,
   use: {
     baseURL: "http://localhost:3000",
-    trace: "retain-on-failure"
+    // Trace only from the first retry: continuous recording taxes the CPU-bound
+    // CI runner on every green first attempt (and failed heavy specs produced
+    // 600+ MB artifacts); a retry is exactly when a trace is worth its cost.
+    trace: "on-first-retry"
   },
   // channel "chromium" runs the full browser in new-headless mode: the default
   // headless shell rejects requestPointerLock (WrongDocumentError).
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], channel: "chromium" } }],
+  //
+  // The no-throttling args are load-bearing for the two-browser multiplayer
+  // specs: they assert on a "witness" page's replica while the other page
+  // holds focus (bringToFront), and Chromium throttles rAF in backgrounded/
+  // occluded pages — a throttled witness stops applying server ticks, so
+  // confirmations that pass in seconds locally starve on the CI runner.
+  //
+  // Three CHAINED projects so the two heavy two-browser specs never overlap —
+  // each runs two live software-GL game pages, and four at once starve the
+  // rAF-driven client streams (mining, poses, predictions) into flaking even
+  // on a fast machine. The light majority still gets both workers; each heavy
+  // spec then runs on an otherwise idle machine. To run one heavy spec alone
+  // without its dependency chain: `bunx playwright test <file> --no-deps`.
+  projects: [
+    {
+      name: "light",
+      testIgnore: ["**/multiplayer.e2e.ts", "**/nether-online.e2e.ts"],
+      use: CHROMIUM
+    },
+    {
+      name: "heavy-multiplayer",
+      testMatch: "**/multiplayer.e2e.ts",
+      dependencies: ["light"],
+      use: CHROMIUM
+    },
+    {
+      name: "heavy-nether",
+      testMatch: "**/nether-online.e2e.ts",
+      dependencies: ["heavy-multiplayer"],
+      use: CHROMIUM
+    }
+  ],
   webServer: [
     {
       // The web app with a full online stack and ZERO external services: an
@@ -50,7 +101,11 @@ export default defineConfig({
       env: {
         PORT: "18080",
         PERSISTENCE: "memory",
-        GAME_TICKET_SECRET: "e2e-ticket-secret"
+        GAME_TICKET_SECRET: "e2e-ticket-secret",
+        // Headroom over the default 6: with two workers, both room-consuming
+        // spec files can hold a live room at once, and CI retries can pile
+        // idle rooms for up to the 5-minute eviction window.
+        MAX_ROOMS: "8"
       }
     }
   ]

@@ -508,7 +508,19 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
           );
         }
         if (event.type === "portalDenied") {
-          flashMessage(event.reason === "online" ? "Portals aren't available in online worlds yet" : "The frame is incomplete");
+          // The "online" reason is defensive-only since nether-online: replicas
+          // never run ignition locally (the cmd routes to the server, which allows it).
+          flashMessage(event.reason === "online" ? "Portals can't be lit from here" : "The frame is incomplete");
+        }
+        // Online dimension travel: `playerDimension` is synthesized by the
+        // session — for the local player it accompanies the engine swap the
+        // shell is about to remount around; for others it's a courtesy toast.
+        if (event.type === "playerDimension" && online) {
+          if (event.playerId === online.playerId) {
+            flashMessage(event.dimension === "nether" ? "Entering the Nether…" : "Returning home…", 2000);
+          } else {
+            flashMessage(`${online.playerName(event.playerId)} ${event.dimension === "nether" ? "entered the Nether" : "returned to the Overworld"}`, 2000);
+          }
         }
         if (event.type === "pickedUp") {
           flashMessage(event.items.map((drop) => `+${drop.count} ${ITEM_DEF_BY_ID[drop.itemId]?.label ?? drop.itemId}`).join(", "));
@@ -567,7 +579,10 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
         persistGame(gameEngine, worldId, () => {});
         syncCloudSave(gameEngine, false); // flush to cloud on leave/unmount (covers Save & Quit)
       }
-      online?.dispose();
+      // The session is NOT disposed here: GameShell owns it (it created it),
+      // because online dimension travel remounts this hook around the SAME
+      // live socket — disposing on unmount would kill the connection mid-swap.
+      // The shell disposes on quit/reload/delete instead.
       delete window.__monecraft;
       rendererRef.current = null;
       minimap?.dispose();

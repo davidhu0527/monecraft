@@ -17,6 +17,40 @@ describe("voxelRaycast", () => {
     expect(result!.previous.toArray()).toEqual([7, 5, 5]);
   });
 
+  test("an on-boundary origin with a zero component never steps that axis (the spawn-seat degeneracy)", () => {
+    // A fresh online joiner is seated at EXACT integer coordinates — on the
+    // cell boundary — and an axis-aligned look direction has a (negative-)zero
+    // component on the other axes. The old `dir || 1e-6` fallback stepped the
+    // ray sideways into a neighbor column at t=0 (its epsilon could even carry
+    // the wrong sign for -0), so "dig straight down" mined the DIAGONAL column
+    // — or nothing, once that column was hollow. The zero axis must never step.
+    const world = emptyWorld();
+    world.set(5, 5, 5, BlockId.Stone); // directly below the on-boundary origin's column
+    // Origin exactly on the x and z boundaries of cell (5,·,5), aiming straight down.
+    const down = new THREE.Vector3(-0, -1, -0);
+    const result = voxelRaycast(world, new THREE.Vector3(5.0, 8.0, 5.0), down, 10);
+    expect(result).not.toBeNull();
+    expect(result!.hit.toArray()).toEqual([5, 5, 5]);
+    expect(result!.previous.toArray()).toEqual([5, 6, 5]);
+    // The neighbor columns are untouched by the traversal: with nothing in
+    // this column, the ray must miss entirely rather than drift sideways.
+    const emptied = emptyWorld();
+    emptied.set(4, 5, 4, BlockId.Stone); // diagonal neighbor — must NOT be found
+    expect(voxelRaycast(emptied, new THREE.Vector3(5.0, 8.0, 5.0), down, 10)).toBeNull();
+  });
+
+  test("a genuinely tilted ray from an on-boundary origin enters the neighbor column it points into", () => {
+    // Correct geometry, preserved: moving -z from exactly z=5.0 leaves the
+    // z=5 cell immediately, so a slightly tilted down-aim samples the
+    // neighbor column — that's physics, not the degeneracy above.
+    const world = emptyWorld();
+    world.set(5, 5, 4, BlockId.Stone);
+    const tilted = new THREE.Vector3(0, -Math.cos(0.02), -Math.sin(0.02));
+    const result = voxelRaycast(world, new THREE.Vector3(5.5, 8.0, 5.0), tilted, 10);
+    expect(result).not.toBeNull();
+    expect(result!.hit.toArray()).toEqual([5, 5, 4]);
+  });
+
   test("diagonal ray traverses cells without skipping through corners", () => {
     const world = emptyWorld();
     world.set(6, 6, 6, BlockId.Stone);

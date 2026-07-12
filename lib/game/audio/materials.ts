@@ -103,7 +103,14 @@ const GROUP_BY_BLOCK: Record<BlockId, MaterialGroup> = {
   [BlockId.NetherPortal]: "glass",
   [BlockId.Netherrack]: "stone",
   [BlockId.Glowstone]: "glass",
-  [BlockId.BlaziteOre]: "stone"
+  [BlockId.BlaziteOre]: "stone",
+  [BlockId.NetherBrick]: "stone",
+  [BlockId.RedstoneOre]: "stone",
+  [BlockId.NetherBrickSlab]: "stone",
+  [BlockId.NetherBrickStairsNorth]: "stone",
+  [BlockId.NetherBrickStairsEast]: "stone",
+  [BlockId.NetherBrickStairsSouth]: "stone",
+  [BlockId.NetherBrickStairsWest]: "stone"
 };
 
 export function materialGroupFor(block: BlockId): MaterialGroup {

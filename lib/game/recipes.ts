@@ -70,18 +70,9 @@ const CRAFTING_RECIPES: Recipe[] = [
     result: { slotId: "grindstone", count: 1 }
   },
   { id: "door", label: "6 Planks -> Wood Door", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "door", count: 1 } },
-  // Redstone-lite. Dust is craft-only for now (gold as the conductor gates
-  // circuits behind a tier-3 pick); redstone ORE worldgen is deferred to a
-  // future WORLDGEN_VERSION batch.
-  {
-    id: "redstone",
-    label: "1 Gold Ore + 1 Coal -> 8 Redstone Dust",
-    cost: [
-      { slotId: "gold_ore", count: 1 },
-      { slotId: "coal", count: 1 }
-    ],
-    result: { slotId: "redstone", count: 8 }
-  },
+  // Redstone-lite. Dust is mined from deep redstone ore (worldgen v12) — the
+  // gold+coal stopgap recipe that predated the ore was retired with it, so the
+  // ore hunt is the one dust source (still tier-3-pick-gated, via the ore).
   {
     id: "lever",
     label: "1 Cobble + 1 Planks -> Lever",
@@ -150,6 +141,19 @@ const CRAFTING_RECIPES: Recipe[] = [
   { id: "plank_stairs", label: "6 Planks -> 4 Plank Stairs", cost: [{ slotId: "planks", count: 6 }], result: { slotId: "plank_stairs", count: 4 } },
   { id: "stone_stairs", label: "6 Stone -> 4 Stone Stairs", cost: [{ slotId: "stone", count: 6 }], result: { slotId: "stone_stairs", count: 4 } },
   { id: "cobble_stairs", label: "6 Cobble -> 4 Cobble Stairs", cost: [{ slotId: "cobble", count: 6 }], result: { slotId: "cobble_stairs", count: 4 } },
+  // The fortress material joins the half-block family at the same ratios.
+  {
+    id: "nether_brick_slab",
+    label: "3 Nether Brick -> 6 Nether Brick Slab",
+    cost: [{ slotId: "nether_brick", count: 3 }],
+    result: { slotId: "nether_brick_slab", count: 6 }
+  },
+  {
+    id: "nether_brick_stairs",
+    label: "6 Nether Brick -> 4 Nether Brick Stairs",
+    cost: [{ slotId: "nether_brick", count: 6 }],
+    result: { slotId: "nether_brick_stairs", count: 4 }
+  },
   {
     id: "torch",
     label: "1 Coal + 1 Wood -> 4 Torch",
@@ -172,6 +176,16 @@ const CRAFTING_RECIPES: Recipe[] = [
   // no fuel itself), so this is a straight wood -> charcoal conversion — the
   // bootstrap fuel for a player who hasn't found coal yet.
   { id: "charcoal", label: "1 Wood -> 1 Charcoal", cost: [{ slotId: "wood", count: 1 }], result: { slotId: "charcoal", count: 1 }, station: "furnace" },
+  // Nether brick: fire the nether's soft rock into the fortress's dressed
+  // building stone (a straight conversion, like charcoal — no fuel ingredient,
+  // so fortress-scale builds stay affordable).
+  {
+    id: "nether_brick",
+    label: "1 Netherrack -> 1 Nether Brick",
+    cost: [{ slotId: "netherrack", count: 1 }],
+    result: { slotId: "nether_brick", count: 1 },
+    station: "furnace"
+  },
   // Raw nether blazite smelts into the ingot the post-diamond gear is forged
   // from (fuel is an ingredient, so the usual coal/charcoal variant pair).
   {

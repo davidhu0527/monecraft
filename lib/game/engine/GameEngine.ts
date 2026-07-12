@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   BlockId,
   collectDungeonSites,
+  collectFortressSites,
   collectShipwreckSites,
   collectTreasureSites,
   collectVillageSites,
@@ -298,10 +299,11 @@ export class GameEngine {
     // The local player's persisted record (v17+ saves hold one entry per player;
     // a downloaded multiplayer world played solo falls back to any first entry).
     const savedLocal = save ? (save.players.find((p) => p.id === LOCAL_PLAYER_ID) ?? save.players[0] ?? null) : null;
-    // Which dimension this engine simulates: where the save left the local
-    // player (swap-on-travel writes it before the remount), else the requested
-    // override, else the overworld.
-    const dimension: DimensionId = savedLocal ? restorePlayerDimension(savedLocal) : (options.dimension ?? "overworld");
+    // Which dimension this engine simulates: an explicit override wins (a
+    // server room boots a nether engine from a save whose players may all sit
+    // in the overworld), else where the save left the local player
+    // (swap-on-travel writes it before the remount), else the overworld.
+    const dimension: DimensionId = options.dimension ?? (savedLocal ? restorePlayerDimension(savedLocal) : "overworld");
     // The world half this engine simulates; foreign halves ride through serialize().
     const section = save ? dimensionSectionOf(save, dimension) : null;
     this.foreignDimensions = dimension === "overworld" ? save?.dimensions : undefined;
@@ -332,6 +334,8 @@ export class GameEngine {
     const shipwreckSites = dimension === "nether" ? { chestIndices: [] as number[] } : collectShipwreckSites(world, this.worldType);
     const treasureSites = dimension === "nether" ? { sites: [] } : collectTreasureSites(world, this.worldType);
     const villageSites = dimension === "nether" ? { centers: [] } : collectVillageSites(world, this.worldType);
+    // The inverse of the above: fortresses are the nether's loot sites.
+    const fortressSites = dimension === "nether" ? collectFortressSites(world) : { chestIndices: [] as number[], spawnerIndices: [] as number[] };
 
     const blockChanges = createBlockChangeTracker(world);
     if (section) blockChanges.applySavedChanges(section.changes);
@@ -351,7 +355,10 @@ export class GameEngine {
 
     // Bake per-voxel light now the block grid is final (worldgen + saved edits).
     // Derived cache, never serialized — see lighting.ts / docs/save-format.md.
-    world.light = computeFullLight(world);
+    // Only the renderer's mesher reads it, so a headless engine (a server room)
+    // skips both the full-world BFS bake and the ~39 MB allocation — that
+    // saving is what lets a room hold an engine per dimension on the same VM.
+    world.light = this.headless ? new Uint8Array(0) : computeFullLight(world);
 
     const firstSpawn =
       dimension === "nether"
@@ -419,6 +426,8 @@ export class GameEngine {
       dungeonSpawnerIndices: new Set(dungeonSites.spawnerIndices),
       shipwreckChestIndices: new Set(shipwreckSites.chestIndices),
       buriedTreasureChestIndices: new Set(treasureSites.sites.map((site) => site.index)),
+      fortressChestIndices: new Set(fortressSites.chestIndices),
+      fortressSpawnerIndices: new Set(fortressSites.spawnerIndices),
       treasureSites: treasureSites.sites,
       lootedWorldgenChests: new Set(),
       villageSites: villageSites.centers,
@@ -528,12 +537,14 @@ export class GameEngine {
   }
 
   /**
-   * Portals work in local single-player only (for now): the server engine and
-   * every replica refuse ignition, so an online world can never strand a
-   * player in a dimension the room doesn't simulate.
+   * Portals work wherever the engine is AUTHORITATIVE over travel: local
+   * single-player (the shell save-and-remounts on dimensionTravel) and the
+   * server room (which hands the player between its dimension shards).
+   * Replicas alone refuse — a client mirrors travel the server initiated
+   * (the `dim` message), it never fires its own.
    */
   private get portalsEnabled(): boolean {
-    return this.authority === "local" && !this.replica;
+    return !this.replica;
   }
 
   /** Stores a player's latest continuous input (a server feeds each client's packet through here). */
@@ -796,8 +807,10 @@ export class GameEngine {
     tickWaterExposure(state, player, dt, damageEnv);
     tickLavaExposure(state, player, dt, damageEnv, hasEffect(player, "fire_resistance"));
     tickOxygen(state, player, dt, damageEnv, hasEffect(player, "water_breathing"));
-    // Dimension travel is single-player only (like ignition): the shell hears
-    // the event and performs the save + remount swap.
+    // Dimension travel fires only where the engine owns it (see
+    // portalsEnabled): the SP shell hears the event and save-remounts; the
+    // server room hears it (attributed to this player) and hands the player
+    // to the target dimension's shard. Replicas mirror, never fire.
     if (this.portalsEnabled) tickPortalDwell(state, player, dt, this.emit);
     player.timers.bowCooldownTimer = Math.max(0, player.timers.bowCooldownTimer - dt);
     player.timers.spearThrowCooldown = Math.max(0, player.timers.spearThrowCooldown - dt);
@@ -1196,6 +1209,12 @@ export class GameEngine {
       timers: createPlayerTimers()
     };
     if (spec.restore) this.restorePlayerFields(player, spec.restore);
+    // APPEARING inside a portal surface never travels — only walking in does.
+    // Without this, a player who left (or was seated) latched inside a portal
+    // rejoins unlatched and rides it again 3 seconds later.
+    const feetCell = state.world.get(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z));
+    const bodyCell = state.world.get(Math.floor(player.position.x), Math.floor(player.position.y) + 1, Math.floor(player.position.z));
+    if (feetCell === BlockId.NetherPortal || bodyCell === BlockId.NetherPortal) player.timers.portalLatched = true;
     state.players.set(spec.id, player);
     // A replica boots playerless with a stub snapshot; the primary taking
     // their seat is when a real one first becomes buildable.
@@ -1338,6 +1357,20 @@ export class GameEngine {
         p.id === this.state.primaryPlayerId ? { ...p, dimension: target, position: { ...anchor }, portalArrival: { ...anchor } } : p
       )
     };
+  }
+
+  /**
+   * Runtime arrival for a server-driven travel handoff: finds or builds the
+   * arrival portal near the anchor. Unlike the boot-time path (which runs
+   * before the light bake), every write journals through blockChanges, so
+   * clients already in this dimension see a built portal replicate as
+   * ordinary tick edits. The caller seats the traveler at the returned cell
+   * and latches their dwell.
+   */
+  ensureArrival(anchor: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+    const pos = ensureArrivalPortal(this.state.world, this.state.blockChanges, this.surfaceYAt, anchor);
+    this.state.worldMeshDirty = true;
+    return pos;
   }
 
   /**
@@ -1713,6 +1746,15 @@ export class GameEngine {
    * has no respawn-coupled state to guard, so it is allowed even while dead — a
    * player should be able to flip to Peaceful to stop a hostile pile-on.
    */
+  /**
+   * World-level difficulty switch for callers that aren't a player command —
+   * a multiplayer room mirrors the owner's setDifficulty into every dimension
+   * engine so e.g. Peaceful despawns hostiles everywhere at once.
+   */
+  setWorldDifficulty(next: Difficulty): void {
+    this.switchDifficulty(next);
+  }
+
   private switchDifficulty(next: Difficulty): void {
     const state = this.state;
     if (state.hardcore) return; // locked to Hard for the world's life
@@ -1754,7 +1796,11 @@ export class GameEngine {
   private respawn(player: PlayerState): void {
     const state = this.state;
     const bed = player.spawnPoint;
-    if (bed && state.world.get(bed.x, bed.y, bed.z) === BlockId.Bed) {
+    // The bed must stand in THIS dimension: the same block coords index a
+    // different voxel in each world, so a foreign bed could false-positive on
+    // whatever happens to occupy that cell here. Absent dimension = a
+    // pre-nether save's bed = overworld.
+    if (bed && (bed.dimension ?? "overworld") === state.dimension && state.world.get(bed.x, bed.y, bed.z) === BlockId.Bed) {
       // Respawn standing on the bed; the bed block is non-solid head room above it.
       player.position.set(bed.x + 0.5, bed.y + 1.05, bed.z + 0.5);
     } else {
