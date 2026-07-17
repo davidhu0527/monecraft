@@ -91,6 +91,20 @@ that's behind (a restored backup) leaves newer local progress alone.
 ⚠️ **The web app and the game server both write `save_revision`**, so they ship
 from the same SHA — see [deploy.md](deploy.md#updating-a-running-deployment).
 
+**Uploads are queued, not fired.** Six call sites push a cloud-linked world
+(autosave, the three unload listeners, hardcore game-over, unmount, manual
+save) and several fire together — backgrounding a phone raises both
+`visibilitychange` and `pagehide`. So pushes go through a latest-wins queue
+(`lib/game/cloudPushQueue.ts`): one upload in flight, the newest snapshot
+queued behind it, superseded snapshots dropped. Unqueued, they raced with the
+same base revision and the loser's 409 latched sync off — a device switching
+off its own sync by conflicting with itself. The snapshot is serialized when a
+push is _requested_, not when it runs, so the unload flush uploads the state as
+of the unload. The reconcile's `commitCursor()` is likewise the caller's to
+call **after** the local write commits: the cursor claims this device HOLDS
+that save, so advancing it past a failed write would make every later open
+read the remote as "not ahead" and refuse to adopt it.
+
 **Save upload is `sp-cloud`-only.** Both kinds keep their blob in the same
 `worlds.saveBlob` column, but they do not share its ownership: an `sp-cloud`
 blob **is** the client's upload, while an `mp` blob is the game server's

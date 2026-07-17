@@ -204,7 +204,13 @@ export default function GameShell() {
       setConnecting(world.name);
       try {
         const decision = await pullCloudSaveIfNewer(world.cloudId);
-        if (decision.adopt) await worldSaves.write(worldId, decision.save);
+        if (decision.adopt) {
+          // Cursor only after the write durably commits — it claims we HOLD
+          // this save, and a failed write would leave later opens declining to
+          // re-adopt it.
+          await worldSaves.write(worldId, decision.save);
+          decision.commitCursor();
+        }
       } catch {
         // Offline or a bad blob → fall through and play the local copy.
       } finally {
@@ -237,7 +243,10 @@ export default function GameShell() {
     setConnecting(world.name);
     try {
       const decision = await pullCloudSaveIfNewer(world.id);
-      if (decision.adopt) await worldSaves.write(`cloud:${world.id}`, decision.save);
+      if (decision.adopt) {
+        await worldSaves.write(`cloud:${world.id}`, decision.save);
+        decision.commitCursor(); // only once the save is durably ours
+      }
     } catch {
       // Offline or a bad blob → play this device's cache (or a fresh world).
     } finally {

@@ -66,13 +66,33 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     stubBody(save, saveRevision, ok);
   }
 
-  test("first download (no cursor) adopts the remote save and records the revision", async () => {
+  test("first download (no cursor) adopts the remote save and records the revision on commit", async () => {
     const storage = fakeStorage();
     stubCloud(3);
     const decision = await pullCloudSaveIfNewer("c1", storage);
     expect(decision.adopt).toBe(true);
-    if (decision.adopt) expect(decision.save.version).toBe(18);
+    if (decision.adopt) {
+      expect(decision.save.version).toBe(18);
+      decision.commitCursor();
+    }
     expect(JSON.parse(storage.getItem(STAMPS_KEY)!).c1).toBe(3);
+  });
+
+  // The cursor claims "this device HOLDS revision N". Advancing it before the
+  // local write commits means a failed write leaves us claiming a save we don't
+  // have — and every later open then reads the remote as "not ahead" and
+  // declines to adopt it, stranding the cloud save on this device forever.
+  test("the cursor only moves when the caller commits it (a failed local write leaves it put)", async () => {
+    const storage = fakeStorage();
+    stubCloud(3);
+    const decision = await pullCloudSaveIfNewer("c1", storage);
+    expect(decision.adopt).toBe(true);
+    // Caller got the save but never committed — e.g. its IndexedDB write threw.
+    expect(storage.getItem(STAMPS_KEY)).toBeNull();
+
+    // So the next open still adopts, rather than writing us off as up to date.
+    stubCloud(3);
+    expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(true);
   });
 
   test("keeps local when the remote is unchanged since this device's cursor", async () => {

@@ -110,7 +110,15 @@ async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; s
   }
 }
 
-export type PullDecision = { adopt: true; save: SaveData } | { adopt: false };
+/**
+ * `commitCursor` records that this device now holds the adopted save. The
+ * caller MUST call it only after storing that save durably: the cursor is a
+ * claim about what's on THIS device, so advancing it before the local write
+ * commits means a failed write leaves us claiming a revision we don't have —
+ * and every later open then reads the remote as "not ahead" and declines to
+ * adopt it, stranding the cloud save permanently.
+ */
+export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => void } | { adopt: false };
 
 /**
  * Open-time reconcile: adopt the remote save ONLY when it advanced past what this
@@ -127,8 +135,8 @@ export async function pullCloudSaveIfNewer(cloudWorldId: string, storage: Storag
   const result = await fetchCloudSave(cloudWorldId);
   if (!result) return { adopt: false }; // no blob yet, or offline → keep local
   const cursor = readStamps(storage)[cloudWorldId];
-  if (result.saveRevision === null) return { adopt: true, save: result.save }; // no revision to reason about → first download
-  if (cursor !== undefined && result.saveRevision <= cursor) return { adopt: false }; // not ahead of our last sync
-  writeStamp(cloudWorldId, result.saveRevision, storage);
-  return { adopt: true, save: result.save };
+  const revision = result.saveRevision;
+  if (revision === null) return { adopt: true, save: result.save, commitCursor: () => {} }; // no revision to reason about → first download
+  if (cursor !== undefined && revision <= cursor) return { adopt: false }; // not ahead of our last sync
+  return { adopt: true, save: result.save, commitCursor: () => writeStamp(cloudWorldId, revision, storage) };
 }
