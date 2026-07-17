@@ -14,9 +14,10 @@ import type { SaveData } from "@/lib/game/types";
  * changed, silently latching sync off for the session. A revision only moves
  * when the blob does.
  *
- * Wired into the shell: WorldSelect uploads/downloads sp-cloud worlds, GameShell
- * reconciles on open (`pullCloudSaveIfNewer`), and useMinecraftGame pushes on
- * autosave/quit for a `WorldMeta.cloudId`-linked, signed-in world.
+ * Wired into the shell: WorldSelect uploads an sp-cloud world (`pushSave`),
+ * GameShell reconciles on open and on download (`pullCloudSaveIfNewer`), and
+ * useMinecraftGame pushes on autosave/quit for a `WorldMeta.cloudId`-linked,
+ * signed-in world.
  */
 
 /**
@@ -107,14 +108,6 @@ async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; s
   } catch {
     return null;
   }
-}
-
-/** Downloads the latest cloud save (null when the world has no blob yet). Advances the sync cursor. */
-export async function pullSave(cloudWorldId: string, storage: Storage = localStorage): Promise<SaveData | null> {
-  const result = await fetchCloudSave(cloudWorldId);
-  if (!result) return null;
-  if (result.saveRevision !== null) writeStamp(cloudWorldId, result.saveRevision, storage);
-  return result.save;
 }
 
 export type PullDecision = { adopt: true; save: SaveData } | { adopt: false };
