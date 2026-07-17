@@ -360,6 +360,28 @@ describe("room lifecycle", () => {
     (room as unknown as { tick(dt: number): void }).tick(0.05);
     expect(a.messagesOf("tick").at(-1)?.self?.hearts).toBeDefined();
   });
+
+  // Each resync gzips the whole shard diff, and Bun doesn't serialize a socket's
+  // concurrent message handlers — so an unbudgeted spam loop stacks full-world
+  // gzips against the tick loop every room shares. Budgeted like cmd/chat/attack.
+  test("resync is rate-limited per second, and the budget refills at the second boundary", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    a.frames.length = 0;
+    for (let i = 0; i < 10; i += 1) await room.handleMessage("alice", { t: "resync" });
+    const firstBurst = a.frames.filter((f) => f.kind === "binary").length;
+    expect(firstBurst).toBeGreaterThan(0);
+    expect(firstBurst).toBeLessThanOrEqual(3); // RESYNC_PER_SECOND, not all 10
+
+    // Cross the second boundary (budgets reset at tick % 20 === 0) → fresh allowance.
+    for (let i = 0; i < 20; i += 1) tick();
+    a.frames.length = 0;
+    await room.handleMessage("alice", { t: "resync" });
+    expect(a.frames.some((f) => f.kind === "binary")).toBe(true);
+  });
 });
 
 describe("ops surface", () => {

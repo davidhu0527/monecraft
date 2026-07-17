@@ -99,7 +99,7 @@ type ClientConn = {
   /** Tick of the last accepted pose (drives the clamp's elapsed time). */
   lastPoseTick: number;
   /** Per-second message budgets (reset each second-boundary tick). */
-  budget: { cmd: number; chat: number; attack: number };
+  budget: { cmd: number; chat: number; attack: number; resync: number };
   /** Sustained-backpressure strikes toward a slow-client kick. */
   slowStrikes: number;
   /** Shadow of the last self-delta sent (reference/primitive compares). */
@@ -150,6 +150,8 @@ const DEFAULT_NETHER_SHARD_LINGER_MS = 60_000;
  * client sweep a mob's whole 900 ms position trail with varied view stamps.
  */
 const MELEE_ATTACKS_PER_SECOND = 12;
+/** Full-shard resends per second. A real desync needs one; this bounds a spam loop's gzip cost. */
+const RESYNC_PER_SECOND = 3;
 
 /**
  * One entry in a room's replay log: a dispatched command (with its claimed eye
@@ -478,7 +480,7 @@ export class Room {
       sink,
       poseSeq: -1,
       lastPoseTick: this.tickCount,
-      budget: { cmd: 0, chat: 0, attack: 0 },
+      budget: { cmd: 0, chat: 0, attack: 0, resync: 0 },
       slowStrikes: 0,
       shadow: null
     };
@@ -642,6 +644,13 @@ export class Room {
         return;
       }
       case "resync": {
+        // Budgeted like cmd/chat/attack: each resync serializes and gzips the
+        // whole shard diff, and Bun doesn't serialize a socket's concurrent
+        // message handlers — so an unbudgeted spam loop stacks full-world gzips
+        // against the 20 Hz tick every room in the process shares. A couple per
+        // second is plenty for a genuine desync recovery.
+        if (conn.budget.resync >= RESYNC_PER_SECOND) return;
+        conn.budget.resync += 1;
         conn.sink.send(await gzipWorldSync(this.buildWorldSync(this.shardOf(conn))));
         conn.shadow = null; // resend the full self-delta next tick
         return;
@@ -721,7 +730,7 @@ export class Room {
     const started = this.now();
     this.tickCount += 1;
     if (this.tickCount % 20 === 0) {
-      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0 };
+      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0, resync: 0 };
     }
 
     // Step every shard and gather its per-tick broadcast data. Coordinates,

@@ -137,6 +137,35 @@ describe("invites", () => {
     expect(list[0].role).toBe("member");
   });
 
+  // Two accepts from the SAME user racing: both used to pass the read-side
+  // "already a member?" check and each burned a use, leaving 2 uses for the 1
+  // membership onConflictDoNothing created. The membership insert now goes first,
+  // so the loser dedupes on the unique index and consumes nothing.
+  test("concurrent same-user accepts consume exactly one use", async () => {
+    const id = await makeWorld();
+    const invite = await createInvite(asDb(), "alice", id);
+    if (!invite.ok) throw new Error("invite failed");
+
+    const [a, b] = await Promise.all([acceptInvite(asDb(), "bob", invite.token), acceptInvite(asDb(), "bob", invite.token)]);
+    expect(a.ok && b.ok).toBe(true);
+
+    const [row] = await db.select().from(schema.worldInvites);
+    expect(row.uses).toBe(1); // one membership → one use, not two
+    expect((await listWorlds(asDb(), "bob")).map((w) => w.id)).toEqual([id]);
+  });
+
+  // A use must be consumed IFF a membership is granted. When the cap fills, the
+  // transaction rolls back the membership too — no half-done accept.
+  test("an accept that can't consume a use grants no membership", async () => {
+    const id = await makeWorld();
+    // A single-use invite already spent: the next accept can't consume.
+    await db.insert(schema.worldInvites).values({ id: "inv-spent", worldId: id, token: "tok-spent", createdBy: "alice", maxUses: 1, uses: 1 });
+
+    expect(await acceptInvite(asDb(), "bob", "tok-spent")).toMatchObject({ ok: false, error: "expired" });
+    // The rolled-back membership insert must leave bob with no access.
+    expect(await listWorlds(asDb(), "bob")).toEqual([]);
+  });
+
   test("expired and exhausted invites refuse", async () => {
     const id = await makeWorld();
     await db.insert(schema.worldInvites).values({ id: "inv-old", worldId: id, token: "tok-old", createdBy: "alice", expiresAt: new Date(Date.now() - 1000) });

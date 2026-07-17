@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
 import { MAX_ONLINE_PROFILES, MAX_WORLDS_PER_PROFILE, WORLDGEN_VERSION } from "@/lib/game/config";
@@ -369,22 +369,49 @@ export async function resolveInvite(db: Db, token: string): Promise<{ ok: true; 
   return { ok: true, worldId: world.id, worldName: world.name };
 }
 
-/** Accepting twice is fine (idempotent); each NEW membership consumes one use. */
+/** Rolls back an accept when the invite's cap fills between resolve and consume. */
+const CAP_FILLED = Symbol("invite-cap-filled");
+
+/** Accepting twice is fine (idempotent); each NEW membership consumes exactly one use. */
 export async function acceptInvite(db: Db, userId: string, token: string): Promise<{ ok: true; worldId: string } | Failure> {
   const resolved = await resolveInvite(db, token);
   if (!resolved.ok) return resolved;
-  const existing = await membership(db, userId, resolved.worldId);
-  if (existing) return { ok: true, worldId: resolved.worldId };
-  // Consume one use atomically, enforcing the cap in the predicate: concurrent
-  // accepts can't both slip past a maxUses that only one increment should clear.
-  const consumed = await db
-    .update(schema.worldInvites)
-    .set({ uses: sql`${schema.worldInvites.uses} + 1` })
-    .where(and(eq(schema.worldInvites.token, token), or(isNull(schema.worldInvites.maxUses), lt(schema.worldInvites.uses, schema.worldInvites.maxUses))))
-    .returning({ id: schema.worldInvites.id });
-  if (consumed.length === 0) return fail("expired"); // the cap filled under concurrency
-  await db.insert(schema.worldMembers).values({ worldId: resolved.worldId, userId, role: "member" }).onConflictDoNothing();
-  return { ok: true, worldId: resolved.worldId };
+  // One transaction so a use is consumed IFF a membership is granted. Two things
+  // this ordering fixes over consume-then-insert: (1) a failed insert can no
+  // longer burn a use with nothing to show for it — they commit or roll back
+  // together; (2) the membership insert goes FIRST, so two concurrent accepts by
+  // the SAME user dedupe on the unique index — the second blocks, then sees the
+  // conflict and consumes nothing (previously both passed a read-side `existing`
+  // check and each burned a use for one membership).
+  try {
+    return await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(schema.worldMembers)
+        .values({ worldId: resolved.worldId, userId, role: "member" })
+        .onConflictDoNothing()
+        .returning({ userId: schema.worldMembers.userId });
+      if (inserted.length === 0) return { ok: true, worldId: resolved.worldId } as const; // already a member — no use consumed
+      // A genuinely new membership: consume one use, enforcing cap AND expiry in
+      // the predicate (both can change between resolveInvite and here). Zero rows
+      // = the invite ran out under us, so undo the membership by aborting.
+      const consumed = await tx
+        .update(schema.worldInvites)
+        .set({ uses: sql`${schema.worldInvites.uses} + 1` })
+        .where(
+          and(
+            eq(schema.worldInvites.token, token),
+            or(isNull(schema.worldInvites.maxUses), lt(schema.worldInvites.uses, schema.worldInvites.maxUses)),
+            or(isNull(schema.worldInvites.expiresAt), gt(schema.worldInvites.expiresAt, new Date()))
+          )
+        )
+        .returning({ id: schema.worldInvites.id });
+      if (consumed.length === 0) throw CAP_FILLED;
+      return { ok: true, worldId: resolved.worldId } as const;
+    });
+  } catch (err) {
+    if (err === CAP_FILLED) return fail("expired");
+    throw err;
+  }
 }
 
 /**
