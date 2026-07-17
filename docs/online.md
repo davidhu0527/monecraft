@@ -264,9 +264,22 @@ troubleshooting). In short:
 `server/index.ts` (Bun, no build step — `bun server/index.ts`). One process
 hosts up to `MAX_ROOMS` worlds; each room is an authoritative `GameEngine`
 on the drift-corrected 20 Hz ticker. Rooms load from Postgres on first join,
-persist every 60 s (when dirty), on last-leave, and on SIGTERM (deploys
-drain, ≤60 s loss crash-safe); five idle minutes evicts a room from memory.
-See [protocol.md](protocol.md) for the wire format.
+persist every 60 s **while occupied** (and when an empty room still owes a
+write), on last-leave, and on SIGTERM (deploys drain, ≤60 s loss crash-safe);
+five idle minutes evicts a room from memory. See [protocol.md](protocol.md)
+for the wire format.
+
+Presence is the persist trigger, not the dirty flag. The flag is set by five
+things — travel, nether-shard evict, join, leave, block-edit events — while a
+live session also moves inventory, health, hunger, effects, XP, statistics,
+advancements, mobs, containers and position, marking none of them; gating the
+interval on it meant a crash could roll back a long session that happened to
+involve no block edit. So the flag now only answers "does an EMPTY room still
+owe a write". Stores **coalesce** — one in flight, at most one follow-up queued
+— because composing and gzipping a world is expensive and `storeWorld` has no
+version guard, so overlapping writes race and the older can land last. The flag
+clears against the snapshot actually composed (a mutation mid-write stays
+dirty), and a failed write re-marks the room rather than dropping the state.
 
 **Single instance, by design.** Rooms live in the process's memory
 (`server/roomRegistry.ts`) with no cross-instance coordination — Postgres holds
@@ -308,7 +321,7 @@ tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
   player out, `POST /rooms/:id/kick/:playerId`.
 - **A redeploy.** SIGTERM drains every room (persist + close with `4005`);
   clients reconnect on the ladder to the new instance and re-sync. Loss is
-  bounded to the last 60 s (the dirty-persist interval) even on a hard crash.
+  bounded to the last 60 s (the persist interval) even on a hard crash.
 - **"How did this happen?"** Pull `/rooms/:id/log`, then `bun scripts/replay.ts`
   to replay the command stream against a fresh engine and diff the outcome.
 - **Latency feels bad.** From a browser console, `window.__monecraft.net`

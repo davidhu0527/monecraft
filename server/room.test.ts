@@ -889,3 +889,99 @@ describe("dimension shards (the nether online)", () => {
     expect(room.playerCount()).toBe(0);
   });
 });
+
+/**
+ * Persistence triggers and write coalescing. The room's own persist() is the
+ * only thing standing between a live session and a crash, so what SETS it off
+ * matters as much as what it writes.
+ */
+describe("room persistence", () => {
+  const tickOf = (room: Room) => () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+  /** Jump to the tick before the persist interval, so one tick trips it. */
+  const armPersistInterval = (room: Room) => {
+    (room as unknown as { tickCount: number }).tickCount = 20 * 60 - 1;
+  };
+  const playerIn = (room: Room, id: string) =>
+    (room as unknown as { shards: Map<string, { engine: { state: { players: Map<string, { xp: number }> } } }> }).shards
+      .get("overworld")!
+      .engine.state.players.get(id)!;
+
+  // The dirty flag is set by five things — travel, shard evict, join, leave, and
+  // block-edit events. A live session moves inventory, health, hunger, effects,
+  // XP, stats, advancements and position without touching any of them, so a
+  // crash used to drop every bit of it since the last block edit.
+  test("an occupied room persists on the interval with no block edit in sight", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-interval"))!, persistence, () => 0);
+    await room.join(claimsFor("alice", "w-interval", "owner"), fakeSink());
+    await room.persist(); // join marked dirty; bank that and start clean
+
+    playerIn(room, "alice").xp = 4242; // persisted state, zero block edits
+
+    armPersistInterval(room);
+    tickOf(room)();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const stored = await persistence.loadWorld("w-interval");
+    expect(stored!.save!.players.find((p) => p.id === "alice")?.xp).toBe(4242);
+  }, 120_000);
+
+  test("an empty, clean room doesn't rewrite itself every interval", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-idle"))!, persistence, () => 0);
+    await room.persist();
+
+    let writes = 0;
+    const store = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async (...args) => {
+      writes += 1;
+      return store(...args);
+    };
+
+    armPersistInterval(room);
+    tickOf(room)();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(writes).toBe(0); // nobody home and nothing owed
+  }, 120_000);
+
+  test("overlapping persists coalesce into one in-flight store plus one follow-up", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-coalesce"))!, persistence, () => 0);
+
+    const started: Array<() => void> = [];
+    persistence.storeWorld = () => new Promise<void>((resolve) => started.push(resolve));
+
+    const first = room.persist();
+    // Two more while the first is in flight: they owe ONE follow-up between
+    // them, not two — a third would compose the same state again.
+    const second = room.persist();
+    const third = room.persist();
+    expect(started).toHaveLength(1);
+
+    started[0]();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(started).toHaveLength(2); // one follow-up covering both requests
+
+    started[1]();
+    await Promise.all([first, second, third]);
+    expect(started).toHaveLength(2); // and it stops there
+  }, 120_000);
+
+  // Without this, a store's success could clear a flag set by an edit that
+  // landed DURING the write — swallowing it until some later block edit.
+  test("a mutation during a store stays dirty", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-midwrite"))!, persistence, () => 0);
+    await room.persist();
+
+    let release: () => void = () => {};
+    persistence.storeWorld = () => new Promise<void>((resolve) => (release = resolve));
+
+    const inFlight = room.persist();
+    (room as unknown as { dirtySinceStore: boolean }).dirtySinceStore = true; // an edit lands mid-write
+    release();
+    await inFlight;
+
+    expect((room as unknown as { dirtySinceStore: boolean }).dirtySinceStore).toBe(true);
+  }, 120_000);
+});

@@ -182,7 +182,15 @@ export class Room {
   private readonly persistence: Persistence;
   private ticker: FixedTicker | null = null;
   private tickCount = 0;
+  /**
+   * Marks state a store must not miss. It is NOT the whole trigger: an occupied
+   * room persists on the interval regardless (see tick()), because only five
+   * mutations ever set this and a live session changes far more than that.
+   */
   private dirtySinceStore = false;
+  /** The in-flight store, and whether one more is owed after it. See persist(). */
+  private storing: Promise<void> | null = null;
+  private storeAgain = false;
   /**
    * The nether's world half from an evicted shard, re-emitted by composeSave
    * until a new shard (whose boot save carries it) supersedes it. The
@@ -658,16 +666,53 @@ export class Room {
     await this.persist();
   }
 
-  /** Persists the full world (every shard's half, live players merged with offline slices). */
+  /**
+   * Persists the full world, coalescing with any store already in flight.
+   *
+   * One store runs at a time: composing + gzipping a whole world is expensive,
+   * and two overlapping UPDATEs race with no version guard — the loser is
+   * silently overwritten, and out of order the OLDER snapshot can be the one
+   * that lands. A request made mid-store queues exactly one follow-up (a third
+   * would compose the same state again), so the awaited promise always resolves
+   * on a store that saw the caller's state. That is what lets shutdown() await
+   * this and be sure the final state is down.
+   */
   async persist(): Promise<void> {
+    if (this.storing) {
+      this.storeAgain = true;
+      return this.storing;
+    }
+    this.storing = (async () => {
+      try {
+        do {
+          this.storeAgain = false;
+          await this.storeOnce();
+        } while (this.storeAgain);
+      } finally {
+        this.storing = null;
+      }
+    })();
+    return this.storing;
+  }
+
+  /** One store of the full world (every shard's half, live players merged with offline slices). */
+  private async storeOnce(): Promise<void> {
     const save = this.composeSave();
     for (const [id, saved] of this.offlinePlayers) {
       if (!save.players.some((p) => p.id === id)) save.players.push(saved);
     }
+    // Clear against the snapshot we just took, not against whatever is true when
+    // the write returns: a mutation landing mid-write must survive as dirty, or
+    // clearing here would swallow it until the next unrelated block edit.
+    this.dirtySinceStore = false;
     const bun = Bun as unknown as { gzipSync(d: Uint8Array): Uint8Array };
     const blob = bun.gzipSync(new TextEncoder().encode(JSON.stringify(save)));
-    await this.persistence.storeWorld(this.worldId, blob, save.version);
-    this.dirtySinceStore = false;
+    try {
+      await this.persistence.storeWorld(this.worldId, blob, save.version);
+    } catch (err) {
+      this.dirtySinceStore = true; // the write never landed — retry on the next interval
+      throw err;
+    }
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -781,7 +826,16 @@ export class Room {
         this.broadcastToDimension(shard.dimension, { t: "mobsKeyframe", n: this.tickCount, mobs: this.collectMobPoses(shard, true) });
       }
     }
-    if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && this.dirtySinceStore) {
+    // An OCCUPIED room persists on the interval whatever the dirty flag says.
+    // The flag is set by exactly five things (travel, shard evict, join, leave,
+    // and block-edit events) — while a live session also moves inventory,
+    // health, hunger, effects, XP, statistics, advancements, mobs, containers
+    // and position, none of which mark anything. A crash could therefore drop a
+    // long stretch of progress that involved no block edit. Chasing every
+    // mutation site is a list to keep in sync forever and one omission is a
+    // silent loss, so presence is the trigger and the flag only decides whether
+    // an EMPTY room still owes a write (block edits then everyone left).
+    if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && (this.clients.size > 0 || this.dirtySinceStore)) {
       void this.persist();
     }
     this.sweepNetherShard();
