@@ -68,10 +68,28 @@ routes are thin HTTP adapters over it.
 
 Single-player cloud saves are gzipped `SaveData` blobs (`lib/game/
 cloudSaves.ts` — block diffs compress extremely well) with last-write-wins
-concurrency: each device sends the `updatedAt` stamp it last saw
-(`x-base-updated-at`); a mismatch is **409** and the pushing client stops
+concurrency: each device sends the `saveRevision` it last saw
+(`x-base-revision`); a mismatch is **409** and the pushing client stops
 syncing and warns (rather than clobber the other device), then adopts the
 newer save on the next open.
+
+**Two clocks, deliberately.** `worlds.updatedAt` is metadata mtime — "last
+touched", what the world list orders by. `worlds.saveRevision` counts **blob
+writes and nothing else**: it is the sync cursor devices compare (stored per
+world under `minecraft_cloud_stamps_v2`) and the CAS token their uploads race
+on, incremented SQL-side by both writers (`putSaveBlob` and the game server's
+`storeWorld`) so concurrent writes can't settle on a value read earlier.
+Revision `0` means never saved, which is what makes "first upload" checkable
+without trusting the client. They must stay separate: while `updatedAt` served
+as both, **renaming a world moved every other device's cursor** and 409'd its
+next push over a save that hadn't changed — and since a 409 latches
+`cloudConflictRef`, that silently disabled sync for the rest of the session.
+Because revisions are ordered, the open-time reconcile asks whether the remote
+is strictly _ahead_ of the cursor rather than merely different, so a remote
+that's behind (a restored backup) leaves newer local progress alone.
+
+⚠️ **The web app and the game server both write `save_revision`**, so they ship
+from the same SHA — see [deploy.md](deploy.md#updating-a-running-deployment).
 
 **Save upload is `sp-cloud`-only.** Both kinds keep their blob in the same
 `worlds.saveBlob` column, but they do not share its ownership: an `sp-cloud`

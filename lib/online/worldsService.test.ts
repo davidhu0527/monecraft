@@ -130,30 +130,63 @@ describe("invites", () => {
 describe("save blobs (LWW)", () => {
   const blob = (text: string) => new TextEncoder().encode(text);
 
-  test("first upload needs a null base; later uploads need the exact stamp", async () => {
+  test("first upload needs a null base; later uploads need the exact revision", async () => {
     const id = await makeWorld("alice", "sp-cloud");
 
     const first = await putSaveBlob(asDb(), "alice", id, blob("v1"), 17, null);
-    expect(first.ok).toBe(true);
-    const stamp1 = first.ok ? first.updatedAt : "";
+    expect(first).toMatchObject({ ok: true, saveRevision: 1 }); // a never-saved world starts at 0
+    const rev1 = first.ok ? first.saveRevision : -1;
 
     // A second device that never saw the blob must not clobber it.
     expect(await putSaveBlob(asDb(), "alice", id, blob("clobber"), 17, null)).toMatchObject({ ok: false, error: "conflict" });
-    // A stale stamp must not clobber either.
-    expect(await putSaveBlob(asDb(), "alice", id, blob("stale"), 17, "2000-01-01T00:00:00.000Z")).toMatchObject({
-      ok: false,
-      error: "conflict"
-    });
-    // The holder of the current stamp may write.
-    const second = await putSaveBlob(asDb(), "alice", id, blob("v2"), 17, stamp1);
-    expect(second.ok).toBe(true);
+    // A stale revision must not clobber either.
+    expect(await putSaveBlob(asDb(), "alice", id, blob("stale"), 17, 0)).toMatchObject({ ok: false, error: "conflict" });
+    // Nor may a revision from the future.
+    expect(await putSaveBlob(asDb(), "alice", id, blob("ahead"), 17, 99)).toMatchObject({ ok: false, error: "conflict" });
+    // The holder of the current revision may write, and the revision advances.
+    expect(await putSaveBlob(asDb(), "alice", id, blob("v2"), 17, rev1)).toMatchObject({ ok: true, saveRevision: 2 });
 
     const fetched = await getSaveBlob(asDb(), "alice", id);
     expect(fetched.ok).toBe(true);
     if (fetched.ok) {
       expect(new TextDecoder().decode(fetched.blob!)).toBe("v2");
       expect(fetched.saveVersion).toBe(17);
+      expect(fetched.saveRevision).toBe(2);
     }
+  });
+
+  test("a garbage base revision is rejected, not read as a first upload", async () => {
+    const id = await makeWorld("alice", "sp-cloud");
+    expect((await putSaveBlob(asDb(), "alice", id, blob("v1"), 17, null)).ok).toBe(true);
+    // NaN is what an unparseable x-base-revision header becomes. Treating it as
+    // "first upload" would hand a stale client a clobber.
+    expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 17, Number.NaN)).toMatchObject({ ok: false, error: "invalid" });
+    expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 17, -1)).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  // The bug this column exists for: updatedAt was both metadata mtime AND the
+  // sync cursor, so renaming a world moved every other device's cursor and
+  // 409'd its next push over a save that never changed.
+  test("renaming a world doesn't disturb the save cursor", async () => {
+    const id = await makeWorld("alice", "sp-cloud");
+    const first = await putSaveBlob(asDb(), "alice", id, blob("v1"), 18, null);
+    const rev = first.ok ? first.saveRevision : -1;
+
+    expect((await renameWorld(asDb(), "alice", id, "Renamed")).ok).toBe(true);
+
+    // Same cursor the device held before the rename: still valid.
+    expect(await putSaveBlob(asDb(), "alice", id, blob("v2"), 18, rev)).toMatchObject({ ok: true, saveRevision: 2 });
+    // And the rename did land — the metadata mtime is what moved, not the cursor.
+    const world = await getWorld(asDb(), "alice", id);
+    expect(world.ok && world.world.name).toBe("Renamed");
+  });
+
+  test("a read doesn't move the cursor either", async () => {
+    const id = await makeWorld("alice", "sp-cloud");
+    const first = await putSaveBlob(asDb(), "alice", id, blob("v1"), 18, null);
+    const rev = first.ok ? first.saveRevision : -1;
+    await getSaveBlob(asDb(), "alice", id);
+    expect(await putSaveBlob(asDb(), "alice", id, blob("v2"), 18, rev)).toMatchObject({ ok: true });
   });
 
   test("non-members can't read or write blobs", async () => {

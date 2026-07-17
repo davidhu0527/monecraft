@@ -70,6 +70,7 @@ export const SCHEMA_DDL = `
       worldgen_version integer NOT NULL,
       save_version integer,
       save_blob bytea,
+      save_revision integer NOT NULL DEFAULT 0,
       created_at timestamp NOT NULL DEFAULT now(),
       updated_at timestamp NOT NULL DEFAULT now()
     );

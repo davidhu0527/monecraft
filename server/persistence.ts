@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db as liveDb, schema, type Db } from "@/db";
 import { readSave } from "@/lib/game/save";
 import type { SaveData } from "@/lib/game/types";
@@ -103,7 +103,14 @@ export function createDrizzlePersistence(database: Db = liveDb()): Persistence {
       };
     },
     async storeWorld(worldId, blob, saveVersion) {
-      await database.update(schema.worlds).set({ saveBlob: blob, saveVersion, updatedAt: new Date() }).where(eq(schema.worlds.id, worldId));
+      // saveRevision counts blob writes wherever they come from — the room is a
+      // writer like any other, and a browser reading this world's blob compares
+      // that number. Incremented SQL-side so concurrent writers can't collide
+      // on a value read earlier.
+      await database
+        .update(schema.worlds)
+        .set({ saveBlob: blob, saveVersion, saveRevision: sql`${schema.worlds.saveRevision} + 1`, updatedAt: new Date() })
+        .where(eq(schema.worlds.id, worldId));
     }
   };
 }

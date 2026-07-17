@@ -4,34 +4,46 @@ import type { SaveData } from "@/lib/game/types";
 /**
  * Cloud sync for single-player saves: gzipped SaveData blobs pushed to
  * /api/worlds/:id/save with a last-write-wins stale guard. Each device
- * remembers the `updatedAt` stamp it last saw per cloud world (its sync
- * cursor); a 409 means another device wrote in between — the caller pulls
- * the newer save and lets the player continue from it.
+ * remembers the `saveRevision` it last saw per cloud world (its sync cursor);
+ * a 409 means another device wrote in between — the caller pulls the newer
+ * save and lets the player continue from it.
+ *
+ * The cursor is a save REVISION, not a timestamp. It used to be the world row's
+ * `updatedAt`, which also served as metadata mtime — so renaming a world moved
+ * every other device's cursor and 409'd its next push over a save that had not
+ * changed, silently latching sync off for the session. A revision only moves
+ * when the blob does.
  *
  * Wired into the shell: WorldSelect uploads/downloads sp-cloud worlds, GameShell
  * reconciles on open (`pullCloudSaveIfNewer`), and useMinecraftGame pushes on
  * autosave/quit for a `WorldMeta.cloudId`-linked, signed-in world.
  */
 
-const STAMPS_KEY = "minecraft_cloud_stamps_v1";
+/**
+ * v2: the values are revisions now, not ISO timestamps. A fresh key rather than
+ * a migration — a stale timestamp compared against a revision would read as
+ * "the cloud moved" forever. With no cursor, the open-time pull adopts and sets
+ * one before anything pushes, so the cost of starting empty is nil.
+ */
+const STAMPS_KEY = "minecraft_cloud_stamps_v2";
 
-type StampMap = Record<string, string>;
+type StampMap = Record<string, number>;
 
 function readStamps(storage: Storage = localStorage): StampMap {
   try {
     const parsed: unknown = JSON.parse(storage.getItem(STAMPS_KEY) ?? "{}");
     if (!parsed || typeof parsed !== "object") return {};
     const out: StampMap = {};
-    for (const [key, value] of Object.entries(parsed)) if (typeof value === "string") out[key] = value;
+    for (const [key, value] of Object.entries(parsed)) if (Number.isInteger(value)) out[key] = value as number;
     return out;
   } catch {
     return {};
   }
 }
 
-function writeStamp(cloudWorldId: string, stamp: string, storage: Storage = localStorage): void {
+function writeStamp(cloudWorldId: string, revision: number, storage: Storage = localStorage): void {
   const stamps = readStamps(storage);
-  stamps[cloudWorldId] = stamp;
+  stamps[cloudWorldId] = revision;
   storage.setItem(STAMPS_KEY, JSON.stringify(stamps));
 }
 
@@ -61,35 +73,37 @@ export type PushResult = "saved" | "conflict" | "error";
 export async function pushSave(cloudWorldId: string, save: SaveData, storage: Storage = localStorage): Promise<PushResult> {
   try {
     const body = await gzipJson(save);
-    const base = readStamps(storage)[cloudWorldId] ?? "";
+    // No cursor = we've never seen this world's blob, i.e. a first upload. The
+    // server accepts that only against a never-saved world, so it can't clobber.
+    const base = readStamps(storage)[cloudWorldId];
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`, {
       method: "PUT",
       headers: {
         "content-type": "application/gzip",
         "x-save-version": String(save.version),
-        "x-base-updated-at": base
+        "x-base-revision": base === undefined ? "" : String(base)
       },
       body: body as unknown as BodyInit
     });
     if (response.status === 409) return "conflict";
     if (!response.ok) return "error";
-    const { updatedAt } = (await response.json()) as { updatedAt: string };
-    writeStamp(cloudWorldId, updatedAt, storage);
+    const { saveRevision } = (await response.json()) as { saveRevision: number };
+    writeStamp(cloudWorldId, saveRevision, storage);
     return "saved";
   } catch {
     return "error";
   }
 }
 
-/** Fetches the cloud blob + its stamp (null when the world has no blob yet, the blob doesn't validate, or the fetch fails). */
-async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; updatedAt: string | null } | null> {
+/** Fetches the cloud blob + its revision (null when the world has no blob yet, the blob doesn't validate, or the fetch fails). */
+async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; saveRevision: number | null } | null> {
   try {
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`);
     if (!response.ok) return null;
-    const updatedAt = response.headers.get("x-updated-at");
+    const header = Number.parseInt(response.headers.get("x-save-revision") ?? "", 10);
     const save = await gunzipSave(new Uint8Array(await response.arrayBuffer()));
     if (!save) return null;
-    return { save, updatedAt };
+    return { save, saveRevision: Number.isInteger(header) ? header : null };
   } catch {
     return null;
   }
@@ -99,7 +113,7 @@ async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; u
 export async function pullSave(cloudWorldId: string, storage: Storage = localStorage): Promise<SaveData | null> {
   const result = await fetchCloudSave(cloudWorldId);
   if (!result) return null;
-  if (result.updatedAt) writeStamp(cloudWorldId, result.updatedAt, storage);
+  if (result.saveRevision !== null) writeStamp(cloudWorldId, result.saveRevision, storage);
   return result.save;
 }
 
@@ -111,12 +125,17 @@ export type PullDecision = { adopt: true; save: SaveData } | { adopt: false };
  * your newer local progress instead of clobbering it with an older cloud copy;
  * a first download (no cursor yet) always adopts, and a genuine remote write from
  * another device wins (last-write-wins — the push side warns on the conflict).
+ *
+ * Revisions are ordered, so this asks whether the remote is strictly AHEAD of
+ * the cursor rather than merely different — a remote behind our cursor (a
+ * restored backup, a stale replica) leaves local progress alone.
  */
 export async function pullCloudSaveIfNewer(cloudWorldId: string, storage: Storage = localStorage): Promise<PullDecision> {
   const result = await fetchCloudSave(cloudWorldId);
   if (!result) return { adopt: false }; // no blob yet, or offline → keep local
   const cursor = readStamps(storage)[cloudWorldId];
-  if (result.updatedAt && result.updatedAt === cursor) return { adopt: false }; // unchanged since our last sync
-  if (result.updatedAt) writeStamp(cloudWorldId, result.updatedAt, storage);
+  if (result.saveRevision === null) return { adopt: true, save: result.save }; // no revision to reason about → first download
+  if (cursor !== undefined && result.saveRevision <= cursor) return { adopt: false }; // not ahead of our last sync
+  writeStamp(cloudWorldId, result.saveRevision, storage);
   return { adopt: true, save: result.save };
 }

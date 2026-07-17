@@ -223,6 +223,9 @@ export async function renameWorld(db: Db, userId: string, worldId: string, name:
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
   if (member.role !== "owner") return fail("forbidden");
+  // Bumps the metadata mtime only. `saveRevision` — the devices' sync cursor —
+  // deliberately does NOT move here: the save didn't change, and while these
+  // were one field a rename 409'd every other device's next push.
   await db.update(schema.worlds).set({ name: trimmed, updatedAt: new Date() }).where(eq(schema.worlds.id, worldId));
   return { ok: true };
 }
@@ -235,25 +238,30 @@ export async function deleteWorld(db: Db, userId: string, worldId: string): Prom
   return { ok: true };
 }
 
-/** The gzipped SaveData blob plus its concurrency stamp. */
+/** The gzipped SaveData blob plus its concurrency stamp (the save revision). */
 export async function getSaveBlob(
   db: Db,
   userId: string,
   worldId: string
-): Promise<{ ok: true; blob: Uint8Array | null; saveVersion: number | null; updatedAt: string } | Failure> {
+): Promise<{ ok: true; blob: Uint8Array | null; saveVersion: number | null; saveRevision: number } | Failure> {
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
   const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
   if (!world) return fail("not-found");
-  return { ok: true, blob: world.saveBlob ?? null, saveVersion: world.saveVersion, updatedAt: world.updatedAt.toISOString() };
+  return { ok: true, blob: world.saveBlob ?? null, saveVersion: world.saveVersion, saveRevision: world.saveRevision };
 }
 
 /**
  * Uploads a single-player cloud save. Last-write-wins with a stale guard: the
- * client sends the `updatedAt` it last saw; a mismatch means someone else
+ * client sends the `saveRevision` it last saw; a mismatch means someone else
  * (another device) wrote in between — 409, and the client picks the newer save.
- * `baseUpdatedAt: null` means "first upload", accepted only while the world has
- * no blob yet.
+ * `baseRevision: null` means "first upload", accepted only while the world has
+ * never been saved (revision 0).
+ *
+ * The cursor is `saveRevision`, NOT `updatedAt`: the latter is metadata mtime,
+ * so a rename moved every other device's cursor and 409'd their next push over
+ * a save that had not changed — silently latching cloud sync off for the
+ * session. A revision only moves when the blob does.
  *
  * `sp-cloud` only. The two kinds share one `saveBlob` column but not its
  * ownership: for `sp-cloud` the blob IS the client's upload, while for `mp` it
@@ -271,26 +279,29 @@ export async function putSaveBlob(
   worldId: string,
   blob: Uint8Array,
   saveVersion: number,
-  baseUpdatedAt: string | null
-): Promise<{ ok: true; updatedAt: string } | Failure> {
+  baseRevision: number | null
+): Promise<{ ok: true; saveRevision: number } | Failure> {
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
   if (!Number.isInteger(saveVersion) || blob.byteLength === 0) return fail("invalid");
+  if (baseRevision !== null && (!Number.isInteger(baseRevision) || baseRevision < 0)) return fail("invalid");
   const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
   if (!world) return fail("not-found");
   if (world.kind !== "sp-cloud") return fail("invalid");
-  const now = new Date();
   // Fold the stale check into the UPDATE predicate so two writers with the same
-  // base stamp can't both win: first upload requires no blob yet; a later one
-  // requires the exact `updatedAt` it last saw. Zero rows affected = stale.
-  const guard =
-    baseUpdatedAt === null
-      ? and(eq(schema.worlds.id, worldId), isNull(schema.worlds.saveBlob))
-      : and(eq(schema.worlds.id, worldId), eq(schema.worlds.updatedAt, new Date(baseUpdatedAt)));
-  const updated = await db.update(schema.worlds).set({ saveBlob: blob, saveVersion, updatedAt: now }).where(guard).returning({ id: schema.worlds.id });
+  // base revision can't both win: a first upload requires a never-saved world
+  // (revision 0); a later one requires the exact revision it last saw. The
+  // increment is SQL-side, so the winner's new revision is decided by the row
+  // it locked, not by a value read earlier. Zero rows affected = stale.
+  const guard = and(eq(schema.worlds.id, worldId), eq(schema.worlds.saveRevision, baseRevision ?? 0));
+  const updated = await db
+    .update(schema.worlds)
+    .set({ saveBlob: blob, saveVersion, saveRevision: sql`${schema.worlds.saveRevision} + 1`, updatedAt: new Date() })
+    .where(guard)
+    .returning({ saveRevision: schema.worlds.saveRevision });
   // The world exists (selected above), so no rows means a stale base.
   if (updated.length === 0) return fail("conflict");
-  return { ok: true, updatedAt: now.toISOString() };
+  return { ok: true, saveRevision: updated[0].saveRevision };
 }
 
 export async function createInvite(db: Db, userId: string, worldId: string): Promise<{ ok: true; token: string } | Failure> {

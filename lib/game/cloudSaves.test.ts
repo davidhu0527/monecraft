@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { gunzipJson, gzipJson, pullCloudSaveIfNewer } from "./cloudSaves";
 import type { SaveData } from "@/lib/game/types";
 
-const STAMPS_KEY = "minecraft_cloud_stamps_v1";
+const STAMPS_KEY = "minecraft_cloud_stamps_v2";
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
   const map = new Map(Object.entries(initial));
@@ -49,42 +49,53 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   // reject can't stand in for one the cloud hands us.
   const save = { version: 18, seed: 1, changes: [], players: [] } as unknown as SaveData;
 
-  /** Stub fetch to answer the cloud GET with an arbitrary gzipped body + an x-updated-at header. */
-  function stubBody(body: unknown, updatedAt: string | null, ok = true): void {
+  /** Stub fetch to answer the cloud GET with an arbitrary gzipped body + an x-save-revision header. */
+  function stubBody(body: unknown, saveRevision: number | null, ok = true): void {
     globalThis.fetch = (async () => {
       const bytes = await gzipJson(body);
       return {
         ok,
-        headers: { get: (key: string) => (key === "x-updated-at" ? updatedAt : null) },
+        headers: { get: (key: string) => (key === "x-save-revision" && saveRevision !== null ? String(saveRevision) : null) },
         arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
       } as unknown as Response;
     }) as unknown as typeof fetch;
   }
 
   /** The common case: a valid save. */
-  function stubCloud(updatedAt: string | null, ok = true): void {
-    stubBody(save, updatedAt, ok);
+  function stubCloud(saveRevision: number | null, ok = true): void {
+    stubBody(save, saveRevision, ok);
   }
 
-  test("first download (no cursor) adopts the remote save and records the stamp", async () => {
+  test("first download (no cursor) adopts the remote save and records the revision", async () => {
     const storage = fakeStorage();
-    stubCloud("2026-01-01T00:00:00Z");
+    stubCloud(3);
     const decision = await pullCloudSaveIfNewer("c1", storage);
     expect(decision.adopt).toBe(true);
     if (decision.adopt) expect(decision.save.version).toBe(18);
-    expect(JSON.parse(storage.getItem(STAMPS_KEY)!).c1).toBe("2026-01-01T00:00:00Z");
+    expect(JSON.parse(storage.getItem(STAMPS_KEY)!).c1).toBe(3);
   });
 
   test("keeps local when the remote is unchanged since this device's cursor", async () => {
-    const storage = fakeStorage({ [STAMPS_KEY]: JSON.stringify({ c1: "2026-01-01T00:00:00Z" }) });
-    stubCloud("2026-01-01T00:00:00Z"); // same stamp we last synced
+    const storage = fakeStorage({ [STAMPS_KEY]: JSON.stringify({ c1: 3 }) });
+    stubCloud(3); // the same revision we last synced
     expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(false);
   });
 
   test("adopts when another device advanced the remote past the cursor", async () => {
-    const storage = fakeStorage({ [STAMPS_KEY]: JSON.stringify({ c1: "2026-01-01T00:00:00Z" }) });
-    stubCloud("2026-02-02T00:00:00Z"); // newer than the cursor
+    const storage = fakeStorage({ [STAMPS_KEY]: JSON.stringify({ c1: 3 }) });
+    stubCloud(4); // ahead of the cursor
     expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(true);
+  });
+
+  // Revisions are ordered, so "different" isn't the question — "ahead" is. A
+  // remote BEHIND our cursor (a restored backup, a stale replica) must not
+  // overwrite newer local progress; the old timestamp cursor compared with ===
+  // and would have adopted it.
+  test("keeps local when the remote is behind the cursor", async () => {
+    const storage = fakeStorage({ [STAMPS_KEY]: JSON.stringify({ c1: 9 }) });
+    stubCloud(4);
+    expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(false);
+    expect(JSON.parse(storage.getItem(STAMPS_KEY)!).c1).toBe(9); // cursor unmoved
   });
 
   test("keeps local when the world has no blob yet or the fetch fails", async () => {
@@ -99,7 +110,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   // recoverable blob is sanitized BEFORE the engine sees it...
   test("sanitizes a recoverable remote blob rather than handing the engine a null player", async () => {
     const storage = fakeStorage();
-    stubBody({ version: 18, seed: 1, changes: [1], players: [null] }, "2026-02-02T00:00:00Z");
+    stubBody({ version: 18, seed: 1, changes: [1], players: [null] }, 4);
     const decision = await pullCloudSaveIfNewer("c1", storage);
     expect(decision.adopt).toBe(true);
     if (decision.adopt) {
@@ -111,7 +122,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   // ...and one that isn't a save at all is refused outright.
   test("refuses a remote blob that isn't a save, and doesn't advance the cursor", async () => {
     const storage = fakeStorage();
-    stubBody({ hello: "world" }, "2026-02-02T00:00:00Z");
+    stubBody({ hello: "world" }, 4);
     expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(false);
     // A refused blob must not move the cursor — the next open has to retry.
     expect(storage.getItem(STAMPS_KEY)).toBeNull();
