@@ -15,6 +15,13 @@ const IDLE_EVICT_MS = 5 * 60 * 1000;
 export class RoomRegistry {
   private readonly rooms = new Map<string, Room>();
   private readonly loading = new Map<string, Promise<Room | null>>();
+  /**
+   * Rooms whose shutdown (and final persist) is still running. They are already
+   * out of `rooms` — nobody may join a room that is closing its sockets — but
+   * their state is not down yet, so a load must wait rather than read the blob
+   * they are about to overwrite.
+   */
+  private readonly evicting = new Map<string, Promise<void>>();
   private sweeper: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -29,6 +36,12 @@ export class RoomRegistry {
 
   /** The room for a world, loading it from persistence on first use. Null: unknown world or at capacity. */
   async getOrLoad(worldId: string): Promise<Room | null> {
+    // Wait out an eviction in progress before reading the row: its final
+    // persist is what we would otherwise load a stale copy of. Awaiting FIRST
+    // keeps the checks below synchronous, so `loading` still collapses
+    // concurrent callers into one load.
+    const evicting = this.evicting.get(worldId);
+    if (evicting) await evicting;
     const existing = this.rooms.get(worldId);
     if (existing) return existing;
     const inFlight = this.loading.get(worldId);
@@ -58,15 +71,34 @@ export class RoomRegistry {
     return [...this.rooms.values()].map((room) => room.diagnostics());
   }
 
+  /**
+   * Evicts rooms that have sat empty. The room leaves `rooms` and enters
+   * `evicting` in the same synchronous step: a join must never reach a room
+   * that is closing its sockets, but must also not load a second copy of the
+   * world from the blob this shutdown is still writing. Between those two
+   * states there is no window — dropping it from `rooms` and only THEN awaiting
+   * shutdown is what let a join build a rival room from pre-shutdown state,
+   * with two Rooms then writing one row under an UPDATE that has no version
+   * guard (last write wins, and the eviction's is usually the older).
+   */
   async sweepIdle(): Promise<void> {
     for (const [worldId, room] of this.rooms) {
       if (room.playerCount() === 0 && room.emptySinceMs !== null && this.now() - room.emptySinceMs > IDLE_EVICT_MS) {
         this.rooms.delete(worldId);
-        await room.shutdown();
+        const done = room.shutdown();
+        // Waiters only need the shutdown to FINISH — a failed final persist
+        // shouldn't reject into a caller that is just trying to load the world
+        // afterwards (it still surfaces on the await below).
+        this.evicting.set(
+          worldId,
+          done.catch(() => {}).finally(() => this.evicting.delete(worldId))
+        );
+        await done;
       }
     }
   }
 
+  /** Terminal (the process is exiting), so the sweepIdle handoff above isn't needed — nothing will load again. */
   async shutdownAll(): Promise<void> {
     if (this.sweeper) clearInterval(this.sweeper);
     const rooms = [...this.rooms.values()];
