@@ -1,3 +1,4 @@
+import { parseSave } from "@/lib/game/save";
 import type { SaveData } from "@/lib/game/types";
 
 /**
@@ -44,6 +45,16 @@ export async function gunzipJson<T>(bytes: Uint8Array): Promise<T> {
   return (await new Response(stream).json()) as T;
 }
 
+/**
+ * A downloaded blob is decoded input, not a SaveData — casting it was the one
+ * save seam that skipped validation (the server's load path has always gone
+ * through `readSave`). Anything that isn't a valid save reads as "no save
+ * here", which the callers already handle as "keep what's local".
+ */
+async function gunzipSave(bytes: Uint8Array): Promise<SaveData | null> {
+  return parseSave(await gunzipJson<unknown>(bytes));
+}
+
 export type PushResult = "saved" | "conflict" | "error";
 
 /** Uploads a save; "conflict" means another device wrote first — pull before retrying. */
@@ -70,13 +81,14 @@ export async function pushSave(cloudWorldId: string, save: SaveData, storage: St
   }
 }
 
-/** Fetches the cloud blob + its stamp (null when the world has no blob yet or the fetch fails). */
+/** Fetches the cloud blob + its stamp (null when the world has no blob yet, the blob doesn't validate, or the fetch fails). */
 async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; updatedAt: string | null } | null> {
   try {
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`);
     if (!response.ok) return null;
     const updatedAt = response.headers.get("x-updated-at");
-    const save = await gunzipJson<SaveData>(new Uint8Array(await response.arrayBuffer()));
+    const save = await gunzipSave(new Uint8Array(await response.arrayBuffer()));
+    if (!save) return null;
     return { save, updatedAt };
   } catch {
     return null;

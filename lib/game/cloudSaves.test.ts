@@ -44,18 +44,26 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     globalThis.fetch = originalFetch;
   });
 
-  const save = { version: 18, seed: 1, changes: [] } as unknown as SaveData;
+  // A *valid* save: `players` is required, and the download now validates
+  // through parseSave like every other save seam — a fixture the engine would
+  // reject can't stand in for one the cloud hands us.
+  const save = { version: 18, seed: 1, changes: [], players: [] } as unknown as SaveData;
 
-  /** Stub fetch to answer the cloud GET with a gzipped save + an x-updated-at header. */
-  function stubCloud(updatedAt: string | null, ok = true): void {
+  /** Stub fetch to answer the cloud GET with an arbitrary gzipped body + an x-updated-at header. */
+  function stubBody(body: unknown, updatedAt: string | null, ok = true): void {
     globalThis.fetch = (async () => {
-      const bytes = await gzipJson(save);
+      const bytes = await gzipJson(body);
       return {
         ok,
         headers: { get: (key: string) => (key === "x-updated-at" ? updatedAt : null) },
         arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
       } as unknown as Response;
     }) as unknown as typeof fetch;
+  }
+
+  /** The common case: a valid save. */
+  function stubCloud(updatedAt: string | null, ok = true): void {
+    stubBody(save, updatedAt, ok);
   }
 
   test("first download (no cursor) adopts the remote save and records the stamp", async () => {
@@ -83,5 +91,29 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     const storage = fakeStorage();
     stubCloud(null, false);
     expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(false);
+  });
+
+  // The download used to be a bare cast: whatever JSON came back WAS a SaveData
+  // as far as the type system knew, so a malformed blob rode into the engine and
+  // threw there. It now goes through parseSave like every other save seam, so a
+  // recoverable blob is sanitized BEFORE the engine sees it...
+  test("sanitizes a recoverable remote blob rather than handing the engine a null player", async () => {
+    const storage = fakeStorage();
+    stubBody({ version: 18, seed: 1, changes: [1], players: [null] }, "2026-02-02T00:00:00Z");
+    const decision = await pullCloudSaveIfNewer("c1", storage);
+    expect(decision.adopt).toBe(true);
+    if (decision.adopt) {
+      expect(decision.save.players).toEqual([]);
+      expect(decision.save.changes).toEqual([]);
+    }
+  });
+
+  // ...and one that isn't a save at all is refused outright.
+  test("refuses a remote blob that isn't a save, and doesn't advance the cursor", async () => {
+    const storage = fakeStorage();
+    stubBody({ hello: "world" }, "2026-02-02T00:00:00Z");
+    expect((await pullCloudSaveIfNewer("c1", storage)).adopt).toBe(false);
+    // A refused blob must not move the cursor — the next open has to retry.
+    expect(storage.getItem(STAMPS_KEY)).toBeNull();
   });
 });
