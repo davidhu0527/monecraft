@@ -73,6 +73,27 @@ concurrency: each device sends the `updatedAt` stamp it last saw
 syncing and warns (rather than clobber the other device), then adopts the
 newer save on the next open.
 
+**Save upload is `sp-cloud`-only.** Both kinds keep their blob in the same
+`worlds.saveBlob` column, but they do not share its ownership: an `sp-cloud`
+blob **is** the client's upload, while an `mp` blob is the game server's
+authoritative persistence (`server/persistence.ts`), which a room reloads as
+world state on its next boot. So `putSaveBlob` gates on `kind` — otherwise
+membership alone would let an invited player hand the room whatever world they
+liked, bypassing the server authority [protocol.md](protocol.md#trust-model)
+reserves ("clients cannot invent items or edits"). Nothing legitimate uploads an
+`mp` world: `useMinecraftGame`'s push returns early when online, and mp worlds
+carry no `cloudId`. `mintTicket` makes the mirror-image check (`mp` only), so
+the two save paths stay disjoint. Reads stay membership-gated for both — a
+member can already see the world by playing it.
+
+Stored blobs are inflated through a bounded gunzip
+(`MAX_DECOMPRESSED_SAVE_BYTES`, `server/persistence.ts`): gzip ratios run
+~1000:1 on hostile input, so an unbounded inflate would turn a few MiB of
+stored bytes into GiB of heap on the 512 MB VM. With the kind gate above, a
+room should only ever read blobs the server itself wrote, so this is depth
+rather than a live vector — but it is the seam where stored bytes become engine
+state, and it shouldn't trust the row on the far side.
+
 **How it flows through the menu** (all opt-in per world):
 
 - **Create in account mode** — the profile world screen's **New Singleplayer

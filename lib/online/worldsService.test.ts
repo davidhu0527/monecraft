@@ -161,6 +161,32 @@ describe("save blobs (LWW)", () => {
     expect((await getSaveBlob(asDb(), "mallory", id)).ok).toBe(false);
     expect((await putSaveBlob(asDb(), "mallory", id, blob("x"), 17, null)).ok).toBe(false);
   });
+
+  // An `mp` world's blob is the game server's authoritative state, not a client
+  // upload. Membership alone must not buy the right to replace it — otherwise an
+  // invited player hands the room whatever world they like on its next boot.
+  test("an mp world's blob rejects uploads — even from its owner", async () => {
+    const id = await makeWorld("alice", "mp");
+    expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 18, null)).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  test("an invited member can't overwrite an mp world's authoritative save", async () => {
+    const id = await makeWorld("alice", "mp");
+    const invite = await createInvite(asDb(), "alice", id);
+    if (!invite.ok) throw new Error("invite failed");
+    expect((await acceptInvite(asDb(), "bob", invite.token)).ok).toBe(true);
+
+    // Bob is a real member: he can read the world and its blob...
+    expect((await getWorld(asDb(), "bob", id)).ok).toBe(true);
+    expect((await getSaveBlob(asDb(), "bob", id)).ok).toBe(true);
+    // ...but the blob is the server's to write, not his.
+    expect(await putSaveBlob(asDb(), "bob", id, blob("pwned"), 18, null)).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  test("sp-cloud uploads still work — the gate is on kind, not on saving", async () => {
+    const id = await makeWorld("alice", "sp-cloud");
+    expect((await putSaveBlob(asDb(), "alice", id, blob("v1"), 18, null)).ok).toBe(true);
+  });
 });
 
 describe("account profiles", () => {

@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { db as liveDb, schema, type Db } from "@/db";
 import { readSave } from "@/lib/game/save";
 import type { SaveData } from "@/lib/game/types";
-import { gunzipWorldSync } from "@/lib/net/codec";
 
 /**
  * Room persistence: where a world's row and gzipped v17 save blob live.
@@ -26,13 +25,62 @@ export type Persistence = {
   storeWorld(worldId: string, blob: Uint8Array, saveVersion: number): Promise<void>;
 };
 
-/** Parses a stored gzipped SaveData blob through the full readSave validation/migration chain. */
-export async function parseSaveBlob(blob: Uint8Array): Promise<SaveData | null> {
+/**
+ * Hard ceiling on a decompressed save. Gzip ratios run ~1000:1 on hostile
+ * input, so an unbounded inflate turns a few MiB of stored bytes into GiB of
+ * heap on a 512 MB VM. Generous next to any real world (a save is a block diff,
+ * not a voxel dump) but bounded, so a malformed or crafted row fails this room
+ * rather than the process.
+ */
+export const MAX_DECOMPRESSED_SAVE_BYTES = 96 * 1024 * 1024;
+
+/**
+ * Inflates gzip with a running output cap, cancelling the stream the moment it
+ * exceeds `maxBytes` — so the cap bounds what is ALLOCATED, not merely what is
+ * returned (which is what checking `.byteLength` after a `gunzipSync` would do).
+ */
+async function gunzipBounded(blob: Uint8Array, maxBytes: number): Promise<string | null> {
+  const reader = new Blob([blob as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
   try {
-    // Reuse gunzip; then readSave via a one-key Storage shim so the entire
-    // migration + validation pipeline applies to server-loaded saves too.
-    const bun = typeof Bun !== "undefined" ? (Bun as unknown as { gunzipSync(d: Uint8Array): Uint8Array }) : null;
-    const json = bun ? new TextDecoder().decode(bun.gunzipSync(blob)) : JSON.stringify(await gunzipWorldSync(blob)); // never taken on Bun; keeps the module portable
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+}
+
+/**
+ * Parses a stored gzipped SaveData blob through the full readSave
+ * validation/migration chain, bounded by MAX_DECOMPRESSED_SAVE_BYTES.
+ *
+ * Since save PUT is `sp-cloud`-only (lib/online/worldsService.ts) a room should
+ * only ever read blobs the server itself wrote, so the bound is depth rather
+ * than a live vector — but this is the seam where stored bytes become engine
+ * state, and it should not trust the row on the far side of it.
+ */
+export async function parseSaveBlob(blob: Uint8Array, maxBytes = MAX_DECOMPRESSED_SAVE_BYTES): Promise<SaveData | null> {
+  try {
+    // readSave via a one-key Storage shim, so the entire migration + validation
+    // pipeline applies to server-loaded saves too.
+    const json = await gunzipBounded(blob, maxBytes);
+    if (json === null) return null;
     const shim = { getItem: () => json } as unknown as Storage;
     return readSave("blob", shim);
   } catch {

@@ -17,7 +17,9 @@ const lockAccount = (ownerId: string) => sql`select pg_advisory_xact_lock(hashte
  * The online worlds domain: every rule the API routes enforce, as pure
  * functions over a drizzle Db — unit-tested against PGlite, adapted to HTTP by
  * the thin handlers in app/api. All read access is membership-gated; writes
- * that shape the world (rename/delete/invite) are owner-gated.
+ * that shape the world (rename/delete/invite) are owner-gated. Save uploads are
+ * membership-gated but `sp-cloud`-only: an `mp` world's blob belongs to the game
+ * server (see `putSaveBlob`).
  *
  * Results use a discriminated `ok` so handlers map failures to status codes
  * without exceptions crossing the seam.
@@ -247,10 +249,21 @@ export async function getSaveBlob(
 }
 
 /**
- * Last-write-wins with a stale guard: the client sends the `updatedAt` it
- * last saw; a mismatch means someone else (another device) wrote in between —
- * 409, and the client picks the newer save. `baseUpdatedAt: null` means
- * "first upload", accepted only while the world has no blob yet.
+ * Uploads a single-player cloud save. Last-write-wins with a stale guard: the
+ * client sends the `updatedAt` it last saw; a mismatch means someone else
+ * (another device) wrote in between — 409, and the client picks the newer save.
+ * `baseUpdatedAt: null` means "first upload", accepted only while the world has
+ * no blob yet.
+ *
+ * `sp-cloud` only. The two kinds share one `saveBlob` column but not its
+ * ownership: for `sp-cloud` the blob IS the client's upload, while for `mp` it
+ * is the game server's authoritative persistence (server/persistence.ts), which
+ * a room reloads as world state on its next boot. Accepting a client upload
+ * there would let any invited member hand the server a world of their choosing —
+ * exactly the authority docs/protocol.md reserves for the server ("clients
+ * cannot invent items or edits"). Nothing legitimate PUTs an `mp` world:
+ * useMinecraftGame's push returns early when online, and mp worlds carry no
+ * `cloudId`. Mirrors the kind check `mintTicket` makes in the other direction.
  */
 export async function putSaveBlob(
   db: Db,
@@ -263,6 +276,9 @@ export async function putSaveBlob(
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
   if (!Number.isInteger(saveVersion) || blob.byteLength === 0) return fail("invalid");
+  const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
+  if (!world) return fail("not-found");
+  if (world.kind !== "sp-cloud") return fail("invalid");
   const now = new Date();
   // Fold the stale check into the UPDATE predicate so two writers with the same
   // base stamp can't both win: first upload requires no blob yet; a later one
@@ -272,7 +288,7 @@ export async function putSaveBlob(
       ? and(eq(schema.worlds.id, worldId), isNull(schema.worlds.saveBlob))
       : and(eq(schema.worlds.id, worldId), eq(schema.worlds.updatedAt, new Date(baseUpdatedAt)));
   const updated = await db.update(schema.worlds).set({ saveBlob: blob, saveVersion, updatedAt: now }).where(guard).returning({ id: schema.worlds.id });
-  // Membership implies the world exists (FK cascade), so no rows means a stale base.
+  // The world exists (selected above), so no rows means a stale base.
   if (updated.length === 0) return fail("conflict");
   return { ok: true, updatedAt: now.toISOString() };
 }

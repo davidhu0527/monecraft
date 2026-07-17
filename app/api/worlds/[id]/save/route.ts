@@ -25,6 +25,9 @@ export async function GET(request: Request, { params }: Params) {
   });
 }
 
+/** Stay inside the platform body limit. */
+const MAX_SAVE_BLOB_BYTES = 4 * 1024 * 1024;
+
 /**
  * PUT /api/worlds/:id/save — upload a new blob. `x-base-updated-at` must
  * carry the stamp the client last saw ("" for a first upload); a mismatch is
@@ -36,8 +39,13 @@ export async function PUT(request: Request, { params }: Params) {
   const { id } = await params;
   const saveVersion = Number.parseInt(request.headers.get("x-save-version") ?? "", 10);
   const base = request.headers.get("x-base-updated-at") || null;
+  // Reject on the declared length first, so an oversized body is refused before
+  // it is buffered into memory. A missing/lying header still hits the check
+  // below — this is an early-out, not the enforcement.
+  const declared = Number.parseInt(request.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(declared) && declared > MAX_SAVE_BLOB_BYTES) return failureResponse("invalid");
   const blob = new Uint8Array(await request.arrayBuffer());
-  if (blob.byteLength > 4 * 1024 * 1024) return failureResponse("invalid"); // stay inside the platform body limit
+  if (blob.byteLength > MAX_SAVE_BLOB_BYTES) return failureResponse("invalid");
   const result = await putSaveBlob(db(), user.id, id, blob, saveVersion, base);
   if (!result.ok) return failureResponse(result.error);
   return NextResponse.json({ updatedAt: result.updatedAt });
