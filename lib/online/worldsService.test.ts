@@ -42,7 +42,15 @@ afterEach(async () => {
 });
 
 async function makeWorld(owner = "alice", kind: "sp-cloud" | "mp" = "mp"): Promise<string> {
-  const result = await createWorld(asDb(), owner, { name: "Test World", kind, seed: 1337 });
+  // mp worlds require a profile (that's how the cap is enforced); sp-cloud
+  // worlds are account-level (the local-menu upload path sends no profileId).
+  let profileId: string | undefined;
+  if (kind === "mp") {
+    const profile = await createProfile(asDb(), owner, { name: "P", skinId: null });
+    if (!profile.ok) throw new Error(profile.error);
+    profileId = profile.profile.id;
+  }
+  const result = await createWorld(asDb(), owner, { name: "Test World", kind, seed: 1337, profileId });
   if (!result.ok) throw new Error(result.error);
   return result.world.id;
 }
@@ -76,10 +84,39 @@ describe("worlds CRUD", () => {
   });
 
   test("rejects garbage world creation", async () => {
-    expect(await createWorld(asDb(), "alice", { name: "  ", kind: "mp", seed: 1 })).toMatchObject({ ok: false, error: "invalid" });
-    expect(await createWorld(asDb(), "alice", { name: "x".repeat(65), kind: "mp", seed: 1 })).toMatchObject({ ok: false, error: "invalid" });
-    expect(await createWorld(asDb(), "alice", { name: "ok", kind: "nope" as never, seed: 1 })).toMatchObject({ ok: false, error: "invalid" });
-    expect(await createWorld(asDb(), "alice", { name: "ok", kind: "mp", seed: Number.NaN })).toMatchObject({ ok: false, error: "invalid" });
+    const p = await createProfile(asDb(), "alice", { name: "P", skinId: null });
+    const pid = p.ok ? p.profile.id : "";
+    expect(await createWorld(asDb(), "alice", { name: "  ", kind: "mp", seed: 1, profileId: pid })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { name: "x".repeat(65), kind: "mp", seed: 1, profileId: pid })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { name: "ok", kind: "nope" as never, seed: 1, profileId: pid })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { name: "ok", kind: "mp", seed: Number.NaN, profileId: pid })).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  test("validates the enums and the seed range, and requires a profile for mp", async () => {
+    const p = await createProfile(asDb(), "alice", { name: "P", skinId: null });
+    const pid = p.ok ? p.profile.id : "";
+    const base = { name: "W", kind: "mp" as const, seed: 1, profileId: pid };
+
+    // A seed past int4 would overflow the column into a 500 rather than a clean 400.
+    expect(await createWorld(asDb(), "alice", { ...base, seed: 1e20 })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { ...base, seed: -3_000_000_000 })).toMatchObject({ ok: false, error: "invalid" });
+    // Bogus enums would otherwise be cast straight into GameEngine at room boot.
+    expect(await createWorld(asDb(), "alice", { ...base, worldType: "__proto__" })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { ...base, gameMode: "god" })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { ...base, difficulty: "lol" })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createWorld(asDb(), "alice", { ...base, hardcore: "yes" as never })).toMatchObject({ ok: false, error: "invalid" });
+    // The cap bypass: an mp world with no profile isn't counted against any cap.
+    expect(await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1 })).toMatchObject({ ok: false, error: "invalid" });
+    // A non-string name would throw on .trim() — a 500 where a 400 belongs.
+    expect(await createWorld(asDb(), "alice", { name: 123 as never, kind: "mp", seed: 1, profileId: pid })).toMatchObject({ ok: false, error: "invalid" });
+
+    // Valid values (including the int4 extremes) go through.
+    expect((await createWorld(asDb(), "alice", { ...base, worldType: "amplified", gameMode: "creative", difficulty: "hard", hardcore: true })).ok).toBe(true);
+    expect((await createWorld(asDb(), "alice", { ...base, seed: 2147483647 })).ok).toBe(true);
+  });
+
+  test("sp-cloud worlds are account-level — no profile required (the upload path)", async () => {
+    expect((await createWorld(asDb(), "alice", { name: "Uploaded", kind: "sp-cloud", seed: 1 })).ok).toBe(true);
   });
 });
 

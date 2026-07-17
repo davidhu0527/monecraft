@@ -2,9 +2,16 @@ import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { schema } from "@/db";
 import { MAX_ONLINE_PROFILES, MAX_WORLDS_PER_PROFILE, WORLDGEN_VERSION } from "@/lib/game/config";
+import { isDifficulty } from "@/lib/game/difficulties";
+import { isGameMode } from "@/lib/game/gameModes";
 import { MAX_PROFILE_NAME } from "@/lib/game/profiles";
+import { isWorldType } from "@/lib/world/worldTypes";
 import { PROTOCOL_VERSION } from "@/lib/net/protocol";
 import { signTicket } from "@/lib/net/tickets";
+
+/** Postgres `integer` (int4) bounds — a seed outside this overflows the column into a 500. */
+const INT32_MIN = -2147483648;
+const INT32_MAX = 2147483647;
 
 /**
  * A transaction-scoped advisory lock keyed off an account id, so concurrent
@@ -168,10 +175,28 @@ export type CreateWorldInput = {
 };
 
 export async function createWorld(db: Db, userId: string, input: CreateWorldInput): Promise<{ ok: true; world: WorldSummary } | Failure> {
-  const name = input.name?.trim();
+  // The route hands this a bare-cast JSON body, so treat every field as unknown:
+  // a non-string name would throw on .trim() (a 500 where a 400 belongs).
+  if (typeof input.name !== "string") return fail("invalid");
+  const name = input.name.trim();
   if (!name || name.length > 64) return fail("invalid");
   if (input.kind !== "sp-cloud" && input.kind !== "mp") return fail("invalid");
-  if (!Number.isFinite(input.seed)) return fail("invalid");
+  // Seed must land inside int4 or the insert 500s. The client already clamps to
+  // this range; an out-of-range value is a hand-rolled request.
+  if (!Number.isFinite(input.seed) || input.seed < INT32_MIN || input.seed > INT32_MAX) return fail("invalid");
+  // The row's other columns are plain text/boolean with no DB-level enum, and
+  // server/room.ts casts them straight into GameEngine — so validate the enums
+  // here rather than let a bogus worldType/gameMode/difficulty reach worldgen.
+  // Reuse the guards the client already uses (lib/game/worlds.ts).
+  if (input.worldType !== undefined && !isWorldType(input.worldType)) return fail("invalid");
+  if (input.gameMode !== undefined && !isGameMode(input.gameMode)) return fail("invalid");
+  if (input.difficulty !== undefined && !isDifficulty(input.difficulty)) return fail("invalid");
+  if (input.hardcore !== undefined && typeof input.hardcore !== "boolean") return fail("invalid");
+  // An `mp` world is always created under a profile (OnlineWorldSelect always
+  // sends one), so require it — otherwise omitting profileId slips past
+  // MAX_WORLDS_PER_PROFILE, creating unlimited profileId-null rows. `sp-cloud`
+  // legitimately omits it: uploads from the local menus are account-level.
+  if (input.kind === "mp" && !input.profileId) return fail("invalid");
   // One transaction so the world + owner-membership inserts are atomic; when a
   // profile is named, a per-account lock also serializes the world-cap check.
   return db.transaction(async (tx) => {
