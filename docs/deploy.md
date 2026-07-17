@@ -1,9 +1,9 @@
 # Deploying online multiplayer
 
 A first-time deploy runbook for the online stack. **Single-player needs none of
-this** — it runs entirely in the browser with localStorage and never touches the
-network. Only online co-op (accounts, cloud saves, shared worlds) needs a server;
-this page is how to stand that up.
+this** — it runs entirely in the browser, saving worlds to IndexedDB, and never
+touches the network. Only online co-op (accounts, cloud saves, shared worlds) needs
+a server; this page is how to stand that up.
 
 For _how the stack fits together_ see [online.md](online.md); for _operating_ a
 running deployment (kick, revoke, replay, redeploys, capacity) see the

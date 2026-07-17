@@ -110,7 +110,7 @@ Every 15s via `setInterval` (queued latest-wins write; the "Saved" toast fires o
 ## Compatibility rules
 
 - Saves store **diffs against generated terrain**, so changing world generation or the voxel index formula (`x + z*sizeX + y*sizeX*sizeZ`) silently corrupts existing saves — bump `WORLDGEN_VERSION` when you do, and each world discards its stale diffs (rebooting from its seed) on the mismatch.
-- Worldgen output is pinned by SHA-256 characterization tests in `lib/world/generation.test.ts`; they fail on any byte-level change. See [testing.md](testing.md) for the re-baseline policy. Caveat: the noise functions use `Math.sin`, whose exact results are engine-defined — the tests prove refactor purity on the pinned Bun version, not cross-browser save portability.
+- Worldgen output is pinned by SHA-256 characterization tests in `lib/world/generation.test.ts`; they fail on any byte-level change. See [testing.md](testing.md) for the re-baseline policy. Since worldgen v11 the digests are **engine-portable**, not Bun-specific: every seed-determined noise call uses the bit-portable primitives in `lib/world/noise.ts` (see the v11 entry above), and `e2e/determinism.e2e.ts` proves a Chromium digest matches the Bun baseline. So these tests do cover cross-browser save portability — and a Bun bump that shifts a digest is a portability bug to fix, not a re-baseline.
 - Changing the save shape requires bumping the `version` field and handling (or discarding) old data. Round-trip tests live in `lib/game/save.test.ts` and `lib/game/engine/GameEngine.test.ts`.
 - Durable gear restores at a maximum count of one per slot. The v1→v2 migration
   splits legacy stacked gear into separate slots until inventory capacity is
