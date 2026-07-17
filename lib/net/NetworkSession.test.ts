@@ -85,6 +85,10 @@ class FakeSocket {
     this.onmessage?.({ data });
   }
 
+  emitError(): void {
+    this.onerror?.();
+  }
+
   emitClose(code: number, reason = ""): void {
     this.readyState = 3;
     this.onclose?.({ code, reason });
@@ -390,6 +394,70 @@ describe("connectNetworkSession", () => {
     await pushWorldSync(instances[1], worldSync(WELCOME.players));
     expect(session.status()).toBe("online");
     expect(session.engine).toBe(engineBefore); // SAME replica, not a fresh one
+    session.dispose();
+  }, 10000);
+
+  // Browsers fire error THEN close for an abnormal drop. Both used to call the
+  // close handler, so a single failure burned two rungs of the ladder, minted
+  // two tickets, and raced two handshakes.
+  test("a socket's error+close pair schedules exactly one reconnect", async () => {
+    const { make, instances } = socketFactory();
+    let ticketsMinted = 0;
+    const session = await connectNetworkSession(
+      "ws://game",
+      "ticket-1",
+      {},
+      {
+        makeSocket: make,
+        worldSize: SMALL,
+        reconnect: async () => {
+          ticketsMinted += 1;
+          return { url: "ws://game", ticket: `ticket-${ticketsMinted + 1}` };
+        }
+      }
+    );
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    // One abnormal drop, both events — as a real browser delivers it.
+    instances[0].emitError();
+    instances[0].emitClose(1006, "abnormal");
+    expect(session.status()).toBe("reconnecting");
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(ticketsMinted).toBe(1); // one reconnect, not two
+    expect(instances.length).toBe(2); // one new socket, not two racing handshakes
+    session.dispose();
+  }, 10000);
+
+  // After a successful reconnect, the OLD socket may still close late — the
+  // server kicks it when the new join lands (CLOSE_KICKED is fatal). That stale
+  // close must not tear down the live session that already reconnected.
+  test("a superseded socket's late close doesn't kill the reconnected session", async () => {
+    const { make, instances } = socketFactory();
+    let ticketsMinted = 0;
+    const session = await connectNetworkSession(
+      "ws://game",
+      "ticket-1",
+      {},
+      {
+        makeSocket: make,
+        worldSize: SMALL,
+        reconnect: async () => {
+          ticketsMinted += 1;
+          return { url: "ws://game", ticket: `ticket-${ticketsMinted + 1}` };
+        }
+      }
+    );
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    instances[0].emitClose(4004, "idle");
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await pushWorldSync(instances[1], worldSync(WELCOME.players));
+    expect(session.status()).toBe("online"); // reconnected on socket #2
+
+    // The dead socket #1 now closes with the server's kick — a FATAL code.
+    instances[0].emitClose(4003, "kicked");
+    expect(session.status()).toBe("online"); // still live: the stale close was ignored
     session.dispose();
   }, 10000);
 

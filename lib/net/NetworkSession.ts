@@ -164,6 +164,13 @@ export async function connectNetworkSession(
   let status: NetStatus = "connecting";
   let disposed = false;
   let ws: WebSocket | null = null;
+  // Each socket handshake claims the next generation, and its steady-state close
+  // handler carries that number. A close is honored only for the live
+  // generation — so a superseded socket's late close (the server kicks the old
+  // connection when a reconnect's join lands) can't tear down its successor, and
+  // acting on a close bumps the counter so the SAME socket's error+close pair —
+  // browsers fire both on an abnormal drop — schedules exactly one reconnect.
+  let generation = 0;
   const chatListeners = new Set<(entry: { from: string; name: string; text: string }) => void>();
   const statusListeners = new Set<(status: NetStatus) => void>();
   const rosterListeners = new Set<() => void>();
@@ -265,6 +272,7 @@ export async function connectNetworkSession(
       const socket = makeSocket(`${serverUrl.replace(/\/$/, "")}/ws`);
       socket.binaryType = "arraybuffer";
       ws = socket;
+      const gen = (generation += 1); // this socket's identity for the steady-state close guard
       const timer = setTimeout(() => {
         reject(new Error("join timed out"));
         try {
@@ -280,10 +288,11 @@ export async function connectNetworkSession(
         const message = decodeServerFrame(event.data);
         if (message?.t === "welcome") {
           clearTimeout(timer);
-          // Hand the socket over to the steady-state handlers.
+          // Hand the socket over to the steady-state handlers, tagged with this
+          // socket's generation so a superseded socket's close is ignored.
           socket.onmessage = (frame) => onServerFrame(frame.data);
-          socket.onclose = (frame) => onSocketClosed(frame.code, frame.reason);
-          socket.onerror = () => onSocketClosed(1006, "socket error");
+          socket.onclose = (frame) => onSocketClosed(gen, frame.code, frame.reason);
+          socket.onerror = () => onSocketClosed(gen, 1006, "socket error");
           resolve(message);
         }
       };
@@ -802,8 +811,14 @@ export async function connectNetworkSession(
   let reconnectAttempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const onSocketClosed = (code: number, reason: string) => {
+  const onSocketClosed = (gen: number, code: number, reason: string) => {
     if (disposed) return;
+    // Only the live socket's close counts. A stale generation is a superseded
+    // socket closing (the server kicked it, or it lost a reconnect race) — the
+    // session it belonged to is already gone. Bumping the counter here makes
+    // this socket stale too, so its error+close pair acts once, not twice.
+    if (gen !== generation) return;
+    generation += 1;
     if (FATAL_CLOSES.has(code) || !options.reconnect) {
       setStatus("closed", `${code} ${reason}`);
       return;
@@ -817,6 +832,7 @@ export async function connectNetworkSession(
       setStatus("closed", "could not reconnect");
       return;
     }
+    if (reconnectTimer) clearTimeout(reconnectTimer); // never leave a ladder rung orphaned
     const delay = RECONNECT_DELAYS_MS[reconnectAttempt];
     reconnectAttempt += 1;
     setStatus("reconnecting", `attempt ${reconnectAttempt}`);
