@@ -97,8 +97,9 @@ test("a single-player world uploads to the cloud and downloads onto a fresh devi
     await expect(page.getByText(/Synced/)).toHaveCount(0); // the local (synced) world is gone
 
     // Simulate a fresh device: clear this device's sync cursor so the open-time
-    // reconcile ADOPTS the cloud save (same-cursor would keep-local and not pull).
-    await page.evaluate(() => localStorage.removeItem("minecraft_cloud_stamps_v1"));
+    // reconcile ADOPTS the cloud save (a cursor at-or-past the remote revision
+    // would keep-local and not pull). The cursor is keyed by save revision now.
+    await page.evaluate(() => localStorage.removeItem("minecraft_cloud_stamps_v2"));
 
     // ── download it and confirm the edit round-tripped through the cloud ─────
     const cloudId = await page.evaluate(async () => {
