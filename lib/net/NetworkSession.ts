@@ -211,6 +211,8 @@ export async function connectNetworkSession(
   // order. A setTimeout per message would leave ordering to the timer heap's
   // tie-breaking, which is not stable for equal deadlines — and the cursor
   // clamps bursts to exactly-equal deadlines, so ties are the common case.
+  // (This orders when frames START processing; the inbound queue at
+  // onServerFrame is what keeps their async COMPLETION in the same order.)
   const simDelayMs = () => Math.max(0, simulatedLatencyMs + (simulatedJitterMs > 0 ? (Math.random() * 2 - 1) * simulatedJitterMs : 0));
   const delayLine = () => {
     const queue: Array<{ deliverAt: number; fire: () => void }> = [];
@@ -625,13 +627,48 @@ export async function connectNetworkSession(
   };
 
   // ── inbound frame processing (latency-shifted) ──────────────────────────────
+  //
+  // Frames must APPLY in arrival order, not just start in it. Only the binary
+  // worldSync is async (it awaits gunzip, which in a browser spans several
+  // macrotasks); the text path is fully synchronous. So the one reordering risk
+  // is a later text `tick` finishing while an earlier worldSync is still
+  // inflating and then being clobbered when the worldSync lands. (Bun's
+  // synchronous gunzip masks it, so it never showed in tests.)
+  //
+  // Fix without making the common case async: a text frame applies synchronously
+  // UNLESS a binary frame is in flight, in which case it (and anything after it)
+  // waits in `queued` until the gunzip settles, then replays in order. Keeping
+  // text synchronous when nothing is pending matters — it is the overwhelmingly
+  // common frame, and everything downstream reads engine state right after.
+  let inflight: Promise<void> | null = null;
+  const queued: unknown[] = [];
+  const pump = () => {
+    while (inflight === null && queued.length > 0) {
+      const data = queued.shift();
+      if (typeof data === "string") {
+        void processServerFrame(data); // sync: the text path has no await before it returns
+      } else {
+        // finally re-pumps so frames buffered during the gunzip drain in order.
+        inflight = processServerFrame(data)
+          .catch(() => {})
+          .finally(() => {
+            inflight = null;
+            pump();
+          });
+      }
+    }
+  };
   const onServerFrame = (data: unknown) => {
     traffic.inBytes += typeof data === "string" ? data.length : ((data as ArrayBuffer).byteLength ?? 0);
+    const deliver = () => {
+      queued.push(data);
+      pump();
+    };
     if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
-      recvLine.push(() => void processServerFrame(data));
+      recvLine.push(deliver);
       return;
     }
-    void processServerFrame(data);
+    deliver();
   };
 
   async function processServerFrame(data: unknown): Promise<void> {

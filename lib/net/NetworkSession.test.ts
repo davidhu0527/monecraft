@@ -150,6 +150,33 @@ describe("connectNetworkSession", () => {
     session.dispose();
   });
 
+  // A binary worldSync awaits gunzip (several macrotasks in a real browser),
+  // and a text tick arriving during that await used to run to completion first,
+  // then the older worldSync landed on top and clobbered it. Frames must APPLY
+  // in arrival order regardless of how long each takes to process.
+  test("a later text frame is not overwritten by an earlier binary frame that finishes late", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession("ws://game", "ticket-1", {}, { makeSocket: make, worldSize: SMALL });
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    const world = session.engine.state.world;
+    const cell = { x: 4, y: 5, z: 6 };
+    const idx = cell.x + cell.z * world.sizeX + cell.y * world.sizeX * world.sizeZ;
+
+    // Emit both back-to-back, NO awaits between: the worldSync's gunzip is still
+    // pending when the tick arrives. The tick is the later frame, so its block
+    // must be the one that survives.
+    const gz = await gzipWorldSync(worldSync(WELCOME.players, { changes: [[idx, BlockId.Stone]] }));
+    instances[0].emit(gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength));
+    instances[0].emit(JSON.stringify({ t: "tick", n: 102, ev: [], pp: [], mp: [], blocks: [[idx, BlockId.Dirt]] }));
+
+    // Let the whole inbound chain drain.
+    for (let i = 0; i < 6; i += 1) await Promise.resolve();
+
+    expect(world.get(cell.x, cell.y, cell.z)).toBe(BlockId.Dirt); // the later frame won
+    session.dispose();
+  });
+
   test("applies self-deltas onto the local player and delivers chat", async () => {
     const { make, instances } = socketFactory();
     const chats: string[] = [];
