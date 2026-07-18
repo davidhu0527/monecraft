@@ -316,12 +316,13 @@ export async function putSaveBlob(
   // Fold the stale check into the UPDATE predicate so two writers with the same
   // base revision can't both win: a first upload requires a never-saved world
   // (revision 0); a later one requires the exact revision it last saw. The
-  // increment is SQL-side, so the winner's new revision is decided by the row
-  // it locked, not by a value read earlier. Zero rows affected = stale.
+  // increment itself is the DB trigger's job (migration 0005) — it fires on the
+  // row this UPDATE locked, so the winner's new revision is decided there, not
+  // from a value read earlier. Zero rows affected = stale.
   const guard = and(eq(schema.worlds.id, worldId), eq(schema.worlds.saveRevision, baseRevision ?? 0));
   const updated = await db
     .update(schema.worlds)
-    .set({ saveBlob: blob, saveVersion, saveRevision: sql`${schema.worlds.saveRevision} + 1`, updatedAt: new Date() })
+    .set({ saveBlob: blob, saveVersion, updatedAt: new Date() })
     .where(guard)
     .returning({ saveRevision: schema.worlds.saveRevision });
   // The world exists (selected above), so no rows means a stale base.

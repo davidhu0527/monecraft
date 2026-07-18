@@ -77,19 +77,23 @@ newer save on the next open.
 touched", what the world list orders by. `worlds.saveRevision` counts **blob
 writes and nothing else**: it is the sync cursor devices compare (stored per
 world under `minecraft_cloud_stamps_v2`) and the CAS token their uploads race
-on, incremented SQL-side by both writers (`putSaveBlob` and the game server's
-`storeWorld`) so concurrent writes can't settle on a value read earlier.
-Revision `0` means never saved, which is what makes "first upload" checkable
-without trusting the client. They must stay separate: while `updatedAt` served
-as both, **renaming a world moved every other device's cursor** and 409'd its
-next push over a save that hadn't changed — and since a 409 latches
-`cloudConflictRef`, that silently disabled sync for the rest of the session.
-Because revisions are ordered, the open-time reconcile asks whether the remote
-is strictly _ahead_ of the cursor rather than merely different, so a remote
-that's behind (a restored backup) leaves newer local progress alone.
+on. A **DB trigger** (migration `0005`, `bump_save_revision`) owns the increment
+— it bumps `save_revision` on any UPDATE where `save_blob` actually changes — so
+neither `putSaveBlob` nor the game server's `storeWorld` sets it, concurrent
+writers can't settle on a value read earlier, and a rename (no blob change)
+structurally never bumps. Revision `0` means never saved, which is what makes
+"first upload" checkable without trusting the client. `updatedAt` and
+`saveRevision` must stay separate: while `updatedAt` served as both, **renaming
+a world moved every other device's cursor** and 409'd its next push over a save
+that hadn't changed — and since a 409 latches `cloudConflictRef`, that silently
+disabled sync for the rest of the session. Because revisions are ordered, the
+open-time reconcile asks whether the remote is strictly _ahead_ of the cursor
+rather than merely different, so a remote that's behind (a restored backup)
+leaves newer local progress alone.
 
-⚠️ **The web app and the game server both write `save_revision`**, so they ship
-from the same SHA — see [deploy.md](deploy.md#updating-a-running-deployment).
+Because the trigger — not app code — owns the increment, the web app and the
+game server **no longer need to ship from the same SHA** for this column: any
+build writes a correct revision. See [deploy.md](deploy.md#updating-a-running-deployment).
 
 **Uploads are queued, not fired.** Six call sites push a cloud-linked world
 (autosave, the three unload listeners, hardcore game-over, unmount, manual

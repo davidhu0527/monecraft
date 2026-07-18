@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db as liveDb, schema, type Db } from "@/db";
 import { readSave } from "@/lib/game/save";
 import type { SaveData } from "@/lib/game/types";
@@ -103,14 +103,11 @@ export function createDrizzlePersistence(database: Db = liveDb()): Persistence {
       };
     },
     async storeWorld(worldId, blob, saveVersion) {
-      // saveRevision counts blob writes wherever they come from — the room is a
-      // writer like any other, and a browser reading this world's blob compares
-      // that number. Incremented SQL-side so concurrent writers can't collide
-      // on a value read earlier.
-      await database
-        .update(schema.worlds)
-        .set({ saveBlob: blob, saveVersion, saveRevision: sql`${schema.worlds.saveRevision} + 1`, updatedAt: new Date() })
-        .where(eq(schema.worlds.id, worldId));
+      // save_revision is bumped by the DB trigger (migration 0005) whenever
+      // save_blob changes — the room is just another writer, and a browser
+      // reading this world's blob compares that number. Not set here, so a
+      // deploy where the trigger is present but this build isn't still counts.
+      await database.update(schema.worlds).set({ saveBlob: blob, saveVersion, updatedAt: new Date() }).where(eq(schema.worlds.id, worldId));
     }
   };
 }

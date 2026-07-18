@@ -36,6 +36,13 @@
       "when": 1784295778583,
       "tag": "0004_save-revision",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784295778584,
+      "tag": "0005_save-revision-trigger",
+      "breakpoints": true
     }
   ]
 }

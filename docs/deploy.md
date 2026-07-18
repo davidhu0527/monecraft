@@ -245,14 +245,14 @@ Two repo secrets drive it (GitHub → Settings → Secrets and variables → Act
   column, like `0003`'s `is_anonymous`): then deploy the new code first and
   migrate second, since the old build would error on the missing column while
   the new build just ignores it until the migration lands.
-  - **If the column is written by BOTH the web app and the game server** —
-    `worlds.save_revision` (`0004`) is the first — then web and game server must
-    ship **from the same SHA**, like a protocol bump: the gated deploy does that
-    by construction, so take the normal path and never move one side with an
-    escape hatch. Half-deployed, the un-updated side keeps writing the blob
-    without advancing the revision, so other devices never see the cloud move.
-    The migration itself is additive and safe to run first (an old build ignores
-    the column), and rolling back the code needs no down-migration.
+  - **`worlds.save_revision` is owned by a DB trigger** (`0005`), not by app
+    code, precisely so this column needs **no** same-SHA coordination: any build —
+    new, old-mid-deploy, or the game server — bumps the revision on a `save_blob`
+    change automatically, and a rename (no blob change) never does. So the
+    ordinary "migrate first, then deploy" path is safe; `0005` is additive (a
+    trigger only) and rolling back the code needs no down-migration. (This
+    superseded `0004`'s original app-side increment, which _did_ require a
+    same-SHA deploy — that constraint is gone.)
 
 ## Troubleshooting
 
