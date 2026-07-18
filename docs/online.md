@@ -109,18 +109,22 @@ call **after** the local write commits: the cursor claims this device HOLDS
 that save, so advancing it past a failed write would make every later open
 read the remote as "not ahead" and refuse to adopt it.
 
-**Save upload is `sp-cloud`-only.** Both kinds keep their blob in the same
-`worlds.saveBlob` column, but they do not share its ownership: an `sp-cloud`
-blob **is** the client's upload, while an `mp` blob is the game server's
-authoritative persistence (`server/persistence.ts`), which a room reloads as
-world state on its next boot. So `putSaveBlob` gates on `kind` — otherwise
-membership alone would let an invited player hand the room whatever world they
-liked, bypassing the server authority [protocol.md](protocol.md#trust-model)
-reserves ("clients cannot invent items or edits"). Nothing legitimate uploads an
-`mp` world: `useMinecraftGame`'s push returns early when online, and mp worlds
-carry no `cloudId`. `mintTicket` makes the mirror-image check (`mp` only), so
-the two save paths stay disjoint. Reads stay membership-gated for both — a
-member can already see the world by playing it.
+**Save-blob access is `sp-cloud`-only — both verbs.** Both kinds keep their blob
+in the same `worlds.saveBlob` column, but they do not share its ownership: an
+`sp-cloud` blob **is** the client's upload, while an `mp` blob is the game
+server's authoritative persistence (`server/persistence.ts`), which a room
+reloads as world state on its next boot. So `putSaveBlob` gates on `kind` —
+otherwise membership alone would let an invited player hand the room whatever
+world they liked, bypassing the server authority
+[protocol.md](protocol.md#trust-model) reserves ("clients cannot invent items or
+edits"). `getSaveBlob` gates the same way: an `mp` blob is the whole
+authoritative world (every offline player's inventory/coordinates, both
+dimensions), far more than a member observes in-game, so membership gates world
+access and metadata but **not** a raw blob download. Nothing legitimate touches
+an `mp` blob over HTTP: `useMinecraftGame`'s push returns early when online, mp
+worlds carry no `cloudId`, and the game server reads via its own Postgres adapter
+(never this route). `mintTicket` makes the mirror-image `mp`-only check, so the
+two save paths stay disjoint.
 
 Stored blobs are inflated through a bounded gunzip
 (`MAX_DECOMPRESSED_SAVE_BYTES`, `server/persistence.ts`): gzip ratios run

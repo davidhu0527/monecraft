@@ -12,12 +12,16 @@
 -- and game-server deploys no longer have to be same-SHA for this column. It also
 -- makes the "rename does not bump" rule structural rather than by-omission: a
 -- rename changes name/updated_at but not save_blob, so IS DISTINCT FROM is false
--- and the revision holds. IS DISTINCT FROM (not =) so a first upload
--- (NULL -> blob) counts as a change and bumps 0 -> 1.
+-- and the ELSE pins the revision to its old value. IS DISTINCT FROM (not =) so a
+-- first upload (NULL -> blob) counts as a change and bumps 0 -> 1. The ELSE makes
+-- the column fully DB-owned: a metadata-only UPDATE can't carry a caller-supplied
+-- save_revision past the trigger.
 CREATE FUNCTION bump_save_revision() RETURNS trigger AS $$
 BEGIN
   IF NEW.save_blob IS DISTINCT FROM OLD.save_blob THEN
     NEW.save_revision := OLD.save_revision + 1;
+  ELSE
+    NEW.save_revision := OLD.save_revision;
   END IF;
   RETURN NEW;
 END;

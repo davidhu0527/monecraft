@@ -82,5 +82,11 @@ test("0005 trigger bumps save_revision on any blob change, and only on a blob ch
   await pg.exec(`UPDATE worlds SET save_blob = '\\x02'::bytea, updated_at = now() WHERE id='w';`);
   expect(await revision()).toBe(2);
 
+  // The ELSE branch: a metadata update that TRIES to set save_revision itself
+  // (no blob change) can't move it — the column is fully DB-owned, so a stray or
+  // hostile write can't desync the cursor.
+  await pg.exec(`UPDATE worlds SET name = 'X', save_revision = 999 WHERE id='w';`);
+  expect(await revision()).toBe(2);
+
   await pg.close();
 });

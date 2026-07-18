@@ -845,7 +845,10 @@ export class Room {
     // silent loss, so presence is the trigger and the flag only decides whether
     // an EMPTY room still owes a write (block edits then everyone left).
     if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && (this.clients.size > 0 || this.dirtySinceStore)) {
-      void this.persist();
+      // Report, don't drop: occupied rooms persist EVERY interval, so a DB outage
+      // would otherwise emit an unhandled rejection each minute on the shared
+      // process. storeOnce already re-marked the room dirty for the next retry.
+      void this.persist().catch((err) => console.error(`room ${this.worldId} interval persist failed:`, err));
     }
     this.sweepNetherShard();
     this.slowestTickMs = Math.max(this.slowestTickMs * 0.99, this.now() - started);

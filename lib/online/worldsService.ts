@@ -204,6 +204,10 @@ export async function createWorld(db: Db, userId: string, input: CreateWorldInpu
   if (input.gameMode !== undefined && !isGameMode(input.gameMode)) return fail("invalid");
   if (input.difficulty !== undefined && !isDifficulty(input.difficulty)) return fail("invalid");
   if (input.hardcore !== undefined && typeof input.hardcore !== "boolean") return fail("invalid");
+  // profileId is the last bare-cast field without a type guard: a numeric 0 would
+  // read as "absent" (truthiness) and a non-string object would reach the Drizzle
+  // predicate. Require a string when present.
+  if (input.profileId !== undefined && input.profileId !== null && typeof input.profileId !== "string") return fail("invalid");
   // An `mp` world is always created under a profile (OnlineWorldSelect always
   // sends one), so require it — otherwise omitting profileId slips past
   // MAX_WORLDS_PER_PROFILE, creating unlimited profileId-null rows. `sp-cloud`

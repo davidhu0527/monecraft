@@ -109,6 +109,8 @@ describe("worlds CRUD", () => {
     expect(await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1 })).toMatchObject({ ok: false, error: "invalid" });
     // A non-string name would throw on .trim() — a 500 where a 400 belongs.
     expect(await createWorld(asDb(), "alice", { name: 123 as never, kind: "mp", seed: 1, profileId: pid })).toMatchObject({ ok: false, error: "invalid" });
+    // A non-string profileId (object) would reach the Drizzle predicate untyped.
+    expect(await createWorld(asDb(), "alice", { name: "W", kind: "sp-cloud", seed: 1, profileId: {} as never })).toMatchObject({ ok: false, error: "invalid" });
 
     // Valid values (including the int4 extremes) go through.
     expect((await createWorld(asDb(), "alice", { ...base, worldType: "amplified", gameMode: "creative", difficulty: "hard", hardcore: true })).ok).toBe(true);

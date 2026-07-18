@@ -1006,4 +1006,29 @@ describe("room persistence", () => {
 
     expect((room as unknown as { dirtySinceStore: boolean }).dirtySinceStore).toBe(true);
   }, 120_000);
+
+  // An occupied room persists every interval, so a DB outage must not spray
+  // unhandled rejections on the shared process — the tick catches it, and the
+  // room stays dirty for the next retry.
+  test("an interval persist that fails is caught and leaves the room dirty for retry", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-fail"))!, persistence, () => 0);
+    await room.join(claimsFor("alice", "w-fail", "owner"), fakeSink());
+    await room.persist(); // bank the join, start clean
+    persistence.storeWorld = () => Promise.reject(new Error("db down"));
+
+    let unhandled: unknown = null;
+    const onUnhandled = (err: unknown) => (unhandled = err);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      armPersistInterval(room);
+      expect(() => tickOf(room)()).not.toThrow(); // the interval persist is fire-and-forget + caught
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+
+    expect(unhandled).toBeNull(); // the rejection was handled, not leaked
+    expect((room as unknown as { dirtySinceStore: boolean }).dirtySinceStore).toBe(true); // re-marked for retry
+  }, 120_000);
 });

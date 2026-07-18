@@ -36,16 +36,21 @@ const MAX_SAVE_BLOB_BYTES = 4 * 1024 * 1024;
  * the save revision the client last saw ("" for a first upload); a mismatch is
  * 409 and the client reconciles by fetching the newer save.
  */
+/** A whole-number header value, or NaN — `Number.parseInt` would accept a prefix like "1junk" as 1. */
+function digits(value: string | null): number {
+  return value !== null && /^\d+$/.test(value) ? Number.parseInt(value, 10) : Number.NaN;
+}
+
 export async function PUT(request: Request, { params }: Params) {
   const user = await sessionUser(request);
   if (!user) return unauthorized();
   const { id } = await params;
-  const saveVersion = Number.parseInt(request.headers.get("x-save-version") ?? "", 10);
+  const saveVersion = digits(request.headers.get("x-save-version"));
   const rawBase = request.headers.get("x-base-revision");
   // Absent/blank = first upload. A present-but-unparseable value is NOT quietly
   // treated as one — that would let a stale client clobber a real save — so it
   // stays NaN and putSaveBlob rejects it as invalid.
-  const base = rawBase === null || rawBase === "" ? null : Number.parseInt(rawBase, 10);
+  const base = rawBase === null || rawBase === "" ? null : digits(rawBase);
   // Reject on the declared length first, so an oversized body is refused before
   // it is buffered into memory. A missing/lying header still hits the check
   // below — this is an early-out, not the enforcement.

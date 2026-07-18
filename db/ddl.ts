@@ -98,6 +98,8 @@ export const SCHEMA_DDL = `
     BEGIN
       IF NEW.save_blob IS DISTINCT FROM OLD.save_blob THEN
         NEW.save_revision := OLD.save_revision + 1;
+      ELSE
+        NEW.save_revision := OLD.save_revision;
       END IF;
       RETURN NEW;
     END;

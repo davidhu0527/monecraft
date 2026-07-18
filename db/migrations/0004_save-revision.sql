@@ -13,7 +13,9 @@
 -- the 0 default.
 --
 -- Deploy order: this migration is additive and safe to run before the app ships
--- (an old build simply ignores the column). The web app and the game server both
--- write save_revision, so they must ship TOGETHER — see docs/deploy.md.
+-- (an old build simply ignores the column). Apply BOTH 0004 and 0005 before
+-- rollout: 0005 adds the trigger that owns the increment, which is what lets any
+-- build (old or new) write a correct save_revision — so the two app deploys do
+-- NOT have to ship together. See docs/deploy.md.
 ALTER TABLE "worlds" ADD COLUMN "save_revision" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 UPDATE "worlds" SET "save_revision" = 1 WHERE "save_blob" IS NOT NULL;

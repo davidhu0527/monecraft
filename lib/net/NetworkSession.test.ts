@@ -461,6 +461,71 @@ describe("connectNetworkSession", () => {
     session.dispose();
   }, 10000);
 
+  // A browser fires `error` then `close`. If error consumed the connection
+  // generation (with 1006), the real fatal close that follows would be dropped as
+  // stale and the session would reconnect instead of closing. error must not
+  // preempt the close code.
+  test("an error followed by a fatal close closes the session — the fatal code isn't masked", async () => {
+    const { make, instances } = socketFactory();
+    let ticketsMinted = 0;
+    const session = await connectNetworkSession(
+      "ws://game",
+      "ticket-1",
+      {},
+      {
+        makeSocket: make,
+        worldSize: SMALL,
+        reconnect: async () => {
+          ticketsMinted += 1;
+          return { url: "ws://game", ticket: `ticket-${ticketsMinted + 1}` };
+        }
+      }
+    );
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+
+    instances[0].emitError(); // now a no-op
+    instances[0].emitClose(4003, "kicked"); // CLOSE_KICKED — fatal
+    expect(session.status()).toBe("closed"); // closed, not reconnecting
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(ticketsMinted).toBe(0); // never tried to reconnect
+    session.dispose();
+  }, 10000);
+
+  // An old socket's binary frame can still be inflating when a reconnect bumps
+  // the generation. When its gunzip resolves it must be dropped, not applied on
+  // top of the live/reconnecting session.
+  test("a binary frame still inflating across a reconnect is dropped, not applied", async () => {
+    const { make, instances } = socketFactory();
+    const session = await connectNetworkSession(
+      "ws://game",
+      "ticket-1",
+      {},
+      {
+        makeSocket: make,
+        worldSize: SMALL,
+        reconnect: async () => ({ url: "ws://game", ticket: "ticket-2" })
+      }
+    );
+    await pushWorldSync(instances[0], worldSync(WELCOME.players));
+    const world = session.engine.state.world;
+    const cell = { x: 3, y: 40, z: 4 };
+    const idx = cell.x + cell.z * world.sizeX + cell.y * world.sizeX * world.sizeZ;
+    const before = world.get(cell.x, cell.y, cell.z);
+    const newBlock = before === BlockId.Stone ? BlockId.Dirt : BlockId.Stone; // guaranteed to differ
+
+    // Emit a binary worldSync WITHOUT awaiting — its gunzip is now in flight —
+    // then drop the socket, which bumps the generation and starts a reconnect.
+    const gz = await gzipWorldSync(worldSync(WELCOME.players, { changes: [[idx, newBlock]] }));
+    instances[0].emit(gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength));
+    instances[0].emitClose(1006, "drop"); // generation++ → the in-flight frame is now stale
+
+    for (let i = 0; i < 6; i += 1) await Promise.resolve(); // let the gunzip settle
+    expect(world.get(cell.x, cell.y, cell.z)).toBe(before); // dropped — the cell is unchanged
+    expect(session.status()).toBe("reconnecting"); // and it didn't flip us back to "online"
+    session.dispose();
+  }, 10000);
+
   test("a fatal drop (bad ticket) closes without retrying", async () => {
     const { make, instances } = socketFactory();
     let reconnects = 0;
