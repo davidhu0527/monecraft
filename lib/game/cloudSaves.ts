@@ -130,12 +130,29 @@ export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => vo
  * Revisions are ordered, so this asks whether the remote is strictly AHEAD of
  * the cursor rather than merely different — a remote behind our cursor (a
  * restored backup, a stale replica) leaves local progress alone.
+ *
+ * `hasLocalSave` is the caller's answer to "is there a durable local save for
+ * this world?" It disambiguates the one case a missing cursor can't: a genuinely
+ * fresh device (no local, no cursor → first download, adopt) from an upgraded
+ * device that synced under an older cursor scheme (local exists, but no revision
+ * cursor yet). Adopting in the latter case would overwrite possibly-newer local
+ * progress with the cloud copy — the round-1 revision-cursor rename did exactly
+ * that. So when local exists but there is no cursor, keep local and SEED the
+ * cursor from the current cloud revision: that reduces the device to the normal
+ * "has a cursor" flow (the next push uses it as the base and can't be a phantom
+ * first-upload 409), and any real cross-device conflict then routes through the
+ * push-side 409 + warning rather than a silent overwrite.
  */
-export async function pullCloudSaveIfNewer(cloudWorldId: string, storage: Storage = localStorage): Promise<PullDecision> {
+export async function pullCloudSaveIfNewer(cloudWorldId: string, hasLocalSave: boolean, storage: Storage = localStorage): Promise<PullDecision> {
   const result = await fetchCloudSave(cloudWorldId);
   if (!result) return { adopt: false }; // no blob yet, or offline → keep local
   const cursor = readStamps(storage)[cloudWorldId];
   const revision = result.saveRevision;
+  if (cursor === undefined && hasLocalSave) {
+    // Unknown revision but a local save to protect → keep local, seed the cursor.
+    if (revision !== null) writeStamp(cloudWorldId, revision, storage);
+    return { adopt: false };
+  }
   if (revision === null) return { adopt: true, save: result.save, commitCursor: () => {} }; // no revision to reason about → first download
   if (cursor !== undefined && revision <= cursor) return { adopt: false }; // not ahead of our last sync
   return { adopt: true, save: result.save, commitCursor: () => writeStamp(cloudWorldId, revision, storage) };

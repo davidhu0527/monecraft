@@ -739,14 +739,21 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     },
     resetNow: () => {
       setSaveMessage("Resetting...");
+      // Arm the skip flag BEFORE the async delete, not in its callback — it gates
+      // the autosave interval and the unload flush, either of which firing during
+      // the delete would rewrite the very blob we're removing (resurrecting the
+      // save). Same ordering, and same reason, as the dimension-travel write
+      // above. Disarm if the delete fails, so a later unmount still saves.
+      skipUnmountSaveRef.current = true;
       void worldSaves.remove(worldIdRef.current).then(
         () => {
           // Remount with no blob: the fresh engine regenerates from the stored seed.
-          // Suppress the unmount save so it can't rewrite the blob we just removed.
-          skipUnmountSaveRef.current = true;
           scheduleTimeout(() => opts.onReloadWorld(), 500);
         },
-        () => flashMessage("Reset failed")
+        () => {
+          skipUnmountSaveRef.current = false;
+          flashMessage("Reset failed");
+        }
       );
     },
     quitToWorlds: () => {

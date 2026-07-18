@@ -4,6 +4,7 @@ import { schema } from "@/db";
 import { MAX_ONLINE_PROFILES, MAX_WORLDS_PER_PROFILE, WORLDGEN_VERSION } from "@/lib/game/config";
 import { isDifficulty } from "@/lib/game/difficulties";
 import { isGameMode } from "@/lib/game/gameModes";
+import { isSkinId } from "@/lib/game/playerSkins";
 import { MAX_PROFILE_NAME } from "@/lib/game/profiles";
 import { isWorldType } from "@/lib/world/worldTypes";
 import { PROTOCOL_VERSION } from "@/lib/net/protocol";
@@ -23,10 +24,11 @@ const lockAccount = (ownerId: string) => sql`select pg_advisory_xact_lock(hashte
 /**
  * The online worlds domain: every rule the API routes enforce, as pure
  * functions over a drizzle Db — unit-tested against PGlite, adapted to HTTP by
- * the thin handlers in app/api. All read access is membership-gated; writes
- * that shape the world (rename/delete/invite) are owner-gated. Save uploads are
- * membership-gated but `sp-cloud`-only: an `mp` world's blob belongs to the game
- * server (see `putSaveBlob`).
+ * the thin handlers in app/api. Metadata reads are membership-gated; writes
+ * that shape the world (rename/delete/invite) are owner-gated. The save BLOB —
+ * both its upload and its download — is membership-gated AND `sp-cloud`-only: an
+ * `mp` world's blob is the game server's authoritative state, not something a
+ * member may upload over or download raw (see `getSaveBlob`/`putSaveBlob`).
  *
  * Results use a discriminated `ok` so handlers map failures to status codes
  * without exceptions crossing the seam.
@@ -91,8 +93,12 @@ export async function createProfile(
   ownerId: string,
   input: { name: string; skinId?: string | null }
 ): Promise<{ ok: true; profile: ProfileSummary } | Failure> {
-  const name = input.name?.trim();
+  // The route hands this a bare-cast JSON body, so treat name/skinId as unknown:
+  // a non-string name would throw on .trim() (a 500 where a 400 belongs).
+  if (typeof input.name !== "string") return fail("invalid");
+  const name = input.name.trim();
   if (!name || name.length > MAX_PROFILE_NAME) return fail("invalid");
+  if (input.skinId != null && !isSkinId(input.skinId)) return fail("invalid");
   // Count and insert under a per-account lock so two concurrent creates can't
   // both slip past MAX_ONLINE_PROFILES.
   return db.transaction(async (tx) => {
@@ -116,11 +122,17 @@ export async function updateProfile(
 ): Promise<{ ok: true } | Failure> {
   const set: { name?: string; skinId?: string | null } = {};
   if (patch.name !== undefined) {
+    if (typeof patch.name !== "string") return fail("invalid");
     const trimmed = patch.name.trim();
     if (!trimmed || trimmed.length > MAX_PROFILE_NAME) return fail("invalid");
     set.name = trimmed;
   }
-  if (patch.skinId !== undefined) set.skinId = patch.skinId;
+  if (patch.skinId !== undefined) {
+    // A skin the client doesn't recognize renders as the default anyway, so
+    // don't store one; null clears it.
+    if (patch.skinId !== null && !isSkinId(patch.skinId)) return fail("invalid");
+    set.skinId = patch.skinId;
+  }
   if (Object.keys(set).length === 0) return fail("invalid");
   const updated = await db
     .update(schema.profiles)
@@ -243,7 +255,8 @@ export async function getWorld(db: Db, userId: string, worldId: string): Promise
 }
 
 export async function renameWorld(db: Db, userId: string, worldId: string, name: string): Promise<{ ok: true } | Failure> {
-  const trimmed = name?.trim();
+  if (typeof name !== "string") return fail("invalid"); // bare-cast body — a number would throw on .trim()
+  const trimmed = name.trim();
   if (!trimmed || trimmed.length > 64) return fail("invalid");
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
@@ -263,7 +276,17 @@ export async function deleteWorld(db: Db, userId: string, worldId: string): Prom
   return { ok: true };
 }
 
-/** The gzipped SaveData blob plus its concurrency stamp (the save revision). */
+/**
+ * The gzipped SaveData blob plus its concurrency stamp (the save revision).
+ *
+ * `sp-cloud` only, like `putSaveBlob`. An `mp` blob is the game server's whole
+ * authoritative world — every (incl. offline) player's inventory, coordinates,
+ * health, XP and both dimensions — far more than a member ever observes in-game,
+ * so membership does not entitle a raw download of it. Nothing legitimate GETs an
+ * `mp` blob from the browser (the client only pulls `sp-cloud` cloud saves; the
+ * game server reads via its own Postgres adapter, never this route), so the gate
+ * is free. Reads of `sp-cloud` stay membership-gated as before.
+ */
 export async function getSaveBlob(
   db: Db,
   userId: string,
@@ -273,6 +296,7 @@ export async function getSaveBlob(
   if (!member) return fail("not-found");
   const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
   if (!world) return fail("not-found");
+  if (world.kind !== "sp-cloud") return fail("invalid");
   return { ok: true, blob: world.saveBlob ?? null, saveVersion: world.saveVersion, saveRevision: world.saveRevision };
 }
 

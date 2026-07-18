@@ -68,4 +68,63 @@ describe("RoomRegistry", () => {
     expect(joined).not.toBe(original!); // a genuinely fresh room, loaded after the write
     await registry.shutdownAll();
   }, 120_000);
+
+  // shutdownAll used to await only rooms already in `rooms`. A load still in
+  // flight (not yet registered) would resolve after the drain and never be shut
+  // down — its state unpersisted at process exit.
+  test("shutdownAll drains a load that is still in flight", async () => {
+    const persistence = createMemoryPersistence();
+    let releaseLoad: (() => void) | null = null;
+    const inner = persistence.loadWorld.bind(persistence);
+    persistence.loadWorld = async (id) => {
+      persistence.loadWorld = inner; // one-shot
+      await new Promise<void>((resolve) => (releaseLoad = resolve));
+      return inner(id);
+    };
+    const registry = new RoomRegistry(persistence, 4, () => 0);
+
+    const loadPromise = registry.getOrLoad("w-load"); // suspended in loadWorld
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    let shutdownDone = false;
+    const shutdown = registry.shutdownAll().then(() => (shutdownDone = true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(shutdownDone).toBe(false); // must wait for the in-flight load
+
+    releaseLoad!();
+    await loadPromise;
+    await shutdown;
+    expect(shutdownDone).toBe(true);
+    // The room the load produced was shut down (persisted) — it's gone from the registry.
+    expect(registry.getExisting("w-load")).toBeNull();
+  }, 120_000);
+
+  test("shutdownAll refuses new loads and awaits an in-flight eviction", async () => {
+    let clock = 0;
+    const persistence = createMemoryPersistence();
+    const registry = new RoomRegistry(persistence, 4, () => clock);
+    await registry.getOrLoad("w-ev");
+
+    clock = IDLE_EVICT_MS + 1;
+    let releaseStore: (() => void) | null = null;
+    const inner = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async (id, blob, version) => {
+      persistence.storeWorld = inner;
+      await new Promise<void>((resolve) => (releaseStore = resolve));
+      return inner(id, blob, version);
+    };
+    const sweep = registry.sweepIdle(); // starts the eviction's held persist
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    let shutdownDone = false;
+    const shutdown = registry.shutdownAll().then(() => (shutdownDone = true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(shutdownDone).toBe(false); // waits for the eviction persist
+    expect(await registry.getOrLoad("w-new")).toBeNull(); // no new loads once shutting down
+
+    releaseStore!();
+    await sweep;
+    await shutdown;
+    expect(shutdownDone).toBe(true);
+  }, 120_000);
 });

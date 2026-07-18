@@ -269,22 +269,26 @@ describe("save blobs (LWW)", () => {
     expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 18, null)).toMatchObject({ ok: false, error: "invalid" });
   });
 
-  test("an invited member can't overwrite an mp world's authoritative save", async () => {
+  test("an invited member can neither overwrite nor download an mp world's authoritative blob", async () => {
     const id = await makeWorld("alice", "mp");
     const invite = await createInvite(asDb(), "alice", id);
     if (!invite.ok) throw new Error("invite failed");
     expect((await acceptInvite(asDb(), "bob", invite.token)).ok).toBe(true);
 
-    // Bob is a real member: he can read the world and its blob...
+    // Bob is a real member: he can read the world's METADATA...
     expect((await getWorld(asDb(), "bob", id)).ok).toBe(true);
-    expect((await getSaveBlob(asDb(), "bob", id)).ok).toBe(true);
-    // ...but the blob is the server's to write, not his.
+    // ...but the raw blob is the server's authoritative world (every player's
+    // inventory/coords, both dimensions) — not his to write OR read.
     expect(await putSaveBlob(asDb(), "bob", id, blob("pwned"), 18, null)).toMatchObject({ ok: false, error: "invalid" });
+    expect(await getSaveBlob(asDb(), "bob", id)).toMatchObject({ ok: false, error: "invalid" });
+    // Even the owner can't download it over HTTP — it's the server's, period.
+    expect(await getSaveBlob(asDb(), "alice", id)).toMatchObject({ ok: false, error: "invalid" });
   });
 
-  test("sp-cloud uploads still work — the gate is on kind, not on saving", async () => {
+  test("sp-cloud blobs upload AND download — the gate is on kind, not on the verb", async () => {
     const id = await makeWorld("alice", "sp-cloud");
     expect((await putSaveBlob(asDb(), "alice", id, blob("v1"), 18, null)).ok).toBe(true);
+    expect((await getSaveBlob(asDb(), "alice", id)).ok).toBe(true);
   });
 });
 
@@ -310,6 +314,25 @@ describe("account profiles", () => {
     expect(await createProfile(asDb(), "alice", { name: "one too many" })).toMatchObject({ ok: false, error: "conflict" });
     expect(await createProfile(asDb(), "bob", { name: "   " })).toMatchObject({ ok: false, error: "invalid" });
     expect(await createProfile(asDb(), "bob", { name: "x".repeat(25) })).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  // These take bare-cast JSON bodies; a non-string field must be a clean
+  // rejection, not a TypeError from .trim() (a 500 where a 400 belongs).
+  test("createProfile/updateProfile/renameWorld reject non-string names and unknown skins", async () => {
+    expect(await createProfile(asDb(), "alice", { name: 123 as never })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createProfile(asDb(), "alice", { name: "OK", skinId: "not-a-skin" })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await createProfile(asDb(), "alice", { name: "OK", skinId: 7 as never })).toMatchObject({ ok: false, error: "invalid" });
+
+    const p = await createProfile(asDb(), "alice", { name: "Steve" });
+    if (!p.ok) throw new Error("create failed");
+    expect(await updateProfile(asDb(), "alice", p.profile.id, { name: 123 as never })).toMatchObject({ ok: false, error: "invalid" });
+    expect(await updateProfile(asDb(), "alice", p.profile.id, { skinId: "not-a-skin" })).toMatchObject({ ok: false, error: "invalid" });
+    // null skinId still clears it (a valid patch).
+    expect(await updateProfile(asDb(), "alice", p.profile.id, { skinId: null })).toMatchObject({ ok: true });
+
+    const world = await createWorld(asDb(), "alice", { name: "W", kind: "mp", seed: 1, profileId: p.profile.id });
+    if (!world.ok) throw new Error("world failed");
+    expect(await renameWorld(asDb(), "alice", world.world.id, 123 as never)).toMatchObject({ ok: false, error: "invalid" });
   });
 
   test("deleting a profile cascades its online worlds; delete is owner-scoped", async () => {

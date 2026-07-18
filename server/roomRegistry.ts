@@ -23,6 +23,8 @@ export class RoomRegistry {
    */
   private readonly evicting = new Map<string, Promise<void>>();
   private sweeper: ReturnType<typeof setInterval> | null = null;
+  /** Set by shutdownAll: no new loads, so the drain there has a fixed set to await. */
+  private shuttingDown = false;
 
   constructor(
     private readonly persistence: Persistence,
@@ -34,8 +36,12 @@ export class RoomRegistry {
     this.sweeper ??= setInterval(() => void this.sweepIdle(), 30_000);
   }
 
-  /** The room for a world, loading it from persistence on first use. Null: unknown world or at capacity. */
+  /** The room for a world, loading it from persistence on first use. Null: unknown world, at capacity, or shutting down. */
   async getOrLoad(worldId: string): Promise<Room | null> {
+    // Once shutdownAll has started, refuse new loads so its drain awaits a fixed
+    // set — a load admitted here could register in `rooms` after the drain
+    // snapshotted it and never be persisted before process exit.
+    if (this.shuttingDown) return null;
     // Wait out an eviction in progress before reading the row: its final
     // persist is what we would otherwise load a stale copy of. Awaiting FIRST
     // keeps the checks below synchronous, so `loading` still collapses
@@ -83,6 +89,7 @@ export class RoomRegistry {
    */
   async sweepIdle(): Promise<void> {
     for (const [worldId, room] of this.rooms) {
+      if (this.shuttingDown) return; // shutdownAll owns the drain now — don't start new evictions
       if (room.playerCount() === 0 && room.emptySinceMs !== null && this.now() - room.emptySinceMs > IDLE_EVICT_MS) {
         this.rooms.delete(worldId);
         const done = room.shutdown();
@@ -98,11 +105,39 @@ export class RoomRegistry {
     }
   }
 
-  /** Terminal (the process is exiting), so the sweepIdle handoff above isn't needed — nothing will load again. */
+  /**
+   * Terminal drain (the process is exiting). Must catch EVERY room that holds
+   * unpersisted state, not just the ones currently in `rooms`:
+   *  - a load in flight will `rooms.set` when it resolves, so await `loading`
+   *    first and let those rooms land before snapshotting;
+   *  - an eviction's final persist may still be running in `evicting`;
+   *  - then shut down whatever is now in `rooms`.
+   * `shuttingDown` blocks new loads, so these three sets can't grow under us.
+   * `allSettled` + logging so one failed persist can't strand the exit.
+   */
   async shutdownAll(): Promise<void> {
+    this.shuttingDown = true;
     if (this.sweeper) clearInterval(this.sweeper);
+    // Drain in-flight loads (which then register in `rooms`) and evictions until
+    // both are empty. `shuttingDown` blocks new loads and stops sweepIdle from
+    // starting new evictions, so at most a sweep that already began adds one
+    // more eviction — the loop catches it and terminates.
+    while (this.loading.size > 0 || this.evicting.size > 0) {
+      await settleAll([...this.loading.values()], "load");
+      await settleAll([...this.evicting.values()], "eviction");
+    }
     const rooms = [...this.rooms.values()];
     this.rooms.clear();
-    await Promise.all(rooms.map((room) => room.shutdown()));
+    await settleAll(
+      rooms.map((room) => room.shutdown()),
+      "shutdown"
+    );
+  }
+}
+
+/** Awaits every promise, logging (not throwing) any rejection so the shutdown drain always completes. */
+async function settleAll(promises: Promise<unknown>[], what: string): Promise<void> {
+  for (const result of await Promise.allSettled(promises)) {
+    if (result.status === "rejected") console.error(`room ${what} failed during shutdown:`, result.reason);
   }
 }

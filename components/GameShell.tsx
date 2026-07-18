@@ -203,7 +203,11 @@ export default function GameShell() {
     if (world?.cloudId) {
       setConnecting(world.name);
       try {
-        const decision = await pullCloudSaveIfNewer(world.cloudId);
+        // Whether a durable local save exists decides an ambiguous cursor: no
+        // cursor + a local save is an upgraded device to protect, not a fresh
+        // download to adopt over.
+        const hasLocalSave = (await worldSaves.read(worldId)) !== null;
+        const decision = await pullCloudSaveIfNewer(world.cloudId, hasLocalSave);
         if (decision.adopt) {
           // Cursor only after the write durably commits — it claims we HOLD
           // this save, and a failed write would leave later opens declining to
@@ -242,7 +246,8 @@ export default function GameShell() {
     joiningRef.current = true;
     setConnecting(world.name);
     try {
-      const decision = await pullCloudSaveIfNewer(world.id);
+      const hasLocalSave = (await worldSaves.read(`cloud:${world.id}`)) !== null;
+      const decision = await pullCloudSaveIfNewer(world.id, hasLocalSave);
       if (decision.adopt) {
         await worldSaves.write(`cloud:${world.id}`, decision.save);
         decision.commitCursor(); // only once the save is durably ours
