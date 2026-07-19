@@ -20,6 +20,7 @@ import { GameRenderer } from "@/lib/game/render/GameRenderer";
 import { createMinimapRenderer, type MinimapRenderer } from "@/lib/game/render/minimap";
 import { worldSaves } from "@/lib/game/saveStore";
 import { pushSave } from "@/lib/game/cloudSaves";
+import { createCloudPushQueue, type CloudPushQueue } from "@/lib/game/cloudPushQueue";
 import type { ArmorSlot, EnchantmentId, Recipe, SaveData } from "@/lib/game/types";
 import type { GameMode } from "@/lib/game/gameModes";
 import type { Difficulty } from "@/lib/game/difficulties";
@@ -257,6 +258,9 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
   // wins a write, so we stop pushing (and warn once) rather than clobber theirs.
   const cloudIdRef = useRef(opts.world.cloudId ?? null);
   const cloudConflictRef = useRef(false);
+  // Built on first push (it needs the cloud id) and held in a ref, so an
+  // in-flight upload outlives the unmount that queued it.
+  const pushQueueRef = useRef<CloudPushQueue | null>(null);
 
   // Callback ref: the engine boots as soon as the canvas mount exists. A ref
   // callback runs during commit, where side effects and setState are legal.
@@ -333,20 +337,29 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     messageClearRef.current = id;
   }, []);
 
-  // Mirror a cloud-linked SP save up after a local write (fire-and-forget so the
-  // fetch survives an unmount). `notify` toasts once on a losing write, so the
-  // player knows another device took over — we then stop pushing to avoid a
-  // last-writer-wins clobber; the next open pulls their save.
+  // Mirror a cloud-linked SP save up after a local write. `notify` toasts once
+  // on a losing write, so the player knows another device took over — we then
+  // stop pushing to avoid a last-writer-wins clobber; the next open pulls their
+  // save. Uploads go through a latest-wins queue (one in flight) so the six call
+  // sites can't race each other into a self-inflicted 409.
   const syncCloudSave = useCallback(
     (engine: GameApi, notify: boolean) => {
       const cloudId = cloudIdRef.current;
       if (!cloudId || onlineRef.current || cloudConflictRef.current) return;
-      void pushSave(cloudId, engine.serialize()).then((result) => {
-        if (result === "conflict") {
+      // Scope the cursor to this local save (worldIdRef, the IndexedDB key), not
+      // the cloud id — two local copies of one cloud world sync independently.
+      const localScope = worldIdRef.current;
+      pushQueueRef.current ??= createCloudPushQueue({
+        push: (save) => pushSave(cloudId, localScope, save),
+        onConflict: (shouldNotify) => {
           cloudConflictRef.current = true;
-          if (notify) flashMessage("This world changed on another device — your changes here won't sync. Reopen to catch up.");
-        }
+          if (shouldNotify) flashMessage("This world changed on another device — your changes here won't sync. Reopen to catch up.");
+        },
+        stopped: () => cloudConflictRef.current
       });
+      // Serialize synchronously: the engine keeps mutating, and the unload flush
+      // needs the state as of ITS call, not whenever the push gets to run.
+      pushQueueRef.current.enqueue(engine.serialize(), notify);
     },
     [flashMessage]
   );
@@ -729,14 +742,21 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     },
     resetNow: () => {
       setSaveMessage("Resetting...");
+      // Arm the skip flag BEFORE the async delete, not in its callback — it gates
+      // the autosave interval and the unload flush, either of which firing during
+      // the delete would rewrite the very blob we're removing (resurrecting the
+      // save). Same ordering, and same reason, as the dimension-travel write
+      // above. Disarm if the delete fails, so a later unmount still saves.
+      skipUnmountSaveRef.current = true;
       void worldSaves.remove(worldIdRef.current).then(
         () => {
           // Remount with no blob: the fresh engine regenerates from the stored seed.
-          // Suppress the unmount save so it can't rewrite the blob we just removed.
-          skipUnmountSaveRef.current = true;
           scheduleTimeout(() => opts.onReloadWorld(), 500);
         },
-        () => flashMessage("Reset failed")
+        () => {
+          skipUnmountSaveRef.current = false;
+          flashMessage("Reset failed");
+        }
       );
     },
     quitToWorlds: () => {

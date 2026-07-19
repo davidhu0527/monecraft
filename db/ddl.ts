@@ -70,6 +70,7 @@ export const SCHEMA_DDL = `
       worldgen_version integer NOT NULL,
       save_version integer,
       save_blob bytea,
+      save_revision integer NOT NULL DEFAULT 0,
       created_at timestamp NOT NULL DEFAULT now(),
       updated_at timestamp NOT NULL DEFAULT now()
     );
@@ -91,4 +92,19 @@ export const SCHEMA_DDL = `
       uses integer NOT NULL DEFAULT 0,
       created_at timestamp NOT NULL DEFAULT now()
     );
+    -- The database owns the save_revision increment (migration 0005), so any
+    -- writer bumps it correctly and a rename (no save_blob change) never does.
+    CREATE FUNCTION bump_save_revision() RETURNS trigger AS $$
+    BEGIN
+      IF NEW.save_blob IS DISTINCT FROM OLD.save_blob THEN
+        NEW.save_revision := OLD.save_revision + 1;
+      ELSE
+        NEW.save_revision := OLD.save_revision;
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    CREATE TRIGGER worlds_bump_save_revision
+      BEFORE UPDATE ON worlds
+      FOR EACH ROW EXECUTE FUNCTION bump_save_revision();
 `;

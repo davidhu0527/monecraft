@@ -1,6 +1,6 @@
 # Contributing
 
-Monecraft is a Minecraft-inspired voxel game built with Next.js 16 (App Router), React 19, TypeScript (strict), Three.js, and Bun. It is single-player, browser-only, and saves to localStorage.
+Monecraft is a Minecraft-inspired voxel game built with Next.js 16 (App Router), React 19, TypeScript (strict), Three.js, and Bun. Single-player runs entirely in the browser and saves worlds to IndexedDB; online co-op adds accounts, cloud saves, and an authoritative Bun game server backed by Postgres.
 
 ## Getting started
 

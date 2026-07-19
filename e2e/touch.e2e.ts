@@ -106,24 +106,29 @@ test("dragging on the world turns the camera", async ({ gamePage: page }) => {
 });
 
 test("press-and-hold on the world mines; lifting stops", async ({ gamePage: page }) => {
+  // The mine intent fires from a real window.setTimeout (TOUCH_HOLD_MINE_MS =
+  // 220 ms) in the controller — a wall-clock timer, not an engine tick. On the
+  // 2-worker software-GL runner the main thread can be blocked long enough to
+  // delay that timer by many seconds, so the polls below must be generous (the
+  // 10 s they used flaked at retries: 0); give the whole test room to match.
+  test.setTimeout(90000);
   await calmDaytime(page);
   await tapToPlay(page);
   await page.waitForTimeout(1000); // settle (see the drag test)
 
   // Press and hold within slop — no move, so it classifies as a mine after
-  // TOUCH_HOLD_MINE_MS (a real setTimeout in the controller; poll for it).
-  // Driven at the controller API like the joystick/drag tests: this was the
-  // last touch test on a dispatched DOM pointer event, and it graduated from
-  // "flaky" to failing whole CI runs — the pointerdown→lookDown DOM wiring is
-  // pinned by TouchControls.test.tsx, and the hold-vs-look classification
-  // windows by touchInputController.test.ts; here we prove the live
-  // controller→input→engine seam with the real timer.
+  // TOUCH_HOLD_MINE_MS. Driven at the controller API like the joystick/drag
+  // tests: this was the last touch test on a dispatched DOM pointer event, and
+  // it graduated from "flaky" to failing whole CI runs — the pointerdown→
+  // lookDown DOM wiring is pinned by TouchControls.test.tsx, and the
+  // hold-vs-look classification windows by touchInputController.test.ts; here we
+  // prove the live controller→input→engine seam with the real timer.
   await page.evaluate(() => {
     (window.__monecraft!.input as unknown as { controls: TouchControls }).controls.lookDown({ pointerId: 1, x: 400, y: 180 });
   });
-  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 30000 }).toBe(true);
   await page.evaluate(() => (window.__monecraft!.input as unknown as { controls: TouchControls }).controls.lookUp(1));
-  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 10000 }).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__monecraft!.input.input.mineHeld), { timeout: 20000 }).toBe(false);
 });
 
 test("the Place button places a block through the touch path", async ({ gamePage: page }) => {

@@ -4,7 +4,7 @@ Guidance for AI coding agents (Codex, Claude Code, Cursor, …) working in this 
 
 ## Project
 
-A Minecraft-inspired voxel game: Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Three.js, Bun. Single-player, browser-based, client-only, saves to localStorage.
+A Minecraft-inspired voxel game: Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Three.js, Bun. Single-player is browser-based and client-only, saving worlds to IndexedDB with no account needed. Online co-op adds accounts, cloud saves, and an authoritative Bun game server (`server/`) backed by Postgres — see [docs/online.md](docs/online.md) and [docs/protocol.md](docs/protocol.md).
 
 **Zero binary assets**: every asset is generated at runtime — textures and sprites from pixel code, sound and music synthesized via ZZFX/WebAudio. New content should follow this principle unless the user decides otherwise. The one sanctioned exception is the UI pixel font (Monocraft, a Minecraft-style face under the SIL OFL 1.1), self-hosted via `next/font/local` from the committed woff2 in `app/fonts/` — don't "fix" it back to a system font. `public/` holds only code (the service worker `sw.js`) — no images or media belong there.
 

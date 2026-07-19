@@ -151,6 +151,9 @@ export default function GameShell() {
   const [dimensionNonce, setDimensionNonce] = useState(0);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  // When an upgrade can't tell whether local or cloud is newer, the player picks.
+  // Held while the open flow awaits their choice; the callbacks resolve it.
+  const [conflict, setConflict] = useState<{ worldName: string; onKeepLocal: () => void; onTakeCloud: () => void } | null>(null);
   // A join is in flight — guards against a double-click opening (and leaking) a
   // second socket. A ref, not `connecting`, so it's set synchronously.
   const joiningRef = useRef(false);
@@ -190,9 +193,39 @@ export default function GameShell() {
   }, []);
 
   /**
+   * Reconcile a cloud-linked world's local save with the cloud before opening.
+   * `localKey` is the IndexedDB key, `cloudId` the row id. Adopt/keep-local are
+   * automatic; a genuine upgrade divergence asks the player (the modal below),
+   * then either takes the cloud save or keeps local — both seed the cursor so
+   * sync works afterward. The cursor only advances after the durable local write.
+   */
+  const reconcileCloudSave = async (localKey: string, cloudId: string, worldName: string) => {
+    // Whether a durable local save exists decides an ambiguous cursor: no cursor
+    // + a local save is an upgraded device to protect, not a fresh download.
+    const hasLocalSave = (await worldSaves.read(localKey)) !== null;
+    // Scope the sync cursor to this local copy (localKey), not the cloud id: the
+    // account cache (`cloud:<id>`) and a downloaded local world can both link one
+    // cloud world, and each must track its own last-synced revision.
+    const decision = await pullCloudSaveIfNewer(cloudId, localKey, hasLocalSave);
+    if (decision.kind === "adopt") {
+      await worldSaves.write(localKey, decision.save);
+      decision.commitCursor();
+    } else if (decision.kind === "conflict") {
+      setConnecting(null); // drop the "Opening…" gate so the choice stands alone
+      const takeCloud = await new Promise<boolean>((resolve) => {
+        setConflict({ worldName, onKeepLocal: () => resolve(false), onTakeCloud: () => resolve(true) });
+      });
+      setConflict(null);
+      setConnecting(worldName); // re-raise the gate so the save write doesn't flash the menu
+      if (takeCloud) await worldSaves.write(localKey, decision.cloudSave);
+      decision.commitCursor(); // the choice resolved which content this device holds
+    }
+    // keep-local → leave the local save untouched
+  };
+
+  /**
    * Open a world for play. A cloud-linked one (WorldMeta.cloudId) reconciles
-   * first: pull the remote save if it advanced past this device's cursor, write
-   * it to disk, and boot from disk like any other world — reusing the "Opening…"
+   * first, then boots from disk like any other world — reusing the "Opening…"
    * gate. The caller owns the `joiningRef` guard (this helper does not), so the
    * materialize-then-open path can hold it across `createWorld` too.
    */
@@ -203,8 +236,7 @@ export default function GameShell() {
     if (world?.cloudId) {
       setConnecting(world.name);
       try {
-        const decision = await pullCloudSaveIfNewer(world.cloudId);
-        if (decision.adopt) await worldSaves.write(worldId, decision.save);
+        await reconcileCloudSave(worldId, world.cloudId, world.name);
       } catch {
         // Offline or a bad blob → fall through and play the local copy.
       } finally {
@@ -236,8 +268,7 @@ export default function GameShell() {
     joiningRef.current = true;
     setConnecting(world.name);
     try {
-      const decision = await pullCloudSaveIfNewer(world.id);
-      if (decision.adopt) await worldSaves.write(`cloud:${world.id}`, decision.save);
+      await reconcileCloudSave(`cloud:${world.id}`, world.id, world.name);
     } catch {
       // Offline or a bad blob → play this device's cache (or a fresh world).
     } finally {
@@ -352,6 +383,24 @@ export default function GameShell() {
             <button type="button" className="mc-button" onClick={() => setConnectError(null)}>
               OK
             </button>
+          </div>
+        </div>
+      )}
+      {conflict && (
+        <div className="net-modal" role="alertdialog" aria-label="Cloud save conflict">
+          <div className="net-modal-box">
+            <p>
+              “{conflict.worldName}” may have changed on another device since this one last synced, and we can&apos;t tell which is newer. Keep this
+              device&apos;s version, or load the cloud copy?
+            </p>
+            <div className="menu-confirm-actions">
+              <button type="button" className="mc-button" onClick={conflict.onKeepLocal}>
+                Keep this device
+              </button>
+              <button type="button" className="mc-button" onClick={conflict.onTakeCloud}>
+                Load cloud copy
+              </button>
+            </div>
           </div>
         </div>
       )}

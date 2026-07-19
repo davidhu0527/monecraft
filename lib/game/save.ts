@@ -342,10 +342,77 @@ export function restorePortalArrival(saved: SavedPlayer): { x: number; y: number
 }
 
 /**
+ * The voxel array is a Uint8Array, so a block id outside 0–255 would not fail
+ * loudly — it would wrap (`300 & 255` = 44) and silently become a DIFFERENT
+ * real block. Ids are deliberately NOT allow-listed against `BlockId`: it is a
+ * `const enum` (erased at runtime, so there is nothing to enumerate), and a
+ * hand-maintained ceiling would silently discard legitimate blocks the day
+ * someone appends an id and forgets to raise it — trading a cosmetic failure
+ * (an unknown id already renders magenta, `BLOCK_COLORS[block] ?? [1, 0, 1]`)
+ * for real data loss. 0–255 is the storage width, not a list to keep in sync.
+ */
+const MAX_STORABLE_BLOCK_ID = 255;
+
+/**
+ * `changes` entries reach `applySavedChanges`, which DESTRUCTURES each one
+ * (`const [idx, block] of changes`) — so a non-iterable entry throws there, not
+ * here — and writes the result straight into the voxel array. Malformed entries
+ * are dropped rather than failing the save: one bad pair must not cost a player
+ * their world, and every sibling reader in this module (mobs, vehicles,
+ * containers, effects, stats) already drops-not-throws.
+ */
+function sanitizeChanges(value: unknown): Array<[number, number]> {
+  if (!Array.isArray(value)) return [];
+  const out: Array<[number, number]> = [];
+  for (const entry of value) {
+    if (!Array.isArray(entry) || entry.length < 2) continue;
+    const [index, block] = entry as [unknown, unknown];
+    if (!Number.isInteger(index) || (index as number) < 0) continue;
+    if (!Number.isInteger(block) || (block as number) < 0 || (block as number) > MAX_STORABLE_BLOCK_ID) continue;
+    out.push([index as number, block as number]);
+  }
+  return out;
+}
+
+/**
+ * Player entries only need to be objects carrying an id here: every field
+ * INSIDE one is read through this module's per-field restorers
+ * (restoreInventorySlots, restoreEffects, restoreMobs, …), which are already
+ * total. Validating those fields again would duplicate them and give the save
+ * format two places to disagree about what a player is. What no one checked is
+ * the entry itself — `save.players.find((p) => p.id === …)` in the engine's
+ * constructor throws outright on a null.
+ */
+function sanitizePlayers(value: unknown): SavedPlayer[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((p): p is SavedPlayer => !!p && typeof p === "object" && !Array.isArray(p) && typeof (p as SavedPlayer).id === "string");
+}
+
+/**
+ * A dimension's world half. `dimensionSectionOf` hands whatever it finds
+ * straight to `applySavedChanges`, so a section without a usable `changes`
+ * array (`{ nether: {} }`, or a non-object) throws at the for-of. The rest of
+ * the section is read by the total per-field readers, so it rides through.
+ */
+function sanitizeDimensions(value: unknown): SaveData["dimensions"] {
+  if (!value || typeof value !== "object") return undefined;
+  const nether = (value as { nether?: unknown }).nether;
+  if (!nether || typeof nether !== "object") return undefined;
+  return { nether: { ...(nether as DimensionSection), changes: sanitizeChanges((nether as DimensionSection).changes) } };
+}
+
+/**
  * Validates a decoded save of any historical version and migrates it to the
  * current SaveData. Total: unknown shapes, future versions, and migration
  * throws all yield null. Shared by the JSON string path (readSave) and
- * callers that hold the decoded object itself (the IndexedDB save store).
+ * callers that hold the decoded object itself (the IndexedDB save store) and
+ * the cloud download (lib/game/cloudSaves.ts).
+ *
+ * "Total" is load-bearing and was previously only aspirational: the top-level
+ * arrays were type-checked but their ENTRIES were not, so a current-version
+ * save like `{ version: 18, seed: 1, changes: [1], players: [null] }` passed
+ * and then threw inside GameEngine. Structural sanitizing happens here, at the
+ * one seam every reader shares; per-field validation stays in the restorers.
  */
 export function parseSave(value: unknown): SaveData | null {
   try {
@@ -404,8 +471,9 @@ export function parseSave(value: unknown): SaveData | null {
     if (migrated.version === 16) migrated = migrateSaveV16toV17(migrated);
     if (migrated.version === 17) migrated = migrateSaveV17toV18(migrated);
     if (migrated.version !== 18) return null;
-    if (!Array.isArray(migrated.players)) return null;
-    return migrated;
+    const players = sanitizePlayers(migrated.players);
+    if (!players) return null;
+    return { ...migrated, players, changes: sanitizeChanges(migrated.changes), dimensions: sanitizeDimensions(migrated.dimensions) };
   } catch {
     return null;
   }

@@ -1,9 +1,9 @@
 # Deploying online multiplayer
 
 A first-time deploy runbook for the online stack. **Single-player needs none of
-this** — it runs entirely in the browser with localStorage and never touches the
-network. Only online co-op (accounts, cloud saves, shared worlds) needs a server;
-this page is how to stand that up.
+this** — it runs entirely in the browser, saving worlds to IndexedDB, and never
+touches the network. Only online co-op (accounts, cloud saves, shared worlds) needs
+a server; this page is how to stand that up.
 
 For _how the stack fits together_ see [online.md](online.md); for _operating_ a
 running deployment (kick, revoke, replay, redeploys, capacity) see the
@@ -94,7 +94,7 @@ copies of the room — everyone connects "successfully" and everyone is alone
 `fly machine list --config server/fly.toml` → exactly one machine.
 
 `server/fly.toml` already pins the rest of the important bits: a single region
-(set `primary_region` to one near your players — it can't pin the machine
+(set `primary_region` by **measured** RTT, not by the map — it can't pin the machine
 _count_, which is runtime state, hence the explicit scale step), **always
 on** (`min_machines_running = 1`, `auto_stop_machines = "off"` — a room must keep
 ticking while players are in it), a `/health` check, `PERSISTENCE = "postgres"`,
@@ -103,6 +103,16 @@ ticking while players are in it), a `/health` check, `PERSISTENCE = "postgres"`,
 `fly scale memory`, then raise the env). SIGTERM on a redeploy
 drains every room to Postgres first, so a deploy loses at most the last 60 s
 (the dirty-persist interval), crash-safe.
+
+**Region is `ord`, chosen by measurement.** For a mixed NA/Asia group, `sjc`
+looked closer to Asia on the map but measured 3–10× worse in production
+(Asia ~2000 ms & NA ~200 ms on `sjc`, vs Asia ~1000 ms & NA ~60 ms on `ord`) —
+Fly's routing/peering to `sjc` is poor for these players' ISPs. Base latency
+lives in the network path, not the server (an idle `/health` already round-trips
+~260 ms), and the `ping` handler replies synchronously, so the client's F3
+`rttMs` is a true RTT. Before changing region, read F3 `rttMs` from a real
+client in each region you serve and let the numbers decide; don't pick by
+geography. (A bigger VM does not help network RTT.)
 
 The app name in `fly.toml` is `monecraft-server`, so its URL is
 `https://monecraft-server.fly.dev` — the browser connects over **`wss://`**
@@ -235,6 +245,14 @@ Two repo secrets drive it (GitHub → Settings → Secrets and variables → Act
   column, like `0003`'s `is_anonymous`): then deploy the new code first and
   migrate second, since the old build would error on the missing column while
   the new build just ignores it until the migration lands.
+  - **`worlds.save_revision` is owned by a DB trigger** (`0005`), not by app
+    code, precisely so this column needs **no** same-SHA coordination: any build —
+    new, old-mid-deploy, or the game server — bumps the revision on a `save_blob`
+    change automatically, and a rename (no blob change) never does. So the
+    ordinary "migrate first, then deploy" path is safe; `0005` is additive (a
+    trigger only) and rolling back the code needs no down-migration. (This
+    superseded `0004`'s original app-side increment, which _did_ require a
+    same-SHA deploy — that constraint is gone.)
 
 ## Troubleshooting
 

@@ -68,10 +68,95 @@ routes are thin HTTP adapters over it.
 
 Single-player cloud saves are gzipped `SaveData` blobs (`lib/game/
 cloudSaves.ts` — block diffs compress extremely well) with last-write-wins
-concurrency: each device sends the `updatedAt` stamp it last saw
-(`x-base-updated-at`); a mismatch is **409** and the pushing client stops
+concurrency: each device sends the `saveRevision` it last saw
+(`x-base-revision`); a mismatch is **409** and the pushing client stops
 syncing and warns (rather than clobber the other device), then adopts the
 newer save on the next open.
+
+**Two clocks, deliberately.** `worlds.updatedAt` is metadata mtime — "last
+touched", what the world list orders by. `worlds.saveRevision` counts **blob
+writes and nothing else**: it is the sync cursor devices compare (stored under
+its own `minecraft_cloud_rev_<scope>` key — independent keys, not one shared JSON
+blob, so two tabs saving different worlds can't clobber each other's cursor) and
+the CAS token their uploads race on. The `<scope>` is the **local save instance**
+(its IndexedDB key), not the cloud id: one device can hold two local copies of a
+single cloud world — the account-mode cache (`cloud:<id>`) and a downloaded local
+world linked by `cloudId` — and each tracks its own last-synced revision, so a
+stale copy can't borrow the other's base and overwrite cloud progress. A **DB
+trigger** (migration
+`0005`, `bump_save_revision`) owns the increment
+— it bumps `save_revision` on any UPDATE where `save_blob` actually changes — so
+neither `putSaveBlob` nor the game server's `storeWorld` sets it, concurrent
+writers can't settle on a value read earlier, and a rename (no blob change)
+structurally never bumps. Revision `0` means never saved, which is what makes
+"first upload" checkable without trusting the client. `updatedAt` and
+`saveRevision` must stay separate: while `updatedAt` served as both, **renaming
+a world moved every other device's cursor** and 409'd its next push over a save
+that hadn't changed — and since a 409 latches `cloudConflictRef`, that silently
+disabled sync for the rest of the session. Because revisions are ordered, the
+open-time reconcile asks whether the remote is strictly _ahead_ of the cursor
+rather than merely different, so a remote that's behind (a restored backup)
+leaves newer local progress alone.
+
+**Upgrading off the old timestamp cursor.** Before revisions, the cursor was the
+`updatedAt` a device last saw (a shared timestamp map). A device upgrading has a
+local save but no revision cursor yet, and the revision alone can't say whether
+local descends from the current cloud. So the GET returns `updatedAt` (U) too,
+and the reconcile compares it to the legacy timestamp cursor T: **U ≤ T** (the
+cloud is unchanged since our last sync → local descends from it) keeps local and
+seeds the revision cursor. **U > T** is _ambiguous_ — `updatedAt` also moves on a
+**rename** (it's metadata mtime), so a bigger U could be genuinely-newer cloud
+content, or an unchanged blob whose row was renamed while this device has newer
+offline edits. There is no un-contaminated timestamp to tell them apart, so
+auto-picking either way risks clobbering the other. The reconcile returns a
+`conflict` and the shell asks the player: **keep this device's version** (seed the
+cursor; their next push uploads local, winning) or **load the cloud copy** (write
+it, seed the cursor). Both seed the revision cursor — not a false claim, because
+the player has resolved which content this device holds. One-time per world (only
+when U > T); after it the device is on revision cursors and never prompts again.
+
+Because the trigger — not app code — owns the increment, the web app and the
+game server **no longer need to ship from the same SHA** for this column: any
+build writes a correct revision. See [deploy.md](deploy.md#updating-a-running-deployment).
+
+**Uploads are queued, not fired.** Six call sites push a cloud-linked world
+(autosave, the three unload listeners, hardcore game-over, unmount, manual
+save) and several fire together — backgrounding a phone raises both
+`visibilitychange` and `pagehide`. So pushes go through a latest-wins queue
+(`lib/game/cloudPushQueue.ts`): one upload in flight, the newest snapshot
+queued behind it, superseded snapshots dropped. Unqueued, they raced with the
+same base revision and the loser's 409 latched sync off — a device switching
+off its own sync by conflicting with itself. The snapshot is serialized when a
+push is _requested_, not when it runs, so the unload flush uploads the state as
+of the unload. The reconcile's `commitCursor()` is likewise the caller's to
+call **after** the local write commits: the cursor claims this device HOLDS
+that save, so advancing it past a failed write would make every later open
+read the remote as "not ahead" and refuse to adopt it.
+
+**Save-blob access is `sp-cloud`-only — both verbs.** Both kinds keep their blob
+in the same `worlds.saveBlob` column, but they do not share its ownership: an
+`sp-cloud` blob **is** the client's upload, while an `mp` blob is the game
+server's authoritative persistence (`server/persistence.ts`), which a room
+reloads as world state on its next boot. So `putSaveBlob` gates on `kind` —
+otherwise membership alone would let an invited player hand the room whatever
+world they liked, bypassing the server authority
+[protocol.md](protocol.md#trust-model) reserves ("clients cannot invent items or
+edits"). `getSaveBlob` gates the same way: an `mp` blob is the whole
+authoritative world (every offline player's inventory/coordinates, both
+dimensions), far more than a member observes in-game, so membership gates world
+access and metadata but **not** a raw blob download. Nothing legitimate touches
+an `mp` blob over HTTP: `useMinecraftGame`'s push returns early when online, mp
+worlds carry no `cloudId`, and the game server reads via its own Postgres adapter
+(never this route). `mintTicket` makes the mirror-image `mp`-only check, so the
+two save paths stay disjoint.
+
+Stored blobs are inflated through a bounded gunzip
+(`MAX_DECOMPRESSED_SAVE_BYTES`, `server/persistence.ts`): gzip ratios run
+~1000:1 on hostile input, so an unbounded inflate would turn a few MiB of
+stored bytes into GiB of heap on the 512 MB VM. With the kind gate above, a
+room should only ever read blobs the server itself wrote, so this is depth
+rather than a live vector — but it is the seam where stored bytes become engine
+state, and it shouldn't trust the row on the far side.
 
 **How it flows through the menu** (all opt-in per world):
 
@@ -211,9 +296,22 @@ troubleshooting). In short:
 `server/index.ts` (Bun, no build step — `bun server/index.ts`). One process
 hosts up to `MAX_ROOMS` worlds; each room is an authoritative `GameEngine`
 on the drift-corrected 20 Hz ticker. Rooms load from Postgres on first join,
-persist every 60 s (when dirty), on last-leave, and on SIGTERM (deploys
-drain, ≤60 s loss crash-safe); five idle minutes evicts a room from memory.
-See [protocol.md](protocol.md) for the wire format.
+persist every 60 s **while occupied** (and when an empty room still owes a
+write), on last-leave, and on SIGTERM (deploys drain, ≤60 s loss crash-safe);
+five idle minutes evicts a room from memory. See [protocol.md](protocol.md)
+for the wire format.
+
+Presence is the persist trigger, not the dirty flag. The flag is set by five
+things — travel, nether-shard evict, join, leave, block-edit events — while a
+live session also moves inventory, health, hunger, effects, XP, statistics,
+advancements, mobs, containers and position, marking none of them; gating the
+interval on it meant a crash could roll back a long session that happened to
+involve no block edit. So the flag now only answers "does an EMPTY room still
+owe a write". Stores **coalesce** — one in flight, at most one follow-up queued
+— because composing and gzipping a world is expensive and `storeWorld` has no
+version guard, so overlapping writes race and the older can land last. The flag
+clears against the snapshot actually composed (a mutation mid-write stays
+dirty), and a failed write re-marks the room rather than dropping the state.
 
 **Single instance, by design.** Rooms live in the process's memory
 (`server/roomRegistry.ts`) with no cross-instance coordination — Postgres holds
@@ -255,7 +353,7 @@ tuning). Both mint their own ticket, so `GAME_TICKET_SECRET` must match; give
   player out, `POST /rooms/:id/kick/:playerId`.
 - **A redeploy.** SIGTERM drains every room (persist + close with `4005`);
   clients reconnect on the ladder to the new instance and re-sync. Loss is
-  bounded to the last 60 s (the dirty-persist interval) even on a hard crash.
+  bounded to the last 60 s (the persist interval) even on a hard crash.
 - **"How did this happen?"** Pull `/rooms/:id/log`, then `bun scripts/replay.ts`
   to replay the command stream against a fresh engine and diff the outcome.
 - **Latency feels bad.** From a browser console, `window.__monecraft.net`

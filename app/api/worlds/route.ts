@@ -14,8 +14,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await sessionUser(request);
   if (!user) return unauthorized();
+  // A bare cast: createWorld is the validation boundary and treats every field
+  // as untrusted (types, enums, seed range, the mp-profile requirement).
   const body = (await request.json().catch(() => null)) as CreateWorldInput | null;
-  if (!body) return failureResponse("invalid");
+  if (!body || typeof body !== "object") return failureResponse("invalid");
   const result = await createWorld(db(), user.id, body);
   if (!result.ok) return failureResponse(result.error);
   return NextResponse.json({ world: result.world }, { status: 201 });

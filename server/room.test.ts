@@ -360,6 +360,28 @@ describe("room lifecycle", () => {
     (room as unknown as { tick(dt: number): void }).tick(0.05);
     expect(a.messagesOf("tick").at(-1)?.self?.hearts).toBeDefined();
   });
+
+  // Each resync gzips the whole shard diff, and Bun doesn't serialize a socket's
+  // concurrent message handlers — so an unbudgeted spam loop stacks full-world
+  // gzips against the tick loop every room shares. Budgeted like cmd/chat/attack.
+  test("resync is rate-limited per second, and the budget refills at the second boundary", async () => {
+    const { room } = await makeRoom();
+    const a = fakeSink();
+    await room.join(claimsFor("alice", "w1"), a);
+    const tick = () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+
+    a.frames.length = 0;
+    for (let i = 0; i < 10; i += 1) await room.handleMessage("alice", { t: "resync" });
+    const firstBurst = a.frames.filter((f) => f.kind === "binary").length;
+    expect(firstBurst).toBeGreaterThan(0);
+    expect(firstBurst).toBeLessThanOrEqual(3); // RESYNC_PER_SECOND, not all 10
+
+    // Cross the second boundary (budgets reset at tick % 20 === 0) → fresh allowance.
+    for (let i = 0; i < 20; i += 1) tick();
+    a.frames.length = 0;
+    await room.handleMessage("alice", { t: "resync" });
+    expect(a.frames.some((f) => f.kind === "binary")).toBe(true);
+  });
 });
 
 describe("ops surface", () => {
@@ -888,4 +910,148 @@ describe("dimension shards (the nether online)", () => {
     room.leave("alice", newSink as never);
     expect(room.playerCount()).toBe(0);
   });
+});
+
+/**
+ * Persistence triggers and write coalescing. The room's own persist() is the
+ * only thing standing between a live session and a crash, so what SETS it off
+ * matters as much as what it writes.
+ */
+describe("room persistence", () => {
+  const tickOf = (room: Room) => () => (room as unknown as { tick(dt: number): void }).tick(0.05);
+  /** Jump to the tick before the persist interval, so one tick trips it. */
+  const armPersistInterval = (room: Room) => {
+    (room as unknown as { tickCount: number }).tickCount = 20 * 60 - 1;
+  };
+  const playerIn = (room: Room, id: string) =>
+    (room as unknown as { shards: Map<string, { engine: { state: { players: Map<string, { xp: number }> } } }> }).shards
+      .get("overworld")!
+      .engine.state.players.get(id)!;
+
+  // The dirty flag is set by five things — travel, shard evict, join, leave, and
+  // block-edit events. A live session moves inventory, health, hunger, effects,
+  // XP, stats, advancements and position without touching any of them, so a
+  // crash used to drop every bit of it since the last block edit.
+  test("an occupied room persists on the interval with no block edit in sight", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-interval"))!, persistence, () => 0);
+    await room.join(claimsFor("alice", "w-interval", "owner"), fakeSink());
+    await room.persist(); // join marked dirty; bank that and start clean
+
+    playerIn(room, "alice").xp = 4242; // persisted state, zero block edits
+
+    armPersistInterval(room);
+    tickOf(room)();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const stored = await persistence.loadWorld("w-interval");
+    expect(stored!.save!.players.find((p) => p.id === "alice")?.xp).toBe(4242);
+  }, 120_000);
+
+  test("an empty, clean room doesn't rewrite itself every interval", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-idle"))!, persistence, () => 0);
+    await room.persist();
+
+    let writes = 0;
+    const store = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async (...args) => {
+      writes += 1;
+      return store(...args);
+    };
+
+    armPersistInterval(room);
+    tickOf(room)();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(writes).toBe(0); // nobody home and nothing owed
+  }, 120_000);
+
+  test("overlapping persists coalesce into one in-flight store plus one follow-up", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-coalesce"))!, persistence, () => 0);
+
+    const started: Array<() => void> = [];
+    persistence.storeWorld = () => new Promise<void>((resolve) => started.push(resolve));
+
+    const first = room.persist();
+    // Two more while the first is in flight: they owe ONE follow-up between
+    // them, not two — a third would compose the same state again.
+    const second = room.persist();
+    const third = room.persist();
+    expect(started).toHaveLength(1);
+
+    started[0]();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(started).toHaveLength(2); // one follow-up covering both requests
+
+    started[1]();
+    await Promise.all([first, second, third]);
+    expect(started).toHaveLength(2); // and it stops there
+  }, 120_000);
+
+  // Without this, a store's success could clear a flag set by an edit that
+  // landed DURING the write — swallowing it until some later block edit.
+  test("a mutation during a store stays dirty", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-midwrite"))!, persistence, () => 0);
+    await room.persist();
+
+    let release: () => void = () => {};
+    persistence.storeWorld = () => new Promise<void>((resolve) => (release = resolve));
+
+    const inFlight = room.persist();
+    (room as unknown as { dirtySinceStore: boolean }).dirtySinceStore = true; // an edit lands mid-write
+    release();
+    await inFlight;
+
+    expect((room as unknown as { dirtySinceStore: boolean }).dirtySinceStore).toBe(true);
+  }, 120_000);
+
+  // An occupied room persists every interval, so a DB outage must not spray
+  // unhandled rejections on the shared process — the tick catches it, and the
+  // room stays dirty for the next retry.
+  test("an interval persist that fails is caught and leaves the room dirty for retry", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-fail"))!, persistence, () => 0);
+    await room.join(claimsFor("alice", "w-fail", "owner"), fakeSink());
+    await room.persist(); // bank the join, start clean
+    persistence.storeWorld = () => Promise.reject(new Error("db down"));
+
+    let unhandled: unknown = null;
+    const onUnhandled = (err: unknown) => (unhandled = err);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      armPersistInterval(room);
+      expect(() => tickOf(room)()).not.toThrow(); // the interval persist is fire-and-forget + caught
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+
+    expect(unhandled).toBeNull(); // the rejection was handled, not leaked
+    expect((room as unknown as { dirtySinceStore: boolean }).dirtySinceStore).toBe(true); // re-marked for retry
+  }, 120_000);
+
+  // Terminal shutdown must QUIESCE before its final write — stop the ticker and
+  // move live players to offline slices — so nothing mutates the room during the
+  // (slow) DB round-trip. Persist-first left the room live during the write, and
+  // a change made in that window (an XP gain) never reached the snapshot.
+  test("terminal shutdown quiesces the room before its final persist", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-quiesce"))!, persistence, () => 0);
+    await room.join(claimsFor("alice", "w-quiesce", "owner"), fakeSink());
+    expect(room.playerCount()).toBe(1);
+
+    let playersWhenWriteBegan = -1;
+    const inner = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async (id, blob, version) => {
+      playersWhenWriteBegan = room.playerCount(); // sampled as the final write starts
+      return inner(id, blob, version);
+    };
+
+    await room.shutdown();
+    // Quiesced first → no live players (and a stopped ticker) during the write,
+    // so nothing can change under it. Persist-first would sample 1 here.
+    expect(playersWhenWriteBegan).toBe(0);
+  }, 120_000);
 });

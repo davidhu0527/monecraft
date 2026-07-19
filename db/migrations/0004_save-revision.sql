@@ -1,0 +1,21 @@
+-- Split the save cursor out of the metadata mtime.
+--
+-- "updated_at" was doing two jobs: metadata mtime (list ordering) and the save
+-- revision every device compares to decide whether the cloud moved. Renaming a
+-- world bumped it, so every other device's cursor went stale over a save that
+-- had not changed — their next push 409'd and the client latched cloud sync off
+-- for the session. "save_revision" now counts blob writes and nothing else.
+--
+-- The backfill is load-bearing. save_revision = 0 means "never saved", which is
+-- what putSaveBlob checks to accept a first upload. Existing worlds that ALREADY
+-- hold a blob must therefore start at 1, or a client with no cursor would be
+-- treated as a first upload and clobber a real save. Worlds with no blob keep
+-- the 0 default.
+--
+-- Deploy order: this migration is additive and safe to run before the app ships
+-- (an old build simply ignores the column). Apply BOTH 0004 and 0005 before
+-- rollout: 0005 adds the trigger that owns the increment, which is what lets any
+-- build (old or new) write a correct save_revision — so the two app deploys do
+-- NOT have to ship together. See docs/deploy.md.
+ALTER TABLE "worlds" ADD COLUMN "save_revision" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+UPDATE "worlds" SET "save_revision" = 1 WHERE "save_blob" IS NOT NULL;
