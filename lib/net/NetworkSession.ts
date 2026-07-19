@@ -164,6 +164,13 @@ export async function connectNetworkSession(
   let status: NetStatus = "connecting";
   let disposed = false;
   let ws: WebSocket | null = null;
+  // Each socket handshake claims the next generation, and its steady-state close
+  // handler carries that number. A close is honored only for the live
+  // generation — so a superseded socket's late close (the server kicks the old
+  // connection when a reconnect's join lands) can't tear down its successor, and
+  // acting on a close bumps the counter so the SAME socket's error+close pair —
+  // browsers fire both on an abnormal drop — schedules exactly one reconnect.
+  let generation = 0;
   const chatListeners = new Set<(entry: { from: string; name: string; text: string }) => void>();
   const statusListeners = new Set<(status: NetStatus) => void>();
   const rosterListeners = new Set<() => void>();
@@ -211,6 +218,8 @@ export async function connectNetworkSession(
   // order. A setTimeout per message would leave ordering to the timer heap's
   // tie-breaking, which is not stable for equal deadlines — and the cursor
   // clamps bursts to exactly-equal deadlines, so ties are the common case.
+  // (This orders when frames START processing; the inbound queue at
+  // onServerFrame is what keeps their async COMPLETION in the same order.)
   const simDelayMs = () => Math.max(0, simulatedLatencyMs + (simulatedJitterMs > 0 ? (Math.random() * 2 - 1) * simulatedJitterMs : 0));
   const delayLine = () => {
     const queue: Array<{ deliverAt: number; fire: () => void }> = [];
@@ -263,6 +272,7 @@ export async function connectNetworkSession(
       const socket = makeSocket(`${serverUrl.replace(/\/$/, "")}/ws`);
       socket.binaryType = "arraybuffer";
       ws = socket;
+      const gen = (generation += 1); // this socket's identity for the steady-state close guard
       const timer = setTimeout(() => {
         reject(new Error("join timed out"));
         try {
@@ -278,10 +288,15 @@ export async function connectNetworkSession(
         const message = decodeServerFrame(event.data);
         if (message?.t === "welcome") {
           clearTimeout(timer);
-          // Hand the socket over to the steady-state handlers.
-          socket.onmessage = (frame) => onServerFrame(frame.data);
-          socket.onclose = (frame) => onSocketClosed(frame.code, frame.reason);
-          socket.onerror = () => onSocketClosed(1006, "socket error");
+          // Hand the socket over to the steady-state handlers, tagged with this
+          // socket's generation so a superseded socket's close is ignored.
+          socket.onmessage = (frame) => onServerFrame(gen, frame.data);
+          socket.onclose = (frame) => onSocketClosed(gen, frame.code, frame.reason);
+          // `error` is ALWAYS followed by `close` (WebSocket spec), so let close
+          // carry the real code. Handling error here too would consume the
+          // generation with 1006, masking a fatal close code that follows (e.g. a
+          // 4003 kick) — the session would then reconnect instead of closing.
+          socket.onerror = () => {};
           resolve(message);
         }
       };
@@ -625,18 +640,65 @@ export async function connectNetworkSession(
   };
 
   // ── inbound frame processing (latency-shifted) ──────────────────────────────
-  const onServerFrame = (data: unknown) => {
+  //
+  // Frames must APPLY in arrival order, not just start in it. Only the binary
+  // worldSync is async (it awaits gunzip, which in a browser spans several
+  // macrotasks); the text path is fully synchronous. So the one reordering risk
+  // is a later text `tick` finishing while an earlier worldSync is still
+  // inflating and then being clobbered when the worldSync lands. (Bun's
+  // synchronous gunzip masks it, so it never showed in tests.)
+  //
+  // Fix without making the common case async: a text frame applies synchronously
+  // UNLESS a binary frame is in flight, in which case it (and anything after it)
+  // waits in `queued` until the gunzip settles, then replays in order. Keeping
+  // text synchronous when nothing is pending matters — it is the overwhelmingly
+  // common frame, and everything downstream reads engine state right after.
+  //
+  // Each frame carries the generation of the socket it arrived on. A frame from a
+  // superseded socket (a reconnect happened) or one arriving after dispose is
+  // dropped — otherwise an old socket's binary frame could finish its gunzip
+  // after the reconnect and apply a stale worldSync, or flip a disposed session
+  // back to "online". `disposed`/`generation` are re-checked AFTER the gunzip
+  // await too, since the session can change while a binary frame inflates.
+  const isStaleFrame = (gen: number): boolean => disposed || gen !== generation;
+  let inflight: Promise<void> | null = null;
+  const queued: Array<{ gen: number; data: unknown }> = [];
+  const pump = () => {
+    while (inflight === null && queued.length > 0) {
+      const { gen, data } = queued.shift()!;
+      if (isStaleFrame(gen)) continue; // superseded socket or disposed session — drop
+      if (typeof data === "string") {
+        void processServerFrame(gen, data); // sync: the text path has no await before it returns
+      } else {
+        // finally re-pumps so frames buffered during the gunzip drain in order.
+        inflight = processServerFrame(gen, data)
+          .catch(() => {})
+          .finally(() => {
+            inflight = null;
+            pump();
+          });
+      }
+    }
+  };
+  const onServerFrame = (gen: number, data: unknown) => {
     traffic.inBytes += typeof data === "string" ? data.length : ((data as ArrayBuffer).byteLength ?? 0);
+    const deliver = () => {
+      queued.push({ gen, data });
+      pump();
+    };
     if (simulatedLatencyMs > 0 || simulatedJitterMs > 0) {
-      recvLine.push(() => void processServerFrame(data));
+      recvLine.push(deliver);
       return;
     }
-    void processServerFrame(data);
+    deliver();
   };
 
-  async function processServerFrame(data: unknown): Promise<void> {
+  async function processServerFrame(gen: number, data: unknown): Promise<void> {
     if (typeof data !== "string") {
       const sync = await gunzipWorldSync(new Uint8Array(data as ArrayBuffer));
+      // The gunzip spanned macrotasks — a reconnect or dispose in that window
+      // makes this worldSync stale; applying it would clobber the live replica.
+      if (isStaleFrame(gen)) return;
       if (sync) {
         // A sync for a dimension we're no longer in is a stale resync that
         // raced a travel swap — applying it would write the wrong world's
@@ -765,8 +827,14 @@ export async function connectNetworkSession(
   let reconnectAttempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const onSocketClosed = (code: number, reason: string) => {
+  const onSocketClosed = (gen: number, code: number, reason: string) => {
     if (disposed) return;
+    // Only the live socket's close counts. A stale generation is a superseded
+    // socket closing (the server kicked it, or it lost a reconnect race) — the
+    // session it belonged to is already gone. Bumping the counter here makes
+    // this socket stale too, so its error+close pair acts once, not twice.
+    if (gen !== generation) return;
+    generation += 1;
     if (FATAL_CLOSES.has(code) || !options.reconnect) {
       setStatus("closed", `${code} ${reason}`);
       return;
@@ -780,6 +848,7 @@ export async function connectNetworkSession(
       setStatus("closed", "could not reconnect");
       return;
     }
+    if (reconnectTimer) clearTimeout(reconnectTimer); // never leave a ladder rung orphaned
     const delay = RECONNECT_DELAYS_MS[reconnectAttempt];
     reconnectAttempt += 1;
     setStatus("reconnecting", `attempt ${reconnectAttempt}`);

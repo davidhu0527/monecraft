@@ -937,6 +937,74 @@ describe("parseSave on decoded objects", () => {
   test("unknown future version yields null", () => {
     expect(parseSave({ ...sampleSave(), version: 19 })).toBeNull();
   });
+
+  // Being total means the ENTRIES are checked, not just the container types.
+  // This exact object used to pass validation and then throw inside GameEngine:
+  // the constructor does `save.players.find((p) => p.id === …)` on the null, and
+  // applySavedChanges destructures `const [idx, block] of changes` on the 1.
+  describe("entry-level validation (a save is only as total as its entries)", () => {
+    test("the reported crasher no longer passes as a valid save", () => {
+      const parsed = parseSave({ version: 18, seed: 1, changes: [1], players: [null] });
+      expect(parsed).not.toBeNull();
+      expect(parsed!.players).toEqual([]);
+      expect(parsed!.changes).toEqual([]);
+    });
+
+    test("malformed player entries are dropped, valid ones kept", () => {
+      const parsed = parseSave({
+        ...sampleSave(),
+        players: [null, undefined, 42, "nope", [], {}, { id: 7 }, { id: "keeper" }]
+      });
+      expect(parsed!.players).toEqual([{ id: "keeper" }]);
+    });
+
+    // Dropping beats rejecting: one bad pair must not cost a player their world.
+    test("malformed change entries are dropped, valid ones kept", () => {
+      const parsed = parseSave({
+        ...sampleSave(),
+        changes: [[10, 3], 1, null, "xy", [5], [Number.NaN, 3], [7, Number.NaN], [-1, 3], [11, 1.5], [12, 4]]
+      });
+      expect(parsed!.changes).toEqual([
+        [10, 3],
+        [12, 4]
+      ]);
+    });
+
+    // The voxel array is a Uint8Array: 300 would wrap to 44 and silently BE a
+    // different real block, which is worse than not being there at all.
+    test("block ids outside the storage width are dropped rather than wrapped", () => {
+      const parsed = parseSave({
+        ...sampleSave(),
+        changes: [
+          [1, 300], // would wrap to 44 — a different real block
+          [2, 255], // the top of the Uint8Array's range: still storable
+          [3, -1]
+        ]
+      });
+      expect(parsed!.changes).toEqual([[2, 255]]);
+    });
+
+    test("players that isn't an array still yields null (a save needs one)", () => {
+      expect(parseSave({ ...sampleSave(), players: {} })).toBeNull();
+      expect(parseSave({ ...sampleSave(), players: undefined })).toBeNull();
+    });
+
+    // dimensionSectionOf hands the section straight to applySavedChanges, which
+    // for-ofs section.changes — so a section without one threw at load.
+    test("a dimension section without usable changes can't reach applySavedChanges", () => {
+      expect(parseSave({ ...sampleSave(), dimensions: { nether: {} } })!.dimensions).toEqual({ nether: { changes: [] } });
+      expect(parseSave({ ...sampleSave(), dimensions: { nether: 5 } })!.dimensions).toBeUndefined();
+      expect(parseSave({ ...sampleSave(), dimensions: "nope" })!.dimensions).toBeUndefined();
+    });
+
+    test("a valid dimension section keeps its changes and its other fields", () => {
+      const parsed = parseSave({
+        ...sampleSave(),
+        dimensions: { nether: { changes: [[1, 2], "junk"], lootedChests: [4] } }
+      });
+      expect(parsed!.dimensions).toEqual({ nether: { changes: [[1, 2]], lootedChests: [4] } });
+    });
+  });
 });
 
 describe("inventorySlotsSnapshot", () => {

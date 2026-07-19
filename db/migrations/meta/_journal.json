@@ -29,6 +29,20 @@
       "when": 1783198845414,
       "tag": "0003_retire-anonymous-guests",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784295778583,
+      "tag": "0004_save-revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784295778584,
+      "tag": "0005_save-revision-trigger",
+      "breakpoints": true
     }
   ]
 }

@@ -104,7 +104,7 @@ export default function WorldSelect({ profile, onPlay, onDownloadCloud, cloudEna
         });
         // A world with no local save yet has nothing to push — link it now and let
         // the first play autosave upload the blob.
-        const pushed = cloud && save ? await pushSave(cloud.id, save) : "saved";
+        const pushed = cloud && save ? await pushSave(cloud.id, world.id, save) : "saved";
         if (cloud && pushed === "saved") {
           linkWorldCloud(world.id, cloud.id);
           refreshCloud();

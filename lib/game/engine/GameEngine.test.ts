@@ -33,6 +33,7 @@ import {
   NETHER_DAYLIGHT
 } from "@/lib/game/config";
 import { countsById } from "@/lib/game/inventory";
+import { parseSave } from "@/lib/game/save";
 import { createEmptySlot, createSlot } from "@/lib/game/items";
 import { applyEnchant, enchantLevel } from "@/lib/game/enchantments";
 import { addEffect } from "@/lib/game/engine/systems/statusEffects";
@@ -115,6 +116,20 @@ describe("world types", () => {
 });
 
 describe("boot", () => {
+  // The engine trusts its save's entries — the ctor does
+  // `save.players.find((p) => p.id === …)`, and applySavedChanges destructures
+  // every change as a tuple. Neither is defensive, by design: parseSave is the
+  // seam that guarantees the shape. This pins that the guarantee holds for the
+  // object a code review reported as a live crasher.
+  test("a save whose entries are junk boots a world instead of throwing", () => {
+    const parsed = parseSave({ version: 18, seed: 1337, changes: [1], players: [null] });
+    expect(parsed).not.toBeNull();
+    const engine = new GameEngine({ save: parsed, seed: 1337, rng: mulberry32(42), worldSize: { x: 64, y: 150, z: 64 } });
+    // Boots as a fresh world (nothing survived sanitizing) rather than dying.
+    expect(engine.state.player.position.y).toBeGreaterThan(2);
+    expect(engine.getSnapshot().hearts).toBe(MAX_HEARTS);
+  });
+
   test("fresh engine spawns the player on safe ground with starter gear and mobs", () => {
     const engine = makeEngine();
     const { state } = engine;

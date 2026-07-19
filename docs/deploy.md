@@ -1,9 +1,9 @@
 # Deploying online multiplayer
 
 A first-time deploy runbook for the online stack. **Single-player needs none of
-this** — it runs entirely in the browser with localStorage and never touches the
-network. Only online co-op (accounts, cloud saves, shared worlds) needs a server;
-this page is how to stand that up.
+this** — it runs entirely in the browser, saving worlds to IndexedDB, and never
+touches the network. Only online co-op (accounts, cloud saves, shared worlds) needs
+a server; this page is how to stand that up.
 
 For _how the stack fits together_ see [online.md](online.md); for _operating_ a
 running deployment (kick, revoke, replay, redeploys, capacity) see the
@@ -245,6 +245,14 @@ Two repo secrets drive it (GitHub → Settings → Secrets and variables → Act
   column, like `0003`'s `is_anonymous`): then deploy the new code first and
   migrate second, since the old build would error on the missing column while
   the new build just ignores it until the migration lands.
+  - **`worlds.save_revision` is owned by a DB trigger** (`0005`), not by app
+    code, precisely so this column needs **no** same-SHA coordination: any build —
+    new, old-mid-deploy, or the game server — bumps the revision on a `save_blob`
+    change automatically, and a rename (no blob change) never does. So the
+    ordinary "migrate first, then deploy" path is safe; `0005` is additive (a
+    trigger only) and rolling back the code needs no down-migration. (This
+    superseded `0004`'s original app-side increment, which _did_ require a
+    same-SHA deploy — that constraint is gone.)
 
 ## Troubleshooting
 

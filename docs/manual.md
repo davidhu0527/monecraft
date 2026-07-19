@@ -808,13 +808,14 @@ pick your **player skin** — from the pause menu (`Esc`).
 
 ## Saving
 
-Your world autosaves to the browser's `localStorage` every **15 seconds**, and you
+Your world autosaves to your browser's storage every **15 seconds**, and you
 can **Save**, **Load**, or **Reset** manually from the pause menu. A save stores the
 world seed plus your edits, inventory, armor, stats, time of day, bed spawn, and the
 contents of every chest — so the world regenerates identically and picks up where
 you left off. Because saves
 live in the browser, they're tied to that browser on that device; "Reset" starts a
-fresh world.
+fresh world. To carry a world between devices, upload it to the cloud with a free
+account (see [Playing online](#playing-online)).
 
 ## Playing online
 

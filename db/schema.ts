@@ -101,6 +101,13 @@ export const profiles = pgTable(
  * the client's latest upload) from a multiplayer world (the blob is the game
  * server's authoritative persistence). One save blob either way: gzipped
  * SaveData JSON (v17 carries every player's slice).
+ *
+ * Note the two clocks. `updatedAt` is metadata mtime — "when was this world
+ * last touched" — and drives list ordering. `saveRevision` counts BLOB writes
+ * and nothing else; it is the sync cursor devices compare and the CAS token
+ * their uploads race on. They must stay separate: while `updatedAt` served as
+ * both, renaming a world moved every other device's cursor and 409'd their
+ * next push over a save that never changed.
  */
 export const worlds = pgTable(
   "worlds",
@@ -124,6 +131,8 @@ export const worlds = pgTable(
     worldgenVersion: integer("worldgen_version").notNull(),
     saveVersion: integer("save_version"),
     saveBlob: bytea("save_blob"),
+    /** Monotonic count of blob writes. 0 ⇔ never saved, which is what makes a "first upload" checkable. */
+    saveRevision: integer("save_revision").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow()
   },

@@ -99,7 +99,7 @@ type ClientConn = {
   /** Tick of the last accepted pose (drives the clamp's elapsed time). */
   lastPoseTick: number;
   /** Per-second message budgets (reset each second-boundary tick). */
-  budget: { cmd: number; chat: number; attack: number };
+  budget: { cmd: number; chat: number; attack: number; resync: number };
   /** Sustained-backpressure strikes toward a slow-client kick. */
   slowStrikes: number;
   /** Shadow of the last self-delta sent (reference/primitive compares). */
@@ -150,6 +150,8 @@ const DEFAULT_NETHER_SHARD_LINGER_MS = 60_000;
  * client sweep a mob's whole 900 ms position trail with varied view stamps.
  */
 const MELEE_ATTACKS_PER_SECOND = 12;
+/** Full-shard resends per second. A real desync needs one; this bounds a spam loop's gzip cost. */
+const RESYNC_PER_SECOND = 3;
 
 /**
  * One entry in a room's replay log: a dispatched command (with its claimed eye
@@ -182,7 +184,15 @@ export class Room {
   private readonly persistence: Persistence;
   private ticker: FixedTicker | null = null;
   private tickCount = 0;
+  /**
+   * Marks state a store must not miss. It is NOT the whole trigger: an occupied
+   * room persists on the interval regardless (see tick()), because only five
+   * mutations ever set this and a live session changes far more than that.
+   */
   private dirtySinceStore = false;
+  /** The in-flight store, and whether one more is owed after it. See persist(). */
+  private storing: Promise<void> | null = null;
+  private storeAgain = false;
   /**
    * The nether's world half from an evicted shard, re-emitted by composeSave
    * until a new shard (whose boot save carries it) supersedes it. The
@@ -470,7 +480,7 @@ export class Room {
       sink,
       poseSeq: -1,
       lastPoseTick: this.tickCount,
-      budget: { cmd: 0, chat: 0, attack: 0 },
+      budget: { cmd: 0, chat: 0, attack: 0, resync: 0 },
       slowStrikes: 0,
       shadow: null
     };
@@ -634,6 +644,13 @@ export class Room {
         return;
       }
       case "resync": {
+        // Budgeted like cmd/chat/attack: each resync serializes and gzips the
+        // whole shard diff, and Bun doesn't serialize a socket's concurrent
+        // message handlers — so an unbudgeted spam loop stacks full-world gzips
+        // against the 20 Hz tick every room in the process shares. A couple per
+        // second is plenty for a genuine desync recovery.
+        if (conn.budget.resync >= RESYNC_PER_SECOND) return;
+        conn.budget.resync += 1;
         conn.sink.send(await gzipWorldSync(this.buildWorldSync(this.shardOf(conn))));
         conn.shadow = null; // resend the full self-delta next tick
         return;
@@ -650,24 +667,73 @@ export class Room {
     }
   }
 
-  /** Drains the room for shutdown: persist + close every socket. */
+  /**
+   * Terminal drain: QUIESCE first, then persist. The room must be frozen before
+   * its final snapshot — stop the ticker and move every live player to an offline
+   * slice — or the ticker keeps advancing and clients keep sending during the DB
+   * write, and those changes (an XP gain, a block edit) never make the snapshot.
+   * (Idle eviction is the opposite order — persist while live so a join gets the
+   * live room — but there the room is empty, so there is nothing to quiesce.)
+   */
   async shutdown(): Promise<void> {
-    this.ticker?.stop();
-    for (const conn of this.clients.values()) conn.sink.close(CLOSE_SERVER_SHUTDOWN, "server restarting");
-    for (const playerId of [...this.clients.keys()]) this.leave(playerId);
+    this.stop();
     await this.persist();
   }
 
-  /** Persists the full world (every shard's half, live players merged with offline slices). */
+  /** Stops the tick loop and closes every socket — no persist (the caller owns that). */
+  stop(): void {
+    this.ticker?.stop();
+    for (const conn of this.clients.values()) conn.sink.close(CLOSE_SERVER_SHUTDOWN, "server restarting");
+    for (const playerId of [...this.clients.keys()]) this.leave(playerId);
+  }
+
+  /**
+   * Persists the full world, coalescing with any store already in flight.
+   *
+   * One store runs at a time: composing + gzipping a whole world is expensive,
+   * and two overlapping UPDATEs race with no version guard — the loser is
+   * silently overwritten, and out of order the OLDER snapshot can be the one
+   * that lands. A request made mid-store queues exactly one follow-up (a third
+   * would compose the same state again), so the awaited promise always resolves
+   * on a store that saw the caller's state. That is what lets shutdown() await
+   * this and be sure the final state is down.
+   */
   async persist(): Promise<void> {
+    if (this.storing) {
+      this.storeAgain = true;
+      return this.storing;
+    }
+    this.storing = (async () => {
+      try {
+        do {
+          this.storeAgain = false;
+          await this.storeOnce();
+        } while (this.storeAgain);
+      } finally {
+        this.storing = null;
+      }
+    })();
+    return this.storing;
+  }
+
+  /** One store of the full world (every shard's half, live players merged with offline slices). */
+  private async storeOnce(): Promise<void> {
     const save = this.composeSave();
     for (const [id, saved] of this.offlinePlayers) {
       if (!save.players.some((p) => p.id === id)) save.players.push(saved);
     }
+    // Clear against the snapshot we just took, not against whatever is true when
+    // the write returns: a mutation landing mid-write must survive as dirty, or
+    // clearing here would swallow it until the next unrelated block edit.
+    this.dirtySinceStore = false;
     const bun = Bun as unknown as { gzipSync(d: Uint8Array): Uint8Array };
     const blob = bun.gzipSync(new TextEncoder().encode(JSON.stringify(save)));
-    await this.persistence.storeWorld(this.worldId, blob, save.version);
-    this.dirtySinceStore = false;
+    try {
+      await this.persistence.storeWorld(this.worldId, blob, save.version);
+    } catch (err) {
+      this.dirtySinceStore = true; // the write never landed — retry on the next interval
+      throw err;
+    }
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -676,7 +742,7 @@ export class Room {
     const started = this.now();
     this.tickCount += 1;
     if (this.tickCount % 20 === 0) {
-      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0 };
+      for (const conn of this.clients.values()) conn.budget = { cmd: 0, chat: 0, attack: 0, resync: 0 };
     }
 
     // Step every shard and gather its per-tick broadcast data. Coordinates,
@@ -781,8 +847,20 @@ export class Room {
         this.broadcastToDimension(shard.dimension, { t: "mobsKeyframe", n: this.tickCount, mobs: this.collectMobPoses(shard, true) });
       }
     }
-    if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && this.dirtySinceStore) {
-      void this.persist();
+    // An OCCUPIED room persists on the interval whatever the dirty flag says.
+    // The flag is set by exactly five things (travel, shard evict, join, leave,
+    // and block-edit events) — while a live session also moves inventory,
+    // health, hunger, effects, XP, statistics, advancements, mobs, containers
+    // and position, none of which mark anything. A crash could therefore drop a
+    // long stretch of progress that involved no block edit. Chasing every
+    // mutation site is a list to keep in sync forever and one omission is a
+    // silent loss, so presence is the trigger and the flag only decides whether
+    // an EMPTY room still owes a write (block edits then everyone left).
+    if (this.tickCount % PERSIST_INTERVAL_TICKS === 0 && (this.clients.size > 0 || this.dirtySinceStore)) {
+      // Report, don't drop: occupied rooms persist EVERY interval, so a DB outage
+      // would otherwise emit an unhandled rejection each minute on the shared
+      // process. storeOnce already re-marked the room dirty for the next retry.
+      void this.persist().catch((err) => console.error(`room ${this.worldId} interval persist failed:`, err));
     }
     this.sweepNetherShard();
     this.slowestTickMs = Math.max(this.slowestTickMs * 0.99, this.now() - started);
