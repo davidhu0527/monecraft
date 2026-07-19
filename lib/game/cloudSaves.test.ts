@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { gunzipJson, gzipJson, pullCloudSaveIfNewer } from "./cloudSaves";
+import { gunzipJson, gzipJson, pullCloudSaveIfNewer, pushSave } from "./cloudSaves";
 import type { SaveData } from "@/lib/game/types";
 
-const REV_KEY = (id: string) => `minecraft_cloud_rev_${id}`; // per-world revision cursor
+const REV_KEY = (scope: string) => `minecraft_cloud_rev_${scope}`; // revision cursor, keyed by local save instance
 const LEGACY_KEY = "minecraft_cloud_stamps_v1"; // pre-revision: shared map of ISO timestamps (read-only bridge)
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
@@ -72,7 +72,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   test("first download (no cursor) adopts the remote save and records the revision on commit", async () => {
     const storage = fakeStorage();
     stubCloud(3);
-    const decision = await pullCloudSaveIfNewer("c1", false, storage);
+    const decision = await pullCloudSaveIfNewer("c1", "c1", false, storage);
     expect(decision.kind).toBe("adopt");
     if (decision.kind === "adopt") {
       expect(decision.save.version).toBe(18);
@@ -88,26 +88,26 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   test("the cursor only moves when the caller commits it (a failed local write leaves it put)", async () => {
     const storage = fakeStorage();
     stubCloud(3);
-    const decision = await pullCloudSaveIfNewer("c1", false, storage);
+    const decision = await pullCloudSaveIfNewer("c1", "c1", false, storage);
     expect(decision.kind).toBe("adopt");
     // Caller got the save but never committed — e.g. its IndexedDB write threw.
     expect(storage.getItem(REV_KEY("c1"))).toBeNull();
 
     // So the next open still adopts, rather than writing us off as up to date.
     stubCloud(3);
-    expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("adopt");
+    expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("adopt");
   });
 
   test("keeps local when the remote is unchanged since this device's cursor", async () => {
     const storage = fakeStorage({ [REV_KEY("c1")]: "3" });
     stubCloud(3); // the same revision we last synced
-    expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("keep-local");
+    expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("keep-local");
   });
 
   test("adopts when another device advanced the remote past the cursor", async () => {
     const storage = fakeStorage({ [REV_KEY("c1")]: "3" });
     stubCloud(4); // ahead of the cursor
-    expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("adopt");
+    expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("adopt");
   });
 
   // Revisions are ordered, so "different" isn't the question — "ahead" is. A
@@ -117,7 +117,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   test("keeps local when the remote is behind the cursor", async () => {
     const storage = fakeStorage({ [REV_KEY("c1")]: "9" });
     stubCloud(4);
-    expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("keep-local");
+    expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("keep-local");
     expect(storage.getItem(REV_KEY("c1"))).toBe("9"); // cursor unmoved
   });
 
@@ -126,16 +126,51 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   test("cursors are per world — advancing one leaves another's untouched", async () => {
     const storage = fakeStorage({ [REV_KEY("c1")]: "3", [REV_KEY("c2")]: "7" });
     stubCloud(4); // c1 advanced
-    const decision = await pullCloudSaveIfNewer("c1", false, storage);
+    const decision = await pullCloudSaveIfNewer("c1", "c1", false, storage);
     if (decision.kind === "adopt") decision.commitCursor();
     expect(storage.getItem(REV_KEY("c1"))).toBe("4"); // c1 moved
     expect(storage.getItem(REV_KEY("c2"))).toBe("7"); // c2 untouched
   });
 
+  // One device can hold TWO local copies of ONE cloud world — the account-mode
+  // cache (`cloud:<id>`) and a downloaded local world (`<uid>`, linked by cloudId).
+  // The cursor is keyed by the LOCAL copy, not the cloud id, so each tracks its
+  // own last-synced revision; a stale copy can't borrow the other's base and
+  // silently overwrite cloud progress. (Keyed by cloud id, they shared one cursor.)
+  test("two local copies of one cloud world reconcile with independent cursors", async () => {
+    const storage = fakeStorage({ [REV_KEY("cloud:w")]: "5", [REV_KEY("local1")]: "2" });
+    // The account cache is current (its cursor 5 == remote 5) → keep local.
+    stubCloud(5);
+    expect((await pullCloudSaveIfNewer("w", "cloud:w", false, storage)).kind).toBe("keep-local");
+    // The downloaded copy is behind (its own cursor 2 < remote 5) → it adopts,
+    // and advancing it leaves the account cache's cursor untouched.
+    stubCloud(5);
+    const behind = await pullCloudSaveIfNewer("w", "local1", false, storage);
+    expect(behind.kind).toBe("adopt");
+    if (behind.kind === "adopt") behind.commitCursor();
+    expect(storage.getItem(REV_KEY("local1"))).toBe("5"); // advanced independently
+    expect(storage.getItem(REV_KEY("cloud:w"))).toBe("5"); // the sibling copy is untouched
+  });
+
+  // The push side of the same decoupling: a stale local copy must send ITS OWN
+  // base revision so the server's compare-and-set can reject it — not the sibling
+  // copy's base (keyed by cloud id, `local1` would have borrowed `cloud:w`'s 5).
+  test("pushSave sends the local copy's base revision, not the cloud id's", async () => {
+    const storage = fakeStorage({ [REV_KEY("cloud:w")]: "5", [REV_KEY("local1")]: "2" });
+    const sentBase: string[] = [];
+    globalThis.fetch = (async (_url: string, init: { headers: Record<string, string> }) => {
+      sentBase.push(init.headers["x-base-revision"]);
+      return { status: 409, ok: false } as unknown as Response; // server: stale base
+    }) as unknown as typeof fetch;
+    const result = await pushSave("w", "local1", save, storage);
+    expect(sentBase).toEqual(["2"]); // local1's own base — not cloud:w's 5, nor "" from an absent `rev_w`
+    expect(result).toBe("conflict");
+  });
+
   test("keeps local when the world has no blob yet or the fetch fails", async () => {
     const storage = fakeStorage();
     stubCloud(null, null, false); // ok = false
-    expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("keep-local");
+    expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("keep-local");
   });
 
   // The upgrade transition: a device that synced under the OLD timestamp scheme
@@ -149,7 +184,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     test("cloud UNCHANGED since our last sync (U ≤ T) → keeps local and seeds the revision cursor", async () => {
       const storage = fakeStorage(legacy);
       stubCloud(5, T); // U == T: the cloud is exactly what we last synced
-      const decision = await pullCloudSaveIfNewer("c1", true, storage);
+      const decision = await pullCloudSaveIfNewer("c1", "c1", true, storage);
       expect(decision.kind).toBe("keep-local"); // local (a descendant of the cloud) survives
       expect(storage.getItem(REV_KEY("c1"))).toBe("5"); // seeded — the next push has a real base, not a 409-loop
     });
@@ -161,7 +196,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     test("cloud may have DIVERGED (U > T) → conflict; the resolvers seed the cursor either way", async () => {
       const storage = fakeStorage(legacy);
       stubCloud(6, "2026-02-01T00:00:00.000Z"); // U > T
-      const decision = await pullCloudSaveIfNewer("c1", true, storage);
+      const decision = await pullCloudSaveIfNewer("c1", "c1", true, storage);
       expect(decision.kind).toBe("conflict");
       if (decision.kind === "conflict") {
         expect(decision.cloudSave.version).toBe(18); // the cloud copy is offered as the choice
@@ -174,7 +209,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     test("no legacy timestamp → conflict rather than risk clobbering either side", async () => {
       const storage = fakeStorage(); // no legacy, no revision cursor
       stubCloud(5, "2026-02-01T00:00:00.000Z");
-      expect((await pullCloudSaveIfNewer("c1", true, storage)).kind).toBe("conflict");
+      expect((await pullCloudSaveIfNewer("c1", "c1", true, storage)).kind).toBe("conflict");
     });
 
     // A device with no cursor AND no local save is genuinely fresh (or a
@@ -182,7 +217,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
     test("still adopts when there is no local save (a genuine fresh device)", async () => {
       const storage = fakeStorage();
       stubCloud(5, T);
-      expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("adopt");
+      expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("adopt");
     });
   });
 
@@ -193,7 +228,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   test("sanitizes a recoverable remote blob rather than handing the engine a null player", async () => {
     const storage = fakeStorage();
     stubBody({ version: 18, seed: 1, changes: [1], players: [null] }, 4, null);
-    const decision = await pullCloudSaveIfNewer("c1", false, storage);
+    const decision = await pullCloudSaveIfNewer("c1", "c1", false, storage);
     expect(decision.kind).toBe("adopt");
     if (decision.kind === "adopt") {
       expect(decision.save.players).toEqual([]);
@@ -205,7 +240,7 @@ describe("pullCloudSaveIfNewer (open-time reconcile)", () => {
   test("refuses a remote blob that isn't a save, and doesn't advance the cursor", async () => {
     const storage = fakeStorage();
     stubBody({ hello: "world" }, 4, null);
-    expect((await pullCloudSaveIfNewer("c1", false, storage)).kind).toBe("keep-local");
+    expect((await pullCloudSaveIfNewer("c1", "c1", false, storage)).kind).toBe("keep-local");
     // A refused blob must not move the cursor — the next open has to retry.
     expect(storage.getItem(REV_KEY("c1"))).toBeNull();
   });

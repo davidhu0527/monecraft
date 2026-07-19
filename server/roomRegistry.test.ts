@@ -85,6 +85,44 @@ describe("RoomRegistry", () => {
     await registry.shutdownAll();
   }, 120_000);
 
+  // Eviction re-checks the FULL idle condition after the persist, not just
+  // playerCount. A join-then-leave during the persist returns playerCount to 0
+  // but refreshes emptySinceMs, so the room is no longer past the idle window —
+  // and its post-session state postdates the snapshot just written. It must NOT
+  // be evicted (that would drop the session's state and skip the grace period).
+  test("a join-then-leave during the eviction persist cancels the eviction", async () => {
+    let clock = 0;
+    const persistence = createMemoryPersistence();
+    const registry = new RoomRegistry(persistence, 4, () => clock);
+    const original = await registry.getOrLoad("w-active");
+    expect(original).not.toBeNull();
+
+    clock = IDLE_EVICT_MS + 1; // empty past the window → eligible for eviction
+    let releaseStore: (() => void) | null = null;
+    const inner = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async (id, blob, version) => {
+      persistence.storeWorld = inner; // one-shot: hold only the eviction's write
+      await new Promise<void>((resolve) => (releaseStore = resolve));
+      return inner(id, blob, version);
+    };
+
+    const sweep = registry.sweepIdle();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(releaseStore).not.toBeNull(); // the eviction persist is in flight
+
+    // A player joined and left while the persist was in flight: playerCount is
+    // back to 0, but emptySinceMs was re-stamped to "just now".
+    original!.emptySinceMs = clock;
+
+    releaseStore!();
+    await sweep;
+
+    // The refreshed idle clock fails the post-persist re-check → the room stays
+    // live (and re-persists next sweep, this time capturing the session).
+    expect(registry.getExisting("w-active")).toBe(original);
+    await registry.shutdownAll();
+  }, 120_000);
+
   // shutdownAll used to await only rooms already in `rooms`. A load still in
   // flight (not yet registered) would resolve after the drain and never be shut
   // down — its state unpersisted at process exit.

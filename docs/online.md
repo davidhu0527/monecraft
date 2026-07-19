@@ -75,10 +75,15 @@ newer save on the next open.
 
 **Two clocks, deliberately.** `worlds.updatedAt` is metadata mtime — "last
 touched", what the world list orders by. `worlds.saveRevision` counts **blob
-writes and nothing else**: it is the sync cursor devices compare (stored per
-world under its own `minecraft_cloud_rev_<id>` key — independent keys, not one
-shared JSON blob, so two tabs saving different worlds can't clobber each other's
-cursor) and the CAS token their uploads race on. A **DB trigger** (migration
+writes and nothing else**: it is the sync cursor devices compare (stored under
+its own `minecraft_cloud_rev_<scope>` key — independent keys, not one shared JSON
+blob, so two tabs saving different worlds can't clobber each other's cursor) and
+the CAS token their uploads race on. The `<scope>` is the **local save instance**
+(its IndexedDB key), not the cloud id: one device can hold two local copies of a
+single cloud world — the account-mode cache (`cloud:<id>`) and a downloaded local
+world linked by `cloudId` — and each tracks its own last-synced revision, so a
+stale copy can't borrow the other's base and overwrite cloud progress. A **DB
+trigger** (migration
 `0005`, `bump_save_revision`) owns the increment
 — it bumps `save_revision` on any UPDATE where `save_blob` actually changes — so
 neither `putSaveBlob` nor the game server's `storeWorld` sets it, concurrent

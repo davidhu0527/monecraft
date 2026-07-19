@@ -80,21 +80,30 @@ export class RoomRegistry {
   async sweepIdle(): Promise<void> {
     for (const [worldId, room] of this.rooms) {
       if (this.shuttingDown) return; // shutdownAll owns the drain now — don't start new evictions
-      if (room.playerCount() === 0 && room.emptySinceMs !== null && this.now() - room.emptySinceMs > IDLE_EVICT_MS) {
+      if (this.isIdleFor(room)) {
         try {
           await room.persist();
         } catch (err) {
           console.error(`room ${worldId} eviction persist failed; keeping it live to retry:`, err);
           continue; // do NOT evict — the world stays joinable from the live room
         }
-        // shutdownAll may have started, or a join may have arrived, during the
-        // persist. Either way, don't complete the eviction.
+        // shutdownAll may have started, or a session may have come and gone,
+        // during the persist. Re-check the FULL idle condition, not just
+        // playerCount: a join-then-leave leaves playerCount at 0 but refreshes
+        // emptySinceMs, so the room is no longer past the idle window — and its
+        // post-session state postdates the snapshot we just took. Evicting now
+        // would drop that state and bypass the idle grace period.
         if (this.shuttingDown) return;
-        if (room.playerCount() > 0) continue;
+        if (!this.isIdleFor(room)) continue;
         this.rooms.delete(worldId);
         room.stop();
       }
     }
+  }
+
+  /** Empty past the idle window — the eviction predicate, evaluated against `now()`. */
+  private isIdleFor(room: Room): boolean {
+    return room.playerCount() === 0 && room.emptySinceMs !== null && this.now() - room.emptySinceMs > IDLE_EVICT_MS;
   }
 
   /**

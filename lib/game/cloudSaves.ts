@@ -3,10 +3,10 @@ import type { SaveData } from "@/lib/game/types";
 
 /**
  * Cloud sync for single-player saves: gzipped SaveData blobs pushed to
- * /api/worlds/:id/save with a last-write-wins stale guard. Each device
- * remembers the `saveRevision` it last saw per cloud world (its sync cursor);
- * a 409 means another device wrote in between — the caller pulls the newer
- * save and lets the player continue from it.
+ * /api/worlds/:id/save with a last-write-wins stale guard. Each local save copy
+ * remembers the `saveRevision` it last saw (its sync cursor, keyed by the local
+ * IndexedDB key, not the cloud id — see below); a 409 means another device wrote
+ * in between — the caller pulls the newer save and lets the player continue.
  *
  * The cursor is a save REVISION, not a timestamp. It used to be the world row's
  * `updatedAt`, which also served as metadata mtime — so renaming a world moved
@@ -23,12 +23,19 @@ import type { SaveData } from "@/lib/game/types";
  */
 
 /**
- * The revision cursor is stored **per world**, under its own key
- * (`minecraft_cloud_rev_<id>`), NOT one shared JSON blob. A shared blob is a
- * read-modify-write: two tabs saving different worlds both read the map and
- * write back, and the second clobbers the first's entry — the lost world then
- * pushes with an empty base, 409s, and latches sync off. Independent keys make
- * each write touch only its own world.
+ * The revision cursor is stored under its own key (`minecraft_cloud_rev_<scope>`),
+ * NOT one shared JSON blob. A shared blob is a read-modify-write: two tabs saving
+ * different worlds both read the map and write back, and the second clobbers the
+ * first's entry — the lost world then pushes with an empty base, 409s, and
+ * latches sync off. Independent keys make each write touch only its own scope.
+ *
+ * The scope is the **local save instance** (its IndexedDB key), not the cloud
+ * world id: one device can hold two local copies of one cloud world — the
+ * account-mode cache (`cloud:<id>`) and a downloaded local world (`<uid>`, linked
+ * by cloudId) — and each has its own sync state. Keying the cursor by cloud id
+ * made them share one, so a stale copy could push past the other's base and
+ * silently overwrite cloud progress. The cursor tracks "what THIS local copy last
+ * synced"; the cloud id only names which server world to fetch/push.
  */
 const REV_KEY_PREFIX = "minecraft_cloud_rev_";
 
@@ -39,15 +46,15 @@ const REV_KEY_PREFIX = "minecraft_cloud_rev_";
  */
 const LEGACY_STAMPS_KEY = "minecraft_cloud_stamps_v1";
 
-function readRevision(cloudWorldId: string, storage: Storage = localStorage): number | undefined {
-  const raw = storage.getItem(REV_KEY_PREFIX + cloudWorldId);
+function readRevision(scope: string, storage: Storage = localStorage): number | undefined {
+  const raw = storage.getItem(REV_KEY_PREFIX + scope);
   if (raw === null) return undefined;
   const n = Number.parseInt(raw, 10);
   return Number.isInteger(n) ? n : undefined;
 }
 
-function writeRevision(cloudWorldId: string, revision: number, storage: Storage = localStorage): void {
-  storage.setItem(REV_KEY_PREFIX + cloudWorldId, String(revision));
+function writeRevision(scope: string, revision: number, storage: Storage = localStorage): void {
+  storage.setItem(REV_KEY_PREFIX + scope, String(revision));
 }
 
 /** This world's legacy timestamp cursor (the `updatedAt` last synced under the old scheme), or undefined. */
@@ -84,13 +91,18 @@ async function gunzipSave(bytes: Uint8Array): Promise<SaveData | null> {
 
 export type PushResult = "saved" | "conflict" | "error";
 
-/** Uploads a save; "conflict" means another device wrote first — pull before retrying. */
-export async function pushSave(cloudWorldId: string, save: SaveData, storage: Storage = localStorage): Promise<PushResult> {
+/**
+ * Uploads a save; "conflict" means another device wrote first — pull before
+ * retrying. `localScope` is this local copy's IndexedDB key: it scopes the sync
+ * cursor so two local copies of one cloud world don't share (and clobber) a base.
+ */
+export async function pushSave(cloudWorldId: string, localScope: string, save: SaveData, storage: Storage = localStorage): Promise<PushResult> {
   try {
     const body = await gzipJson(save);
-    // No cursor = we've never seen this world's blob, i.e. a first upload. The
-    // server accepts that only against a never-saved world, so it can't clobber.
-    const base = readRevision(cloudWorldId, storage);
+    // No cursor = this local copy has never seen the world's blob, i.e. a first
+    // upload. The server accepts that only against a never-saved world, so it
+    // can't clobber.
+    const base = readRevision(localScope, storage);
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`, {
       method: "PUT",
       headers: {
@@ -103,7 +115,7 @@ export async function pushSave(cloudWorldId: string, save: SaveData, storage: St
     if (response.status === 409) return "conflict";
     if (!response.ok) return "error";
     const { saveRevision } = (await response.json()) as { saveRevision: number };
-    writeRevision(cloudWorldId, saveRevision, storage);
+    writeRevision(localScope, saveRevision, storage);
     return "saved";
   } catch {
     return "error";
@@ -171,16 +183,22 @@ export type PullDecision =
  *     apart, so rather than auto-pick (and risk clobbering either side), return
  *     `conflict` and let the player choose.
  */
-export async function pullCloudSaveIfNewer(cloudWorldId: string, hasLocalSave: boolean, storage: Storage = localStorage): Promise<PullDecision> {
+export async function pullCloudSaveIfNewer(
+  cloudWorldId: string,
+  localScope: string,
+  hasLocalSave: boolean,
+  storage: Storage = localStorage
+): Promise<PullDecision> {
   const result = await fetchCloudSave(cloudWorldId);
   if (!result) return { kind: "keep-local" }; // no blob yet, or offline → keep local
-  const cursor = readRevision(cloudWorldId, storage);
+  const cursor = readRevision(localScope, storage);
   const revision = result.saveRevision;
   const seedCursor = () => {
-    if (revision !== null) writeRevision(cloudWorldId, revision, storage);
+    if (revision !== null) writeRevision(localScope, revision, storage);
   };
   if (cursor === undefined && hasLocalSave) {
     // Ambiguous upgrade — decide with the legacy timestamp cursor vs server mtime.
+    // The legacy stamp map predates per-instance cursors and is keyed by cloud id.
     const legacyT = readLegacyTimestamp(cloudWorldId, storage);
     const cloudUnchanged = legacyT !== undefined && result.updatedAt !== null && result.updatedAt <= legacyT;
     if (cloudUnchanged) {

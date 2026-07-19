@@ -203,7 +203,10 @@ export default function GameShell() {
     // Whether a durable local save exists decides an ambiguous cursor: no cursor
     // + a local save is an upgraded device to protect, not a fresh download.
     const hasLocalSave = (await worldSaves.read(localKey)) !== null;
-    const decision = await pullCloudSaveIfNewer(cloudId, hasLocalSave);
+    // Scope the sync cursor to this local copy (localKey), not the cloud id: the
+    // account cache (`cloud:<id>`) and a downloaded local world can both link one
+    // cloud world, and each must track its own last-synced revision.
+    const decision = await pullCloudSaveIfNewer(cloudId, localKey, hasLocalSave);
     if (decision.kind === "adopt") {
       await worldSaves.write(localKey, decision.save);
       decision.commitCursor();
@@ -213,6 +216,7 @@ export default function GameShell() {
         setConflict({ worldName, onKeepLocal: () => resolve(false), onTakeCloud: () => resolve(true) });
       });
       setConflict(null);
+      setConnecting(worldName); // re-raise the gate so the save write doesn't flash the menu
       if (takeCloud) await worldSaves.write(localKey, decision.cloudSave);
       decision.commitCursor(); // the choice resolved which content this device holds
     }

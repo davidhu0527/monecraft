@@ -346,8 +346,11 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     (engine: GameApi, notify: boolean) => {
       const cloudId = cloudIdRef.current;
       if (!cloudId || onlineRef.current || cloudConflictRef.current) return;
+      // Scope the cursor to this local save (worldIdRef, the IndexedDB key), not
+      // the cloud id — two local copies of one cloud world sync independently.
+      const localScope = worldIdRef.current;
       pushQueueRef.current ??= createCloudPushQueue({
-        push: (save) => pushSave(cloudId, save),
+        push: (save) => pushSave(cloudId, localScope, save),
         onConflict: (shouldNotify) => {
           cloudConflictRef.current = true;
           if (shouldNotify) flashMessage("This world changed on another device — your changes here won't sync. Reopen to catch up.");
