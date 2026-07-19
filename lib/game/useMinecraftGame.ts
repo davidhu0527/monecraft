@@ -127,10 +127,6 @@ export type UseMinecraftGameOptions = {
   onQuitToWorlds: () => void;
   /** Re-read this world from disk by forcing a fresh mount (used by Load/Reset). */
   onReloadWorld: () => void;
-  /** A one-shot message to surface once the world opens (e.g. a cloud-reconcile notice). */
-  initialNotice?: string;
-  /** Called after `initialNotice` has been shown, so the shell can clear it (a reset remount won't re-flash). */
-  onInitialNoticeShown?: () => void;
 };
 
 export function useMinecraftGame(opts: UseMinecraftGameOptions) {
@@ -340,19 +336,6 @@ export function useMinecraftGame(opts: UseMinecraftGameOptions) {
     pendingTimeoutsRef.current.add(id);
     messageClearRef.current = id;
   }, []);
-
-  // Surface a one-shot open-time notice (e.g. "the cloud had a newer copy") once,
-  // then tell the shell to clear it so a Reset/Load remount can't re-flash it.
-  // Captured in refs so the effect runs exactly once on mount; the flash is
-  // deferred a tick so it isn't a synchronous set-state during the effect.
-  const initialNoticeRef = useRef(opts.initialNotice);
-  const onInitialNoticeShownRef = useRef(opts.onInitialNoticeShown);
-  useEffect(() => {
-    const notice = initialNoticeRef.current;
-    if (!notice) return;
-    scheduleTimeout(() => flashMessage(notice, 6000), 0);
-    onInitialNoticeShownRef.current?.();
-  }, [scheduleTimeout, flashMessage]);
 
   // Mirror a cloud-linked SP save up after a local write. `notify` toasts once
   // on a losing write, so the player knows another device took over — we then

@@ -667,10 +667,17 @@ export class Room {
     }
   }
 
-  /** Drains the room for shutdown: persist FIRST (while still live), then stop. */
+  /**
+   * Terminal drain: QUIESCE first, then persist. The room must be frozen before
+   * its final snapshot — stop the ticker and move every live player to an offline
+   * slice — or the ticker keeps advancing and clients keep sending during the DB
+   * write, and those changes (an XP gain, a block edit) never make the snapshot.
+   * (Idle eviction is the opposite order — persist while live so a join gets the
+   * live room — but there the room is empty, so there is nothing to quiesce.)
+   */
   async shutdown(): Promise<void> {
-    await this.persist();
     this.stop();
+    await this.persist();
   }
 
   /** Stops the tick loop and closes every socket — no persist (the caller owns that). */

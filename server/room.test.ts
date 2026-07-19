@@ -1031,4 +1031,27 @@ describe("room persistence", () => {
     expect(unhandled).toBeNull(); // the rejection was handled, not leaked
     expect((room as unknown as { dirtySinceStore: boolean }).dirtySinceStore).toBe(true); // re-marked for retry
   }, 120_000);
+
+  // Terminal shutdown must QUIESCE before its final write — stop the ticker and
+  // move live players to offline slices — so nothing mutates the room during the
+  // (slow) DB round-trip. Persist-first left the room live during the write, and
+  // a change made in that window (an XP gain) never reached the snapshot.
+  test("terminal shutdown quiesces the room before its final persist", async () => {
+    const persistence = createMemoryPersistence();
+    const room = new Room((await persistence.loadWorld("w-quiesce"))!, persistence, () => 0);
+    await room.join(claimsFor("alice", "w-quiesce", "owner"), fakeSink());
+    expect(room.playerCount()).toBe(1);
+
+    let playersWhenWriteBegan = -1;
+    const inner = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async (id, blob, version) => {
+      playersWhenWriteBegan = room.playerCount(); // sampled as the final write starts
+      return inner(id, blob, version);
+    };
+
+    await room.shutdown();
+    // Quiesced first → no live players (and a stopped ticker) during the write,
+    // so nothing can change under it. Persist-first would sample 1 here.
+    expect(playersWhenWriteBegan).toBe(0);
+  }, 120_000);
 });

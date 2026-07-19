@@ -39,23 +39,9 @@ type MinecraftGameProps = {
   /** Hardcore Game Over: erase the dead world and return to the world list. */
   onDeleteWorld: () => void;
   onReloadWorld: () => void;
-  /** A one-shot notice to flash once the world opens (a cloud-reconcile message). */
-  initialNotice?: string;
-  /** Called after `initialNotice` is shown, so the shell clears it. */
-  onInitialNoticeShown?: () => void;
 };
 
-export default function MinecraftGame({
-  world,
-  profile,
-  initialSave,
-  online,
-  onQuitToWorlds,
-  onDeleteWorld,
-  onReloadWorld,
-  initialNotice,
-  onInitialNoticeShown
-}: MinecraftGameProps) {
+export default function MinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onDeleteWorld, onReloadWorld }: MinecraftGameProps) {
   const {
     attachMount,
     attachMinimap,
@@ -137,7 +123,7 @@ export default function MinecraftGame({
     touchMode,
     updateTouchSettings,
     unstuckNow
-  } = useMinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onReloadWorld, initialNotice, onInitialNoticeShown });
+  } = useMinecraftGame({ world, profile, initialSave, online, onQuitToWorlds, onReloadWorld });
 
   useEffect(() => {
     installUiTiles();

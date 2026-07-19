@@ -99,11 +99,16 @@ local save but no revision cursor yet, and the revision alone can't say whether
 local descends from the current cloud. So the GET returns `updatedAt` (U) too,
 and the reconcile compares it to the legacy timestamp cursor T: **U ≤ T** (the
 cloud is unchanged since our last sync → local descends from it) keeps local and
-seeds the revision cursor; **U > T** (another device wrote since) adopts the
-cloud — never seeding a cursor for content the device doesn't hold, which is what
-would let a stale local push silently overwrite newer cloud work — and warns the
-player their unsynced local changes were replaced. One-time per world; after it
-the device is on revision cursors.
+seeds the revision cursor. **U > T** is _ambiguous_ — `updatedAt` also moves on a
+**rename** (it's metadata mtime), so a bigger U could be genuinely-newer cloud
+content, or an unchanged blob whose row was renamed while this device has newer
+offline edits. There is no un-contaminated timestamp to tell them apart, so
+auto-picking either way risks clobbering the other. The reconcile returns a
+`conflict` and the shell asks the player: **keep this device's version** (seed the
+cursor; their next push uploads local, winning) or **load the cloud copy** (write
+it, seed the cursor). Both seed the revision cursor — not a false claim, because
+the player has resolved which content this device holds. One-time per world (only
+when U > T); after it the device is on revision cursors and never prompts again.
 
 Because the trigger — not app code — owns the increment, the web app and the
 game server **no longer need to ship from the same SHA** for this column: any

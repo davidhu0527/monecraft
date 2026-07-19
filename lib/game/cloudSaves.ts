@@ -126,18 +126,23 @@ async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; s
 }
 
 /**
- * `commitCursor` records that this device now holds the adopted save. The
- * caller MUST call it only after storing that save durably: the cursor is a
- * claim about what's on THIS device, so advancing it before the local write
- * commits means a failed write leaves us claiming a revision we don't have —
- * and every later open then reads the remote as "not ahead" and declines to
- * adopt it, stranding the cloud save permanently.
- *
- * `supersededLocal` is set only on the ambiguous-upgrade adopt path below: the
- * cloud had advanced past this device's last sync, so adopting it may have
- * replaced unsynced local changes — the caller warns the player.
+ * The open-time reconcile's verdict:
+ *  - `adopt` — take the remote save; the caller writes it locally, then calls
+ *    `commitCursor` (only after that write durably commits — the cursor claims
+ *    THIS device holds the revision, so advancing it past a failed write would
+ *    make every later open read the remote as "not ahead" and decline to adopt,
+ *    stranding the cloud save).
+ *  - `keep-local` — this device's save is at least as new; leave it untouched.
+ *  - `conflict` — an upgrade where local and cloud may have DIVERGED and the
+ *    timestamps can't say which is newer (see below). The caller asks the player
+ *    to choose, then either writes `cloudSave` (take cloud) or keeps local; both
+ *    call `commitCursor` to seed the revision so sync works afterward — not a
+ *    false claim, because the player has explicitly resolved which content wins.
  */
-export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => void; supersededLocal?: boolean } | { adopt: false };
+export type PullDecision =
+  | { kind: "adopt"; save: SaveData; commitCursor: () => void }
+  | { kind: "keep-local" }
+  | { kind: "conflict"; cloudSave: SaveData; commitCursor: () => void };
 
 /**
  * Open-time reconcile: adopt the remote save ONLY when it advanced past what this
@@ -155,32 +160,37 @@ export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => vo
  * upgraded device that synced under the OLD timestamp cursor scheme (local
  * exists, no revision cursor yet). For that upgrade, the revision alone can't
  * say whether local descends from the current cloud — but the legacy timestamp
- * cursor T can, against the server's mtime U:
+ * cursor T against the server's mtime U gets us most of the way:
  *   - U ≤ T (cloud unchanged since our last sync): local descends from it → keep
  *     local and seed the revision cursor. A later push to R+1 is a legit
  *     continuation, not a false claim.
- *   - U > T, or no T: the cloud advanced (another device wrote) → ADOPT it; never
- *     seed a cursor for content this device doesn't hold, which is what let a
- *     stale local push silently clobber newer cloud work. Warn (supersededLocal).
+ *   - U > T, or no T: the cloud MAY have advanced — but U also moves on a rename
+ *     (metadata mtime), so "advanced" is ambiguous: it could be genuinely-newer
+ *     cloud content, or an unchanged blob whose row was renamed while this device
+ *     has newer offline edits. There is no un-contaminated timestamp to tell them
+ *     apart, so rather than auto-pick (and risk clobbering either side), return
+ *     `conflict` and let the player choose.
  */
 export async function pullCloudSaveIfNewer(cloudWorldId: string, hasLocalSave: boolean, storage: Storage = localStorage): Promise<PullDecision> {
   const result = await fetchCloudSave(cloudWorldId);
-  if (!result) return { adopt: false }; // no blob yet, or offline → keep local
+  if (!result) return { kind: "keep-local" }; // no blob yet, or offline → keep local
   const cursor = readRevision(cloudWorldId, storage);
   const revision = result.saveRevision;
+  const seedCursor = () => {
+    if (revision !== null) writeRevision(cloudWorldId, revision, storage);
+  };
   if (cursor === undefined && hasLocalSave) {
     // Ambiguous upgrade — decide with the legacy timestamp cursor vs server mtime.
     const legacyT = readLegacyTimestamp(cloudWorldId, storage);
     const cloudUnchanged = legacyT !== undefined && result.updatedAt !== null && result.updatedAt <= legacyT;
     if (cloudUnchanged) {
-      if (revision !== null) writeRevision(cloudWorldId, revision, storage); // keep local, seed (honest)
-      return { adopt: false };
+      seedCursor(); // keep local, seed (honest — local descends from the cloud)
+      return { kind: "keep-local" };
     }
-    // Cloud advanced or unprovable descent → adopt so we can't clobber it; warn.
-    const commitCursor = revision !== null ? () => writeRevision(cloudWorldId, revision, storage) : () => {};
-    return { adopt: true, save: result.save, commitCursor, supersededLocal: true };
+    // Diverged, and the timestamps can't say which is newer → the player chooses.
+    return { kind: "conflict", cloudSave: result.save, commitCursor: seedCursor };
   }
-  if (revision === null) return { adopt: true, save: result.save, commitCursor: () => {} }; // no revision to reason about → first download
-  if (cursor !== undefined && revision <= cursor) return { adopt: false }; // not ahead of our last sync
-  return { adopt: true, save: result.save, commitCursor: () => writeRevision(cloudWorldId, revision, storage) };
+  if (revision === null) return { kind: "adopt", save: result.save, commitCursor: () => {} }; // no revision to reason about → first download
+  if (cursor !== undefined && revision <= cursor) return { kind: "keep-local" }; // not ahead of our last sync
+  return { kind: "adopt", save: result.save, commitCursor: seedCursor };
 }
