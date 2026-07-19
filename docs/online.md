@@ -76,8 +76,10 @@ newer save on the next open.
 **Two clocks, deliberately.** `worlds.updatedAt` is metadata mtime — "last
 touched", what the world list orders by. `worlds.saveRevision` counts **blob
 writes and nothing else**: it is the sync cursor devices compare (stored per
-world under `minecraft_cloud_stamps_v2`) and the CAS token their uploads race
-on. A **DB trigger** (migration `0005`, `bump_save_revision`) owns the increment
+world under its own `minecraft_cloud_rev_<id>` key — independent keys, not one
+shared JSON blob, so two tabs saving different worlds can't clobber each other's
+cursor) and the CAS token their uploads race on. A **DB trigger** (migration
+`0005`, `bump_save_revision`) owns the increment
 — it bumps `save_revision` on any UPDATE where `save_blob` actually changes — so
 neither `putSaveBlob` nor the game server's `storeWorld` sets it, concurrent
 writers can't settle on a value read earlier, and a rename (no blob change)
@@ -90,6 +92,18 @@ disabled sync for the rest of the session. Because revisions are ordered, the
 open-time reconcile asks whether the remote is strictly _ahead_ of the cursor
 rather than merely different, so a remote that's behind (a restored backup)
 leaves newer local progress alone.
+
+**Upgrading off the old timestamp cursor.** Before revisions, the cursor was the
+`updatedAt` a device last saw (a shared timestamp map). A device upgrading has a
+local save but no revision cursor yet, and the revision alone can't say whether
+local descends from the current cloud. So the GET returns `updatedAt` (U) too,
+and the reconcile compares it to the legacy timestamp cursor T: **U ≤ T** (the
+cloud is unchanged since our last sync → local descends from it) keeps local and
+seeds the revision cursor; **U > T** (another device wrote since) adopts the
+cloud — never seeding a cursor for content the device doesn't hold, which is what
+would let a stale local push silently overwrite newer cloud work — and warns the
+player their unsynced local changes were replaced. One-time per world; after it
+the device is on revision cursors.
 
 Because the trigger — not app code — owns the increment, the web app and the
 game server **no longer need to ship from the same SHA** for this column: any

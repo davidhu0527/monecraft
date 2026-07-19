@@ -24,12 +24,10 @@ describe("RoomRegistry", () => {
     await registry.shutdownAll();
   }, 120_000);
 
-  // The race: the room left `rooms` before its shutdown persisted, so a join in
-  // that window took the load path, read the PRE-shutdown blob, and built a
-  // second Room for one world. Both then wrote the same row through an UPDATE
-  // with no version guard — last write wins, and the eviction's is usually the
-  // older one, so the evicted room's final state silently lost.
-  test("a join during an eviction waits for it rather than loading a rival room from stale state", async () => {
+  // Eviction persists BEFORE removing the room, so the room stays in `rooms`
+  // throughout its final write. A join landing mid-persist gets that exact live
+  // instance — never a second room loaded from a blob that's mid-write.
+  test("a join during an eviction's persist gets the live room, never a stale rival", async () => {
     let clock = 0;
     const persistence = createMemoryPersistence();
     const registry = new RoomRegistry(persistence, 4, () => clock);
@@ -37,7 +35,6 @@ describe("RoomRegistry", () => {
     const original = await registry.getOrLoad("w-evict");
     expect(original).not.toBeNull();
 
-    // Sit empty past the idle window, then evict — with the final store held open.
     clock = IDLE_EVICT_MS + 1;
     let storeStarted = false;
     let releaseStore: (() => void) | null = null;
@@ -51,21 +48,40 @@ describe("RoomRegistry", () => {
 
     const sweep = registry.sweepIdle();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(storeStarted).toBe(true); // mid-shutdown: out of `rooms`, still writing
+    expect(storeStarted).toBe(true); // persisting — but the room is STILL registered
 
-    // A join lands right here. It must not read the row this shutdown is about
-    // to overwrite.
-    let joined: Awaited<ReturnType<RoomRegistry["getOrLoad"]>> | "pending" = "pending";
-    const join = registry.getOrLoad("w-evict").then((room) => (joined = room));
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(joined).toBe("pending"); // held until the eviction's write lands
+    // A join lands mid-persist: it gets the live room immediately, no wait.
+    const joined = await registry.getOrLoad("w-evict");
+    expect(joined).toBe(original); // the live room, not a rival loaded from a mid-write blob
 
     releaseStore!();
     await sweep;
-    await join;
+    await registry.shutdownAll();
+  }, 120_000);
 
-    expect(joined).not.toBeNull();
-    expect(joined).not.toBe(original!); // a genuinely fresh room, loaded after the write
+  // The finding-2 fix: a failed eviction persist used to be swallowed and the
+  // room removed anyway, so a waiting join loaded the stale (never-written) DB
+  // blob into a rival room. Now a failed persist keeps the room live/retryable.
+  test("a failed eviction persist keeps the room live and joinable — no stale reload", async () => {
+    let clock = 0;
+    const persistence = createMemoryPersistence();
+    const registry = new RoomRegistry(persistence, 4, () => clock);
+    const original = await registry.getOrLoad("w-fail");
+    expect(original).not.toBeNull();
+
+    clock = IDLE_EVICT_MS + 1;
+    const inner = persistence.storeWorld.bind(persistence);
+    persistence.storeWorld = async () => {
+      persistence.storeWorld = inner; // one-shot: only the eviction's write fails
+      throw new Error("db down");
+    };
+
+    await registry.sweepIdle(); // persist throws → the room must NOT be evicted
+
+    // The world is still served by the LIVE room (its in-memory final state),
+    // never reloaded from the stale blob.
+    expect(registry.getExisting("w-fail")).toBe(original);
+    expect(await registry.getOrLoad("w-fail")).toBe(original);
     await registry.shutdownAll();
   }, 120_000);
 
@@ -99,7 +115,7 @@ describe("RoomRegistry", () => {
     expect(registry.getExisting("w-load")).toBeNull();
   }, 120_000);
 
-  test("shutdownAll refuses new loads and awaits an in-flight eviction", async () => {
+  test("shutdownAll refuses new loads and shuts down a room whose eviction persist is in flight", async () => {
     let clock = 0;
     const persistence = createMemoryPersistence();
     const registry = new RoomRegistry(persistence, 4, () => clock);

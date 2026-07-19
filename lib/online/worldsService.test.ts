@@ -230,6 +230,10 @@ describe("save blobs (LWW)", () => {
     // "first upload" would hand a stale client a clobber.
     expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 17, Number.NaN)).toMatchObject({ ok: false, error: "invalid" });
     expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 17, -1)).toMatchObject({ ok: false, error: "invalid" });
+    // Past int4: a valid JS integer, but it overflows the `integer` column into a
+    // 500 rather than a clean rejection. Bound saveVersion and baseRevision both.
+    expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 2147483648, null)).toMatchObject({ ok: false, error: "invalid" });
+    expect(await putSaveBlob(asDb(), "alice", id, blob("x"), 17, 2147483648)).toMatchObject({ ok: false, error: "invalid" });
   });
 
   // The bug this column exists for: updatedAt was both metadata mtime AND the

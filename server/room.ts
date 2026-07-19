@@ -667,12 +667,17 @@ export class Room {
     }
   }
 
-  /** Drains the room for shutdown: persist + close every socket. */
+  /** Drains the room for shutdown: persist FIRST (while still live), then stop. */
   async shutdown(): Promise<void> {
+    await this.persist();
+    this.stop();
+  }
+
+  /** Stops the tick loop and closes every socket — no persist (the caller owns that). */
+  stop(): void {
     this.ticker?.stop();
     for (const conn of this.clients.values()) conn.sink.close(CLOSE_SERVER_SHUTDOWN, "server restarting");
     for (const playerId of [...this.clients.keys()]) this.leave(playerId);
-    await this.persist();
   }
 
   /**

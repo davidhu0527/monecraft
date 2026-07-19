@@ -295,13 +295,15 @@ export async function getSaveBlob(
   db: Db,
   userId: string,
   worldId: string
-): Promise<{ ok: true; blob: Uint8Array | null; saveVersion: number | null; saveRevision: number } | Failure> {
+): Promise<{ ok: true; blob: Uint8Array | null; saveVersion: number | null; saveRevision: number; updatedAt: string } | Failure> {
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
   const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
   if (!world) return fail("not-found");
   if (world.kind !== "sp-cloud") return fail("invalid");
-  return { ok: true, blob: world.saveBlob ?? null, saveVersion: world.saveVersion, saveRevision: world.saveRevision };
+  // `updatedAt` rides along so a device upgrading off the legacy timestamp cursor
+  // can decide whether the cloud advanced since its last sync (see cloudSaves.ts).
+  return { ok: true, blob: world.saveBlob ?? null, saveVersion: world.saveVersion, saveRevision: world.saveRevision, updatedAt: world.updatedAt.toISOString() };
 }
 
 /**
@@ -336,8 +338,11 @@ export async function putSaveBlob(
 ): Promise<{ ok: true; saveRevision: number } | Failure> {
   const member = await membership(db, userId, worldId);
   if (!member) return fail("not-found");
-  if (!Number.isInteger(saveVersion) || blob.byteLength === 0) return fail("invalid");
-  if (baseRevision !== null && (!Number.isInteger(baseRevision) || baseRevision < 0)) return fail("invalid");
+  // Both land in `integer` (int4) columns/predicates, so bound them to the int4
+  // range — a larger value passes Number.isInteger but overflows Postgres into a
+  // 500. saveVersion is a small format version; baseRevision a monotonic counter.
+  if (!Number.isInteger(saveVersion) || saveVersion < 0 || saveVersion > INT32_MAX || blob.byteLength === 0) return fail("invalid");
+  if (baseRevision !== null && (!Number.isInteger(baseRevision) || baseRevision < 0 || baseRevision > INT32_MAX)) return fail("invalid");
   const [world] = await db.select().from(schema.worlds).where(eq(schema.worlds.id, worldId));
   if (!world) return fail("not-found");
   if (world.kind !== "sp-cloud") return fail("invalid");

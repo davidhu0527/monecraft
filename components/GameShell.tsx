@@ -151,6 +151,10 @@ export default function GameShell() {
   const [dimensionNonce, setDimensionNonce] = useState(0);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  // A one-shot notice to flash once the next world opens (a cloud-reconcile that
+  // replaced the local copy). The game clears it via onInitialNoticeShown.
+  const [openNotice, setOpenNotice] = useState<string | undefined>(undefined);
+  const CLOUD_SUPERSEDED_NOTICE = "This world had a newer copy in the cloud — loaded it. Unsynced changes on this device were replaced.";
   // A join is in flight — guards against a double-click opening (and leaking) a
   // second socket. A ref, not `connecting`, so it's set synchronously.
   const joiningRef = useRef(false);
@@ -214,6 +218,7 @@ export default function GameShell() {
           // re-adopt it.
           await worldSaves.write(worldId, decision.save);
           decision.commitCursor();
+          if (decision.supersededLocal) setOpenNotice(CLOUD_SUPERSEDED_NOTICE);
         }
       } catch {
         // Offline or a bad blob → fall through and play the local copy.
@@ -251,6 +256,7 @@ export default function GameShell() {
       if (decision.adopt) {
         await worldSaves.write(`cloud:${world.id}`, decision.save);
         decision.commitCursor(); // only once the save is durably ours
+        if (decision.supersededLocal) setOpenNotice(CLOUD_SUPERSEDED_NOTICE);
       }
     } catch {
       // Offline or a bad blob → play this device's cache (or a fresh world).
@@ -397,6 +403,8 @@ export default function GameShell() {
                 setScreen({ name: "world-select", profileId: profile.id });
               }}
               onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+              initialNotice={openNotice}
+              onInitialNoticeShown={() => setOpenNotice(undefined)}
             />
           )}
         </WorldSaveGate>
@@ -425,6 +433,8 @@ export default function GameShell() {
               setScreen(backToWorlds);
             }}
             onReloadWorld={() => setReloadNonce((nonce) => nonce + 1)}
+            initialNotice={openNotice}
+            onInitialNoticeShown={() => setOpenNotice(undefined)}
           />
         )}
       </WorldSaveGate>

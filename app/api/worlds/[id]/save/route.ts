@@ -23,7 +23,10 @@ export async function GET(request: Request, { params }: Params) {
     headers: {
       "content-type": "application/gzip",
       "x-save-version": String(result.saveVersion ?? ""),
-      "x-save-revision": String(result.saveRevision)
+      "x-save-revision": String(result.saveRevision),
+      // Metadata mtime — a device bridging off the legacy timestamp cursor uses
+      // it to tell whether the cloud advanced since its last sync (cloudSaves.ts).
+      "x-updated-at": result.updatedAt
     }
   });
 }

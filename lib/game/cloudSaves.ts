@@ -12,7 +12,9 @@ import type { SaveData } from "@/lib/game/types";
  * `updatedAt`, which also served as metadata mtime — so renaming a world moved
  * every other device's cursor and 409'd its next push over a save that had not
  * changed, silently latching sync off for the session. A revision only moves
- * when the blob does.
+ * when the blob does. It is stored per world (independent keys, not one shared
+ * blob), and a device upgrading off the legacy timestamp scheme bridges via the
+ * server's mtime (see `pullCloudSaveIfNewer`).
  *
  * Wired into the shell: WorldSelect uploads an sp-cloud world (`pushSave`),
  * GameShell reconciles on open and on download (`pullCloudSaveIfNewer`), and
@@ -21,31 +23,43 @@ import type { SaveData } from "@/lib/game/types";
  */
 
 /**
- * v2: the values are revisions now, not ISO timestamps. A fresh key rather than
- * a migration — a stale timestamp compared against a revision would read as
- * "the cloud moved" forever. With no cursor, the open-time pull adopts and sets
- * one before anything pushes, so the cost of starting empty is nil.
+ * The revision cursor is stored **per world**, under its own key
+ * (`minecraft_cloud_rev_<id>`), NOT one shared JSON blob. A shared blob is a
+ * read-modify-write: two tabs saving different worlds both read the map and
+ * write back, and the second clobbers the first's entry — the lost world then
+ * pushes with an empty base, 409s, and latches sync off. Independent keys make
+ * each write touch only its own world.
  */
-const STAMPS_KEY = "minecraft_cloud_stamps_v2";
+const REV_KEY_PREFIX = "minecraft_cloud_rev_";
 
-type StampMap = Record<string, number>;
+/**
+ * The pre-revision cursor: a shared JSON map of ISO timestamps (the world row's
+ * `updatedAt` each device last saw). Still on upgraded devices; read ONLY to
+ * bridge the one-time transition to revision cursors — never written.
+ */
+const LEGACY_STAMPS_KEY = "minecraft_cloud_stamps_v1";
 
-function readStamps(storage: Storage = localStorage): StampMap {
-  try {
-    const parsed: unknown = JSON.parse(storage.getItem(STAMPS_KEY) ?? "{}");
-    if (!parsed || typeof parsed !== "object") return {};
-    const out: StampMap = {};
-    for (const [key, value] of Object.entries(parsed)) if (Number.isInteger(value)) out[key] = value as number;
-    return out;
-  } catch {
-    return {};
-  }
+function readRevision(cloudWorldId: string, storage: Storage = localStorage): number | undefined {
+  const raw = storage.getItem(REV_KEY_PREFIX + cloudWorldId);
+  if (raw === null) return undefined;
+  const n = Number.parseInt(raw, 10);
+  return Number.isInteger(n) ? n : undefined;
 }
 
-function writeStamp(cloudWorldId: string, revision: number, storage: Storage = localStorage): void {
-  const stamps = readStamps(storage);
-  stamps[cloudWorldId] = revision;
-  storage.setItem(STAMPS_KEY, JSON.stringify(stamps));
+function writeRevision(cloudWorldId: string, revision: number, storage: Storage = localStorage): void {
+  storage.setItem(REV_KEY_PREFIX + cloudWorldId, String(revision));
+}
+
+/** This world's legacy timestamp cursor (the `updatedAt` last synced under the old scheme), or undefined. */
+function readLegacyTimestamp(cloudWorldId: string, storage: Storage = localStorage): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(storage.getItem(LEGACY_STAMPS_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const value = (parsed as Record<string, unknown>)[cloudWorldId];
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function gzipJson(value: unknown): Promise<Uint8Array> {
@@ -76,7 +90,7 @@ export async function pushSave(cloudWorldId: string, save: SaveData, storage: St
     const body = await gzipJson(save);
     // No cursor = we've never seen this world's blob, i.e. a first upload. The
     // server accepts that only against a never-saved world, so it can't clobber.
-    const base = readStamps(storage)[cloudWorldId];
+    const base = readRevision(cloudWorldId, storage);
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`, {
       method: "PUT",
       headers: {
@@ -89,22 +103,23 @@ export async function pushSave(cloudWorldId: string, save: SaveData, storage: St
     if (response.status === 409) return "conflict";
     if (!response.ok) return "error";
     const { saveRevision } = (await response.json()) as { saveRevision: number };
-    writeStamp(cloudWorldId, saveRevision, storage);
+    writeRevision(cloudWorldId, saveRevision, storage);
     return "saved";
   } catch {
     return "error";
   }
 }
 
-/** Fetches the cloud blob + its revision (null when the world has no blob yet, the blob doesn't validate, or the fetch fails). */
-async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; saveRevision: number | null } | null> {
+/** Fetches the cloud blob + its revision + mtime (null when the world has no blob yet, the blob doesn't validate, or the fetch fails). */
+async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; saveRevision: number | null; updatedAt: string | null } | null> {
   try {
     const response = await fetch(`/api/worlds/${cloudWorldId}/save`);
     if (!response.ok) return null;
     const header = Number.parseInt(response.headers.get("x-save-revision") ?? "", 10);
+    const updatedAt = response.headers.get("x-updated-at");
     const save = await gunzipSave(new Uint8Array(await response.arrayBuffer()));
     if (!save) return null;
-    return { save, saveRevision: Number.isInteger(header) ? header : null };
+    return { save, saveRevision: Number.isInteger(header) ? header : null, updatedAt };
   } catch {
     return null;
   }
@@ -117,8 +132,12 @@ async function fetchCloudSave(cloudWorldId: string): Promise<{ save: SaveData; s
  * commits means a failed write leaves us claiming a revision we don't have —
  * and every later open then reads the remote as "not ahead" and declines to
  * adopt it, stranding the cloud save permanently.
+ *
+ * `supersededLocal` is set only on the ambiguous-upgrade adopt path below: the
+ * cloud had advanced past this device's last sync, so adopting it may have
+ * replaced unsynced local changes — the caller warns the player.
  */
-export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => void } | { adopt: false };
+export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => void; supersededLocal?: boolean } | { adopt: false };
 
 /**
  * Open-time reconcile: adopt the remote save ONLY when it advanced past what this
@@ -131,29 +150,37 @@ export type PullDecision = { adopt: true; save: SaveData; commitCursor: () => vo
  * the cursor rather than merely different — a remote behind our cursor (a
  * restored backup, a stale replica) leaves local progress alone.
  *
- * `hasLocalSave` is the caller's answer to "is there a durable local save for
- * this world?" It disambiguates the one case a missing cursor can't: a genuinely
- * fresh device (no local, no cursor → first download, adopt) from an upgraded
- * device that synced under an older cursor scheme (local exists, but no revision
- * cursor yet). Adopting in the latter case would overwrite possibly-newer local
- * progress with the cloud copy — the round-1 revision-cursor rename did exactly
- * that. So when local exists but there is no cursor, keep local and SEED the
- * cursor from the current cloud revision: that reduces the device to the normal
- * "has a cursor" flow (the next push uses it as the base and can't be a phantom
- * first-upload 409), and any real cross-device conflict then routes through the
- * push-side 409 + warning rather than a silent overwrite.
+ * `hasLocalSave` disambiguates the one case a missing revision cursor can't: a
+ * genuinely fresh device (no local, no cursor → first download, adopt) from an
+ * upgraded device that synced under the OLD timestamp cursor scheme (local
+ * exists, no revision cursor yet). For that upgrade, the revision alone can't
+ * say whether local descends from the current cloud — but the legacy timestamp
+ * cursor T can, against the server's mtime U:
+ *   - U ≤ T (cloud unchanged since our last sync): local descends from it → keep
+ *     local and seed the revision cursor. A later push to R+1 is a legit
+ *     continuation, not a false claim.
+ *   - U > T, or no T: the cloud advanced (another device wrote) → ADOPT it; never
+ *     seed a cursor for content this device doesn't hold, which is what let a
+ *     stale local push silently clobber newer cloud work. Warn (supersededLocal).
  */
 export async function pullCloudSaveIfNewer(cloudWorldId: string, hasLocalSave: boolean, storage: Storage = localStorage): Promise<PullDecision> {
   const result = await fetchCloudSave(cloudWorldId);
   if (!result) return { adopt: false }; // no blob yet, or offline → keep local
-  const cursor = readStamps(storage)[cloudWorldId];
+  const cursor = readRevision(cloudWorldId, storage);
   const revision = result.saveRevision;
   if (cursor === undefined && hasLocalSave) {
-    // Unknown revision but a local save to protect → keep local, seed the cursor.
-    if (revision !== null) writeStamp(cloudWorldId, revision, storage);
-    return { adopt: false };
+    // Ambiguous upgrade — decide with the legacy timestamp cursor vs server mtime.
+    const legacyT = readLegacyTimestamp(cloudWorldId, storage);
+    const cloudUnchanged = legacyT !== undefined && result.updatedAt !== null && result.updatedAt <= legacyT;
+    if (cloudUnchanged) {
+      if (revision !== null) writeRevision(cloudWorldId, revision, storage); // keep local, seed (honest)
+      return { adopt: false };
+    }
+    // Cloud advanced or unprovable descent → adopt so we can't clobber it; warn.
+    const commitCursor = revision !== null ? () => writeRevision(cloudWorldId, revision, storage) : () => {};
+    return { adopt: true, save: result.save, commitCursor, supersededLocal: true };
   }
   if (revision === null) return { adopt: true, save: result.save, commitCursor: () => {} }; // no revision to reason about → first download
   if (cursor !== undefined && revision <= cursor) return { adopt: false }; // not ahead of our last sync
-  return { adopt: true, save: result.save, commitCursor: () => writeStamp(cloudWorldId, revision, storage) };
+  return { adopt: true, save: result.save, commitCursor: () => writeRevision(cloudWorldId, revision, storage) };
 }
